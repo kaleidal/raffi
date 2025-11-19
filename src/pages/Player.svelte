@@ -5,11 +5,17 @@
     import { onMount, tick } from "svelte";
     import Hls from "hls.js";
     import { createSession, getSessionUrl, getStreamUrl } from "../lib/client";
+    import { getMetaData } from "../lib/library/library";
+    import type { ShowResponse } from "../lib/library/types/meta_types";
 
     let videoElem: HTMLVideoElement;
     let playerContainer: HTMLDivElement;
+    let canvasElem: HTMLCanvasElement;
 
     let isPlaying = false;
+    let loading = true;
+    let showCanvas = false;
+    let metaData: ShowResponse | null = null;
     let currentTime = 0; // global time, seconds
     let duration = 0; // global duration, seconds
     let volume = 1;
@@ -30,7 +36,7 @@
         resetHideTimer();
     }
 
-    // percent *elapsed* (for your styling)
+    // percent *elapsed*
     $: progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
     const togglePlay = () => {
@@ -51,6 +57,7 @@
     // used to coordinate slider intent vs internal seeks
     let pendingSeek: number | null = null;
     let seekGuard = false;
+    let firstSeekLoad = false;
 
     const handleTimeUpdate = () => {
         if (!videoElem) return;
@@ -83,7 +90,6 @@
     }
 
     const onSeekInput = (event: Event) => {
-        // Just update the UI/internal state while dragging
         const remaining = Number((event.target as HTMLInputElement).value);
         const desiredGlobal = Math.max(
             0,
@@ -94,18 +100,14 @@
         pendingSeek = desiredGlobal;
     };
 
-    const onSeekChange = (event: Event) => {
+    const performSeek = (targetGlobal: number) => {
         if (!videoElem || duration <= 0) return;
 
-        const remaining = Number((event.target as HTMLInputElement).value);
-        const desiredGlobal = Math.max(
-            0,
-            Math.min(duration, duration - remaining),
-        );
+        // Clamp target
+        targetGlobal = Math.max(0, Math.min(duration, targetGlobal));
 
-        pendingSeek = desiredGlobal;
-
-        const localTarget = desiredGlobal - playbackOffset;
+        pendingSeek = targetGlobal;
+        const localTarget = targetGlobal - playbackOffset;
 
         if (isTimeBuffered(videoElem, localTarget)) {
             // already in current slice, just seek
@@ -113,9 +115,18 @@
             // Clear pending seek since we handled it locally
             pendingSeek = null;
         } else {
+            // Capture frame BEFORE setting currentTime to avoid black screen
+            captureFrame();
+            showCanvas = true;
             // trigger 'seeking' event so our handler will do the hard seek
             videoElem.currentTime = Math.max(localTarget, 0);
         }
+    };
+
+    const onSeekChange = (event: Event) => {
+        const remaining = Number((event.target as HTMLInputElement).value);
+        const desiredGlobal = duration - remaining;
+        performSeek(desiredGlobal);
     };
 
     const onVolumeChange = (event: Event) => {
@@ -146,15 +157,33 @@
         if (event.code === "Space") {
             event.preventDefault();
             togglePlay();
+        } else if (event.code === "ArrowLeft") {
+            // Forward 5s (inverted)
+            performSeek(currentTime + 5);
+        } else if (event.code === "ArrowRight") {
+            // Backward 5s (inverted)
+            performSeek(currentTime - 5);
+        } else if (event.code === "ArrowUp") {
+            volume = Math.min(1, volume + 0.1);
+            videoElem.volume = volume;
+        } else if (event.code === "ArrowDown") {
+            volume = Math.min(0, volume - 0.1);
+            videoElem.volume = volume;
+        } else if (event.code === "Escape") {
+            toggleFullscreen();
+        } else if (event.code === "F") {
+            toggleFullscreen();
         }
     };
 
-    onMount(async () => {
-        const testTorrentioSrc =
-            "https://torrentio.strem.fun/resolve/realdebrid/LMDSM5K2GLBR4BG6MT6JBPYHR7C5HZP2RAUCCNL4ZIS7236LV2LA/17c6cc17891f3640cef082cde56fd426b1dcd016/null/2/Just.Add.Magic.S01E03.Just.Add.Dogs.2160p.AMZN.WEB-DL.DDP5.1.x265-LAZY.mkv";
+    const testTorrentioSrc =
+        "https://torrentio.strem.fun/resolve/realdebrid/LMDSM5K2GLBR4BG6MT6JBPYHR7C5HZP2RAUCCNL4ZIS7236LV2LA/17c6cc17891f3640cef082cde56fd426b1dcd016/null/2/Just.Add.Magic.S01E03.Just.Add.Dogs.2160p.AMZN.WEB-DL.DDP5.1.x265-LAZY.mkv";
 
+    let videoSrc = testTorrentioSrc;
+
+    onMount(async () => {
         // 1) create session + get base manifest URL
-        sessionId = await createSession(testTorrentioSrc, "http");
+        sessionId = await createSession(videoSrc, "http");
 
         const baseManifest = `${getStreamUrl(sessionId)}/child.m3u8`;
         const sessionUrl = getSessionUrl(sessionId);
@@ -165,6 +194,10 @@
         );
         duration = sessionMetadata.durationSeconds || 0;
 
+        // Fetch metadata for splash screen
+        // TODO: Get actual IMDB ID from somewhere, hardcoded for now as per Meta.svelte example
+        metaData = await getMetaData("tt2661044", "series");
+
         await tick();
         if (!videoElem) return;
 
@@ -174,11 +207,28 @@
                 lowLatencyMode: false,
                 maxBufferLength: 30,
                 backBufferLength: 30,
+                xhrSetup: (xhr, url) => {
+                    if (url.includes("seek=") && !firstSeekLoad) {
+                        // If this is a refresh (not the first load of the seek), strip the seek param
+                        // to prevent the backend from creating new sessions/slices repeatedly.
+                        const cleanUrl = url.split("?")[0];
+                        console.log(
+                            "Stripping seek param from refresh:",
+                            cleanUrl,
+                        );
+                        xhr.open("GET", cleanUrl, true);
+                    } else if (url.includes("seek=")) {
+                        // First load of the seek, let it pass but mark as done
+                        firstSeekLoad = false;
+                    }
+                },
             });
 
             // initial manifest parsed -> autoplay
             const onInitialParsed = () => {
                 console.log("HLS MANIFEST_PARSED (initial)");
+                loading = false;
+                showCanvas = false;
                 videoElem.play().catch((err) => {
                     console.warn("autoplay failed:", err);
                 });
@@ -225,8 +275,13 @@
             }
 
             // Otherwise we perform a hard seek -> new slice on the server
+            // captureFrame() is called in performSeek now
             seekGuard = true;
-            const url = `${getStreamUrl(sessionId)}/child.m3u8?seek=${Math.floor(desiredGlobal)}`;
+            loading = true;
+            showCanvas = true; // Ensure canvas is shown
+            firstSeekLoad = true;
+            const seekId = Math.random().toString(36).substring(7);
+            const url = `${getStreamUrl(sessionId)}/child.m3u8?seek=${Math.floor(desiredGlobal)}&seek_id=${seekId}`;
             console.log("Hard seek to", desiredGlobal, "->", url);
 
             if (hls) {
@@ -237,6 +292,8 @@
                     // we start from the beginning of the new slice
                     videoElem.currentTime = 0;
                     seekGuard = false;
+                    loading = false;
+                    showCanvas = false;
 
                     videoElem.play().catch((err) => {
                         console.warn("play after seek failed:", err);
@@ -255,6 +312,8 @@
                     playbackOffset = desiredGlobal;
                     videoElem.currentTime = 0;
                     seekGuard = false;
+                    loading = false;
+                    showCanvas = false;
                     videoElem
                         .play()
                         .catch((err) =>
@@ -266,17 +325,31 @@
 
         videoElem.addEventListener("seeking", onSeeking);
     });
+
+    const captureFrame = () => {
+        if (!videoElem || !canvasElem) return;
+        canvasElem.width = videoElem.videoWidth;
+        canvasElem.height = videoElem.videoHeight;
+        const ctx = canvasElem.getContext("2d");
+        if (ctx) {
+            ctx.drawImage(videoElem, 0, 0, canvasElem.width, canvasElem.height);
+        }
+    };
 </script>
 
 <svelte:window on:mousemove={handleMouseMove} on:keydown={handleKeydown} />
 
 <div
-    class="bg-black max-w-screen h-screen relative {!controlsVisible
-        ? 'cursor-none'
-        : ''}"
+    class="fixed inset-0 w-screen h-screen bg-black overflow-hidden group"
     bind:this={playerContainer}
 >
     <div class="w-full h-screen">
+        <canvas
+            bind:this={canvasElem}
+            class="absolute inset-0 w-full h-full object-contain z-10 {showCanvas
+                ? 'block'
+                : 'hidden'}"
+        ></canvas>
         <video
             bind:this={videoElem}
             on:timeupdate={handleTimeUpdate}
@@ -289,7 +362,7 @@
         </video>
     </div>
 
-    {#if controlsVisible}
+    {#if controlsVisible && !loading}
         <div
             in:slide={{ duration: 200, axis: "y" }}
             out:slide={{ duration: 200, axis: "y" }}
@@ -372,6 +445,29 @@
                     </svg>
                 </ExpandingButton>
 
+                <ExpandingButton
+                    label={"Download"}
+                    onClick={() => {
+                        window.open(videoSrc);
+                    }}
+                >
+                    <svg
+                        width="22"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                    >
+                        <path
+                            d="M12 15V3M12 15L7 10M12 15L17 10M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15"
+                            stroke="#E9E9E9"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        />
+                    </svg>
+                </ExpandingButton>
+
                 <ExpandingButton label={"Settings"} onClick={() => {}}>
                     <svg
                         width="22"
@@ -403,6 +499,22 @@
                     />
                 </div>
             </div>
+        </div>
+    {/if}
+
+    {#if loading}
+        <div
+            class="fixed inset-0 z-50 bg-[#000000]/10 backdrop-blur-[12px] flex items-center justify-center"
+        >
+            {#if metaData}
+                <div class="relative z-10 flex flex-col items-center gap-8">
+                    <img
+                        src={metaData.meta.logo ?? ""}
+                        alt="Logo"
+                        class="w-[400px] object-contain animate-pulse"
+                    />
+                </div>
+            {/if}
         </div>
     {/if}
 </div>
