@@ -1,0 +1,27 @@
+const CORE_BASE = "http://127.0.0.1:6969";
+
+export type SessionKind = "http" | "torrent";
+
+export async function createSession(source: string, kind: SessionKind = "http") {
+    const res = await fetch(`${CORE_BASE}/sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source, kind })
+    });
+
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`createSession failed: ${res.status} ${text}`);
+    }
+
+    const data = await res.json() as { id: string };
+    return data.id;
+}
+
+export function getStreamUrl(sessionId: string) {
+    return `${CORE_BASE}/sessions/${sessionId}/stream`;
+}
+
+export function getSessionUrl(sessionId: string) {
+    return `${CORE_BASE}/sessions/${sessionId}`;
+}

@@ -1,6 +1,6 @@
 <script lang="ts">
-    import {getMetaData} from "./lib/library/library";
-    import type {ShowResponse} from "./lib/library/types/meta_types";
+    import {getMetaData} from "../lib/library/library";
+    import type {ShowResponse} from "../lib/library/types/meta_types";
     import {onMount} from "svelte";
 
     let imdbID: string = "tt2661044";
@@ -21,7 +21,7 @@
     };
 
     onMount(async() => {
-        metaData = await getMetaData(imdbID);
+        metaData = await getMetaData(imdbID, "series");
         loadedMeta = true;
 
         episodes = metaData.meta.videos.length;
@@ -49,21 +49,25 @@
                             <path d="M23 11.5L76.6667 46L23 80.5V11.5Z" stroke="black" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
 
-                        Watch S1E1
+                        Watch {metaData.meta.type === "movie" ? "Movie" : "S1E1"}
                     </button>
                 </div>
 
                 <div class="flex flex-col gap-[20px] h-full justify-end items-end">
-                    <div class="px-[60px] py-[40px] bg-[#FFFFFF]/10 backdrop-blur-[16px] rounded-[64px] flex flex-col gap-[20px]">
-                        <span class="text-[#E1E1E1] text-[32px] font-poppins font-bold">0/{episodes} episodes watched</span>
-                        <div class="w-full h-[10px] bg-[#A3A3A3]/30 rounded-full overflow-hidden">
-                            <div class="h-full bg-white rounded-full" style="width: 0%"></div>
-                            <div class="h-full bg-[#A3A3A3]/30 rounded-full" style="width: 100%"></div>
+                    {#if metaData.meta.type === "series"}
+                        <div class="px-[60px] py-[40px] w-full bg-[#FFFFFF]/10 backdrop-blur-[16px] rounded-[64px] flex flex-col gap-[20px]">
+                            <span class="text-[#E1E1E1] text-[32px] font-poppins font-bold">0/{episodes} episodes watched</span>
+                            <div class="w-full h-[10px] bg-[#A3A3A3]/30 rounded-full overflow-hidden">
+                                <div class="h-full bg-white rounded-full" style="width: 0%"></div>
+                                <div class="h-full bg-[#A3A3A3]/30 rounded-full" style="width: 100%"></div>
+                            </div>
                         </div>
-                    </div>
+                    {/if}
 
-                    <div class="px-[60px] py-[40px] bg-[#FFFFFF]/10 backdrop-blur-[16px] rounded-[64px] flex flex-col gap-[20px] justify-center">
-                        <span class="text-[#E1E1E1] text-[32px] font-poppins font-bold">{episodes} episodes • {seasons} seasons</span>
+                    <div class="px-[60px] py-[40px] w-full bg-[#FFFFFF]/10 backdrop-blur-[16px] rounded-[64px] flex flex-col gap-[20px] justify-center">
+                        {#if metaData.meta.type === "series"}
+                            <span class="text-[#E1E1E1] text-[32px] font-poppins font-bold">{episodes} episodes • {seasons} seasons</span>
+                        {/if}
 
                         <div class="flex flex-row gap-[10px] items-center justify-between">
                             <span class="text-[#E8E8E8]/80 text-[24px] font-poppins font-medium">{metaData.meta.year}</span>
@@ -99,29 +103,35 @@
                 </div>
             </div>
 
-            <span class="absolute bottom-10 left-1/2 transform -translate-x-1/2 text-[#E1E1E1]/60 text-[16px] font-poppins font-medium">scroll down to view episodes</span>
+            {#if metaData.meta.type === "series"}
+                <div class="absolute bottom-0 left-0 w-full h-[150px] bg-gradient-to-t from-[#090909] to-transparent"></div>
+
+                <span class="absolute bottom-10 left-1/2 transform -translate-x-1/2 text-[#E1E1E1]/60 text-[16px] font-poppins font-medium">scroll down to view episodes</span>
+            {/if}
         </div>
 
-        <div class="w-screen p-40">
-            <div class="flex flex-row gap-[20px] mb-10">
-                {#each seasonsArray as season}
-                    <button class="px-[30px] py-[15px] {currentSeason === season ? 'bg-[#FFFFFF]/20 hover:bg-[#D3D3D3]/20' : 'bg-[#FFFFFF]/10 hover:bg-[#D3D3D3]/10'} backdrop-blur-2xl rounded-full text-[#E1E1E1] text-[20px] font-poppins font-medium cursor-pointer transition-colors duration-200" on:click={() => currentSeason = season}>
-                        Season {season}
-                    </button>
-                {/each}
-            </div>
+        {#if metaData.meta.type === "series"}
+            <div class="w-screen p-40">
+                <div class="flex flex-row gap-[20px] mb-10">
+                    {#each seasonsArray as season}
+                        <button class="px-[30px] py-[15px] {currentSeason === season ? 'bg-[#FFFFFF]/20 hover:bg-[#D3D3D3]/20' : 'bg-[#FFFFFF]/10 hover:bg-[#D3D3D3]/10'} backdrop-blur-2xl rounded-full text-[#E1E1E1] text-[20px] font-poppins font-medium cursor-pointer transition-colors duration-200" on:click={() => currentSeason = season}>
+                            Season {season}
+                        </button>
+                    {/each}
+                </div>
 
-            <div class="grid grid-cols-4 gap-[30px]">
-                {#each metaData.meta.videos.filter(video => video.season === currentSeason) as episode}
-                    <div class="bg-[#121212] rounded-[20px] overflow-hidden cursor-pointer hover:scale-[1.03] hover:-rotate-2 transition-transform duration-200">
-                        <img src={episode.thumbnail} alt="Episode Thumbnail" class="w-full h-auto object-cover" />
-                        <div class="p-5 flex flex-col gap-[10px]">
-                            <span class="text-[#E1E1E1] text-[18px] font-poppins font-semibold">S{episode.season}E{episode.episode} - {episode.name}</span>
-                            <span class="text-[#A3A3A3] text-[14px] font-poppins font-medium">{truncateWords(episode.description ?? "", 50)}</span>
+                <div class="grid grid-cols-4 gap-[30px]">
+                    {#each metaData.meta.videos.filter(video => video.season === currentSeason) as episode}
+                        <div class="bg-[#121212] rounded-[20px] overflow-hidden cursor-pointer hover:scale-[1.03] hover:-rotate-2 transition-transform duration-200">
+                            <img src={episode.thumbnail} alt="Episode Thumbnail" class="w-full h-auto object-cover" />
+                            <div class="p-5 flex flex-col gap-[10px]">
+                                <span class="text-[#E1E1E1] text-[18px] font-poppins font-semibold">S{episode.season}E{episode.episode} - {episode.name}</span>
+                                <span class="text-[#A3A3A3] text-[14px] font-poppins font-medium">{truncateWords(episode.description ?? "", 50)}</span>
+                            </div>
                         </div>
-                    </div>
-                {/each}
+                    {/each}
+                </div>
             </div>
-        </div>
+        {/if}
     </div>
 {/if}

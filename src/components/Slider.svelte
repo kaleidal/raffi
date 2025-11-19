@@ -7,31 +7,37 @@
     export let max: number = 1;
     export let step: number = 0.01;
     export let onInput: (event: Event) => void;
+    export let onChange: (event: Event) => void = () => {};
 </script>
 
 <div class="flex flex-col items-start gap-1 ml-auto">
     {#if label}
-        <span class="text-[#878787] text-[15px] font-poppins font-medium">{label}</span>
+        <span class="text-[#878787] text-[15px] font-poppins font-medium"
+            >{label}</span
+        >
     {/if}
-    <div class="relative w-full h-[4px] hover:h-2 cursor-pointer transition-all duration-150">
+    <div
+        class="relative w-full h-[4px] hover:h-2 cursor-pointer transition-all duration-150"
+    >
         <div
-                class="absolute inset-y-0 left-0 rounded-full bg-white transition-[width] duration-150"
-                style={`width:${widthProgress}%`}
+            class="absolute inset-y-0 left-0 rounded-full bg-white transition-[width] duration-150"
+            style={`width:${widthProgress}%`}
         ></div>
 
         <div
-                class="absolute inset-y-0 right-0 rounded-full bg-[#A3A3A3]/30 transition-[width] duration-150"
-                style={`width:${widthGrey}%`}
+            class="absolute inset-y-0 right-0 rounded-full bg-[#A3A3A3]/30 transition-[width] duration-150"
+            style={`width:${widthGrey}%`}
         ></div>
 
         <input
-                type="range"
-                min={min}
-                max={max}
-                step={step}
-                bind:value={value}
-                on:input={onInput}
-                class="relative z-10 w-full h-3 appearance-none bg-transparent cursor-pointer"
+            type="range"
+            {min}
+            {max}
+            {step}
+            bind:value
+            on:input={onInput}
+            on:change={onChange}
+            class="relative z-10 w-full h-3 appearance-none bg-transparent cursor-pointer"
         />
     </div>
 </div>
