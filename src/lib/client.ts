@@ -1,4 +1,5 @@
 const CORE_BASE = "http://127.0.0.1:6969";
+export const serverUrl = CORE_BASE;
 
 export type SessionKind = "http" | "torrent";
 
