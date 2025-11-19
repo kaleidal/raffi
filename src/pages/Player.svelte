@@ -177,7 +177,7 @@
     };
 
     const testTorrentioSrc =
-        "https://torrentio.strem.fun/resolve/realdebrid/LMDSM5K2GLBR4BG6MT6JBPYHR7C5HZP2RAUCCNL4ZIS7236LV2LA/17c6cc17891f3640cef082cde56fd426b1dcd016/null/2/Just.Add.Magic.S01E03.Just.Add.Dogs.2160p.AMZN.WEB-DL.DDP5.1.x265-LAZY.mkv";
+        "https://torrentio.strem.fun/resolve/realdebrid/LMDSM5K2GLBR4BG6MT6JBPYHR7C5HZP2RAUCCNL4ZIS7236LV2LA/65e2ca405505a6af0f74c43a01235c548f4eb51b/null/0/hazbin.hotel.s02e08.1080p.web.h264-sylix%5BEZTVx.to%5D.mkv";
 
     let videoSrc = testTorrentioSrc;
 
@@ -196,7 +196,7 @@
 
         // Fetch metadata for splash screen
         // TODO: Get actual IMDB ID from somewhere, hardcoded for now as per Meta.svelte example
-        metaData = await getMetaData("tt2661044", "series");
+        metaData = await getMetaData("tt7216636", "series");
 
         await tick();
         if (!videoElem) return;
@@ -233,6 +233,26 @@
                     console.warn("autoplay failed:", err);
                 });
             };
+
+            hls.on(Hls.Events.MANIFEST_LOADED, (_, data) => {
+                // Check for custom header with slice start time
+                // Hls.js exposes network details in data.networkDetails
+                if (
+                    data.networkDetails &&
+                    data.networkDetails instanceof XMLHttpRequest
+                ) {
+                    const startHeader = data.networkDetails.getResponseHeader(
+                        "X-Raffi-Slice-Start",
+                    );
+                    if (startHeader) {
+                        const val = parseFloat(startHeader);
+                        if (!isNaN(val)) {
+                            console.log("Received slice start offset:", val);
+                            playbackOffset = val;
+                        }
+                    }
+                }
+            });
 
             hls.on(Hls.Events.MANIFEST_PARSED, onInitialParsed);
 
@@ -290,7 +310,7 @@
                     console.log("HLS MANIFEST_PARSED (seek)");
                     playbackOffset = desiredGlobal;
                     // we start from the beginning of the new slice
-                    videoElem.currentTime = 0;
+                    // videoElem.currentTime = 0; // Don't reset, let EXT-X-START handle it
                     seekGuard = false;
                     loading = false;
                     showCanvas = false;
