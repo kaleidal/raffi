@@ -10,8 +10,13 @@
         getStreamUrl,
         serverUrl,
     } from "../lib/client";
-    import { getMetaData } from "../lib/library/library";
     import type { ShowResponse } from "../lib/library/types/meta_types";
+
+    export let videoSrc: string | null = null;
+    export let metaData: ShowResponse | null = null;
+    export let autoPlay: boolean = true;
+    export let onClose: () => void = () => {};
+    export let onNextEpisode: () => void = () => {};
 
     interface Chapter {
         startTime: number;
@@ -26,13 +31,12 @@
     let isPlaying = false;
     let loading = true;
     let showCanvas = false;
-    let metaData: ShowResponse | null = null; // For splash screen (logo, etc)
     let sessionData: any = null; // For chapters and duration
     let currentChapter: Chapter | null = null;
     let showSkipIntro = false;
     let showNextEpisode = false;
-    let currentTime = 0; // global time, seconds
-    let duration = 0; // global duration, seconds
+    let currentTime = 0;
+    let duration = 0;
     let volume = 1;
     let controlsVisible = true;
     let hideTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -103,7 +107,6 @@
                 currentChapter = chapter;
                 const title = chapter.title.toLowerCase();
 
-                // Check for intro
                 if (
                     title.includes("intro") ||
                     title.includes("opening") ||
@@ -112,7 +115,6 @@
                     inIntro = true;
                 }
 
-                // Check for credits
                 if (title.includes("credits") || title.includes("ending")) {
                     inCredits = true;
                 }
@@ -123,7 +125,6 @@
 
         showSkipIntro = inIntro;
 
-        // Show next episode if in credits OR if near end (fallback)
         if (inCredits) {
             showNextEpisode = true;
         } else if (duration > 0 && duration - time <= 45) {
@@ -140,24 +141,8 @@
     }
 
     function nextEpisode() {
-        // we dont have next episode logic yet
-        window.location.href = "/";
+        onNextEpisode();
     }
-
-    onDestroy(() => {
-        if (hls) hls.destroy();
-
-        // Trigger cleanup
-        if (sessionId) {
-            const url = `${serverUrl}/cleanup?id=${sessionId}`;
-            // Use sendBeacon for reliable delivery on unload
-            if (navigator.sendBeacon) {
-                navigator.sendBeacon(url);
-            } else {
-                fetch(url, { method: "POST", keepalive: true });
-            }
-        }
-    });
 
     function isTimeBuffered(
         elem: HTMLVideoElement,
@@ -183,29 +168,23 @@
             Math.min(duration, duration - remaining),
         );
 
-        // We don't trigger the hard seek here, just update pendingSeek so the UI knows where we are
         pendingSeek = desiredGlobal;
     };
 
     const performSeek = (targetGlobal: number) => {
         if (!videoElem || duration <= 0) return;
 
-        // Clamp target
         targetGlobal = Math.max(0, Math.min(duration, targetGlobal));
 
         pendingSeek = targetGlobal;
         const localTarget = targetGlobal - playbackOffset;
 
         if (isTimeBuffered(videoElem, localTarget)) {
-            // already in current slice, just seek
             videoElem.currentTime = localTarget;
-            // Clear pending seek since we handled it locally
             pendingSeek = null;
         } else {
-            // Capture frame BEFORE setting currentTime to avoid black screen
             captureFrame();
             showCanvas = true;
-            // trigger 'seeking' event so our handler will do the hard seek
             videoElem.currentTime = Math.max(localTarget, 0);
         }
     };
@@ -225,10 +204,15 @@
 
     const formatTime = (t: number) => {
         if (!isFinite(t) || t < 0) return "0:00";
-        const minutes = Math.floor(t / 60);
+        const hours = Math.floor(t / 3600);
+        const minutes = Math.floor((t % 3600) / 60);
         const seconds = Math.floor(t % 60)
             .toString()
             .padStart(2, "0");
+
+        if (hours > 0) {
+            return `${hours}:${minutes.toString().padStart(2, "0")}:${seconds}`;
+        }
         return `${minutes}:${seconds}`;
     };
 
@@ -263,177 +247,207 @@
         }
     };
 
-    const testTorrentioSrc =
-        "https://torrentio.strem.fun/resolve/realdebrid/LMDSM5K2GLBR4BG6MT6JBPYHR7C5HZP2RAUCCNL4ZIS7236LV2LA/a08767212391439d4bd019c2eb518360245f18c2/null/10/Teen%20Wolf%20S03E02%20-%20Chaos%20Rising.mkv";
+    let currentVideoSrc: string | null = null;
 
-    let videoSrc = testTorrentioSrc;
-
-    onMount(async () => {
-        // 1) create session + get base manifest URL
-        sessionId = await createSession(videoSrc, "http");
-
-        const baseManifest = `${getStreamUrl(sessionId)}/child.m3u8`;
-        const sessionUrl = getSessionUrl(sessionId);
-
-        // 2) fetch metadata (duration etc.)
-        const res = await fetch(`${serverUrl}/sessions/${sessionId}`);
-        if (!res.ok) throw new Error("Failed to load session info");
-        sessionData = await res.json();
-        if (sessionData.chapters) {
-            console.log("Loaded chapters:", sessionData.chapters);
-        }
-        duration = sessionData.durationSeconds || 0;
-
-        // Fetch metadata for splash screen
-        // TODO: Get actual IMDB ID from somewhere, hardcoded for now as per Meta.svelte example
-        metaData = await getMetaData("tt7216636", "series");
-
-        await tick();
-        if (!videoElem) return;
-
-        // 3) set up Hls.js or native HLS
-        if (Hls.isSupported()) {
-            hls = new Hls({
-                lowLatencyMode: false,
-                maxBufferLength: 30,
-                backBufferLength: 30,
-                xhrSetup: (xhr, url) => {
-                    if (url.includes("seek=") && !firstSeekLoad) {
-                        // If this is a refresh (not the first load of the seek), strip the seek param
-                        // to prevent the backend from creating new sessions/slices repeatedly.
-                        const cleanUrl = url.split("?")[0];
-                        console.log(
-                            "Stripping seek param from refresh:",
-                            cleanUrl,
-                        );
-                        xhr.open("GET", cleanUrl, true);
-                    } else if (url.includes("seek=")) {
-                        // First load of the seek, let it pass but mark as done
-                        firstSeekLoad = false;
-                    }
-                },
-            });
-
-            // initial manifest parsed -> autoplay
-            const onInitialParsed = () => {
-                console.log("HLS MANIFEST_PARSED (initial)");
-                loading = false;
-                showCanvas = false;
-                videoElem.play().catch((err) => {
-                    console.warn("autoplay failed:", err);
-                });
-            };
-
-            hls.on(Hls.Events.MANIFEST_LOADED, (_, data) => {
-                // Check for custom header with slice start time
-                // Hls.js exposes network details in data.networkDetails
-                if (
-                    data.networkDetails &&
-                    data.networkDetails instanceof XMLHttpRequest
-                ) {
-                    const startHeader = data.networkDetails.getResponseHeader(
-                        "X-Raffi-Slice-Start",
-                    );
-                    if (startHeader) {
-                        const val = parseFloat(startHeader);
-                        if (!isNaN(val)) {
-                            console.log("Received slice start offset:", val);
-                            playbackOffset = val;
-                        }
-                    }
-                }
-            });
-
-            hls.on(Hls.Events.MANIFEST_PARSED, onInitialParsed);
-
-            hls.on(Hls.Events.ERROR, (_, data) => {
-                console.error("HLS ERROR", data);
-                if (data.fatal) {
-                    // if a fatal error happens mid-seek, release the guard
-                    seekGuard = false;
-                }
-            });
-
-            hls.loadSource(baseManifest);
-            hls.attachMedia(videoElem);
-        } else if (videoElem.canPlayType("application/vnd.apple.mpegurl")) {
-            videoElem.src = baseManifest;
-            videoElem.addEventListener("loadedmetadata", () => {
-                videoElem.play().catch((err) => {
-                    console.warn("autoplay failed:", err);
-                });
-            });
-        } else {
-            console.error("No HLS support");
+    const cleanupSession = () => {
+        if (hls) {
+            hls.destroy();
+            hls = null;
         }
 
-        // 4) hard-seek handler: when user asks for a time outside buffer,
-        // reload HLS at ?seek=<globalTime>
-        const onSeeking = () => {
-            if (!videoElem) return;
-            if (pendingSeek == null || seekGuard) return;
+        if (sessionId) {
+            const url = `${serverUrl}/cleanup?id=${sessionId}`;
+            if (navigator.sendBeacon) {
+                navigator.sendBeacon(url);
+            } else {
+                fetch(url, { method: "POST", keepalive: true });
+            }
+            sessionId = ""; // Clear session ID
+        }
+    };
 
-            const desiredGlobal = pendingSeek;
+    const loadVideo = async (src: string) => {
+        try {
+            loading = true;
+            showCanvas = false;
+            isPlaying = false;
+
+            // Reset state
+            currentTime = 0;
+            duration = 0;
+            playbackOffset = 0;
+            currentChapter = null;
+            showSkipIntro = false;
+            showNextEpisode = false;
+            seekGuard = false;
+            firstSeekLoad = false;
             pendingSeek = null;
 
-            const localTarget = desiredGlobal - playbackOffset;
+            // 1) create session + get base manifest URL
+            sessionId = await createSession(src, "http");
 
-            // If the target is already buffered in current slice, just seek locally
-            if (isTimeBuffered(videoElem, localTarget)) {
-                videoElem.currentTime = localTarget;
-                return;
+            const baseManifest = `${getStreamUrl(sessionId)}/child.m3u8`;
+            const sessionUrl = getSessionUrl(sessionId);
+
+            // 2) fetch metadata (duration etc.)
+            const res = await fetch(`${serverUrl}/sessions/${sessionId}`);
+            if (!res.ok) throw new Error("Failed to load session info");
+            sessionData = await res.json();
+            if (sessionData.chapters) {
+                console.log("Loaded chapters:", sessionData.chapters);
             }
+            duration = sessionData.durationSeconds || 0;
 
-            // Otherwise we perform a hard seek -> new slice on the server
-            // captureFrame() is called in performSeek now
-            seekGuard = true;
-            loading = true;
-            showCanvas = true; // Ensure canvas is shown
-            firstSeekLoad = true;
-            const seekId = Math.random().toString(36).substring(7);
-            const url = `${getStreamUrl(sessionId)}/child.m3u8?seek=${Math.floor(desiredGlobal)}&seek_id=${seekId}`;
-            console.log("Hard seek to", desiredGlobal, "->", url);
+            await tick();
+            if (!videoElem) return;
 
-            if (hls) {
-                // per-seek MANIFEST_PARSED handler
-                const onSeekParsed = () => {
-                    console.log("HLS MANIFEST_PARSED (seek)");
-                    playbackOffset = desiredGlobal;
-                    // we start from the beginning of the new slice
-                    // videoElem.currentTime = 0; // Don't reset, let EXT-X-START handle it
-                    seekGuard = false;
+            // 3) set up Hls.js or native HLS
+            if (Hls.isSupported()) {
+                hls = new Hls({
+                    lowLatencyMode: false,
+                    maxBufferLength: 30,
+                    backBufferLength: 30,
+                    xhrSetup: (xhr, url) => {
+                        if (url.includes("seek=") && !firstSeekLoad) {
+                            const cleanUrl = url.split("?")[0];
+                            xhr.open("GET", cleanUrl, true);
+                        } else if (url.includes("seek=")) {
+                            firstSeekLoad = false;
+                        }
+                    },
+                });
+
+                const onInitialParsed = () => {
+                    console.log("HLS MANIFEST_PARSED (initial)");
                     loading = false;
                     showCanvas = false;
-
-                    videoElem.play().catch((err) => {
-                        console.warn("play after seek failed:", err);
-                    });
-
-                    hls?.off(Hls.Events.MANIFEST_PARSED, onSeekParsed);
+                    if (autoPlay) {
+                        videoElem.play().catch((err) => {
+                            console.warn("autoplay failed:", err);
+                        });
+                    }
                 };
 
-                hls.on(Hls.Events.MANIFEST_PARSED, onSeekParsed);
-                hls.loadSource(url);
-                hls.startLoad(0);
+                hls.on(Hls.Events.MANIFEST_LOADED, (_, data) => {
+                    if (
+                        data.networkDetails &&
+                        data.networkDetails instanceof XMLHttpRequest
+                    ) {
+                        const startHeader =
+                            data.networkDetails.getResponseHeader(
+                                "X-Raffi-Slice-Start",
+                            );
+                        if (startHeader) {
+                            const val = parseFloat(startHeader);
+                            if (!isNaN(val)) {
+                                console.log(
+                                    "Received slice start offset:",
+                                    val,
+                                );
+                                playbackOffset = val;
+                            }
+                        }
+                    }
+                });
+
+                hls.on(Hls.Events.MANIFEST_PARSED, onInitialParsed);
+
+                hls.on(Hls.Events.ERROR, (_, data) => {
+                    console.error("HLS ERROR", data);
+                    if (data.fatal) {
+                        seekGuard = false;
+                    }
+                });
+
+                hls.loadSource(baseManifest);
+                hls.attachMedia(videoElem);
+            } else if (videoElem.canPlayType("application/vnd.apple.mpegurl")) {
+                videoElem.src = baseManifest;
+                videoElem.addEventListener("loadedmetadata", () => {
+                    if (autoPlay) {
+                        videoElem.play().catch((err) => {
+                            console.warn("autoplay failed:", err);
+                        });
+                    }
+                });
             } else {
-                // native HLS path (Safari etc.)
-                videoElem.src = url;
-                videoElem.onloadedmetadata = () => {
-                    playbackOffset = desiredGlobal;
-                    videoElem.currentTime = 0;
-                    seekGuard = false;
-                    loading = false;
-                    showCanvas = false;
-                    videoElem
-                        .play()
-                        .catch((err) =>
-                            console.warn("play after seek failed:", err),
-                        );
-                };
+                console.error("No HLS support");
             }
-        };
 
-        videoElem.addEventListener("seeking", onSeeking);
+            // 4) hard-seek handler
+            const onSeeking = () => {
+                if (!videoElem) return;
+                if (pendingSeek == null || seekGuard) return;
+
+                const desiredGlobal = pendingSeek;
+                pendingSeek = null;
+
+                const localTarget = desiredGlobal - playbackOffset;
+
+                if (isTimeBuffered(videoElem, localTarget)) {
+                    videoElem.currentTime = localTarget;
+                    return;
+                }
+
+                seekGuard = true;
+                loading = true;
+                showCanvas = true;
+                firstSeekLoad = true;
+                const seekId = Math.random().toString(36).substring(7);
+                const url = `${getStreamUrl(sessionId)}/child.m3u8?seek=${Math.floor(desiredGlobal)}&seek_id=${seekId}`;
+                console.log("Hard seek to", desiredGlobal, "->", url);
+
+                if (hls) {
+                    const onSeekParsed = () => {
+                        console.log("HLS MANIFEST_PARSED (seek)");
+                        playbackOffset = desiredGlobal;
+                        seekGuard = false;
+                        loading = false;
+                        showCanvas = false;
+
+                        videoElem.play().catch((err) => {
+                            console.warn("play after seek failed:", err);
+                        });
+
+                        hls?.off(Hls.Events.MANIFEST_PARSED, onSeekParsed);
+                    };
+
+                    hls.on(Hls.Events.MANIFEST_PARSED, onSeekParsed);
+                    hls.loadSource(url);
+                    hls.startLoad(0);
+                } else {
+                    videoElem.src = url;
+                    videoElem.onloadedmetadata = () => {
+                        playbackOffset = desiredGlobal;
+                        videoElem.currentTime = 0;
+                        seekGuard = false;
+                        loading = false;
+                        showCanvas = false;
+                        videoElem
+                            .play()
+                            .catch((err) =>
+                                console.warn("play after seek failed:", err),
+                            );
+                    };
+                }
+            };
+
+            videoElem.addEventListener("seeking", onSeeking);
+        } catch (err) {
+            console.error("Error loading video:", err);
+            loading = false;
+        }
+    };
+
+    $: if (videoSrc && videoSrc !== currentVideoSrc) {
+        console.log("videoSrc changed, reloading...", videoSrc);
+        currentVideoSrc = videoSrc;
+        cleanupSession();
+        loadVideo(videoSrc);
+    }
+
+    onDestroy(() => {
+        cleanupSession();
     });
 
     const captureFrame = () => {
@@ -450,7 +464,9 @@
 <svelte:window on:mousemove={handleMouseMove} on:keydown={handleKeydown} />
 
 <div
-    class="fixed inset-0 w-screen h-screen bg-black overflow-hidden group"
+    class="fixed inset-0 w-screen h-screen bg-black overflow-hidden group {controlsVisible
+        ? 'cursor-default'
+        : 'cursor-none'}"
     bind:this={playerContainer}
 >
     <div class="w-full h-screen">
@@ -473,6 +489,30 @@
     </div>
 
     {#if controlsVisible && !loading}
+        <div class="absolute left-0 top-0 p-10 z-50">
+            <button
+                class="bg-[#000000]/20 backdrop-blur-md hover:bg-[#FFFFFF]/20 transition-colors duration-200 rounded-full p-4 cursor-pointer"
+                on:click={onClose}
+                aria-label="Close player"
+            >
+                <svg
+                    width="30"
+                    height="30"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                >
+                    <path
+                        d="M15 19L8 12L15 5"
+                        stroke="white"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    />
+                </svg>
+            </button>
+        </div>
+
         <div
             class="absolute left-1/2 -translate-x-1/2 bottom-[50px] z-50 flex flex-col gap-[10px]"
         >
@@ -626,7 +666,7 @@
                     <ExpandingButton
                         label={"Download"}
                         onClick={() => {
-                            window.open(videoSrc);
+                            window.open(videoSrc!!);
                         }}
                     >
                         <svg
@@ -638,24 +678,6 @@
                         >
                             <path
                                 d="M12 15V3M12 15L7 10M12 15L17 10M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15"
-                                stroke="#E9E9E9"
-                                stroke-width="2"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                            />
-                        </svg>
-                    </ExpandingButton>
-
-                    <ExpandingButton label={"Settings"} onClick={() => {}}>
-                        <svg
-                            width="22"
-                            height="24"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            xmlns="http://www.w3.org/2000/svg"
-                        >
-                            <path
-                                d="M12 20C14.1217 20 16.1566 19.1571 17.6569 17.6569C19.1571 16.1566 20 14.1217 20 12C20 9.87827 19.1571 7.84344 17.6569 6.34315C16.1566 4.84285 14.1217 4 12 4M12 20C9.87827 20 7.84344 19.1571 6.34315 17.6569C4.84285 16.1566 4 14.1217 4 12M12 20V22M12 4C9.87827 4 7.84344 4.84285 6.34315 6.34315C4.84285 7.84344 4 9.87827 4 12M12 4V2M4 12H2M14 12C14 12.5304 13.7893 13.0391 13.4142 13.4142C13.0391 13.7893 12.5304 14 12 14C11.4696 14 10.9609 13.7893 10.5858 13.4142C10.2107 13.0391 10 12.5304 10 12C10 11.4696 10.2107 10.9609 10.5858 10.5858C10.9609 10.2107 11.4696 10 12 10C12.5304 10 13.0391 10.2107 13.4142 10.5858C13.7893 10.9609 14 11.4696 14 12ZM14 12H22M17 20.66L16 18.93M11 10.27L7 3.34M20.66 17L18.93 16M3.34 7L5.07 8M20.66 7L18.93 8M3.34 17L5.07 16M17 3.34L16 5.07M11 13.73L7 20.66"
                                 stroke="#E9E9E9"
                                 stroke-width="2"
                                 stroke-linecap="round"

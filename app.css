@@ -1,6 +1,9 @@
 @import "tailwindcss";
 
 .font-poppins {
-  @apply font-sans;
   font-family: 'Poppins', sans-serif;
+}
+
+.font-syne {
+  font-family: 'Syne', sans-serif;
 }
