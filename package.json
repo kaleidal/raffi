@@ -20,9 +20,11 @@
   },
   "dependencies": {
     "@stremio/stremio-core-web": "^0.50.0",
+    "@supabase/supabase-js": "^2.83.0",
     "@tailwindcss/vite": "^4.1.17",
     "eventemitter3": "^5.0.1",
     "hls.js": "^1.6.14",
+    "svelte-spa-router": "^4.0.1",
     "tailwindcss": "^4.1.17"
   }
 }

@@ -1,6 +1,12 @@
 <script lang="ts">
-    import Player from "./pages/Player.svelte";
     import Meta from "./pages/Meta.svelte";
+    import Router from "svelte-spa-router";
+    import Login from "./pages/auth/Login.svelte";
+
+    const routes = {
+        "/login": Login,
+        "/meta": Meta,
+    };
 </script>
 
-<Player />
+<Router {routes} />
