@@ -4,14 +4,17 @@
     import { onDestroy, onMount } from "svelte";
     import Player from "./Player.svelte";
     import { slide, fade } from "svelte/transition";
+    import { router } from "../lib/stores/router";
 
     let addons: string[] = [
         "https://torrentio.strem.fun/language=german,serbian,croatian|qualityfilter=scr,cam|limit=1|debridoptions=nodownloadlinks|realdebrid=LMDSM5K2GLBR4BG6MT6JBPYHR7C5HZP2RAUCCNL4ZIS7236LV2LA/",
     ];
 
-    let imdbID: string = "tt0330373";
-    let titleType: string = "movie";
-    let lastWatched = { season: 1, episode: 1 };
+    // Get params from router store
+    $: imdbID = $router.params.imdbId;
+    $: titleType = $router.params.type || "movie";
+
+    let lastWatched = { season: 1, episode: 0 };
 
     let loadedMeta: boolean = false;
     let metaData: ShowResponse;
@@ -153,7 +156,9 @@
         }
     }
 
-    onMount(async () => {
+    const loadData = async () => {
+        if (!imdbID) return;
+        loadedMeta = false;
         metaData = await getMetaData(imdbID, titleType);
         loadedMeta = true;
 
@@ -162,10 +167,15 @@
             ...metaData.meta.videos.map((video) => video.season),
         );
 
+        seasonsArray = [];
         for (let i = 1; i <= seasons; i++) {
             seasonsArray.push(i);
         }
-    });
+    };
+
+    $: if (imdbID) {
+        loadData();
+    }
     $: {
         if (playerVisible || streamsPopupVisible) {
             document.body.style.overflow = "hidden";
@@ -187,6 +197,29 @@
                 alt="Cover"
                 class="h-screen opacity-60 w-full object-cover"
             />
+
+            <button
+                class="absolute top-[50px] left-[50px] z-50 bg-[#FFFFFF]/10 hover:bg-[#FFFFFF]/20 backdrop-blur-md p-4 rounded-full transition-colors duration-200 cursor-pointer"
+                on:click={() => router.navigate("home")}
+                aria-label="Back to Home"
+            >
+                <svg
+                    width="30"
+                    height="30"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                >
+                    <path
+                        d="M15 19L8 12L15 5"
+                        stroke="white"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    />
+                </svg>
+            </button>
+
             <div
                 class="p-40 absolute top-0 left-0 h-screen w-screen flex gap-[50px] flex-row justify-between items-start"
             >
@@ -250,7 +283,7 @@
 
                         Watch {metaData.meta.type === "movie"
                             ? "Movie"
-                            : "S1E2"}
+                            : "S1E1"}
                     </button>
                 </div>
 
@@ -393,7 +426,7 @@
 
         {#if metaData.meta.type === "series"}
             <div class="w-screen p-40">
-                <div class="flex flex-row gap-[20px] mb-10">
+                <div class="flex flex-row flex-wrap gap-[20px] mb-10">
                     {#each seasonsArray as season}
                         <button
                             class="px-[30px] py-[15px] {currentSeason === season
