@@ -1,12 +1,17 @@
 <script lang="ts">
     import Meta from "./pages/Meta.svelte";
-    import Router from "svelte-spa-router";
     import Login from "./pages/auth/Login.svelte";
+    import Home from "./pages/Home.svelte";
+    import Player from "./pages/Player.svelte";
+    import { router } from "./lib/stores/router";
 
-    const routes = {
-        "/login": Login,
-        "/meta": Meta,
+    // Map pages to components
+    const pages = {
+        home: Home,
+        login: Login,
+        meta: Meta,
+        player: Player,
     };
 </script>
 
-<Router {routes} />
+<svelte:component this={pages[$router.page]} />
