@@ -1,12 +1,11 @@
 <script lang="ts">
-    import type { ShowResponse } from "../../lib/library/types/meta_types";
+    import type { PopularTitleMeta } from "../../lib/library/types/popular_types";
     import { router } from "../../lib/stores/router";
-    import { fade } from "svelte/transition";
 
     import { onMount } from "svelte";
+    import { fade } from "svelte/transition";
 
-    export let continueWatchingMeta: (ShowResponse & { libraryItem: any })[] =
-        [];
+    export let popularMeta: PopularTitleMeta[] = [];
 
     function navigateToMeta(imdbId: string, type: string) {
         router.navigate("meta", { imdbId, type });
@@ -19,7 +18,7 @@
         if (scrollContainer) {
             const { scrollLeft, scrollWidth, clientWidth } = scrollContainer;
             showLeftButton = scrollLeft > 0;
-            showRightButton = scrollLeft + clientWidth < scrollWidth - 1; // -1 tolerance
+            showRightButton = scrollLeft + clientWidth < scrollWidth - 1;
         }
     }
 
@@ -42,7 +41,7 @@
     });
 </script>
 
-{#if continueWatchingMeta.length > 0}
+{#if popularMeta.length > 0}
     <div class="w-full h-fit flex flex-col gap-4 relative group">
         <div class="flex flex-row gap-[10px] items-center">
             <svg
@@ -53,23 +52,23 @@
                 xmlns="http://www.w3.org/2000/svg"
             >
                 <path
-                    d="M12.5 6.25L41.6667 25L12.5 43.75V6.25Z"
-                    stroke="#E0E0E6"
+                    d="M17.7083 30.2083C19.0897 30.2083 20.4144 29.6596 21.3912 28.6828C22.3679 27.7061 22.9167 26.3813 22.9167 25C22.9167 22.125 21.875 20.8333 20.8333 18.75C18.6 14.2854 20.3667 10.3042 25 6.25C26.0417 11.4583 29.1667 16.4583 33.3333 19.7917C37.5 23.125 39.5833 27.0833 39.5833 31.25C39.5833 33.1651 39.2061 35.0615 38.4732 36.8308C37.7404 38.6001 36.6662 40.2078 35.312 41.562C33.9578 42.9162 32.3501 43.9904 30.5808 44.7232C28.8115 45.4561 26.9151 45.8333 25 45.8333C23.0849 45.8333 21.1885 45.4561 19.4192 44.7232C17.6499 43.9904 16.0422 42.9162 14.688 41.562C13.3338 40.2078 12.2596 38.6001 11.5268 36.8308C10.7939 35.0615 10.4167 33.1651 10.4167 31.25C10.4167 28.8479 11.3188 26.4708 12.5 25C12.5 26.3813 13.0487 27.7061 14.0255 28.6828C15.0022 29.6596 16.327 30.2083 17.7083 30.2083Z"
+                    stroke="#FF8F3C"
                     stroke-width="4"
                     stroke-linecap="round"
                     stroke-linejoin="round"
                 />
             </svg>
 
-            <h1 class="font-poppins text-[#E0E0E6] font-medium text-[48px]">
-                Jump back into it
+            <h1 class="font-poppins text-[#FF8F3C] font-medium text-[48px]">
+                Popular
             </h1>
         </div>
 
         <div class="relative">
             {#if showLeftButton}
                 <button
-                    class="absolute left-[-25px] top-1/2 -translate-y-1/2 z-20 bg-black/50 hover:bg-black/80 backdrop-blur-md text-white p-3 rounded-full transition-all duration-200 cursor-pointer shadow-lg border border-white/10"
+                    class="absolute h-full left-[-25px] top-1/2 -translate-y-1/2 z-20 bg-black/50 hover:bg-black/80 backdrop-blur-md text-white p-3 transition-all duration-200 cursor-pointer"
                     on:click={scrollLeft}
                     aria-label="Scroll left"
                     transition:fade={{ duration: 200 }}
@@ -93,46 +92,24 @@
                 bind:this={scrollContainer}
                 on:scroll={updateScrollButtons}
             >
-                {#each continueWatchingMeta as title}
-                    {#if title.meta}
-                        {@const progress = title.libraryItem.progress}
-                        {@const isMovie = title.meta.type === "movie"}
-                        {@const movieProgress = isMovie ? progress : null}
-                        {@const isMovieResumable =
-                            isMovie &&
-                            movieProgress &&
-                            !movieProgress.watched &&
-                            movieProgress.time > 0}
-
-                        <button
-                            class="w-[200px] h-fit rounded-[16px] hover:opacity-80 transition-all duration-200 ease-out cursor-pointer overflow-clip relative flex-shrink-0"
-                            on:click={() =>
-                                navigateToMeta(
-                                    title.meta.imdb_id,
-                                    title.meta.type,
-                                )}
-                        >
-                            <img
-                                src={title.meta.poster}
-                                alt=""
-                                class="w-full h-full object-cover"
-                            />
-                            {#if isMovieResumable}
-                                <div
-                                    class="absolute bottom-0 left-0 h-[4px] bg-[#676767] z-20"
-                                    style="width: {(movieProgress.time /
-                                        movieProgress.duration) *
-                                        100}%"
-                                ></div>
-                            {/if}
-                        </button>
-                    {/if}
+                {#each popularMeta as title}
+                    <button
+                        class="w-[200px] h-fit rounded-[16px] hover:opacity-80 transition-all duration-200 ease-out cursor-pointer overflow-clip relative flex-shrink-0"
+                        on:click={() =>
+                            navigateToMeta(title.imdb_id, title.type)}
+                    >
+                        <img
+                            src={title.poster}
+                            alt=""
+                            class="w-full h-full object-cover"
+                        />
+                    </button>
                 {/each}
             </div>
 
             {#if showRightButton}
                 <button
-                    class="absolute right-[-25px] top-1/2 -translate-y-1/2 z-20 bg-black/50 hover:bg-black/80 backdrop-blur-md text-white p-3 rounded-full transition-all duration-200 cursor-pointer shadow-lg border border-white/10"
+                    class="absolute h-full right-[-25px] top-1/2 -translate-y-1/2 z-20 bg-black/50 hover:bg-black/80 backdrop-blur-md text-white p-3 transition-all duration-200 cursor-pointer"
                     on:click={scrollRight}
                     aria-label="Scroll right"
                     transition:fade={{ duration: 200 }}

@@ -9,10 +9,12 @@
     import SearchBar from "../components/home/SearchBar.svelte";
     import ContinueWatching from "../components/home/ContinueWatching.svelte";
     import AddonsModal from "../components/AddonsModal.svelte";
+    import PopularSection from "../components/home/PopularSection.svelte";
 
     let showcasedTitle: PopularTitleMeta;
     let fetchedTitles = false;
     let continueWatchingMeta: (ShowResponse & { libraryItem: any })[] = [];
+    let popularMeta: PopularTitleMeta[] = [];
     let showAddonsModal = false;
 
     async function checkTrailer(videoId: string): Promise<boolean> {
@@ -50,7 +52,8 @@
             if (
                 randomTitle.trailerStreams &&
                 randomTitle.trailerStreams.length > 0 &&
-                randomTitle.trailerStreams[0]
+                randomTitle.trailerStreams[0] &&
+                randomTitle.logo != undefined
             ) {
                 const isPlayable = await checkTrailer(
                     randomTitle.trailerStreams[0].ytId,
@@ -69,8 +72,6 @@
             );
             if (fallback) showcasedTitle = fallback;
         }
-
-        console.log(showcasedTitle);
 
         try {
             const library = await getLibrary();
@@ -116,6 +117,23 @@
             console.error("Failed to load library", e);
         }
 
+        let absolutePopularTitles = [];
+        let mostPopularMovies = await getPopularTitles("movie");
+        let mostPopularSeries = await getPopularTitles("series");
+        absolutePopularTitles = [...mostPopularMovies, ...mostPopularSeries];
+
+        if (absolutePopularTitles.length > 0) {
+            absolutePopularTitles.sort(
+                (a, b) =>
+                    (b.popularities.moviedb || 0) -
+                    (a.popularities.moviedb || 0),
+            );
+
+            absolutePopularTitles = absolutePopularTitles.slice(0, 20);
+
+            popularMeta = absolutePopularTitles;
+        }
+
         fetchedTitles = true;
     });
 
@@ -132,8 +150,11 @@
 
         <SearchBar on:openAddons={handleOpenAddons} />
 
-        <div class="w-full z-10 h-fit p-[100px] pt-[50px]">
+        <div
+            class="w-full z-10 h-fit flex flex-col gap-[100px] p-[100px] pt-[50px]"
+        >
             <ContinueWatching {continueWatchingMeta} />
+            <PopularSection {popularMeta} />
         </div>
     </div>
 
