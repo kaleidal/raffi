@@ -51,6 +51,7 @@
                 transport_url: newAddonUrl.replace("/manifest.json", ""),
                 manifest: manifest,
                 flags: { protected: false, official: false },
+                addon_id: crypto.randomUUID(),
             });
             newAddonUrl = "";
             await loadAddons();

@@ -6,6 +6,7 @@ export interface Addon {
     transport_url: string;
     manifest: any;
     flags: any;
+    addon_id: string;
 }
 
 export interface LibraryItem {
@@ -15,6 +16,7 @@ export interface LibraryItem {
     last_watched: string;
     completed_at: string | null;
     type: string;
+    shown: boolean;
 }
 
 export interface List {
@@ -28,6 +30,7 @@ export interface ListItem {
     list_id: string;
     imdb_id: string;
     position: number;
+    type: string;
 }
 
 export interface UserMeta {
@@ -79,6 +82,30 @@ export const getLibraryItem = async (imdb_id: string) => {
     return data as LibraryItem | null;
 };
 
+export const hideFromContinueWatching = async (imdb_id: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { error } = await supabase
+        .from('libraries')
+        .update({ shown: false })
+        .eq('user_id', user.id)
+        .eq('imdb_id', imdb_id);
+    if (error) throw error;
+};
+
+export const forgetProgress = async (imdb_id: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { error } = await supabase
+        .from('libraries')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('imdb_id', imdb_id);
+    if (error) throw error;
+};
+
 export const updateLibraryProgress = async (imdb_id: string, progress: any, type: string, completed: boolean = false) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
@@ -89,6 +116,7 @@ export const updateLibraryProgress = async (imdb_id: string, progress: any, type
         progress,
         last_watched: new Date().toISOString(),
         type,
+        shown: true, // Ensure it's shown when updated
     };
     if (completed) {
         updates.completed_at = new Date().toISOString();
@@ -148,11 +176,12 @@ export const deleteList = async (list_id: string) => {
     if (error) throw error;
 };
 
-export const addToList = async (list_id: string, imdb_id: string, position: number) => {
+export const addToList = async (list_id: string, imdb_id: string, position: number, type: string) => {
     const { error } = await supabase.from('list_items').insert({
         list_id,
         imdb_id,
-        position
+        position,
+        type
     });
     if (error) throw error;
 };
@@ -160,4 +189,10 @@ export const addToList = async (list_id: string, imdb_id: string, position: numb
 export const removeFromList = async (list_id: string, imdb_id: string) => {
     const { error } = await supabase.from('list_items').delete().eq('list_id', list_id).eq('imdb_id', imdb_id);
     if (error) throw error;
+};
+
+export const getListItems = async (list_id: string) => {
+    const { data, error } = await supabase.from('list_items').select('*').eq('list_id', list_id).order('position', { ascending: true });
+    if (error) throw error;
+    return data as ListItem[];
 };

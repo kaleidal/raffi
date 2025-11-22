@@ -11,11 +11,14 @@
     import AddonsModal from "../components/AddonsModal.svelte";
     import PopularSection from "../components/home/PopularSection.svelte";
 
+    import YouModal from "../components/home/YouModal.svelte";
+
     let showcasedTitle: PopularTitleMeta;
     let fetchedTitles = false;
     let continueWatchingMeta: (ShowResponse & { libraryItem: any })[] = [];
     let popularMeta: PopularTitleMeta[] = [];
     let showAddonsModal = false;
+    let showYouModal = false;
 
     async function checkTrailer(videoId: string): Promise<boolean> {
         try {
@@ -81,7 +84,9 @@
                     new Date(a.last_watched).getTime(),
             );
 
-            const recent = library.slice(0, 10);
+            const recent = library
+                .filter((item) => item.shown !== false)
+                .slice(0, 10);
             for (const item of recent) {
                 try {
                     let meta: ShowResponse;
@@ -142,13 +147,16 @@
     }
 </script>
 
-{#if fetchedTitles}
-    <div class="bg-[#090909] h-fit min-h-screen flex flex-col pb-[100px]">
+<div class="bg-[#090909] h-fit min-h-screen flex flex-col pb-[100px]">
+    {#if fetchedTitles}
         {#if showcasedTitle}
             <Hero {showcasedTitle} />
         {/if}
 
-        <SearchBar on:openAddons={handleOpenAddons} />
+        <SearchBar
+            on:openAddons={handleOpenAddons}
+            on:openProfile={() => (showYouModal = true)}
+        />
 
         <div
             class="w-full z-10 h-fit flex flex-col gap-[100px] p-[100px] pt-[50px]"
@@ -156,7 +164,11 @@
             <ContinueWatching {continueWatchingMeta} />
             <PopularSection {popularMeta} />
         </div>
-    </div>
 
-    <AddonsModal bind:showAddonsModal />
-{/if}
+        <AddonsModal bind:showAddonsModal />
+        <YouModal
+            bind:visible={showYouModal}
+            on:close={() => (showYouModal = false)}
+        />
+    {/if}
+</div>

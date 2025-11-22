@@ -1,10 +1,15 @@
 <script lang="ts">
+    import ListsPopup from "./ListsPopup.svelte";
+
     export let metaData: any;
+
+    let listsPopupVisible = false;
 </script>
 
 <div class="flex flex-row gap-[20px]">
     <button
         class="px-[50px] py-[20px] flex flex-row gap-[20px] items-center cursor-pointer hover:bg-[#D3D3D3]/10 transition-all duration-200 bg-[#FFFFFF]/10 backdrop-blur-[16px] rounded-[64px] justify-center"
+        on:click={() => (listsPopupVisible = true)}
     >
         <svg
             width="30"
@@ -26,6 +31,13 @@
             >Add to list</span
         >
     </button>
+
+    <ListsPopup
+        bind:visible={listsPopupVisible}
+        imdbId={metaData.meta.imdb_id}
+        type={metaData.meta.type}
+        on:close={() => (listsPopupVisible = false)}
+    />
 
     <button
         class="px-[50px] py-[20px] flex flex-row gap-[20px] items-center cursor-pointer hover:bg-[#D3D3D3]/10 transition-all duration-200 bg-[#FFFFFF]/10 backdrop-blur-[16px] rounded-[64px] justify-center"
