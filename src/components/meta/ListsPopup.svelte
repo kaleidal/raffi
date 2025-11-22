@@ -44,7 +44,7 @@
         loading = true;
         try {
             lists = await getLists();
-            // Check membership
+
             const { data: items } = await supabase
                 .from("list_items")
                 .select("list_id")
@@ -65,7 +65,6 @@
                 memberOf.delete(listId);
                 memberOf = memberOf;
             } else {
-                // Position is just 0 for now, or max + 1 if we want to be fancy but db.ts doesn't expose getListItems easily yet
                 await addToList(listId, imdbId, 0, type);
                 memberOf.add(listId);
                 memberOf = memberOf;
