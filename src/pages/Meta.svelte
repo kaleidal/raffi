@@ -312,11 +312,20 @@
         loadedMeta = false;
         try {
             metaData = await getMetaData(imdbID, titleType);
+            console.log("Loaded metadata:", metaData);
 
-            // If we have an expected name and the loaded metadata name doesn't match, try fallback
             if (expectedName && metaData.meta.name !== expectedName) {
                 console.warn(
                     `Name mismatch: expected "${expectedName}", got "${metaData.meta.name}". Trying fallback type.`,
+                );
+                const fallbackType = titleType === "movie" ? "series" : "movie";
+                metaData = await getMetaData(imdbID, fallbackType);
+                titleType = fallbackType;
+            }
+
+            if (!metaData.meta.logo || !metaData.meta.background) {
+                console.warn(
+                    "Missing logo or background. Trying fallback type.",
                 );
                 const fallbackType = titleType === "movie" ? "series" : "movie";
                 metaData = await getMetaData(imdbID, fallbackType);
