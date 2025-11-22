@@ -7,7 +7,6 @@
     import { supabase } from "./lib/db/supabase";
     import { onMount } from "svelte";
 
-    // Map pages to components
     const pages = {
         home: Home,
         login: Login,
@@ -19,7 +18,6 @@
     let checkingAuth = true;
 
     onMount(() => {
-        // Check initial auth state
         (async () => {
             const {
                 data: { user },
@@ -27,13 +25,11 @@
             isAuthenticated = !!user;
             checkingAuth = false;
 
-            // If not authenticated and not on login page, redirect to login
             if (!isAuthenticated && $router.page !== "login") {
                 router.navigate("login");
             }
         })();
 
-        // Listen for auth state changes
         const {
             data: { subscription },
         } = supabase.auth.onAuthStateChange((event, session) => {

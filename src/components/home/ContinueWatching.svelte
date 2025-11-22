@@ -17,7 +17,6 @@
     let showLeftButton = false;
     let showRightButton = false;
 
-    // Context Menu State
     let showContextMenu = false;
     let contextMenuX = 0;
     let contextMenuY = 0;
