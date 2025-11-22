@@ -23,42 +23,15 @@ export const getPopularTitles = async (type: string): Promise<PopularTitleMeta[]
     return (await response.json()).metas;
 }
 
-export const searchTitles = async (query: string): Promise<PopularTitleMeta[]> => {
+export const searchTitles = async (query: string): Promise<any[]> => {
     if (!query) return [];
 
-    const movieUrl = `https://v3-cinemeta.strem.io/catalog/movie/top/search=${encodeURIComponent(query)}.json`;
-    const seriesUrl = `https://v3-cinemeta.strem.io/catalog/series/top/search=${encodeURIComponent(query)}.json`;
+    const url = `https://imdb.iamidiotareyoutoo.com/search?q=${encodeURIComponent(query)}&tt=&lsn=1&v=1`;
 
     try {
-        const [movieRes, seriesRes] = await Promise.all([
-            fetch(movieUrl),
-            fetch(seriesUrl)
-        ]);
-
-        const movies = movieRes.ok ? (await movieRes.json()).metas || [] : [];
-        const series = seriesRes.ok ? (await seriesRes.json()).metas || [] : [];
-
-        const allResults = [...movies, ...series];
-
-        return allResults.sort((a, b) => {
-            const getScore = (item: PopularTitleMeta) => {
-                const popularity = item.popularity || item.popularities?.stremio || 0;
-                let year = parseInt(item.year?.split("-")[0] || "0");
-
-                let multiplier = 1;
-                if (year < 2000) {
-                    multiplier = 0.1; // Hard nerf
-                } else if (year < 2015) {
-                    multiplier = 0.2; // Softer nerf
-                } else if (year < 2010) {
-                    multiplier = 0.5; // Softer nerf
-                }
-
-                return popularity * multiplier;
-            };
-
-            return getScore(b) - getScore(a);
-        });
+        const response = await fetch(url);
+        const data = await response.json();
+        return data.description || [];
     } catch (e) {
         console.error("Search failed", e);
         return [];

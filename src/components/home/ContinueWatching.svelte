@@ -2,6 +2,8 @@
     import type { ShowResponse } from "../../lib/library/types/meta_types";
     import { router } from "../../lib/stores/router";
     import { fade } from "svelte/transition";
+    import ContextMenu from "./ContextMenu.svelte";
+    import { hideFromContinueWatching, forgetProgress } from "../../lib/db/db";
 
     import { onMount } from "svelte";
 
@@ -14,6 +16,44 @@
     let scrollContainer: HTMLDivElement;
     let showLeftButton = false;
     let showRightButton = false;
+
+    // Context Menu State
+    let showContextMenu = false;
+    let contextMenuX = 0;
+    let contextMenuY = 0;
+    let selectedImdbId = "";
+
+    function handleContextMenu(e: MouseEvent, imdbId: string) {
+        e.preventDefault();
+        contextMenuX = e.clientX;
+        contextMenuY = e.clientY;
+        selectedImdbId = imdbId;
+        showContextMenu = true;
+    }
+
+    async function handleRemove() {
+        if (!selectedImdbId) return;
+        try {
+            await hideFromContinueWatching(selectedImdbId);
+            continueWatchingMeta = continueWatchingMeta.filter(
+                (item) => item.meta.imdb_id !== selectedImdbId,
+            );
+        } catch (e) {
+            console.error("Failed to remove item", e);
+        }
+    }
+
+    async function handleForget() {
+        if (!selectedImdbId) return;
+        try {
+            await forgetProgress(selectedImdbId);
+            continueWatchingMeta = continueWatchingMeta.filter(
+                (item) => item.meta.imdb_id !== selectedImdbId,
+            );
+        } catch (e) {
+            console.error("Failed to forget item", e);
+        }
+    }
 
     function updateScrollButtons() {
         if (scrollContainer) {
@@ -41,6 +81,16 @@
         return () => window.removeEventListener("resize", updateScrollButtons);
     });
 </script>
+
+{#if showContextMenu}
+    <ContextMenu
+        x={contextMenuX}
+        y={contextMenuY}
+        on:close={() => (showContextMenu = false)}
+        on:remove={handleRemove}
+        on:forget={handleForget}
+    />
+{/if}
 
 {#if continueWatchingMeta.length > 0}
     <div class="w-full h-fit flex flex-col gap-4 relative group">
@@ -111,6 +161,8 @@
                                     title.meta.imdb_id,
                                     title.meta.type,
                                 )}
+                            on:contextmenu={(e) =>
+                                handleContextMenu(e, title.meta.imdb_id)}
                         >
                             <img
                                 src={title.meta.poster}

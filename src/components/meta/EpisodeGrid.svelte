@@ -31,6 +31,8 @@
                 ? 'opacity-60'
                 : ''}"
             on:click={() => handleEpisodeClick(episode)}
+            on:contextmenu|preventDefault={(e) =>
+                dispatch("episodeContextMenu", { event: e, episode })}
         >
             <div
                 class="w-full h-[150px] bg-gradient-to-t from-[#090909] to-transparent absolute bottom-0 left-0"
