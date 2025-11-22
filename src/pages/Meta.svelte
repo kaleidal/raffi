@@ -162,7 +162,11 @@
         metaData = await getMetaData(imdbID, titleType);
         loadedMeta = true;
 
-        episodes = metaData.meta.videos.length;
+        // episodes is the total number of episodes starting from season 1, skip season 0 which is the special episodes
+        episodes = metaData.meta.videos.filter(
+            (video) => video.season > 0,
+        ).length;
+
         seasons = Math.max(
             ...metaData.meta.videos.map((video) => video.season),
         );
@@ -449,11 +453,41 @@
                                 class="w-full h-[150px] bg-gradient-to-t from-[#090909] to-transparent absolute bottom-0 left-0"
                             ></div>
 
-                            <img
-                                src={episode.thumbnail}
-                                alt="Episode Thumbnail"
-                                class="w-full h-full object-cover"
-                            />
+                            {#if episode.thumbnail}
+                                <img
+                                    src={episode.thumbnail}
+                                    alt="Episode Thumbnail"
+                                    class="w-full h-full object-cover aspect-video"
+                                />
+                            {:else}
+                                <div
+                                    class="w-full aspect-video bg-[#1a1a1a] flex items-center justify-center"
+                                >
+                                    <svg
+                                        width="40"
+                                        height="40"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        class="opacity-20"
+                                    >
+                                        <path
+                                            d="M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z"
+                                            stroke="white"
+                                            stroke-width="2"
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                        />
+                                        <path
+                                            d="M10 8L16 12L10 16V8Z"
+                                            stroke="white"
+                                            stroke-width="2"
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                        />
+                                    </svg>
+                                </div>
+                            {/if}
 
                             <div
                                 class="p-5 flex flex-col justify-end gap-[10px] z-10 absolute w-full h-full top-0 left-0"

@@ -125,9 +125,13 @@
 
         showSkipIntro = inIntro;
 
-        if (inCredits) {
+        if (inCredits && metaData?.meta.type === "series") {
             showNextEpisode = true;
-        } else if (duration > 0 && duration - time <= 45) {
+        } else if (
+            duration > 0 &&
+            duration - time <= 45 &&
+            metaData?.meta.type === "series"
+        ) {
             showNextEpisode = true;
         } else {
             showNextEpisode = false;
