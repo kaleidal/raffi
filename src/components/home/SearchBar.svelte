@@ -7,7 +7,7 @@
     const dispatch = createEventDispatcher();
 
     let searchQuery = "";
-    let searchResults: PopularTitleMeta[] = [];
+    let searchResults: any[] = [];
     let searchTimeout: any;
     let showSearchResults = false;
 
@@ -34,8 +34,8 @@
         }, 200);
     }
 
-    function navigateToMeta(imdbId: string, type: string) {
-        router.navigate("meta", { imdbId, type });
+    function navigateToMeta(imdbId: string, type: string, name: string) {
+        router.navigate("meta", { imdbId, type, name });
     }
 
     function openAddons() {
@@ -91,20 +91,24 @@
                     <button
                         class="flex flex-row gap-4 items-center p-2 hover:bg-white/10 rounded-xl transition-colors cursor-pointer text-left"
                         on:click={() =>
-                            navigateToMeta(result.imdb_id, result.type)}
+                            navigateToMeta(
+                                result["#IMDB_ID"],
+                                "movie",
+                                result["#TITLE"],
+                            )}
                     >
                         <img
-                            src={result.poster}
-                            alt={result.name}
+                            src={result["#IMG_POSTER"]}
+                            alt={result["#TITLE"]}
                             class="w-[40px] h-[60px] object-cover rounded-md bg-black/50"
                         />
                         <div class="flex flex-col">
                             <span
                                 class="text-white font-poppins font-medium text-lg line-clamp-1"
-                                >{result.name}</span
+                                >{result["#TITLE"]}</span
                             >
                             <span class="text-white/50 font-poppins text-sm"
-                                >{result.year || ""} • {result.type}</span
+                                >{result["#YEAR"] || ""}</span
                             >
                         </div>
                     </button>
@@ -139,6 +143,7 @@
         <button
             class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 transition-colors duration-300 cursor-pointer"
             aria-label="profile"
+            on:click={() => dispatch("openProfile")}
         >
             <svg
                 width="40"

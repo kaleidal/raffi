@@ -1,9 +1,10 @@
 <script lang="ts">
     import { fade } from "svelte/transition";
     import { createEventDispatcher } from "svelte";
+    import type { Addon } from "../../lib/db/db";
 
     export let streamsPopupVisible = false;
-    export let addons: string[] = [];
+    export let addons: Addon[] = [];
     export let selectedAddon: string;
     export let loadingStreams = false;
     export let streams: any[] = [];
@@ -24,6 +25,28 @@
         const words = text.split(/\s+/);
         if (words.length <= maxWords) return text;
         return words.slice(0, maxWords).join(" ") + "…";
+    }
+
+    function getStreamTitle(stream: any) {
+        if (!stream.title) {
+            return metaData.meta.type === "movie"
+                ? "Watch Movie"
+                : "Watch Episode";
+        }
+        const parts = stream.title.split("\n");
+        if (parts.length > 1) {
+            return parts[1];
+        }
+        return stream.title;
+    }
+
+    function getStreamDetails(stream: any) {
+        if (!stream.title) return "";
+        const parts = stream.title.split("\n");
+        if (parts.length > 2) {
+            return parts.slice(2).join(" ");
+        }
+        return "";
     }
 </script>
 
@@ -68,15 +91,16 @@
 
             {#if addons.length > 1}
                 <div class="flex flex-row gap-4 overflow-x-auto pb-2">
-                    {#each addons as addon, i}
+                    {#each addons as addon}
                         <button
                             class="px-6 py-3 rounded-full text-sm font-medium transition-colors cursor-pointer whitespace-nowrap {selectedAddon ===
-                            addon
+                            addon.transport_url
                                 ? 'bg-white text-black'
                                 : 'bg-white/10 text-white hover:bg-white/20'}"
-                            on:click={() => (selectedAddon = addon)}
+                            on:click={() =>
+                                (selectedAddon = addon.transport_url)}
                         >
-                            Addon {i + 1}
+                            {addon.manifest.name}
                         </button>
                     {/each}
                 </div>
@@ -102,10 +126,7 @@
                             >
                                 <span class="text-white font-medium text-lg"
                                     >{truncateWords(
-                                        stream.title.split("\n")[0] ||
-                                            (metaData.meta.type === "movie"
-                                                ? "Watch Movie"
-                                                : "Watch S1E2"),
+                                        getStreamTitle(stream),
                                         10,
                                     )}</span
                                 >
@@ -114,8 +135,7 @@
                                 >
                             </div>
                             <span class="text-white/40 text-sm line-clamp-1"
-                                >{stream.title.split("\n").slice(1).join(" ") ||
-                                    ""}</span
+                                >{getStreamDetails(stream)}</span
                             >
                         </button>
                     {/each}

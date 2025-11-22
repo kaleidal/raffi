@@ -5,6 +5,7 @@
     import Player from "./Player.svelte";
     import { slide, fade } from "svelte/transition";
     import { router } from "../lib/stores/router";
+    import type { Addon } from "../lib/db/db";
     import {
         getAddons,
         getLibraryItem,
@@ -15,15 +16,16 @@
     import EpisodeGrid from "../components/meta/EpisodeGrid.svelte";
     import StreamsPopup from "../components/meta/StreamsPopup.svelte";
     import ActionButtons from "../components/meta/ActionButtons.svelte";
+    import EpisodeContextMenu from "../components/meta/EpisodeContextMenu.svelte";
 
-    let addons: string[] = [];
+    let addons: Addon[] = [];
 
     onMount(async () => {
         try {
             const dbAddons = await getAddons();
             if (dbAddons.length > 0) {
-                addons = dbAddons.map((a) => a.transport_url);
-                selectedAddon = addons[0];
+                addons = dbAddons;
+                selectedAddon = addons[0].transport_url;
             }
         } catch (e) {
             console.error("Failed to load addons", e);
@@ -33,6 +35,7 @@
     // Get params from router store
     $: imdbID = $router.params.imdbId;
     $: titleType = $router.params.type || "movie";
+    $: expectedName = $router.params.name || "";
 
     let lastWatched = { season: 1, episode: 0 };
 
@@ -49,7 +52,7 @@
     let playerVisible = false;
     let streams: any[] = [];
     let selectedStreamUrl: string | null = null;
-    let selectedAddon: string = addons[0];
+    let selectedAddon: string = "";
     let loadingStreams = false;
     let selectedEpisode: any = null;
     let progressMap: any = {};
@@ -219,6 +222,85 @@
         }
     };
 
+    // Context Menu Logic
+    let showEpisodeContextMenu = false;
+    let contextMenuX = 0;
+    let contextMenuY = 0;
+    let contextEpisode: any = null;
+
+    function handleEpisodeContextMenu(e: MouseEvent, episode: any) {
+        contextMenuX = e.clientX;
+        contextMenuY = e.clientY;
+        contextEpisode = episode;
+        showEpisodeContextMenu = true;
+    }
+
+    function handleContextWatch() {
+        if (contextEpisode) {
+            episodeClicked(contextEpisode);
+        }
+    }
+
+    async function handleContextMarkWatched() {
+        if (!contextEpisode || !imdbID) return;
+        const key = `${contextEpisode.season}:${contextEpisode.episode}`;
+        // Assume standard duration if unknown, or just set watched=true
+        // If we don't have duration, we can't set time accurately, but watched=true is key.
+        // We'll preserve existing duration if available.
+        const existing = progressMap[key] || {};
+        const duration = existing.duration || 0;
+
+        progressMap[key] = {
+            time: duration, // Set to end
+            duration: duration,
+            watched: true,
+            updatedAt: Date.now(),
+        };
+        progressMap = progressMap;
+        await updateLibraryProgress(
+            imdbID,
+            progressMap,
+            metaData.meta.type,
+            false,
+        );
+    }
+
+    async function handleContextMarkUnwatched() {
+        if (!contextEpisode || !imdbID) return;
+        const key = `${contextEpisode.season}:${contextEpisode.episode}`;
+        const existing = progressMap[key] || {};
+
+        progressMap[key] = {
+            ...existing,
+            time: 0,
+            watched: false,
+            updatedAt: Date.now(),
+        };
+        progressMap = progressMap;
+        await updateLibraryProgress(
+            imdbID,
+            progressMap,
+            metaData.meta.type,
+            false,
+        );
+    }
+
+    async function handleContextResetProgress() {
+        if (!contextEpisode || !imdbID) return;
+        const key = `${contextEpisode.season}:${contextEpisode.episode}`;
+
+        if (progressMap[key]) {
+            delete progressMap[key];
+            progressMap = progressMap;
+            await updateLibraryProgress(
+                imdbID,
+                progressMap,
+                metaData.meta.type,
+                false,
+            );
+        }
+    }
+
     $: if (selectedAddon && selectedEpisode) {
         if (streamsPopupVisible) {
             fetchStreams(selectedEpisode);
@@ -228,7 +310,30 @@
     const loadData = async () => {
         if (!imdbID) return;
         loadedMeta = false;
-        metaData = await getMetaData(imdbID, titleType);
+        try {
+            metaData = await getMetaData(imdbID, titleType);
+
+            // If we have an expected name and the loaded metadata name doesn't match, try fallback
+            if (expectedName && metaData.meta.name !== expectedName) {
+                console.warn(
+                    `Name mismatch: expected "${expectedName}", got "${metaData.meta.name}". Trying fallback type.`,
+                );
+                const fallbackType = titleType === "movie" ? "series" : "movie";
+                metaData = await getMetaData(imdbID, fallbackType);
+                titleType = fallbackType;
+            }
+        } catch (e) {
+            console.warn(
+                `Failed to load meta for ${titleType}, trying fallback`,
+            );
+            try {
+                const fallbackType = titleType === "movie" ? "series" : "movie";
+                metaData = await getMetaData(imdbID, fallbackType);
+                titleType = fallbackType;
+            } catch (e2) {
+                console.error("Failed to load meta (fallback)", e2);
+            }
+        }
         loadedMeta = true;
 
         episodes = (metaData.meta.videos || []).filter(
@@ -577,10 +682,27 @@
                     {currentSeason}
                     {progressMap}
                     on:episodeClick={(e) => episodeClicked(e.detail)}
+                    on:episodeContextMenu={(e) =>
+                        handleEpisodeContextMenu(
+                            e.detail.event,
+                            e.detail.episode,
+                        )}
                 />
             </div>
         {/if}
     </div>
+
+    {#if showEpisodeContextMenu}
+        <EpisodeContextMenu
+            x={contextMenuX}
+            y={contextMenuY}
+            on:close={() => (showEpisodeContextMenu = false)}
+            on:watch={handleContextWatch}
+            on:markWatched={handleContextMarkWatched}
+            on:markUnwatched={handleContextMarkUnwatched}
+            on:resetProgress={handleContextResetProgress}
+        />
+    {/if}
 
     <StreamsPopup
         bind:streamsPopupVisible

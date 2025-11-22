@@ -145,6 +145,13 @@
         onNextEpisode();
     }
 
+    function handleNextEpisodeClick() {
+        if (duration > 0 && duration - currentTime <= 600) {
+            onProgress(duration, duration);
+        }
+        onNextEpisode();
+    }
+
     function isTimeBuffered(
         elem: HTMLVideoElement,
         target: number,
@@ -527,6 +534,7 @@
                 {onSeekChange}
                 {onVolumeChange}
                 {toggleFullscreen}
+                onNextEpisode={handleNextEpisodeClick}
             />
         </div>
     {/if}
