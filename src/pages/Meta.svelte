@@ -5,10 +5,25 @@
     import Player from "./Player.svelte";
     import { slide, fade } from "svelte/transition";
     import { router } from "../lib/stores/router";
+    import {
+        getAddons,
+        getLibraryItem,
+        updateLibraryProgress,
+    } from "../lib/db/db";
 
-    let addons: string[] = [
-        "https://torrentio.strem.fun/language=german,serbian,croatian|qualityfilter=scr,cam|limit=1|debridoptions=nodownloadlinks|realdebrid=LMDSM5K2GLBR4BG6MT6JBPYHR7C5HZP2RAUCCNL4ZIS7236LV2LA/",
-    ];
+    let addons: string[] = [];
+
+    onMount(async () => {
+        try {
+            const dbAddons = await getAddons();
+            if (dbAddons.length > 0) {
+                addons = dbAddons.map((a) => a.transport_url);
+                selectedAddon = addons[0];
+            }
+        } catch (e) {
+            console.error("Failed to load addons", e);
+        }
+    });
 
     // Get params from router store
     $: imdbID = $router.params.imdbId;
@@ -32,6 +47,8 @@
     let selectedAddon: string = addons[0];
     let loadingStreams = false;
     let selectedEpisode: any = null;
+    let progressMap: any = {};
+    let libraryItem: any = null;
 
     const truncateWords = (text: string, maxWords: number) => {
         if (!text) return "";
@@ -58,7 +75,7 @@
             }
 
             const response = await fetch(
-                selectedAddon + "stream/" + type + "/" + streamId + ".json",
+                selectedAddon + "/stream/" + type + "/" + streamId + ".json",
             );
             const data = await response.json();
             if (data.streams) {
@@ -77,12 +94,26 @@
         await fetchStreams(episode);
     };
 
+    let startTime = 0;
+
     const onStreamClick = (stream: any) => {
-        // stream.url or stream.ytId or stream.infoHash
+        // stream.url or stream.infoHash
         // For now assuming stream.url as torrenting hasn't been implemented yet.
         if (stream.url) {
             selectedStream = stream;
             selectedStreamUrl = stream.url;
+
+            if (selectedEpisode) {
+                const key = `${selectedEpisode.season}:${selectedEpisode.episode}`;
+                const prog = progressMap[key];
+                if (prog && !prog.watched) {
+                    startTime = prog.time;
+                } else {
+                    startTime = 0;
+                }
+                console.log("Setting startTime:", startTime);
+            }
+
             playerVisible = true;
             streamsPopupVisible = false;
         } else {
@@ -150,6 +181,27 @@
         }
     };
 
+    let lastUpdate = 0;
+    const handleProgress = async (time: number, duration: number) => {
+        if (!selectedEpisode || !imdbID) return;
+        const key = `${selectedEpisode.season}:${selectedEpisode.episode}`;
+        const isWatched = time > duration * 0.9;
+
+        progressMap[key] = {
+            time,
+            duration,
+            watched: isWatched,
+            updatedAt: Date.now(),
+        };
+        progressMap = progressMap; // Trigger reactivity
+
+        const now = Date.now();
+        if (now - lastUpdate > 5000 || isWatched) {
+            lastUpdate = now;
+            await updateLibraryProgress(imdbID, progressMap, false);
+        }
+    };
+
     $: if (selectedAddon && selectedEpisode) {
         if (streamsPopupVisible) {
             fetchStreams(selectedEpisode);
@@ -162,7 +214,6 @@
         metaData = await getMetaData(imdbID, titleType);
         loadedMeta = true;
 
-        // episodes is the total number of episodes starting from season 1, skip season 0 which is the special episodes
         episodes = metaData.meta.videos.filter(
             (video) => video.season > 0,
         ).length;
@@ -175,7 +226,36 @@
         for (let i = 1; i <= seasons; i++) {
             seasonsArray.push(i);
         }
+
+        try {
+            const item = await getLibraryItem(imdbID);
+            if (item) {
+                libraryItem = item;
+                progressMap = item.progress || {};
+
+                // lastWatched is now reactive, no need to calculate here
+            }
+        } catch (e) {
+            console.error("Failed to load library item", e);
+        }
     };
+
+    $: {
+        let latest = 0;
+        let latestKey = "";
+        for (const [key, val] of Object.entries(progressMap)) {
+            const v = val as any;
+            if (v.updatedAt > latest) {
+                latest = v.updatedAt;
+                latestKey = key;
+            }
+        }
+
+        if (latestKey) {
+            const [s, e] = latestKey.split(":").map(Number);
+            lastWatched = { season: s, episode: e };
+        }
+    }
 
     $: if (imdbID) {
         loadData();
@@ -204,7 +284,10 @@
 
             <button
                 class="absolute top-[50px] left-[50px] z-50 bg-[#FFFFFF]/10 hover:bg-[#FFFFFF]/20 backdrop-blur-md p-4 rounded-full transition-colors duration-200 cursor-pointer"
-                on:click={() => router.navigate("home")}
+                on:click={() => {
+                    router.navigate("home");
+                    closePlayer();
+                }}
                 aria-label="Back to Home"
             >
                 <svg
@@ -243,52 +326,130 @@
                         >
                     </div>
 
-                    <button
-                        class="bg-[#FFFFFF]/80 hover:bg-[#D3D3D3]/80 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-[20px] text-black text-[48px] font-poppins font-medium px-[130px] py-[25px] rounded-[50px] mt-10 transition-colors duration-200"
-                        on:click={() => {
-                            if (metaData.meta.type === "movie") {
-                                episodeClicked({});
-                            } else {
-                                const nextEpIndex =
-                                    metaData.meta.videos.findIndex(
-                                        (v) =>
-                                            v.season === lastWatched.season &&
-                                            v.episode === lastWatched.episode,
-                                    );
-                                if (
-                                    nextEpIndex !== -1 &&
-                                    nextEpIndex <
-                                        metaData.meta.videos.length - 1
-                                ) {
-                                    const nextEp =
-                                        metaData.meta.videos[nextEpIndex + 1];
-                                    episodeClicked(nextEp);
-                                } else {
-                                    episodeClicked(metaData.meta.videos[0]);
-                                }
-                            }
-                        }}
-                    >
-                        <svg
-                            width="70"
-                            height="70"
-                            viewBox="0 0 92 92"
-                            fill="none"
-                            xmlns="http://www.w3.org/2000/svg"
-                        >
-                            <path
-                                d="M23 11.5L76.6667 46L23 80.5V11.5Z"
-                                stroke="black"
-                                stroke-width="10"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                            />
-                        </svg>
+                    {#if metaData.meta.type === "series"}
+                        {@const lastEpKey = `${lastWatched.season}:${lastWatched.episode}`}
+                        {@const lastEpProgress = progressMap[lastEpKey]}
+                        {@const isResumable =
+                            lastEpProgress &&
+                            !lastEpProgress.watched &&
+                            lastEpProgress.time > 0}
 
-                        Watch {metaData.meta.type === "movie"
-                            ? "Movie"
-                            : "S1E1"}
-                    </button>
+                        <div
+                            class="relative overflow-hidden rounded-[50px] mt-10"
+                        >
+                            <button
+                                class="bg-[#FFFFFF]/80 hover:bg-[#D3D3D3]/80 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-[20px] text-black text-[48px] font-poppins font-medium px-[130px] py-[25px] w-full transition-colors duration-200 relative z-10"
+                                on:click={() => {
+                                    const nextEpIndex =
+                                        metaData.meta.videos.findIndex(
+                                            (v) =>
+                                                v.season ===
+                                                    lastWatched.season &&
+                                                v.episode ===
+                                                    lastWatched.episode,
+                                        );
+                                    if (
+                                        nextEpIndex !== -1 &&
+                                        nextEpIndex <
+                                            metaData.meta.videos.length - 1
+                                    ) {
+                                        // If watched, go to next
+                                        if (
+                                            lastEpProgress &&
+                                            lastEpProgress.watched
+                                        ) {
+                                            const nextEp =
+                                                metaData.meta.videos[
+                                                    nextEpIndex + 1
+                                                ];
+                                            episodeClicked(nextEp);
+                                        } else {
+                                            // Resume current
+                                            episodeClicked(
+                                                metaData.meta.videos[
+                                                    nextEpIndex
+                                                ],
+                                            );
+                                        }
+                                    } else {
+                                        episodeClicked(metaData.meta.videos[0]);
+                                    }
+                                }}
+                            >
+                                <svg
+                                    width="70"
+                                    height="70"
+                                    viewBox="0 0 92 92"
+                                    fill="none"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                >
+                                    <path
+                                        d="M23 11.5L76.6667 46L23 80.5V11.5Z"
+                                        stroke="black"
+                                        stroke-width="10"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                    />
+                                </svg>
+
+                                {#if isResumable}
+                                    Resume S{lastWatched.season}E{lastWatched.episode}
+                                {:else if lastEpProgress && lastEpProgress.watched}
+                                    <!-- Check if there is a next episode -->
+                                    {@const nextEpIndex =
+                                        metaData.meta.videos.findIndex(
+                                            (v) =>
+                                                v.season ===
+                                                    lastWatched.season &&
+                                                v.episode ===
+                                                    lastWatched.episode,
+                                        )}
+                                    {#if nextEpIndex !== -1 && nextEpIndex < metaData.meta.videos.length - 1}
+                                        {@const nextEp =
+                                            metaData.meta.videos[
+                                                nextEpIndex + 1
+                                            ]}
+                                        Watch S{nextEp.season}E{nextEp.episode}
+                                    {:else}
+                                        Watch S1E1
+                                    {/if}
+                                {:else}
+                                    Watch S{lastWatched.season}E{lastWatched.episode ||
+                                        1}
+                                {/if}
+                            </button>
+                            {#if isResumable}
+                                <div
+                                    class="absolute bottom-0 left-0 h-[6px] bg-[#676767] z-20"
+                                    style="width: {(lastEpProgress.time /
+                                        lastEpProgress.duration) *
+                                        100}%"
+                                ></div>
+                            {/if}
+                        </div>
+                    {:else}
+                        <button
+                            class="bg-[#FFFFFF]/80 hover:bg-[#D3D3D3]/80 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-[20px] text-black text-[48px] font-poppins font-medium px-[130px] py-[25px] rounded-[50px] mt-10 transition-colors duration-200"
+                            on:click={() => episodeClicked({})}
+                        >
+                            <svg
+                                width="70"
+                                height="70"
+                                viewBox="0 0 92 92"
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg"
+                            >
+                                <path
+                                    d="M23 11.5L76.6667 46L23 80.5V11.5Z"
+                                    stroke="black"
+                                    stroke-width="10"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                />
+                            </svg>
+                            Watch Movie
+                        </button>
+                    {/if}
                 </div>
 
                 <div
@@ -445,8 +606,14 @@
 
                 <div class="grid grid-cols-4 gap-[30px]">
                     {#each metaData.meta.videos.filter((video) => video.season === currentSeason) as episode}
+                        {@const epKey = `${episode.season}:${episode.episode}`}
+                        {@const epProgress = progressMap[epKey]}
+                        {@const isWatched = epProgress && epProgress.watched}
+
                         <button
-                            class="bg-[#121212] rounded-[20px] overflow-hidden cursor-pointer hover:opacity-80 transition-opacity duration-200 relative"
+                            class="bg-[#121212] rounded-[20px] overflow-hidden cursor-pointer hover:opacity-80 transition-opacity duration-200 relative {isWatched
+                                ? 'opacity-60'
+                                : ''}"
                             on:click={() => episodeClicked(episode)}
                         >
                             <div
@@ -457,7 +624,9 @@
                                 <img
                                     src={episode.thumbnail}
                                     alt="Episode Thumbnail"
-                                    class="w-full h-full object-cover aspect-video"
+                                    class="w-full h-full object-cover aspect-video {isWatched
+                                        ? 'grayscale'
+                                        : ''}"
                                 />
                             {:else}
                                 <div
@@ -487,6 +656,37 @@
                                         />
                                     </svg>
                                 </div>
+                            {/if}
+
+                            {#if isWatched}
+                                <div
+                                    class="absolute top-2 right-2 bg-black/50 p-1 rounded-full"
+                                >
+                                    <svg
+                                        width="20"
+                                        height="20"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="white"
+                                        stroke-width="2"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                    >
+                                        <path
+                                            d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"
+                                        ></path>
+                                        <circle cx="12" cy="12" r="3"></circle>
+                                    </svg>
+                                </div>
+                            {/if}
+
+                            {#if epProgress && !isWatched && epProgress.time > 0}
+                                <div
+                                    class="absolute bottom-0 left-0 h-[4px] bg-[#676767] z-20"
+                                    style="width: {(epProgress.time /
+                                        epProgress.duration) *
+                                        100}%"
+                                ></div>
                             {/if}
 
                             <div
@@ -586,7 +786,7 @@
                                 >
                                     <span class="text-white font-medium text-lg"
                                         >{truncateWords(
-                                            stream.title ||
+                                            stream.title.split("\n")[0] ||
                                                 (metaData.meta.type === "movie"
                                                     ? "Watch Movie"
                                                     : "Watch S1E2"),
@@ -619,6 +819,8 @@
                 autoPlay={true}
                 onClose={closePlayer}
                 onNextEpisode={handleNextEpisode}
+                onProgress={handleProgress}
+                {startTime}
             />
         </div>
     {/if}

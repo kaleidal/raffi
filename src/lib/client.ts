@@ -3,11 +3,11 @@ export const serverUrl = CORE_BASE;
 
 export type SessionKind = "http" | "torrent";
 
-export async function createSession(source: string, kind: SessionKind = "http") {
+export async function createSession(source: string, kind: SessionKind = "http", startTime: number = 0) {
     const res = await fetch(`${CORE_BASE}/sessions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source, kind })
+        body: JSON.stringify({ source, kind, startTime })
     });
 
     if (!res.ok) {

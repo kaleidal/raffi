@@ -18,6 +18,9 @@
     export let onClose: () => void = () => {};
     export let onNextEpisode: () => void = () => {};
 
+    export let onProgress: (time: number, duration: number) => void = () => {};
+    export let startTime: number = 0;
+
     interface Chapter {
         startTime: number;
         endTime: number;
@@ -81,6 +84,7 @@
     const handleTimeUpdate = () => {
         if (!videoElem) return;
         currentTime = playbackOffset + videoElem.currentTime;
+        onProgress(currentTime, duration);
         if (!seekGuard) {
             checkChapters(currentTime);
         }
@@ -288,9 +292,10 @@
             pendingSeek = null;
 
             // 1) create session + get base manifest URL
-            sessionId = await createSession(src, "http");
+            sessionId = await createSession(src, "http", startTime);
+            playbackOffset = startTime;
 
-            const baseManifest = `${getStreamUrl(sessionId)}/child.m3u8`;
+            let baseManifest = `${getStreamUrl(sessionId)}/child.m3u8`;
             const sessionUrl = getSessionUrl(sessionId);
 
             // 2) fetch metadata (duration etc.)
@@ -322,6 +327,7 @@
                 });
 
                 const onInitialParsed = () => {
+                    hls?.off(Hls.Events.MANIFEST_PARSED, onInitialParsed);
                     console.log("HLS MANIFEST_PARSED (initial)");
                     loading = false;
                     showCanvas = false;
@@ -333,10 +339,12 @@
                 };
 
                 hls.on(Hls.Events.MANIFEST_LOADED, (_, data) => {
+                    console.log("MANIFEST_LOADED data:", data);
                     if (
                         data.networkDetails &&
                         data.networkDetails instanceof XMLHttpRequest
                     ) {
+                        console.log("Network details is XHR");
                         const startHeader =
                             data.networkDetails.getResponseHeader(
                                 "X-Raffi-Slice-Start",
@@ -349,7 +357,14 @@
                                     val,
                                 );
                                 playbackOffset = val;
+                            } else {
+                                console.warn(
+                                    "Invalid slice start header:",
+                                    startHeader,
+                                );
                             }
+                        } else {
+                            console.warn("No X-Raffi-Slice-Start header found");
                         }
                     }
                 });
