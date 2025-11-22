@@ -14,6 +14,7 @@ export interface LibraryItem {
     progress: any; // Record<string, WatchedState>
     last_watched: string;
     completed_at: string | null;
+    type: string;
 }
 
 export interface List {
@@ -78,7 +79,7 @@ export const getLibraryItem = async (imdb_id: string) => {
     return data as LibraryItem | null;
 };
 
-export const updateLibraryProgress = async (imdb_id: string, progress: any, completed: boolean = false) => {
+export const updateLibraryProgress = async (imdb_id: string, progress: any, type: string, completed: boolean = false) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
@@ -87,6 +88,7 @@ export const updateLibraryProgress = async (imdb_id: string, progress: any, comp
         imdb_id,
         progress,
         last_watched: new Date().toISOString(),
+        type,
     };
     if (completed) {
         updates.completed_at = new Date().toISOString();
