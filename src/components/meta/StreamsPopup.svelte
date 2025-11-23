@@ -2,6 +2,7 @@
     import { fade } from "svelte/transition";
     import { createEventDispatcher } from "svelte";
     import type { Addon } from "../../lib/db/db";
+    import LoadingSpinner from "../common/LoadingSpinner.svelte";
 
     export let streamsPopupVisible = false;
     export let addons: Addon[] = [];
@@ -118,8 +119,8 @@
 
             <div class="flex flex-col gap-4 overflow-y-auto pr-2">
                 {#if loadingStreams}
-                    <div class="text-white/50 text-center py-10">
-                        Loading streams...
+                    <div class="flex justify-center py-10">
+                        <LoadingSpinner size="40px" />
                     </div>
                 {:else if streams.length === 0}
                     <div class="text-white/50 text-center py-10">

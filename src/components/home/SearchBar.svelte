@@ -2,6 +2,8 @@
     import { createEventDispatcher } from "svelte";
     import { searchTitles } from "../../lib/library/library";
     import { router } from "../../lib/stores/router";
+    import Skeleton from "../common/Skeleton.svelte";
+    import { fade } from "svelte/transition";
 
     const dispatch = createEventDispatcher();
 
@@ -9,6 +11,7 @@
     let searchResults: any[] = [];
     let searchTimeout: any;
     let showSearchResults = false;
+    let loading = false;
     export let absolute: boolean = true;
 
     function handleSearch(e: Event) {
@@ -19,12 +22,16 @@
         if (!query.trim()) {
             searchResults = [];
             showSearchResults = false;
+            loading = false;
             return;
         }
 
+        loading = true;
+        showSearchResults = true;
+
         searchTimeout = setTimeout(async () => {
             searchResults = await searchTitles(query);
-            showSearchResults = true;
+            loading = false;
         }, 500);
     }
 
@@ -90,36 +97,55 @@
             />
         </div>
 
-        {#if showSearchResults && searchResults.length > 0}
+        {#if showSearchResults && (searchResults.length > 0 || loading)}
             <div
                 class="absolute top-[90px] left-0 w-full bg-[#181818]/90 backdrop-blur-xl rounded-[24px] p-4 flex flex-col gap-2 max-h-[400px] overflow-y-auto z-100"
+                transition:fade={{ duration: 200 }}
             >
-                {#each searchResults as result}
-                    <button
-                        class="flex flex-row gap-4 items-center p-2 hover:bg-white/10 rounded-xl transition-colors cursor-pointer text-left"
-                        on:click={() =>
-                            navigateToMeta(
-                                result["#IMDB_ID"],
-                                "movie",
-                                result["#TITLE"],
-                            )}
-                    >
-                        <img
-                            src={result["#IMG_POSTER"]}
-                            alt={result["#TITLE"]}
-                            class="w-[40px] h-[60px] object-cover rounded-md bg-black/50"
-                        />
-                        <div class="flex flex-col">
-                            <span
-                                class="text-white font-poppins font-medium text-lg line-clamp-1"
-                                >{result["#TITLE"]}</span
-                            >
-                            <span class="text-white/50 font-poppins text-sm"
-                                >{result["#YEAR"] || ""}</span
-                            >
+                {#if loading}
+                    {#each Array(3) as _}
+                        <div
+                            class="flex flex-row gap-4 items-center p-2 rounded-xl"
+                        >
+                            <Skeleton
+                                width="40px"
+                                height="60px"
+                                borderRadius="6px"
+                            />
+                            <div class="flex flex-col gap-2">
+                                <Skeleton width="150px" height="20px" />
+                                <Skeleton width="50px" height="14px" />
+                            </div>
                         </div>
-                    </button>
-                {/each}
+                    {/each}
+                {:else}
+                    {#each searchResults as result}
+                        <button
+                            class="flex flex-row gap-4 items-center p-2 hover:bg-white/10 rounded-xl transition-colors cursor-pointer text-left"
+                            on:click={() =>
+                                navigateToMeta(
+                                    result["#IMDB_ID"],
+                                    "movie",
+                                    result["#TITLE"],
+                                )}
+                        >
+                            <img
+                                src={result["#IMG_POSTER"]}
+                                alt={result["#TITLE"]}
+                                class="w-[40px] h-[60px] object-cover rounded-md bg-black/50"
+                            />
+                            <div class="flex flex-col">
+                                <span
+                                    class="text-white font-poppins font-medium text-lg line-clamp-1"
+                                    >{result["#TITLE"]}</span
+                                >
+                                <span class="text-white/50 font-poppins text-sm"
+                                    >{result["#YEAR"] || ""}</span
+                                >
+                            </div>
+                        </button>
+                    {/each}
+                {/if}
             </div>
         {/if}
     </div>
