@@ -1,9 +1,13 @@
 <script lang="ts">
-    import type { ShowResponse } from "../../lib/library/types/meta_types";
-    import { router } from "../../lib/stores/router";
+    import type { ShowResponse } from "../../../lib/library/types/meta_types";
+    import { router } from "../../../lib/stores/router";
     import { fade } from "svelte/transition";
-    import ContextMenu from "./ContextMenu.svelte";
-    import { hideFromContinueWatching, forgetProgress } from "../../lib/db/db";
+    import WatchingContextMenu from "../context_menus/WatchingContextMenu.svelte";
+    import {
+        hideFromContinueWatching,
+        forgetProgress,
+    } from "../../../lib/db/db";
+    import ListsPopup from "../../meta/ListsPopup.svelte";
 
     import { onMount } from "svelte";
 
@@ -21,12 +25,15 @@
     let contextMenuX = 0;
     let contextMenuY = 0;
     let selectedImdbId = "";
+    let selectedType = "";
+    let showListsPopup = false;
 
-    function handleContextMenu(e: MouseEvent, imdbId: string) {
+    function handleContextMenu(e: MouseEvent, imdbId: string, type: string) {
         e.preventDefault();
         contextMenuX = e.clientX;
         contextMenuY = e.clientY;
         selectedImdbId = imdbId;
+        selectedType = type;
         showContextMenu = true;
     }
 
@@ -52,6 +59,11 @@
         } catch (e) {
             console.error("Failed to forget item", e);
         }
+    }
+
+    function handleAddToList() {
+        showContextMenu = false;
+        showListsPopup = true;
     }
 
     function updateScrollButtons() {
@@ -82,14 +94,22 @@
 </script>
 
 {#if showContextMenu}
-    <ContextMenu
+    <WatchingContextMenu
         x={contextMenuX}
         y={contextMenuY}
         on:close={() => (showContextMenu = false)}
         on:remove={handleRemove}
         on:forget={handleForget}
+        on:addToList={handleAddToList}
     />
 {/if}
+
+<ListsPopup
+    bind:visible={showListsPopup}
+    imdbId={selectedImdbId}
+    type={selectedType}
+    on:close={() => (showListsPopup = false)}
+/>
 
 {#if continueWatchingMeta.length > 0}
     <div class="w-full h-fit flex flex-col gap-4 relative group">
@@ -118,7 +138,7 @@
         <div class="relative">
             {#if showLeftButton}
                 <button
-                    class="absolute left-[-25px] top-1/2 -translate-y-1/2 z-20 bg-black/50 hover:bg-black/80 backdrop-blur-md text-white p-3 rounded-full transition-all duration-200 cursor-pointer shadow-lg border border-white/10"
+                    class="absolute h-full left-[-25px] top-1/2 -translate-y-1/2 z-20 bg-black/50 hover:bg-black/80 backdrop-blur-md text-white p-3 transition-all duration-200 cursor-pointer"
                     on:click={scrollLeft}
                     aria-label="Scroll left"
                     transition:fade={{ duration: 200 }}
@@ -161,7 +181,11 @@
                                     title.meta.type,
                                 )}
                             on:contextmenu={(e) =>
-                                handleContextMenu(e, title.meta.imdb_id)}
+                                handleContextMenu(
+                                    e,
+                                    title.meta.imdb_id,
+                                    title.meta.type,
+                                )}
                         >
                             <img
                                 src={title.meta.poster}
@@ -183,7 +207,7 @@
 
             {#if showRightButton}
                 <button
-                    class="absolute right-[-25px] top-1/2 -translate-y-1/2 z-20 bg-black/50 hover:bg-black/80 backdrop-blur-md text-white p-3 rounded-full transition-all duration-200 cursor-pointer shadow-lg border border-white/10"
+                    class="absolute h-full right-[-25px] top-1/2 -translate-y-1/2 z-20 bg-black/50 hover:bg-black/80 backdrop-blur-md text-white p-3 transition-all duration-200 cursor-pointer"
                     on:click={scrollRight}
                     aria-label="Scroll right"
                     transition:fade={{ duration: 200 }}

@@ -9,6 +9,7 @@
     let searchResults: any[] = [];
     let searchTimeout: any;
     let showSearchResults = false;
+    export let absolute: boolean = true;
 
     function handleSearch(e: Event) {
         const query = (e.target as HTMLInputElement).value;
@@ -43,11 +44,18 @@
 </script>
 
 <div
-    class="absolute top-0 left-0 w-full p-[50px] flex flex-row justify-between items-center z-50"
+    class="{absolute
+        ? 'absolute'
+        : 'relative'} top-0 left-0 w-full p-[50px] flex flex-row justify-between items-center z-50"
 >
-    <img src="/raffi.svg" alt="Raffi Logo" class="h-[100px]" />
+    <button
+        class="cursor-pointer hover:opacity-80 transition-opacity"
+        on:click={() => router.navigate("home")}
+    >
+        <img src="/raffi.svg" alt="Raffi Logo" class="h-[80px]" />
+    </button>
 
-    <div class="flex flex-col relative">
+    <div class="flex flex-col absolute left-1/2 -translate-x-1/2">
         <div
             class="flex flex-row gap-0 rounded-full overflow-clip w-fit backdrop-blur-md z-20"
         >
@@ -72,7 +80,7 @@
             <input
                 type="text"
                 placeholder="search for a movie or show"
-                class="bg-[#000000]/50 text-[#D4D4D4] text-center py-[20px] text-[28px] font-poppins font-medium w-fit outline-none focus:outline-none focus:ring-0"
+                class="bg-[#000000]/50 text-[#D4D4D4] text-center py-[20px] text-[28px] font-poppins font-normal w-fit outline-none focus:outline-none focus:ring-0"
                 on:input={handleSearch}
                 on:focus={() => {
                     if (searchQuery) showSearchResults = true;
@@ -118,7 +126,7 @@
 
     <div class="flex flex-row gap-[10px]">
         <button
-            class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 transition-colors duration-300 cursor-pointer"
+            class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
             aria-label="addons"
             on:click={openAddons}
         >
@@ -140,9 +148,9 @@
         </button>
 
         <button
-            class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 transition-colors duration-300 cursor-pointer"
-            aria-label="profile"
-            on:click={() => dispatch("openProfile")}
+            class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
+            aria-label="lists"
+            on:click={() => router.navigate("lists")}
         >
             <svg
                 width="40"
@@ -152,7 +160,29 @@
                 xmlns="http://www.w3.org/2000/svg"
             >
                 <path
-                    d="M31.6667 35V31.6667C31.6667 29.8986 30.9643 28.2029 29.7141 26.9526C28.4638 25.7024 26.7682 25 25 25H15C13.2319 25 11.5362 25.7024 10.286 26.9526C9.03575 28.2029 8.33337 29.8986 8.33337 31.6667V35M26.6667 11.6667C26.6667 15.3486 23.6819 18.3333 20 18.3333C16.3181 18.3333 13.3334 15.3486 13.3334 11.6667C13.3334 7.98477 16.3181 5 20 5C23.6819 5 26.6667 7.98477 26.6667 11.6667Z"
+                    d="M26.6667 10.0001L33.3333 33.3334M20 10.0001V33.3334M13.3333 13.3334V33.3334M6.66667 6.66675V33.3334"
+                    stroke="#C3C3C3"
+                    stroke-width="3"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                />
+            </svg>
+        </button>
+
+        <button
+            class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
+            aria-label="settings"
+            on:click={() => dispatch("openSettings")}
+        >
+            <svg
+                width="40"
+                height="40"
+                viewBox="0 0 40 40"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+            >
+                <path
+                    d="M20 33.3333C23.5362 33.3333 26.9276 31.9285 29.4281 29.428C31.9286 26.9275 33.3333 23.5361 33.3333 19.9999C33.3333 16.4637 31.9286 13.0723 29.4281 10.5718C26.9276 8.07134 23.5362 6.66659 20 6.66659M20 33.3333C16.4638 33.3333 13.0724 31.9285 10.5719 29.428C8.07142 26.9275 6.66666 23.5361 6.66666 19.9999M20 33.3333V36.6666M20 6.66659C16.4638 6.66659 13.0724 8.07134 10.5719 10.5718C8.07142 13.0723 6.66666 16.4637 6.66666 19.9999M20 6.66659V3.33325M6.66666 19.9999H3.33333M23.3333 19.9999C23.3333 20.884 22.9821 21.7318 22.357 22.3569C21.7319 22.9821 20.884 23.3333 20 23.3333C19.1159 23.3333 18.2681 22.9821 17.643 22.3569C17.0179 21.7318 16.6667 20.884 16.6667 19.9999C16.6667 19.1159 17.0179 18.268 17.643 17.6429C18.2681 17.0178 19.1159 16.6666 20 16.6666C20.884 16.6666 21.7319 17.0178 22.357 17.6429C22.9821 18.268 23.3333 19.1159 23.3333 19.9999ZM23.3333 19.9999H36.6667M28.3333 34.4333L26.6667 31.5499M18.3333 17.1166L11.6667 5.56659M34.4333 28.3333L31.55 26.6666M5.56666 11.6666L8.45 13.3333M34.4333 11.6666L31.55 13.3333M5.56666 28.3333L8.45 26.6666M28.3333 5.56659L26.6667 8.44992M18.3333 22.8833L11.6667 34.4333"
                     stroke="#C3C3C3"
                     stroke-width="3"
                     stroke-linecap="round"

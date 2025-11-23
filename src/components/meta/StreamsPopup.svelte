@@ -48,6 +48,16 @@
         }
         return "";
     }
+
+    // Filter addons to only show those with stream resource
+    $: filteredAddons = addons.filter((addon) => {
+        if (!addon.manifest || !addon.manifest.resources) return false;
+        return addon.manifest.resources.some(
+            (resource: any) =>
+                (typeof resource === "object" && resource.name === "stream") ||
+                resource === "stream",
+        );
+    });
 </script>
 
 {#if streamsPopupVisible}
@@ -89,9 +99,9 @@
                 Select Stream
             </h2>
 
-            {#if addons.length > 1}
+            {#if filteredAddons.length > 1}
                 <div class="flex flex-row gap-4 overflow-x-auto pb-2">
-                    {#each addons as addon}
+                    {#each filteredAddons as addon}
                         <button
                             class="px-6 py-3 rounded-full text-sm font-medium transition-colors cursor-pointer whitespace-nowrap {selectedAddon ===
                             addon.transport_url

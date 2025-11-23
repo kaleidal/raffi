@@ -86,7 +86,7 @@
         tabindex="0"
     >
         <div
-            class="bg-[#181818] w-full max-w-2xl rounded-[32px] p-10 flex flex-col gap-6 relative"
+            class="bg-[#121212] w-full max-w-2xl rounded-[32px] p-10 flex flex-col gap-6 relative"
             transition:scale={{ start: 0.95, duration: 200 }}
         >
             <div class="flex justify-between items-center">
@@ -154,7 +154,7 @@
                                     <img
                                         src={addon.manifest.logo}
                                         alt=""
-                                        class="w-12 h-12"
+                                        class="w-12 h-12 object-contain"
                                     />
                                     <span
                                         class="text-white/80 text-[20px] truncate flex-1 mr-4"
