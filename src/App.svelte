@@ -8,6 +8,8 @@
     import { onMount } from "svelte";
     import Lists from "./pages/Lists.svelte";
 
+    import LoadingSpinner from "./components/common/LoadingSpinner.svelte";
+
     const pages = {
         home: Home,
         login: Login,
@@ -54,9 +56,7 @@
     <div
         class="w-screen h-screen bg-[#090909] flex items-center justify-center"
     >
-        <div class="text-[#878787] font-poppins font-medium text-2xl">
-            Loading...
-        </div>
+        <LoadingSpinner size="60px" />
     </div>
 {:else if !isAuthenticated && $router.page !== "login"}
     <Login />
