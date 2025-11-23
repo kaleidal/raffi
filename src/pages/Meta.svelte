@@ -733,6 +733,8 @@
                 onClose={closePlayer}
                 onNextEpisode={handleNextEpisode}
                 onProgress={handleProgress}
+                season={selectedEpisode?.season}
+                episode={selectedEpisode?.episode}
             />
         </div>
     {/if}
