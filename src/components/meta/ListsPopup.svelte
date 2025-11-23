@@ -9,6 +9,7 @@
         type List,
     } from "../../lib/db/db";
     import { supabase } from "../../lib/db/supabase";
+    import LoadingSpinner from "../common/LoadingSpinner.svelte";
 
     export let visible = false;
     export let imdbId: string;
@@ -132,7 +133,9 @@
                 </div>
 
                 {#if loading}
-                    <div class="text-white/50 text-center py-4">Loading...</div>
+                    <div class="flex justify-center py-4">
+                        <LoadingSpinner size="30px" />
+                    </div>
                 {:else if lists.length === 0}
                     <div class="text-white/50 text-center py-4">
                         No lists found. Create one above.

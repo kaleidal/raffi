@@ -17,6 +17,7 @@
     import StreamsPopup from "../components/meta/StreamsPopup.svelte";
     import ActionButtons from "../components/meta/ActionButtons.svelte";
     import EpisodeContextMenu from "../components/meta/EpisodeContextMenu.svelte";
+    import LoadingSpinner from "../components/common/LoadingSpinner.svelte";
 
     let addons: Addon[] = [];
 
@@ -406,7 +407,7 @@
 </script>
 
 {#if loadedMeta}
-    <div class="bg-[#090909] flex-1">
+    <div class="bg-[#090909] flex-1" in:fade={{ duration: 300 }}>
         <div class="w-screen h-screen">
             <img
                 src={metaData.meta.background ?? ""}
@@ -739,4 +740,11 @@
             />
         </div>
     {/if}
+{:else}
+    <div
+        class="w-full h-screen flex items-center justify-center"
+        out:fade={{ duration: 200 }}
+    >
+        <LoadingSpinner size="60px" />
+    </div>
 {/if}

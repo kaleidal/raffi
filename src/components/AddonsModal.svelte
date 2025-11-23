@@ -3,6 +3,7 @@
     import { onMount } from "svelte";
     import { getAddons, addAddon, removeAddon } from "../lib/db/db";
     import type { Addon } from "../lib/db/db";
+    import LoadingSpinner from "./common/LoadingSpinner.svelte";
 
     export let showAddonsModal = false;
 
@@ -136,8 +137,8 @@
 
                 <div class="flex flex-col gap-2 max-h-[400px] overflow-y-auto">
                     {#if loadingAddons}
-                        <div class="text-center text-white/50 py-4">
-                            Loading...
+                        <div class="flex justify-center py-4">
+                            <LoadingSpinner size="30px" />
                         </div>
                     {:else if addonsList.length === 0}
                         <div class="text-center text-white/50 py-4">

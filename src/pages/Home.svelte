@@ -1,5 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
+    import { fade } from "svelte/transition";
     import { getMetaData, getPopularTitles } from "../lib/library/library";
     import type { ShowResponse } from "../lib/library/types/meta_types";
     import type { PopularTitleMeta } from "../lib/library/types/popular_types";
@@ -11,15 +12,13 @@
     import AddonsModal from "../components/AddonsModal.svelte";
     import PopularSection from "../components/home/sections/PopularSection.svelte";
     import GenreSection from "../components/home/sections/GenreSection.svelte";
-
-    import YouModal from "../components/home/YouModal.svelte";
+    import LoadingSpinner from "../components/common/LoadingSpinner.svelte";
 
     let showcasedTitle: PopularTitleMeta;
     let fetchedTitles = false;
     let continueWatchingMeta: (ShowResponse & { libraryItem: any })[] = [];
     let popularMeta: PopularTitleMeta[] = [];
     let showAddonsModal = false;
-    let showYouModal = false;
     let genreMap: Record<string, PopularTitleMeta[]> = {};
     let topGenres: string[] = [];
 
@@ -173,30 +172,35 @@
 
 <div class="bg-[#090909] h-fit min-h-screen flex flex-col pb-[100px]">
     {#if fetchedTitles}
-        {#if showcasedTitle}
-            <Hero {showcasedTitle} />
-        {/if}
+        <div in:fade={{ duration: 300 }}>
+            {#if showcasedTitle}
+                <Hero {showcasedTitle} />
+            {/if}
 
-        <SearchBar
-            on:openAddons={handleOpenAddons}
-            on:openProfile={() => (showYouModal = true)}
-        />
+            <SearchBar
+                on:openAddons={handleOpenAddons}
+                on:openProfile={() => {}}
+            />
 
-        <div
-            class="w-full z-10 h-fit flex flex-col gap-[100px] p-[100px] pt-[50px]"
-        >
-            <ContinueWatching {continueWatchingMeta} />
-            <PopularSection {popularMeta} />
+            <div
+                class="w-full z-10 h-fit flex flex-col gap-[100px] p-[100px] pt-[50px]"
+            >
+                <ContinueWatching {continueWatchingMeta} />
+                <PopularSection {popularMeta} />
 
-            {#each topGenres as genre}
-                <GenreSection {genre} titles={genreMap[genre]} />
-            {/each}
+                {#each topGenres as genre}
+                    <GenreSection {genre} titles={genreMap[genre]} />
+                {/each}
+            </div>
+
+            <AddonsModal bind:showAddonsModal />
         </div>
-
-        <AddonsModal bind:showAddonsModal />
-        <YouModal
-            bind:visible={showYouModal}
-            on:close={() => (showYouModal = false)}
-        />
+    {:else}
+        <div
+            class="w-full h-screen flex items-center justify-center"
+            out:fade={{ duration: 200 }}
+        >
+            <LoadingSpinner size="60px" />
+        </div>
     {/if}
 </div>
