@@ -2,6 +2,8 @@
     import Slider from "../Slider.svelte";
     import ExpandingButton from "../ExpandingButton.svelte";
     import { slide } from "svelte/transition";
+    import type { ShowResponse } from "../../lib/library/types/meta_types";
+    import { createEventDispatcher } from "svelte";
 
     export let isPlaying = false;
     export let duration = 0;
@@ -10,6 +12,9 @@
     export let controlsVisible = true;
     export let loading = false;
     export let videoSrc: string | null = null;
+    export let metaData: ShowResponse | null = null;
+    export let currentAudioLabel: string = "";
+    export let currentSubtitleLabel: string = "";
 
     export let togglePlay: () => void;
     export let onSeekInput: (e: Event) => void;
@@ -17,6 +22,8 @@
     export let onVolumeChange: (e: Event) => void;
     export let toggleFullscreen: () => void;
     export let onNextEpisode: () => void;
+
+    const dispatch = createEventDispatcher();
 
     const formatTime = (t: number) => {
         if (!isFinite(t) || t < 0) return "0:00";
@@ -119,7 +126,10 @@
                 </svg>
             </ExpandingButton>
 
-            <ExpandingButton label={"Next Episode"} onClick={onNextEpisode}>
+            <ExpandingButton
+                label={currentAudioLabel || "Audio"}
+                onClick={() => dispatch("audioClick")}
+            >
                 <svg
                     width="20"
                     height="20"
@@ -128,7 +138,7 @@
                     xmlns="http://www.w3.org/2000/svg"
                 >
                     <path
-                        d="M17.5 3.33333V16.6667M5.02417 3.57083C4.77126 3.41908 4.48261 3.33717 4.18769 3.33345C3.89278 3.32972 3.60216 3.40433 3.3455 3.54965C3.08884 3.69497 2.87534 3.90579 2.7268 4.16059C2.57826 4.4154 2.5 4.70506 2.5 5V15C2.5 15.2949 2.57826 15.5846 2.7268 15.8394C2.87534 16.0942 3.08884 16.305 3.3455 16.4503C3.60216 16.5957 3.89278 16.6703 4.18769 16.6665C4.48261 16.6628 4.77126 16.5809 5.02417 16.4292L13.355 11.4308C13.6023 11.2831 13.8071 11.0737 13.9494 10.8232C14.0917 10.5727 14.1666 10.2896 14.1668 10.0015C14.1671 9.71345 14.0927 9.43022 13.9508 9.17947C13.809 8.92872 13.6045 8.71902 13.3575 8.57083L5.02417 3.57083Z"
+                        d="M1.6665 8.33333V10.8333M4.99984 5V14.1667M8.33317 2.5V17.5M11.6665 6.66667V12.5M14.9998 4.16667V15M18.3332 8.33333V10.8333"
                         stroke="#E9E9E9"
                         stroke-width="2"
                         stroke-linecap="round"
@@ -136,6 +146,47 @@
                     />
                 </svg>
             </ExpandingButton>
+
+            <ExpandingButton
+                label={currentSubtitleLabel || "Subtitles: Off"}
+                onClick={() => dispatch("subtitleClick")}
+            >
+                <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 20 20"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                >
+                    <path
+                        d="M5.83333 12.5H9.16667M12.5 12.5H14.1667M5.83333 9.16666H7.5M10.8333 9.16666H14.1667M4.16667 4.16666H15.8333C16.7538 4.16666 17.5 4.91285 17.5 5.83332V14.1667C17.5 15.0871 16.7538 15.8333 15.8333 15.8333H4.16667C3.24619 15.8333 2.5 15.0871 2.5 14.1667V5.83332C2.5 4.91285 3.24619 4.16666 4.16667 4.16666Z"
+                        stroke="#E9E9E9"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    />
+                </svg>
+            </ExpandingButton>
+
+            {#if metaData?.meta.type === "series"}
+                <ExpandingButton label={"Next Episode"} onClick={onNextEpisode}>
+                    <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 20 20"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                    >
+                        <path
+                            d="M17.5 3.33333V16.6667M5.02417 3.57083C4.77126 3.41908 4.48261 3.33717 4.18769 3.33345C3.89278 3.32972 3.60216 3.40433 3.3455 3.54965C3.08884 3.69497 2.87534 3.90579 2.7268 4.16059C2.57826 4.4154 2.5 4.70506 2.5 5V15C2.5 15.2949 2.57826 15.5846 2.7268 15.8394C2.87534 16.0942 3.08884 16.305 3.3455 16.4503C3.60216 16.5957 3.89278 16.6703 4.18769 16.6665C4.48261 16.6628 4.77126 16.5809 5.02417 16.4292L13.355 11.4308C13.6023 11.2831 13.8071 11.0737 13.9494 10.8232C14.0917 10.5727 14.1666 10.2896 14.1668 10.0015C14.1671 9.71345 14.0927 9.43022 13.9508 9.17947C13.809 8.92872 13.6045 8.71902 13.3575 8.57083L5.02417 3.57083Z"
+                            stroke="#E9E9E9"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        />
+                    </svg>
+                </ExpandingButton>
+            {/if}
 
             <ExpandingButton
                 label={"Download"}

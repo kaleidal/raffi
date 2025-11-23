@@ -10,6 +10,8 @@
     import type { ShowResponse } from "../lib/library/types/meta_types";
     import PlayerControls from "../components/player/PlayerControls.svelte";
     import PlayerOverlays from "../components/player/PlayerOverlays.svelte";
+    import TrackSelectionModal from "../components/player/TrackSelectionModal.svelte";
+    import { getAddons } from "../lib/db/db";
 
     export let videoSrc: string | null = null;
     export let metaData: ShowResponse | null = null;
@@ -19,6 +21,8 @@
 
     export let onProgress: (time: number, duration: number) => void = () => {};
     export let startTime: number = 0;
+    export let season: number | null = null;
+    export let episode: number | null = null;
 
     interface Chapter {
         startTime: number;
@@ -42,6 +46,13 @@
     let volume = 1;
     let controlsVisible = true;
     let hideTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    let showAudioSelection = false;
+    let showSubtitleSelection = false;
+    let audioTracks: any[] = [];
+    let subtitleTracks: any[] = [];
+    let currentAudioLabel = "Default";
+    let currentSubtitleLabel = "Off";
 
     const IDLE_DELAY = 5000;
 
@@ -276,10 +287,13 @@
             firstSeekLoad = false;
             pendingSeek = null;
 
+            audioTracks = [];
+            subtitleTracks = [];
+            currentAudioLabel = "Default";
+            currentSubtitleLabel = "Off";
+
             sessionId = await createSession(src, "http", startTime);
             playbackOffset = startTime;
-
-            let baseManifest = `${getStreamUrl(sessionId)}/child.m3u8`;
 
             const res = await fetch(`${serverUrl}/sessions/${sessionId}`);
             if (!res.ok) throw new Error("Failed to load session info");
@@ -289,154 +303,586 @@
             }
             duration = sessionData.durationSeconds || 0;
 
+            // Process available streams
+            if (sessionData.availableStreams) {
+                audioTracks = sessionData.availableStreams
+                    .filter((s: any) => s.type === "audio")
+                    .map((s: any) => ({
+                        id: s.index,
+                        label: s.title || s.language || `Audio ${s.index}`,
+                        selected: s.index === (sessionData.audioIndex || 0),
+                        group: "Embedded",
+                    }));
+
+                // Filter out embedded subtitles as requested
+                subtitleTracks = [
+                    { id: "off", label: "Off", selected: true, group: "None" },
+                ];
+
+                // Set initial labels
+                const selectedAudio = audioTracks.find((t) => t.selected);
+                if (selectedAudio) currentAudioLabel = selectedAudio.label;
+            }
+
+            // Fetch addon subtitles (placeholder)
+            fetchAddonSubtitles();
+
             await tick();
             if (!videoElem) return;
 
-            if (Hls.isSupported()) {
-                hls = new Hls({
-                    lowLatencyMode: false,
-                    maxBufferLength: 30,
-                    backBufferLength: 30,
-                    xhrSetup: (xhr, url) => {
-                        if (url.includes("seek=") && !firstSeekLoad) {
-                            const cleanUrl = url.split("?")[0];
-                            xhr.open("GET", cleanUrl, true);
-                        } else if (url.includes("seek=")) {
-                            firstSeekLoad = false;
-                        }
-                    },
-                });
-
-                const onInitialParsed = () => {
-                    hls?.off(Hls.Events.MANIFEST_PARSED, onInitialParsed);
-                    console.log("HLS MANIFEST_PARSED (initial)");
-                    loading = false;
-                    showCanvas = false;
-                    if (autoPlay) {
-                        videoElem.play().catch((err) => {
-                            console.warn("autoplay failed:", err);
-                        });
-                    }
-                };
-
-                hls.on(Hls.Events.MANIFEST_LOADED, (_, data) => {
-                    console.log("MANIFEST_LOADED data:", data);
-                    if (
-                        data.networkDetails &&
-                        data.networkDetails instanceof XMLHttpRequest
-                    ) {
-                        console.log("Network details is XHR");
-                        const startHeader =
-                            data.networkDetails.getResponseHeader(
-                                "X-Raffi-Slice-Start",
-                            );
-                        if (startHeader) {
-                            const val = parseFloat(startHeader);
-                            if (!isNaN(val)) {
-                                console.log(
-                                    "Received slice start offset:",
-                                    val,
-                                );
-                                playbackOffset = val;
-                            } else {
-                                console.warn(
-                                    "Invalid slice start header:",
-                                    startHeader,
-                                );
-                            }
-                        } else {
-                            console.warn("No X-Raffi-Slice-Start header found");
-                        }
-                    }
-                });
-
-                hls.on(Hls.Events.MANIFEST_PARSED, onInitialParsed);
-
-                hls.on(Hls.Events.ERROR, (_, data) => {
-                    console.error("HLS ERROR", data);
-                    if (data.fatal) {
-                        seekGuard = false;
-                    }
-                });
-
-                hls.loadSource(baseManifest);
-                hls.attachMedia(videoElem);
-            } else if (videoElem.canPlayType("application/vnd.apple.mpegurl")) {
-                videoElem.src = baseManifest;
-                videoElem.addEventListener("loadedmetadata", () => {
-                    if (autoPlay) {
-                        videoElem.play().catch((err) => {
-                            console.warn("autoplay failed:", err);
-                        });
-                    }
-                });
-            } else {
-                console.error("No HLS support");
-            }
-
-            const onSeeking = () => {
-                if (!videoElem) return;
-                if (pendingSeek == null || seekGuard) return;
-
-                const desiredGlobal = pendingSeek;
-                pendingSeek = null;
-
-                const localTarget = desiredGlobal - playbackOffset;
-
-                if (isTimeBuffered(videoElem, localTarget)) {
-                    videoElem.currentTime = localTarget;
-                    return;
-                }
-
-                seekGuard = true;
-                loading = true;
-                showCanvas = true;
-                firstSeekLoad = true;
-                const seekId = Math.random().toString(36).substring(7);
-                const url = `${getStreamUrl(sessionId)}/child.m3u8?seek=${Math.floor(desiredGlobal)}&seek_id=${seekId}`;
-                console.log("Hard seek to", desiredGlobal, "->", url);
-
-                if (hls) {
-                    const onSeekParsed = () => {
-                        console.log("HLS MANIFEST_PARSED (seek)");
-                        playbackOffset = desiredGlobal;
-                        seekGuard = false;
-                        loading = false;
-                        showCanvas = false;
-
-                        videoElem.play().catch((err) => {
-                            console.warn("play after seek failed:", err);
-                        });
-
-                        hls?.off(Hls.Events.MANIFEST_PARSED, onSeekParsed);
-                    };
-
-                    hls.on(Hls.Events.MANIFEST_PARSED, onSeekParsed);
-                    hls.loadSource(url);
-                    hls.startLoad(0);
-                } else {
-                    videoElem.src = url;
-                    videoElem.onloadedmetadata = () => {
-                        playbackOffset = desiredGlobal;
-                        videoElem.currentTime = 0;
-                        seekGuard = false;
-                        loading = false;
-                        showCanvas = false;
-                        videoElem
-                            .play()
-                            .catch((err) =>
-                                console.warn("play after seek failed:", err),
-                            );
-                    };
-                }
-            };
-
-            videoElem.addEventListener("seeking", onSeeking);
+            initHLS(sessionId, startTime);
         } catch (err) {
             console.error("Error loading video:", err);
             loading = false;
         }
     };
+
+    async function handleAudioSelect(e: CustomEvent) {
+        const track = e.detail;
+        if (track.selected) return;
+
+        // Optimistic update
+        audioTracks = audioTracks.map((t) => ({
+            ...t,
+            selected: t.id === track.id,
+        }));
+        currentAudioLabel = track.label;
+
+        try {
+            await fetch(`${serverUrl}/sessions/${sessionId}/audio`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ index: track.id }),
+            });
+
+            // Reload HLS at current time
+            const time = currentTime;
+            if (hls) {
+                hls.destroy();
+                hls = null;
+            }
+            initHLS(sessionId, time);
+        } catch (err) {
+            console.error("Failed to switch audio:", err);
+        }
+    }
+
+    let currentSubtitleAbort: AbortController | null = null;
+    let parsedCues: { start: number; end: number; text: string }[] = [];
+
+    // Sync subtitles when playbackOffset changes (e.g. seeking)
+    // With server-side seeking, we re-fetch subtitles on seek, so we don't need to manually sync offsets anymore.
+    // $: if (playbackOffset !== undefined) {
+    //    syncSubtitles();
+    // }
+
+    function syncSubtitles() {
+        // No-op
+    }
+
+    async function handleSubtitleSelect(e: any) {
+        const track = e.detail;
+        subtitleTracks = subtitleTracks.map((t) => ({
+            ...t,
+            selected: t.id === track.id,
+        }));
+        currentSubtitleLabel = track.label;
+
+        // Cleanup existing subtitles
+        if (currentSubtitleAbort) {
+            currentSubtitleAbort.abort();
+            currentSubtitleAbort = null;
+        }
+
+        parsedCues = []; // Clear parsed cues
+
+        const video = videoElem;
+        if (!video) return;
+
+        // Remove existing track elements and text tracks
+        const existingTracks = video.querySelectorAll("track");
+        existingTracks.forEach((t) => t.remove());
+
+        // Clear existing TextTracks that we might have added
+        for (let i = 0; i < video.textTracks.length; i++) {
+            const t = video.textTracks[i];
+            if (t.mode === "showing") {
+                t.mode = "disabled";
+            }
+        }
+
+        if (track.id !== "off" && track.url) {
+            console.log("Starting manual subtitle fetch:", track.url);
+            currentSubtitleAbort = new AbortController();
+
+            // Create a new TextTrack
+            const textTrack = video.addTextTrack(
+                "subtitles",
+                track.label,
+                track.lang || "en",
+            );
+            textTrack.mode = "showing";
+
+            try {
+                let response;
+                let isSrt = false;
+
+                if (track.isAddon) {
+                    // Addon subtitles (likely SRT)
+                    // No seeking support for external SRTs yet, just fetch the whole file
+                    console.log("Fetching addon subtitle:", track.url);
+                    response = await fetch(track.url, {
+                        signal: currentSubtitleAbort.signal,
+                    });
+                    isSrt =
+                        track.url.endsWith(".srt") ||
+                        track.url.includes("subencoding"); // OpenSubtitles often has no extension or weird ones
+                } else {
+                    // Embedded subtitles (VTT with seeking)
+                    const startTime = currentTime || playbackOffset || 0;
+                    const fetchUrl = `${track.url}?startTime=${startTime}`;
+                    console.log("Fetching subtitles from:", fetchUrl);
+
+                    response = await fetch(fetchUrl, {
+                        signal: currentSubtitleAbort.signal,
+                    });
+                }
+
+                if (!response.body) throw new Error("No response body");
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder("utf-8"); // TODO: Handle other encodings if needed
+                let buffer = "";
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value, { stream: true });
+                    buffer += chunk;
+
+                    // Process buffer
+                    // SRT uses blank lines as separators.
+                    // Normalize line endings to \n
+                    const normalized = buffer
+                        .replace(/\r\n/g, "\n")
+                        .replace(/\r/g, "\n");
+                    const parts = normalized.split(/\n\n+/);
+
+                    // Keep the last part in buffer as it might be incomplete
+                    // But we need to be careful not to keep too much if the stream is done
+                    // For now, simple logic:
+                    buffer = parts.pop() || "";
+
+                    // If buffer is getting too large, it might mean we are not splitting correctly
+                    if (buffer.length > 5000) {
+                        console.warn("Subtitle buffer too large, flushing...");
+                        parts.push(buffer);
+                        buffer = "";
+                    }
+
+                    for (const part of parts) {
+                        if (isSrt) {
+                            parseAndAddSRTCue(textTrack, part, playbackOffset);
+                        } else {
+                            parseAndAddCue(textTrack, part);
+                        }
+                    }
+                }
+                // Process remaining buffer
+                if (buffer.trim()) {
+                    if (isSrt) {
+                        parseAndAddSRTCue(textTrack, buffer, playbackOffset);
+                    } else {
+                        parseAndAddCue(textTrack, buffer);
+                    }
+                }
+            } catch (err: any) {
+                if (err.name !== "AbortError") {
+                    console.error("Subtitle stream error:", err);
+                }
+            }
+        }
+    }
+
+    function parseAndAddCue(track: TextTrack, block: string) {
+        const lines = block
+            .split("\n")
+            .map((l) => l.trim())
+            .filter((l) => l);
+        if (lines.length < 2) return;
+
+        // Check for timing line: 00:00:00.000 --> 00:00:00.000
+        let timingLineIdx = -1;
+        for (let i = 0; i < lines.length; i++) {
+            if (lines[i].includes("-->")) {
+                timingLineIdx = i;
+                break;
+            }
+        }
+
+        if (timingLineIdx === -1) return;
+
+        const timing = lines[timingLineIdx];
+        const text = lines.slice(timingLineIdx + 1).join("\n");
+
+        const [startStr, endStr] = timing.split("-->").map((s) => s.trim());
+        if (!startStr || !endStr) return;
+
+        const start = parseVTTTime(startStr);
+        const end = parseVTTTime(endStr);
+
+        // Subtitle delay in seconds (positive = delay, negative = advance)
+        // User reported subtitles are ahead, so we need to delay them (add time)
+        const SUBTITLE_DELAY = 0.5;
+
+        if (start !== null && end !== null) {
+            // Store absolute time (relative to the segment start, which is 0 in the video player)
+            parsedCues.push({ start, end, text });
+
+            try {
+                // Remove formatting tags like <i>, <b>, etc.
+                const cleanText = text.replace(/<[^>]+>/g, "");
+
+                // Add with delay
+                const cue = new VTTCue(
+                    start + SUBTITLE_DELAY,
+                    end + SUBTITLE_DELAY,
+                    cleanText,
+                );
+
+                // Move subtitles up slightly
+                cue.line = getCurrentCueLine();
+
+                track.addCue(cue);
+            } catch (e) {
+                console.warn("Failed to add cue:", e);
+            }
+        }
+    }
+
+    function parseVTTTime(timeStr: string): number | null {
+        const parts = timeStr.split(":");
+        let seconds = 0;
+
+        if (parts.length === 3) {
+            // HH:MM:SS.mmm
+            seconds += parseFloat(parts[0]) * 3600;
+            seconds += parseFloat(parts[1]) * 60;
+            seconds += parseFloat(parts[2]);
+        } else if (parts.length === 2) {
+            // MM:SS.mmm
+            seconds += parseFloat(parts[0]) * 60;
+            seconds += parseFloat(parts[1]);
+        } else {
+            return null;
+        }
+        return seconds;
+    }
+
+    // SRT Parsing Logic
+    function parseSRTTime(timeStr: string): number | null {
+        // 00:00:33,000
+        const parts = timeStr.replace(",", ".").split(":");
+        let seconds = 0;
+
+        if (parts.length === 3) {
+            seconds += parseFloat(parts[0]) * 3600;
+            seconds += parseFloat(parts[1]) * 60;
+            seconds += parseFloat(parts[2]);
+        } else {
+            return null;
+        }
+        return seconds;
+    }
+
+    function parseAndAddSRTCue(
+        track: TextTrack,
+        block: string,
+        offset: number = 0,
+    ) {
+        const lines = block
+            .split("\n")
+            .map((l) => l.trim())
+            .filter((l) => l);
+
+        // SRT block must have at least index, timing, and text (3 lines)
+        // But sometimes index is missing or merged, so we look for timing line.
+
+        if (lines.length < 2) return;
+
+        // Check for timing line: 00:00:00,000 --> 00:00:00,000
+        let timingLineIdx = -1;
+        for (let i = 0; i < lines.length; i++) {
+            if (lines[i].includes("-->")) {
+                timingLineIdx = i;
+                break;
+            }
+        }
+
+        if (timingLineIdx === -1) {
+            // console.warn("SRT block missing timing:", block);
+            return;
+        }
+
+        const timing = lines[timingLineIdx];
+        // Text is everything after timing line
+        const textLines = lines.slice(timingLineIdx + 1);
+        const text = textLines.join("\n");
+
+        const [startStr, endStr] = timing.split("-->").map((s) => s.trim());
+        if (!startStr || !endStr) return;
+
+        const start = parseSRTTime(startStr);
+        const end = parseSRTTime(endStr);
+
+        if (start !== null && end !== null) {
+            // Adjust for playback offset (seeking)
+            // If we seeked to 10:00 (600s), playbackOffset is 600.
+            // A cue at 10:05 (605s) should be displayed at video time 5s.
+            // So we subtract offset.
+            const adjustedStart = start - offset;
+            const adjustedEnd = end - offset;
+
+            // Only add cues that are in the future (relative to current segment start)
+            // Or slightly in the past if they overlap the start
+            if (adjustedEnd < 0) return;
+
+            parsedCues.push({ start: adjustedStart, end: adjustedEnd, text });
+            try {
+                // Remove all HTML tags
+                const cleanText = text.replace(/<[^>]*>/g, "");
+
+                // Decode HTML entities if needed (basic ones)
+                const decodedText = cleanText
+                    .replace(/&nbsp;/g, " ")
+                    .replace(/&amp;/g, "&")
+                    .replace(/&lt;/g, "<")
+                    .replace(/&gt;/g, ">");
+
+                const cue = new VTTCue(adjustedStart, adjustedEnd, decodedText);
+                cue.line = getCurrentCueLine();
+                track.addCue(cue);
+            } catch (e) {
+                console.warn("Failed to add SRT cue:", e);
+            }
+        } else {
+            console.warn("Failed to parse SRT timing:", timing);
+        }
+    }
+
+    async function fetchAddonSubtitles() {
+        if (!metaData) return;
+
+        try {
+            const addons = await getAddons();
+            const subtitleAddons = addons.filter(
+                (a) =>
+                    a.manifest.resources?.includes("subtitles") ||
+                    a.manifest.resources?.some(
+                        (r: any) => r.name === "subtitles",
+                    ),
+            );
+
+            let type = metaData.meta.type;
+            let id = metaData.meta.imdb_id;
+
+            if (type === "series" && season && episode) {
+                id = `${id}:${season}:${episode}`;
+            }
+
+            for (const addon of subtitleAddons) {
+                const url = `${addon.transport_url}/subtitles/${type}/${id}.json`;
+                console.log("Fetching addon subtitles:", url);
+
+                try {
+                    const res = await fetch(url);
+                    if (!res.ok) continue;
+                    const data = await res.json();
+
+                    if (data.subtitles && Array.isArray(data.subtitles)) {
+                        const newTracks = data.subtitles.map((s: any) => ({
+                            id: s.id || s.url,
+                            label: `${s.lang} (${addon.manifest.name || "Addon"})`,
+                            lang: s.lang,
+                            url: s.url,
+                            selected: false,
+                            isAddon: true,
+                        }));
+
+                        subtitleTracks = [...subtitleTracks, ...newTracks];
+                    }
+                } catch (err) {
+                    console.warn(
+                        "Failed to fetch subtitles from addon:",
+                        addon.transport_url,
+                        err,
+                    );
+                }
+            }
+        } catch (err) {
+            console.error("Failed to load addons:", err);
+        }
+    }
+
+    function initHLS(sid: string, startOffset: number) {
+        let baseManifest = `${getStreamUrl(sid)}/child.m3u8`;
+        playbackOffset = startOffset;
+
+        if (Hls.isSupported()) {
+            hls = new Hls({
+                lowLatencyMode: false,
+                maxBufferLength: 30,
+                backBufferLength: 30,
+                xhrSetup: (xhr, url) => {
+                    if (url.includes("seek=") && !firstSeekLoad) {
+                        const cleanUrl = url.split("?")[0];
+                        xhr.open("GET", cleanUrl, true);
+                    } else if (url.includes("seek=")) {
+                        firstSeekLoad = false;
+                    }
+                },
+            });
+
+            const onInitialParsed = () => {
+                hls?.off(Hls.Events.MANIFEST_PARSED, onInitialParsed);
+                console.log("HLS MANIFEST_PARSED (initial)");
+                loading = false;
+                showCanvas = false;
+                if (autoPlay) {
+                    videoElem.play().catch((err) => {
+                        console.warn("autoplay failed:", err);
+                    });
+                }
+            };
+
+            hls.on(Hls.Events.MANIFEST_LOADED, (_, data) => {
+                console.log("MANIFEST_LOADED data:", data);
+                if (
+                    data.networkDetails &&
+                    data.networkDetails instanceof XMLHttpRequest
+                ) {
+                    console.log("Network details is XHR");
+                    const startHeader = data.networkDetails.getResponseHeader(
+                        "X-Raffi-Slice-Start",
+                    );
+                    if (startHeader) {
+                        const val = parseFloat(startHeader);
+                        if (!isNaN(val)) {
+                            console.log("Received slice start offset:", val);
+                            playbackOffset = val;
+                        } else {
+                            console.warn(
+                                "Invalid slice start header:",
+                                startHeader,
+                            );
+                        }
+                    } else {
+                        console.warn("No X-Raffi-Slice-Start header found");
+                    }
+                }
+            });
+
+            hls.on(Hls.Events.MANIFEST_PARSED, onInitialParsed);
+
+            hls.on(Hls.Events.ERROR, (_, data) => {
+                console.error("HLS ERROR", data);
+                if (data.fatal) {
+                    seekGuard = false;
+                }
+            });
+
+            hls.loadSource(baseManifest);
+            hls.attachMedia(videoElem);
+        } else if (videoElem.canPlayType("application/vnd.apple.mpegurl")) {
+            videoElem.src = baseManifest;
+            videoElem.addEventListener("loadedmetadata", () => {
+                if (autoPlay) {
+                    videoElem.play().catch((err) => {
+                        console.warn("autoplay failed:", err);
+                    });
+                }
+            });
+        } else {
+            console.error("No HLS support");
+        }
+
+        const onSeeking = () => {
+            if (!videoElem) return;
+            if (pendingSeek == null || seekGuard) return;
+
+            const desiredGlobal = pendingSeek;
+            pendingSeek = null;
+
+            const localTarget = desiredGlobal - playbackOffset;
+
+            if (isTimeBuffered(videoElem, localTarget)) {
+                videoElem.currentTime = localTarget;
+                return;
+            }
+
+            seekGuard = true;
+            loading = true;
+            showCanvas = true;
+            firstSeekLoad = true;
+            const seekId = Math.random().toString(36).substring(7);
+            const url = `${getStreamUrl(sid)}/child.m3u8?seek=${Math.floor(desiredGlobal)}&seek_id=${seekId}`;
+            console.log("Hard seek to", desiredGlobal, "->", url);
+
+            if (hls) {
+                const onSeekParsed = () => {
+                    console.log("HLS MANIFEST_PARSED (seek)");
+                    playbackOffset = desiredGlobal;
+                    seekGuard = false;
+                    loading = false;
+                    showCanvas = false;
+
+                    // Re-fetch subtitles if active
+                    if (currentSubtitleLabel !== "Off") {
+                        const track = subtitleTracks.find((t) => t.selected);
+                        if (track) {
+                            handleSubtitleSelect({ detail: track });
+                        }
+                    }
+
+                    videoElem.play().catch((err) => {
+                        console.warn("play after seek failed:", err);
+                    });
+
+                    hls?.off(Hls.Events.MANIFEST_PARSED, onSeekParsed);
+                };
+
+                hls.on(Hls.Events.MANIFEST_PARSED, onSeekParsed);
+                hls.loadSource(url);
+                hls.startLoad(0);
+            } else {
+                videoElem.src = url;
+                videoElem.onloadedmetadata = () => {
+                    playbackOffset = desiredGlobal;
+                    videoElem.currentTime = 0;
+                    seekGuard = false;
+                    loading = false;
+                    showCanvas = false;
+
+                    // Re-fetch subtitles if active
+                    if (currentSubtitleLabel !== "Off") {
+                        const track = subtitleTracks.find((t) => t.selected);
+                        if (track) {
+                            handleSubtitleSelect({ detail: track });
+                        }
+                    }
+
+                    videoElem
+                        .play()
+                        .catch((err) =>
+                            console.warn("play after seek failed:", err),
+                        );
+                };
+            }
+        };
+
+        videoElem.addEventListener("seeking", onSeeking);
+    }
 
     $: if (videoSrc && videoSrc !== currentVideoSrc) {
         console.log("videoSrc changed, reloading...", videoSrc);
@@ -458,6 +904,28 @@
             ctx.drawImage(videoElem, 0, 0, canvasElem.width, canvasElem.height);
         }
     };
+    $: updateCuePositions(controlsVisible);
+
+    function updateCuePositions(showControls: boolean) {
+        const video = videoElem;
+        if (!video) return;
+
+        const linePosition = showControls ? -5 : -3;
+
+        for (let i = 0; i < video.textTracks.length; i++) {
+            const track = video.textTracks[i];
+            if (track.mode === "showing" && track.cues) {
+                for (let j = 0; j < track.cues.length; j++) {
+                    const cue = track.cues[j] as VTTCue;
+                    cue.line = linePosition;
+                }
+            }
+        }
+    }
+
+    function getCurrentCueLine() {
+        return controlsVisible ? -5 : -3;
+    }
 </script>
 
 <svelte:window on:mousemove={handleMouseMove} on:keydown={handleKeydown} />
@@ -477,6 +945,7 @@
         ></canvas>
         <video
             bind:this={videoElem}
+            crossorigin="anonymous"
             on:timeupdate={handleTimeUpdate}
             on:play={handlePlay}
             on:pause={handlePause}
@@ -529,14 +998,37 @@
                 {controlsVisible}
                 {loading}
                 {videoSrc}
+                {metaData}
+                {currentAudioLabel}
+                {currentSubtitleLabel}
                 {togglePlay}
                 {onSeekInput}
                 {onSeekChange}
                 {onVolumeChange}
                 {toggleFullscreen}
                 onNextEpisode={handleNextEpisodeClick}
+                on:audioClick={() => (showAudioSelection = true)}
+                on:subtitleClick={() => (showSubtitleSelection = true)}
             />
         </div>
+    {/if}
+
+    {#if showAudioSelection}
+        <TrackSelectionModal
+            title="Audio"
+            tracks={audioTracks}
+            on:select={handleAudioSelect}
+            on:close={() => (showAudioSelection = false)}
+        />
+    {/if}
+
+    {#if showSubtitleSelection}
+        <TrackSelectionModal
+            title="Subtitles"
+            tracks={subtitleTracks}
+            on:select={handleSubtitleSelect}
+            on:close={() => (showSubtitleSelection = false)}
+        />
     {/if}
 
     {#if loading}
@@ -555,3 +1047,20 @@
         </div>
     {/if}
 </div>
+
+<style>
+    /* Hide default controls */
+    video::-webkit-media-controls {
+        display: none !important;
+    }
+    video::-webkit-media-controls-enclosure {
+        display: none !important;
+    }
+
+    /* Subtitle styling */
+    video::cue {
+        background-color: transparent !important;
+        text-shadow: 0 0 4px black;
+        font-family: inherit;
+    }
+</style>
