@@ -6,12 +6,14 @@
     import { router } from "./lib/stores/router";
     import { supabase } from "./lib/db/supabase";
     import { onMount } from "svelte";
+    import Lists from "./pages/Lists.svelte";
 
     const pages = {
         home: Home,
         login: Login,
         meta: Meta,
         player: Player,
+        lists: Lists,
     };
 
     let isAuthenticated = false;

@@ -605,23 +605,24 @@
                     class="flex flex-col gap-[20px] h-full justify-end items-end"
                 >
                     {#if metaData.meta.type === "series"}
+                        {@const watchedCount = Object.values(
+                            progressMap,
+                        ).filter((p: any) => p && p.watched).length}
+                        {@const progressPercent =
+                            episodes > 0 ? (watchedCount / episodes) * 100 : 0}
                         <div
                             class="px-[60px] py-[40px] w-full bg-[#FFFFFF]/10 backdrop-blur-[16px] rounded-[64px] flex flex-col gap-[20px]"
                         >
                             <span
                                 class="text-[#E1E1E1] text-[32px] font-poppins font-bold"
-                                >0/{episodes} episodes watched</span
+                                >{watchedCount}/{episodes} episodes watched</span
                             >
                             <div
                                 class="w-full h-[10px] bg-[#A3A3A3]/30 rounded-full overflow-hidden"
                             >
                                 <div
-                                    class="h-full bg-white rounded-full"
-                                    style="width: 0%"
-                                ></div>
-                                <div
-                                    class="h-full bg-[#A3A3A3]/30 rounded-full"
-                                    style="width: 100%"
+                                    class="h-full bg-white rounded-full transition-all duration-300"
+                                    style="width: {progressPercent}%"
                                 ></div>
                             </div>
                         </div>

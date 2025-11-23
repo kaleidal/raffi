@@ -1,9 +1,11 @@
 <script lang="ts">
-    import type { PopularTitleMeta } from "../../lib/library/types/popular_types";
-    import { router } from "../../lib/stores/router";
+    import type { PopularTitleMeta } from "../../../lib/library/types/popular_types";
+    import { router } from "../../../lib/stores/router";
 
     import { onMount } from "svelte";
     import { fade } from "svelte/transition";
+    import TitleContextMenu from "../context_menus/TitleContextMenu.svelte";
+    import ListsPopup from "../../meta/ListsPopup.svelte";
 
     export let popularMeta: PopularTitleMeta[] = [];
 
@@ -13,6 +15,12 @@
     let scrollContainer: HTMLDivElement;
     let showLeftButton = false;
     let showRightButton = false;
+    let showContextMenu = false;
+    let contextMenuX = 0;
+    let contextMenuY = 0;
+    let selectedImdbId = "";
+    let selectedType = "";
+    let showListsPopup = false;
 
     function updateScrollButtons() {
         if (scrollContainer) {
@@ -34,12 +42,42 @@
         }
     }
 
+    function handleContextMenu(e: MouseEvent, imdbId: string, type: string) {
+        e.preventDefault();
+        contextMenuX = e.clientX;
+        contextMenuY = e.clientY;
+        selectedImdbId = imdbId;
+        selectedType = type;
+        showContextMenu = true;
+    }
+
+    function handleAddToList() {
+        showContextMenu = false;
+        showListsPopup = true;
+    }
+
     onMount(() => {
         updateScrollButtons();
         window.addEventListener("resize", updateScrollButtons);
         return () => window.removeEventListener("resize", updateScrollButtons);
     });
 </script>
+
+{#if showContextMenu}
+    <TitleContextMenu
+        x={contextMenuX}
+        y={contextMenuY}
+        on:close={() => (showContextMenu = false)}
+        on:addToList={handleAddToList}
+    />
+{/if}
+
+<ListsPopup
+    bind:visible={showListsPopup}
+    imdbId={selectedImdbId}
+    type={selectedType}
+    on:close={() => (showListsPopup = false)}
+/>
 
 {#if popularMeta.length > 0}
     <div class="w-full h-fit flex flex-col gap-4 relative group">
@@ -97,6 +135,8 @@
                         class="w-[200px] h-fit rounded-[16px] hover:opacity-80 transition-all duration-200 ease-out cursor-pointer overflow-clip relative flex-shrink-0"
                         on:click={() =>
                             navigateToMeta(title.imdb_id, title.type)}
+                        on:contextmenu={(e) =>
+                            handleContextMenu(e, title.imdb_id, title.type)}
                     >
                         <img
                             src={title.poster}
