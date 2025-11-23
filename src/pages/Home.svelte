@@ -7,9 +7,10 @@
 
     import Hero from "../components/home/Hero.svelte";
     import SearchBar from "../components/home/SearchBar.svelte";
-    import ContinueWatching from "../components/home/ContinueWatching.svelte";
+    import ContinueWatching from "../components/home/sections/ContinueWatching.svelte";
     import AddonsModal from "../components/AddonsModal.svelte";
-    import PopularSection from "../components/home/PopularSection.svelte";
+    import PopularSection from "../components/home/sections/PopularSection.svelte";
+    import GenreSection from "../components/home/sections/GenreSection.svelte";
 
     import YouModal from "../components/home/YouModal.svelte";
 
@@ -19,6 +20,8 @@
     let popularMeta: PopularTitleMeta[] = [];
     let showAddonsModal = false;
     let showYouModal = false;
+    let genreMap: Record<string, PopularTitleMeta[]> = {};
+    let topGenres: string[] = [];
 
     async function checkTrailer(videoId: string): Promise<boolean> {
         try {
@@ -139,6 +142,27 @@
             popularMeta = absolutePopularTitles;
         }
 
+        const allTitlesForGenres = [...mostPopularMovies, ...mostPopularSeries];
+        const genreCount: Record<string, number> = {};
+
+        for (const title of allTitlesForGenres) {
+            if (title.genre && Array.isArray(title.genre)) {
+                for (const g of title.genre) {
+                    if (!genreMap[g]) {
+                        genreMap[g] = [];
+                        genreCount[g] = 0;
+                    }
+                    genreMap[g].push(title);
+                    genreCount[g]++;
+                }
+            }
+        }
+
+        topGenres = Object.entries(genreCount)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10)
+            .map(([genre]) => genre);
+
         fetchedTitles = true;
     });
 
@@ -163,6 +187,10 @@
         >
             <ContinueWatching {continueWatchingMeta} />
             <PopularSection {popularMeta} />
+
+            {#each topGenres as genre}
+                <GenreSection {genre} titles={genreMap[genre]} />
+            {/each}
         </div>
 
         <AddonsModal bind:showAddonsModal />
