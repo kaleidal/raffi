@@ -110,6 +110,53 @@
         >
         Mark as Unwatched
     </button>
+    <button
+        class="text-left px-4 py-2 text-white/80 hover:text-white hover:bg-white/10 transition-colors font-poppins text-sm flex flex-row gap-2 items-center cursor-pointer"
+        on:click={() => {
+            dispatch("markSeasonWatched");
+            close();
+        }}
+    >
+        <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            ><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline
+                points="22 4 12 14.01 9 11.01"
+            ></polyline></svg
+        >
+        Mark Season as Watched
+    </button>
+    <button
+        class="text-left px-4 py-2 text-white/80 hover:text-white hover:bg-white/10 transition-colors font-poppins text-sm flex flex-row gap-2 items-center cursor-pointer"
+        on:click={() => {
+            dispatch("markSeasonUnwatched");
+            close();
+        }}
+    >
+        <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            ><circle cx="12" cy="12" r="10"></circle><line
+                x1="4.93"
+                y1="4.93"
+                x2="19.07"
+                y2="19.07"
+            ></line></svg
+        >
+        Mark Season as Unwatched
+    </button>
     <div class="h-[1px] bg-white/10 my-1"></div>
     <button
         class="text-left px-4 py-2 text-[#FF4444] hover:bg-[#FF4444]/10 transition-colors font-poppins text-sm flex flex-row gap-2 items-center cursor-pointer"

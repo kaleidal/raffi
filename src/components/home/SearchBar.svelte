@@ -1,9 +1,11 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte";
-    import { searchTitles } from "../../lib/library/library";
+    import { searchTitles, getMetaData } from "../../lib/library/library";
     import { router } from "../../lib/stores/router";
     import Skeleton from "../common/Skeleton.svelte";
     import { fade } from "svelte/transition";
+    import TitleContextMenu from "./context_menus/TitleContextMenu.svelte";
+    import ListsPopup from "../meta/ListsPopup.svelte";
 
     const dispatch = createEventDispatcher();
 
@@ -13,6 +15,15 @@
     let showSearchResults = false;
     let loading = false;
     export let absolute: boolean = true;
+
+    // Context Menu State
+    let showContextMenu = false;
+    let contextMenuX = 0;
+    let contextMenuY = 0;
+    let selectedImdbId = "";
+    let selectedType = "movie"; // Default to movie for search results
+    let selectedTitle = ""; // Store title for verification
+    let showListsPopup = false;
 
     function handleSearch(e: Event) {
         const query = (e.target as HTMLInputElement).value;
@@ -36,8 +47,12 @@
     }
 
     function closeSearch() {
+        // Delay closing to allow clicks on results or context menu
         setTimeout(() => {
-            showSearchResults = false;
+            // Only close if we're not interacting with context menu or popup
+            if (!showContextMenu && !showListsPopup) {
+                showSearchResults = false;
+            }
         }, 200);
     }
 
@@ -47,6 +62,79 @@
 
     function openAddons() {
         dispatch("openAddons");
+    }
+
+    function handleContextMenu(
+        e: MouseEvent,
+        imdbId: string,
+        type: string,
+        title: string,
+    ) {
+        contextMenuX = e.clientX;
+        contextMenuY = e.clientY;
+        selectedImdbId = imdbId;
+        selectedType = type;
+        selectedTitle = title;
+        showContextMenu = true;
+    }
+
+    async function handleAddToList() {
+        showContextMenu = false;
+
+        // Verify type before showing popup
+        // Search results default to "movie", but might be "series"
+        // We use the same heuristic as Meta page
+        try {
+            let metaData = await getMetaData(selectedImdbId, selectedType);
+
+            let typeChanged = false;
+            if (selectedTitle && metaData.meta.name !== selectedTitle) {
+                console.warn(
+                    `Name mismatch: expected "${selectedTitle}", got "${metaData.meta.name}". Trying fallback type.`,
+                );
+                typeChanged = true;
+            } else if (!metaData.meta.logo && !metaData.meta.background) {
+                console.warn(
+                    "Missing logo or background. Trying fallback type.",
+                );
+                typeChanged = true;
+            }
+
+            if (typeChanged) {
+                const fallbackType =
+                    selectedType === "movie" ? "series" : "movie";
+                try {
+                    const fallbackMeta = await getMetaData(
+                        selectedImdbId,
+                        fallbackType,
+                    );
+                    if (fallbackMeta && fallbackMeta.meta) {
+                        selectedType = fallbackType;
+                    }
+                } catch (e) {
+                    console.error("Failed to load fallback meta", e);
+                }
+            }
+        } catch (e) {
+            console.warn(
+                `Failed to load meta for ${selectedType}, trying fallback`,
+            );
+            try {
+                const fallbackType =
+                    selectedType === "movie" ? "series" : "movie";
+                const fallbackMeta = await getMetaData(
+                    selectedImdbId,
+                    fallbackType,
+                );
+                if (fallbackMeta && fallbackMeta.meta) {
+                    selectedType = fallbackType;
+                }
+            } catch (e2) {
+                console.error("Failed to load meta (fallback)", e2);
+            }
+        }
+
+        showListsPopup = true;
     }
 </script>
 
@@ -128,6 +216,13 @@
                                     "movie",
                                     result["#TITLE"],
                                 )}
+                            on:contextmenu|preventDefault={(e) =>
+                                handleContextMenu(
+                                    e,
+                                    result["#IMDB_ID"],
+                                    "movie", // Assuming movie for now, search results might not have type
+                                    result["#TITLE"],
+                                )}
                         >
                             <img
                                 src={result["#IMG_POSTER"]}
@@ -149,6 +244,22 @@
             </div>
         {/if}
     </div>
+
+    {#if showContextMenu}
+        <TitleContextMenu
+            x={contextMenuX}
+            y={contextMenuY}
+            on:close={() => (showContextMenu = false)}
+            on:addToList={handleAddToList}
+        />
+    {/if}
+
+    <ListsPopup
+        bind:visible={showListsPopup}
+        imdbId={selectedImdbId}
+        type={selectedType}
+        on:close={() => (showListsPopup = false)}
+    />
 
     <div class="flex flex-row gap-[10px]">
         <button
