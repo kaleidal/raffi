@@ -302,6 +302,64 @@
         }
     }
 
+    async function handleContextMarkSeasonWatched() {
+        if (!contextEpisode || !imdbID || !metaData) return;
+        const season = contextEpisode.season;
+        const episodesInSeason = metaData.meta.videos.filter(
+            (v) => v.season === season,
+        );
+
+        for (const ep of episodesInSeason) {
+            const key = `${ep.season}:${ep.episode}`;
+            const existing = progressMap[key] || {};
+            // If already watched, skip to avoid unnecessary updates/overwrites if we want to preserve exact times?
+            // Actually, just ensuring it's marked as watched is enough.
+            // We'll set time to duration if available, or just mark watched.
+            const duration = existing.duration || 0;
+
+            progressMap[key] = {
+                time: duration,
+                duration: duration,
+                watched: true,
+                updatedAt: Date.now(),
+            };
+        }
+        progressMap = progressMap; // Trigger reactivity
+        await updateLibraryProgress(
+            imdbID,
+            progressMap,
+            metaData.meta.type,
+            false,
+        );
+    }
+
+    async function handleContextMarkSeasonUnwatched() {
+        if (!contextEpisode || !imdbID || !metaData) return;
+        const season = contextEpisode.season;
+        const episodesInSeason = metaData.meta.videos.filter(
+            (v) => v.season === season,
+        );
+
+        for (const ep of episodesInSeason) {
+            const key = `${ep.season}:${ep.episode}`;
+            const existing = progressMap[key] || {};
+
+            progressMap[key] = {
+                ...existing,
+                time: 0,
+                watched: false,
+                updatedAt: Date.now(),
+            };
+        }
+        progressMap = progressMap; // Trigger reactivity
+        await updateLibraryProgress(
+            imdbID,
+            progressMap,
+            metaData.meta.type,
+            false,
+        );
+    }
+
     $: if (selectedAddon && selectedEpisode) {
         if (streamsPopupVisible) {
             fetchStreams(selectedEpisode);
@@ -712,6 +770,8 @@
             on:markWatched={handleContextMarkWatched}
             on:markUnwatched={handleContextMarkUnwatched}
             on:resetProgress={handleContextResetProgress}
+            on:markSeasonWatched={handleContextMarkSeasonWatched}
+            on:markSeasonUnwatched={handleContextMarkSeasonUnwatched}
         />
     {/if}
 

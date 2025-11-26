@@ -4,7 +4,7 @@
     import { getMetaData, getPopularTitles } from "../lib/library/library";
     import type { ShowResponse } from "../lib/library/types/meta_types";
     import type { PopularTitleMeta } from "../lib/library/types/popular_types";
-    import { getLibrary } from "../lib/db/db";
+    import { getLibrary, updateLibraryPoster } from "../lib/db/db";
 
     import Hero from "../components/home/Hero.svelte";
     import SearchBar from "../components/home/SearchBar.svelte";
@@ -36,17 +36,31 @@
     }
 
     onMount(async () => {
-        let randomType = Math.random() < 0.5 ? "series" : "movie";
-        let mostPopularTitles = await getPopularTitles(randomType);
+        let absolutePopularTitles = [];
+        let mostPopularMovies = await getPopularTitles("movie");
+        let mostPopularSeries = await getPopularTitles("series");
+        absolutePopularTitles = [...mostPopularMovies, ...mostPopularSeries];
+
+        if (absolutePopularTitles.length > 0) {
+            absolutePopularTitles.sort(
+                (a, b) =>
+                    (b.popularities.moviedb || 0) -
+                    (a.popularities.moviedb || 0),
+            );
+
+            absolutePopularTitles = absolutePopularTitles.slice(0, 20);
+
+            popularMeta = absolutePopularTitles;
+        }
 
         let attempts = 0;
         const maxAttempts = 10;
 
         while (attempts < maxAttempts) {
             let randomIndex = Math.floor(
-                Math.random() * mostPopularTitles.length,
+                Math.random() * absolutePopularTitles.length,
             );
-            let randomTitle = mostPopularTitles[randomIndex];
+            let randomTitle = absolutePopularTitles[randomIndex];
 
             const year = parseInt(randomTitle.year ?? "");
             if (!year || year < 2010) {
@@ -72,7 +86,7 @@
         }
 
         if (!showcasedTitle) {
-            const fallback = mostPopularTitles.find(
+            const fallback = absolutePopularTitles.find(
                 (t) => t.trailerStreams && t.trailerStreams.length > 0,
             );
             if (fallback) showcasedTitle = fallback;
@@ -86,18 +100,31 @@
                     new Date(a.last_watched).getTime(),
             );
 
-            const recent = library
-                .filter((item) => item.shown !== false)
-                .slice(0, 10);
+            const recent = library.filter((item) => item.shown !== false);
             for (const item of recent) {
                 try {
+                    if (item.poster) {
+                        continueWatchingMeta.push({
+                            meta: {
+                                poster: item.poster,
+                                imdb_id: item.imdb_id,
+                                type: item.type,
+                                name: "",
+                                id: item.imdb_id,
+                                genres: [],
+                                releaseInfo: "",
+                                description: "",
+                                cast: [],
+                                videos: [],
+                                popularities: {} as any,
+                            } as any,
+                            libraryItem: item,
+                        });
+                        continueWatchingMeta = continueWatchingMeta;
+                        continue;
+                    }
+
                     let meta: ShowResponse;
-                    console.log(
-                        "Fetching meta for:",
-                        item.imdb_id,
-                        "Type:",
-                        item.type,
-                    );
                     if (item.type) {
                         meta = await getMetaData(item.imdb_id, item.type);
                     } else {
@@ -107,7 +134,20 @@
                             meta = await getMetaData(item.imdb_id, "movie");
                         }
                     }
+
                     if (meta && meta.meta) {
+                        if (!item.poster && meta.meta.poster) {
+                            try {
+                                await updateLibraryPoster(
+                                    item.imdb_id,
+                                    meta.meta.poster,
+                                );
+                                item.poster = meta.meta.poster;
+                            } catch (e) {
+                                console.error("Failed to backfill poster", e);
+                            }
+                        }
+
                         continueWatchingMeta.push({
                             ...meta,
                             libraryItem: item,
@@ -122,23 +162,6 @@
             }
         } catch (e) {
             console.error("Failed to load library", e);
-        }
-
-        let absolutePopularTitles = [];
-        let mostPopularMovies = await getPopularTitles("movie");
-        let mostPopularSeries = await getPopularTitles("series");
-        absolutePopularTitles = [...mostPopularMovies, ...mostPopularSeries];
-
-        if (absolutePopularTitles.length > 0) {
-            absolutePopularTitles.sort(
-                (a, b) =>
-                    (b.popularities.moviedb || 0) -
-                    (a.popularities.moviedb || 0),
-            );
-
-            absolutePopularTitles = absolutePopularTitles.slice(0, 20);
-
-            popularMeta = absolutePopularTitles;
         }
 
         const allTitlesForGenres = [...mostPopularMovies, ...mostPopularSeries];

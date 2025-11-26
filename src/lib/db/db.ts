@@ -12,11 +12,12 @@ export interface Addon {
 export interface LibraryItem {
     user_id: string;
     imdb_id: string;
-    progress: any; // Record<string, WatchedState>
+    progress: any;
     last_watched: string;
     completed_at: string | null;
     type: string;
     shown: boolean;
+    poster?: string;
 }
 
 export interface List {
@@ -24,6 +25,7 @@ export interface List {
     user_id: string;
     created_at: string;
     name: string;
+    position: number;
 }
 
 export interface ListItem {
@@ -31,6 +33,7 @@ export interface ListItem {
     imdb_id: string;
     position: number;
     type: string;
+    poster?: string;
 }
 
 export interface UserMeta {
@@ -106,7 +109,7 @@ export const forgetProgress = async (imdb_id: string) => {
     if (error) throw error;
 };
 
-export const updateLibraryProgress = async (imdb_id: string, progress: any, type: string, completed: boolean = false) => {
+export const updateLibraryProgress = async (imdb_id: string, progress: any, type: string, completed: boolean = false, poster?: string) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
@@ -116,44 +119,40 @@ export const updateLibraryProgress = async (imdb_id: string, progress: any, type
         progress,
         last_watched: new Date().toISOString(),
         type,
-        shown: true, // Ensure it's shown when updated
+        shown: true,
     };
     if (completed) {
         updates.completed_at = new Date().toISOString();
     }
-
-    // Check if item exists
-    const { data: existing } = await supabase
-        .from('libraries')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('imdb_id', imdb_id)
-        .maybeSingle();
-
-    if (existing) {
-        const { data, error } = await supabase
-            .from('libraries')
-            .update(updates)
-            .eq('user_id', user.id)
-            .eq('imdb_id', imdb_id)
-            .select()
-            .single();
-        if (error) throw error;
-        return data as LibraryItem;
-    } else {
-        const { data, error } = await supabase
-            .from('libraries')
-            .insert(updates)
-            .select()
-            .single();
-        if (error) throw error;
-        return data as LibraryItem;
+    if (poster) {
+        updates.poster = poster;
     }
+
+    // Use upsert to handle race conditions
+    const { data, error } = await supabase
+        .from('libraries')
+        .upsert(updates, { onConflict: 'user_id,imdb_id' })
+        .select()
+        .single();
+    if (error) throw error;
+    return data as LibraryItem;
+};
+
+export const updateLibraryPoster = async (imdb_id: string, poster: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { error } = await supabase
+        .from('libraries')
+        .update({ poster })
+        .eq('user_id', user.id)
+        .eq('imdb_id', imdb_id);
+    if (error) throw error;
 };
 
 // Lists
 export const getLists = async () => {
-    const { data, error } = await supabase.from('lists').select('*');
+    const { data, error } = await supabase.from('lists').select('*').order('position', { ascending: true });
     if (error) throw error;
     return data as List[];
 };
@@ -162,13 +161,23 @@ export const createList = async (name: string) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
+    // Get max position
+    const { data: maxPosData } = await supabase.from('lists').select('position').order('position', { ascending: false }).limit(1).maybeSingle();
+    const position = (maxPosData?.position || 0) + 1;
+
     const { data, error } = await supabase.from('lists').insert({
         user_id: user.id,
         name,
+        position,
         created_at: new Date().toISOString()
     }).select().single();
     if (error) throw error;
     return data as List;
+};
+
+export const updateList = async (list_id: string, updates: Partial<List>) => {
+    const { error } = await supabase.from('lists').update(updates).eq('list_id', list_id);
+    if (error) throw error;
 };
 
 export const deleteList = async (list_id: string) => {
@@ -176,12 +185,13 @@ export const deleteList = async (list_id: string) => {
     if (error) throw error;
 };
 
-export const addToList = async (list_id: string, imdb_id: string, position: number, type: string) => {
+export const addToList = async (list_id: string, imdb_id: string, position: number, type: string, poster?: string) => {
     const { error } = await supabase.from('list_items').insert({
         list_id,
         imdb_id,
         position,
-        type
+        type,
+        poster
     });
     if (error) throw error;
 };
@@ -195,4 +205,14 @@ export const getListItems = async (list_id: string) => {
     const { data, error } = await supabase.from('list_items').select('*').eq('list_id', list_id).order('position', { ascending: true });
     if (error) throw error;
     return data as ListItem[];
+};
+
+export const updateListItemPosition = async (list_id: string, imdb_id: string, position: number) => {
+    const { error } = await supabase.from('list_items').update({ position }).eq('list_id', list_id).eq('imdb_id', imdb_id);
+    if (error) throw error;
+};
+
+export const updateListItemPoster = async (list_id: string, imdb_id: string, poster: string) => {
+    const { error } = await supabase.from('list_items').update({ poster }).eq('list_id', list_id).eq('imdb_id', imdb_id);
+    if (error) throw error;
 };
