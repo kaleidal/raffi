@@ -6,6 +6,7 @@
     import {
         hideFromContinueWatching,
         forgetProgress,
+        updateLibraryProgress,
     } from "../../../lib/db/db";
     import ListsPopup from "../../meta/ListsPopup.svelte";
 
@@ -13,6 +14,30 @@
 
     export let continueWatchingMeta: (ShowResponse & { libraryItem: any })[] =
         [];
+
+    $: {
+        continueWatchingMeta.forEach(async (item) => {
+            if (
+                item.meta &&
+                item.meta.poster &&
+                !item.libraryItem.poster &&
+                item.libraryItem.imdb_id
+            ) {
+                try {
+                    await updateLibraryProgress(
+                        item.libraryItem.imdb_id,
+                        item.libraryItem.progress,
+                        item.libraryItem.type,
+                        false,
+                        item.meta.poster,
+                    );
+                    item.libraryItem.poster = item.meta.poster;
+                } catch (e) {
+                    console.error("Failed to backfill poster", e);
+                }
+            }
+        });
+    }
 
     function navigateToMeta(imdbId: string, type: string) {
         router.navigate("meta", { imdbId, type });
@@ -70,7 +95,7 @@
         if (scrollContainer) {
             const { scrollLeft, scrollWidth, clientWidth } = scrollContainer;
             showLeftButton = scrollLeft > 0;
-            showRightButton = scrollLeft + clientWidth < scrollWidth - 1; // -1 tolerance
+            showRightButton = scrollLeft + clientWidth < scrollWidth - 1;
         }
     }
 
@@ -188,7 +213,8 @@
                                 )}
                         >
                             <img
-                                src={title.meta.poster}
+                                src={title.libraryItem.poster ||
+                                    title.meta.poster}
                                 alt=""
                                 class="w-full h-full object-cover"
                             />

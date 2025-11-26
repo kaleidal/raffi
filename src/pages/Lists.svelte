@@ -7,6 +7,9 @@
         getListItems,
         getLists,
         removeFromList,
+        updateList,
+        updateListItemPosition,
+        updateListItemPoster,
         type List,
     } from "../lib/db/db";
     import { getMetaData } from "../lib/library/library";
@@ -25,6 +28,9 @@
     let isPaused = false;
     let isMuted = true;
     let showAddonsModal = false;
+
+    let editingListId: string | null = null;
+    let editingName = "";
 
     function togglePlay() {
         if (!playerIframe) return;
@@ -63,8 +69,7 @@
                     listItemsMap[firstListId] &&
                     listItemsMap[firstListId].length > 0
                 ) {
-                    selectedItem = listItemsMap[firstListId][0];
-                    selectedListId = firstListId;
+                    selectItem(listItemsMap[firstListId][0], firstListId);
                 }
             }
         } catch (e) {
@@ -75,13 +80,57 @@
     async function loadListItems(listId: string) {
         try {
             const items = await getListItems(listId);
-            const metaPromises = items.map((item) =>
-                getMetaData(item.imdb_id, item.type),
-            );
+
+            const metaPromises = items.map(async (item) => {
+                if (item.poster) {
+                    // Use cached poster
+                    return {
+                        poster: item.poster,
+                        imdb_id: item.imdb_id,
+                        type: item.type,
+                        list_id: listId,
+                        db_item: item,
+                        _partial: true,
+                    };
+                }
+
+                try {
+                    const data = await getMetaData(item.imdb_id, item.type);
+                    if (data && data.meta) {
+                        // Backfill poster if missing in DB
+                        if (!item.poster && data.meta.poster) {
+                            try {
+                                await updateListItemPoster(
+                                    listId,
+                                    item.imdb_id,
+                                    data.meta.poster,
+                                );
+                                // Update local item so we know it's backfilled
+                                item.poster = data.meta.poster;
+                            } catch (e) {
+                                console.error("Failed to backfill poster", e);
+                            }
+                        }
+                        return { ...data.meta, list_id: listId, db_item: item };
+                    }
+                } catch (e) {
+                    console.error(`Failed to load meta for ${item.imdb_id}`, e);
+                }
+                return null;
+            });
+
             const metas = await Promise.all(metaPromises);
+
+            // Merge DB info (position) with Meta info
             listItemsMap[listId] = metas
-                .filter((m) => m && m.meta)
-                .map((m) => ({ ...m.meta, list_id: listId }));
+                .filter((m): m is NonNullable<typeof m> => !!m)
+                .map((m) => ({
+                    ...m,
+                    // Prefer DB poster if available (though we just fetched meta)
+                    poster: m.db_item.poster || m.poster,
+                    position: m.db_item.position,
+                }))
+                .sort((a, b) => a.position - b.position);
         } catch (e) {
             console.error("Failed to load list items", e);
         }
@@ -111,7 +160,7 @@
 
             const currentListItems = listItemsMap[selectedListId];
             if (currentListItems.length > 0) {
-                selectedItem = currentListItems[0];
+                selectItem(currentListItems[0], selectedListId);
             } else {
                 selectedItem = null;
             }
@@ -120,11 +169,143 @@
         }
     }
 
-    function selectItem(item: any, listId: string) {
-        selectedItem = item;
+    async function selectItem(item: any, listId: string) {
         selectedListId = listId;
         isPaused = false;
         isMuted = true;
+
+        if (item._partial) {
+            // Fetch full meta
+            try {
+                const data = await getMetaData(item.imdb_id, item.type);
+                if (data && data.meta) {
+                    selectedItem = {
+                        ...data.meta,
+                        list_id: listId,
+                        db_item: item.db_item,
+                    };
+                    // Update the item in the map too so we don't fetch again?
+                    const items = listItemsMap[listId];
+                    const idx = items.findIndex(
+                        (i) => i.imdb_id === item.imdb_id,
+                    );
+                    if (idx !== -1) {
+                        items[idx] = {
+                            ...selectedItem,
+                            poster: item.poster,
+                            position: item.position,
+                        };
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to fetch full meta for selected item", e);
+                selectedItem = item; // Fallback
+            }
+        } else {
+            selectedItem = item;
+        }
+    }
+
+    // List Renaming
+    function startEditing(list: List) {
+        editingListId = list.list_id;
+        editingName = list.name;
+    }
+
+    async function saveListName() {
+        if (!editingListId) return;
+        try {
+            await updateList(editingListId, { name: editingName });
+            await loadLists();
+            editingListId = null;
+        } catch (e) {
+            console.error("Failed to rename list", e);
+        }
+    }
+
+    // List Reordering
+    async function moveList(index: number, direction: "up" | "down") {
+        if (direction === "up" && index === 0) return;
+        if (direction === "down" && index === lists.length - 1) return;
+
+        const newIndex = direction === "up" ? index - 1 : index + 1;
+        const listA = lists[index];
+        const listB = lists[newIndex];
+
+        // Swap positions
+        const posA = listA.position;
+        const posB = listB.position;
+
+        try {
+            await updateList(listA.list_id, { position: posB });
+            await updateList(listB.list_id, { position: posA });
+            await loadLists();
+        } catch (e) {
+            console.error("Failed to move list", e);
+        }
+    }
+
+    // Drag and Drop for List Items
+    let draggedItem: any = null;
+    let draggedFromListId: string | null = null;
+
+    function handleDragStart(event: DragEvent, item: any, listId: string) {
+        draggedItem = item;
+        draggedFromListId = listId;
+        if (event.dataTransfer) {
+            event.dataTransfer.effectAllowed = "move";
+            // event.dataTransfer.setData("text/plain", JSON.stringify(item));
+        }
+    }
+
+    function handleDragOver(event: DragEvent) {
+        event.preventDefault();
+        if (event.dataTransfer) {
+            event.dataTransfer.dropEffect = "move";
+        }
+    }
+
+    async function handleDrop(
+        event: DragEvent,
+        targetItem: any,
+        targetListId: string,
+    ) {
+        event.preventDefault();
+        if (!draggedItem || !draggedFromListId) return;
+        if (draggedFromListId !== targetListId) return; // Only allow reordering within same list for now
+        if (draggedItem.imdb_id === targetItem.imdb_id) return;
+
+        const items = listItemsMap[targetListId];
+        const oldIndex = items.findIndex(
+            (i) => i.imdb_id === draggedItem.imdb_id,
+        );
+        const newIndex = items.findIndex(
+            (i) => i.imdb_id === targetItem.imdb_id,
+        );
+
+        if (oldIndex === -1 || newIndex === -1) return;
+
+        // Reorder array locally
+        const newItems = [...items];
+        newItems.splice(oldIndex, 1);
+        newItems.splice(newIndex, 0, draggedItem);
+        listItemsMap[targetListId] = newItems;
+
+        // Update positions in DB
+        try {
+            // We need to update positions for all affected items or just swap?
+            // Ideally update all to be safe and consistent
+            const updates = newItems.map((item, index) =>
+                updateListItemPosition(targetListId, item.imdb_id, index + 1),
+            );
+            await Promise.all(updates);
+        } catch (e) {
+            console.error("Failed to update item positions", e);
+            await loadListItems(targetListId); // Revert on error
+        }
+
+        draggedItem = null;
+        draggedFromListId = null;
     }
 </script>
 
@@ -151,34 +332,135 @@
                     {#each lists as list}
                         <div class="flex flex-col gap-[20px]">
                             <div
-                                class="flex flex-row justify-between items-center"
+                                class="flex flex-row justify-between items-center group/header"
                             >
-                                <h3
-                                    class="text-[#FFFFFF] text-[32px] font-poppins font-semibold"
-                                >
-                                    {list.name}
-                                </h3>
-                                <button
-                                    class="text-[#FF4444] opacity-50 hover:opacity-100 transition-opacity p-2 hover:bg-[#FF4444]/10 rounded-lg cursor-pointer"
-                                    on:click={() =>
-                                        handleDeleteList(list.list_id)}
-                                    aria-label="Delete list"
-                                >
-                                    <svg
-                                        width="20"
-                                        height="20"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        stroke-width="2"
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        ><polyline points="3 6 5 6 21 6"
-                                        ></polyline><path
-                                            d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-                                        ></path></svg
+                                {#if editingListId === list.list_id}
+                                    <form
+                                        class="flex-1 flex flex-row gap-2"
+                                        on:submit|preventDefault={saveListName}
                                     >
-                                </button>
+                                        <input
+                                            type="text"
+                                            bind:value={editingName}
+                                            class="bg-transparent text-[#FFFFFF] text-[32px] font-poppins font-semibold border-b border-white/20 focus:border-white outline-none w-full"
+                                            on:blur={saveListName}
+                                        />
+                                    </form>
+                                {:else}
+                                    <div
+                                        class="flex flex-row gap-4 items-center"
+                                    >
+                                        <h3
+                                            class="text-[#FFFFFF] text-[32px] font-poppins font-semibold cursor-pointer hover:text-white/80 transition-colors"
+                                            on:dblclick={() =>
+                                                startEditing(list)}
+                                        >
+                                            {list.name}
+                                        </h3>
+                                        <div
+                                            class="flex flex-col gap-1 opacity-0 group-hover/header:opacity-100 transition-opacity"
+                                        >
+                                            <button
+                                                class="text-white/50 hover:text-white cursor-pointer"
+                                                on:click={() =>
+                                                    moveList(
+                                                        lists.indexOf(list),
+                                                        "up",
+                                                    )}
+                                                disabled={lists.indexOf(
+                                                    list,
+                                                ) === 0}
+                                                aria-label="Move list up"
+                                            >
+                                                <svg
+                                                    width="12"
+                                                    height="12"
+                                                    viewBox="0 0 24 24"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    stroke-width="2"
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                    ><polyline
+                                                        points="18 15 12 9 6 15"
+                                                    ></polyline></svg
+                                                >
+                                            </button>
+                                            <button
+                                                aria-label="Move list down"
+                                                class="text-white/50 hover:text-white cursor-pointer"
+                                                on:click={() =>
+                                                    moveList(
+                                                        lists.indexOf(list),
+                                                        "down",
+                                                    )}
+                                                disabled={lists.indexOf(
+                                                    list,
+                                                ) ===
+                                                    lists.length - 1}
+                                            >
+                                                <svg
+                                                    width="12"
+                                                    height="12"
+                                                    viewBox="0 0 24 24"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    stroke-width="2"
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                    ><polyline
+                                                        points="6 9 12 15 18 9"
+                                                    ></polyline></svg
+                                                >
+                                            </button>
+                                        </div>
+                                    </div>
+                                {/if}
+
+                                <div class="flex flex-row gap-2">
+                                    <button
+                                        class="text-white/50 hover:text-white transition-colors p-2 hover:bg-white/10 rounded-lg cursor-pointer"
+                                        on:click={() => startEditing(list)}
+                                        aria-label="Rename list"
+                                    >
+                                        <svg
+                                            width="20"
+                                            height="20"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            stroke-width="2"
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            ><path
+                                                d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
+                                            ></path><path
+                                                d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
+                                            ></path></svg
+                                        >
+                                    </button>
+                                    <button
+                                        class="text-[#FF4444] opacity-50 hover:opacity-100 transition-opacity p-2 hover:bg-[#FF4444]/10 rounded-lg cursor-pointer"
+                                        on:click={() =>
+                                            handleDeleteList(list.list_id)}
+                                        aria-label="Delete list"
+                                    >
+                                        <svg
+                                            width="20"
+                                            height="20"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            stroke-width="2"
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            ><polyline points="3 6 5 6 21 6"
+                                            ></polyline><path
+                                                d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                                            ></path></svg
+                                        >
+                                    </button>
+                                </div>
                             </div>
 
                             <div class="w-full h-[1px] bg-[#333333]"></div>
@@ -190,9 +472,26 @@
                                             class="flex flex-col gap-[10px] w-full aspect-[2/3] transition-opacity duration-300 group cursor-pointer relative {selectedItem?.imdb_id ===
                                             item.imdb_id
                                                 ? 'opacity-60'
-                                                : 'hover:opacity-80'}"
+                                                : 'hover:opacity-80'} {draggedItem?.imdb_id ===
+                                            item.imdb_id
+                                                ? 'opacity-30'
+                                                : ''}"
                                             on:click={() =>
                                                 selectItem(item, list.list_id)}
+                                            draggable="true"
+                                            on:dragstart={(e) =>
+                                                handleDragStart(
+                                                    e,
+                                                    item,
+                                                    list.list_id,
+                                                )}
+                                            on:dragover={handleDragOver}
+                                            on:drop={(e) =>
+                                                handleDrop(
+                                                    e,
+                                                    item,
+                                                    list.list_id,
+                                                )}
                                         >
                                             <img
                                                 src={item.poster}

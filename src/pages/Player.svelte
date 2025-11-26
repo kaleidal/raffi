@@ -11,6 +11,7 @@
     import PlayerControls from "../components/player/PlayerControls.svelte";
     import PlayerOverlays from "../components/player/PlayerOverlays.svelte";
     import TrackSelectionModal from "../components/player/TrackSelectionModal.svelte";
+    import SeekFeedback from "../components/player/SeekFeedback.svelte";
     import { getAddons } from "../lib/db/db";
 
     export let videoSrc: string | null = null;
@@ -53,6 +54,9 @@
     let subtitleTracks: any[] = [];
     let currentAudioLabel = "Default";
     let currentSubtitleLabel = "Off";
+
+    let seekFeedback: { type: "forward" | "backward"; id: number } | null =
+        null;
 
     const IDLE_DELAY = 5000;
 
@@ -236,9 +240,15 @@
         } else if (event.code === "ArrowLeft") {
             // Forward 5s (inverted)
             performSeek(currentTime + 5);
+            if (seekFeedbackTimeout) clearTimeout(seekFeedbackTimeout);
+            seekFeedback = { type: "forward", id: Date.now() };
+            seekFeedbackTimeout = setTimeout(() => (seekFeedback = null), 500);
         } else if (event.code === "ArrowRight") {
             // Backward 5s (inverted)
             performSeek(currentTime - 5);
+            if (seekFeedbackTimeout) clearTimeout(seekFeedbackTimeout);
+            seekFeedback = { type: "backward", id: Date.now() };
+            seekFeedbackTimeout = setTimeout(() => (seekFeedback = null), 500);
         } else if (event.code === "ArrowUp") {
             volume = Math.min(1, volume + 0.1);
             videoElem.volume = volume;
@@ -303,7 +313,6 @@
             }
             duration = sessionData.durationSeconds || 0;
 
-            // Process available streams
             if (sessionData.availableStreams) {
                 audioTracks = sessionData.availableStreams
                     .filter((s: any) => s.type === "audio")
@@ -314,17 +323,14 @@
                         group: "Embedded",
                     }));
 
-                // Filter out embedded subtitles as requested
                 subtitleTracks = [
                     { id: "off", label: "Off", selected: true, group: "None" },
                 ];
 
-                // Set initial labels
                 const selectedAudio = audioTracks.find((t) => t.selected);
                 if (selectedAudio) currentAudioLabel = selectedAudio.label;
             }
 
-            // Fetch addon subtitles (placeholder)
             fetchAddonSubtitles();
 
             await tick();
@@ -341,7 +347,6 @@
         const track = e.detail;
         if (track.selected) return;
 
-        // Optimistic update
         audioTracks = audioTracks.map((t) => ({
             ...t,
             selected: t.id === track.id,
@@ -355,7 +360,6 @@
                 body: JSON.stringify({ index: track.id }),
             });
 
-            // Reload HLS at current time
             const time = currentTime;
             if (hls) {
                 hls.destroy();
@@ -370,16 +374,6 @@
     let currentSubtitleAbort: AbortController | null = null;
     let parsedCues: { start: number; end: number; text: string }[] = [];
 
-    // Sync subtitles when playbackOffset changes (e.g. seeking)
-    // With server-side seeking, we re-fetch subtitles on seek, so we don't need to manually sync offsets anymore.
-    // $: if (playbackOffset !== undefined) {
-    //    syncSubtitles();
-    // }
-
-    function syncSubtitles() {
-        // No-op
-    }
-
     async function handleSubtitleSelect(e: any) {
         const track = e.detail;
         subtitleTracks = subtitleTracks.map((t) => ({
@@ -388,22 +382,19 @@
         }));
         currentSubtitleLabel = track.label;
 
-        // Cleanup existing subtitles
         if (currentSubtitleAbort) {
             currentSubtitleAbort.abort();
             currentSubtitleAbort = null;
         }
 
-        parsedCues = []; // Clear parsed cues
+        parsedCues = [];
 
         const video = videoElem;
         if (!video) return;
 
-        // Remove existing track elements and text tracks
         const existingTracks = video.querySelectorAll("track");
         existingTracks.forEach((t) => t.remove());
 
-        // Clear existing TextTracks that we might have added
         for (let i = 0; i < video.textTracks.length; i++) {
             const t = video.textTracks[i];
             if (t.mode === "showing") {
@@ -415,7 +406,6 @@
             console.log("Starting manual subtitle fetch:", track.url);
             currentSubtitleAbort = new AbortController();
 
-            // Create a new TextTrack
             const textTrack = video.addTextTrack(
                 "subtitles",
                 track.label,
@@ -428,17 +418,14 @@
                 let isSrt = false;
 
                 if (track.isAddon) {
-                    // Addon subtitles (likely SRT)
-                    // No seeking support for external SRTs yet, just fetch the whole file
                     console.log("Fetching addon subtitle:", track.url);
                     response = await fetch(track.url, {
                         signal: currentSubtitleAbort.signal,
                     });
                     isSrt =
                         track.url.endsWith(".srt") ||
-                        track.url.includes("subencoding"); // OpenSubtitles often has no extension or weird ones
+                        track.url.includes("subencoding");
                 } else {
-                    // Embedded subtitles (VTT with seeking)
                     const startTime = currentTime || playbackOffset || 0;
                     const fetchUrl = `${track.url}?startTime=${startTime}`;
                     console.log("Fetching subtitles from:", fetchUrl);
@@ -451,7 +438,7 @@
                 if (!response.body) throw new Error("No response body");
 
                 const reader = response.body.getReader();
-                const decoder = new TextDecoder("utf-8"); // TODO: Handle other encodings if needed
+                const decoder = new TextDecoder("utf-8");
                 let buffer = "";
 
                 while (true) {
@@ -461,20 +448,13 @@
                     const chunk = decoder.decode(value, { stream: true });
                     buffer += chunk;
 
-                    // Process buffer
-                    // SRT uses blank lines as separators.
-                    // Normalize line endings to \n
                     const normalized = buffer
                         .replace(/\r\n/g, "\n")
                         .replace(/\r/g, "\n");
                     const parts = normalized.split(/\n\n+/);
 
-                    // Keep the last part in buffer as it might be incomplete
-                    // But we need to be careful not to keep too much if the stream is done
-                    // For now, simple logic:
                     buffer = parts.pop() || "";
 
-                    // If buffer is getting too large, it might mean we are not splitting correctly
                     if (buffer.length > 5000) {
                         console.warn("Subtitle buffer too large, flushing...");
                         parts.push(buffer);
@@ -489,7 +469,6 @@
                         }
                     }
                 }
-                // Process remaining buffer
                 if (buffer.trim()) {
                     if (isSrt) {
                         parseAndAddSRTCue(textTrack, buffer, playbackOffset);
@@ -512,7 +491,6 @@
             .filter((l) => l);
         if (lines.length < 2) return;
 
-        // Check for timing line: 00:00:00.000 --> 00:00:00.000
         let timingLineIdx = -1;
         for (let i = 0; i < lines.length; i++) {
             if (lines[i].includes("-->")) {
@@ -532,26 +510,20 @@
         const start = parseVTTTime(startStr);
         const end = parseVTTTime(endStr);
 
-        // Subtitle delay in seconds (positive = delay, negative = advance)
-        // User reported subtitles are ahead, so we need to delay them (add time)
-        const SUBTITLE_DELAY = 0.5;
+        const SUBTITLE_DELAY = 0.2;
 
         if (start !== null && end !== null) {
-            // Store absolute time (relative to the segment start, which is 0 in the video player)
             parsedCues.push({ start, end, text });
 
             try {
-                // Remove formatting tags like <i>, <b>, etc.
                 const cleanText = text.replace(/<[^>]+>/g, "");
 
-                // Add with delay
                 const cue = new VTTCue(
                     start + SUBTITLE_DELAY,
                     end + SUBTITLE_DELAY,
                     cleanText,
                 );
 
-                // Move subtitles up slightly
                 cue.line = getCurrentCueLine();
 
                 track.addCue(cue);
@@ -580,9 +552,7 @@
         return seconds;
     }
 
-    // SRT Parsing Logic
     function parseSRTTime(timeStr: string): number | null {
-        // 00:00:33,000
         const parts = timeStr.replace(",", ".").split(":");
         let seconds = 0;
 
@@ -606,12 +576,8 @@
             .map((l) => l.trim())
             .filter((l) => l);
 
-        // SRT block must have at least index, timing, and text (3 lines)
-        // But sometimes index is missing or merged, so we look for timing line.
-
         if (lines.length < 2) return;
 
-        // Check for timing line: 00:00:00,000 --> 00:00:00,000
         let timingLineIdx = -1;
         for (let i = 0; i < lines.length; i++) {
             if (lines[i].includes("-->")) {
@@ -621,12 +587,10 @@
         }
 
         if (timingLineIdx === -1) {
-            // console.warn("SRT block missing timing:", block);
             return;
         }
 
         const timing = lines[timingLineIdx];
-        // Text is everything after timing line
         const textLines = lines.slice(timingLineIdx + 1);
         const text = textLines.join("\n");
 
@@ -637,23 +601,15 @@
         const end = parseSRTTime(endStr);
 
         if (start !== null && end !== null) {
-            // Adjust for playback offset (seeking)
-            // If we seeked to 10:00 (600s), playbackOffset is 600.
-            // A cue at 10:05 (605s) should be displayed at video time 5s.
-            // So we subtract offset.
             const adjustedStart = start - offset;
             const adjustedEnd = end - offset;
 
-            // Only add cues that are in the future (relative to current segment start)
-            // Or slightly in the past if they overlap the start
             if (adjustedEnd < 0) return;
 
             parsedCues.push({ start: adjustedStart, end: adjustedEnd, text });
             try {
-                // Remove all HTML tags
                 const cleanText = text.replace(/<[^>]*>/g, "");
 
-                // Decode HTML entities if needed (basic ones)
                 const decodedText = cleanText
                     .replace(/&nbsp;/g, " ")
                     .replace(/&amp;/g, "&")
@@ -926,6 +882,8 @@
     function getCurrentCueLine() {
         return controlsVisible ? -5 : -3;
     }
+
+    let seekFeedbackTimeout: any;
 </script>
 
 <svelte:window on:mousemove={handleMouseMove} on:keydown={handleKeydown} />
@@ -956,8 +914,16 @@
         </video>
     </div>
 
-    {#if controlsVisible && !loading}
-        <div class="absolute left-0 top-0 p-10 z-50">
+    {#if seekFeedback}
+        <SeekFeedback type={seekFeedback.type} id={seekFeedback.id} />
+    {/if}
+
+    {#if !loading}
+        <div
+            class="absolute left-0 top-0 p-10 z-50 transition-all duration-300 ease-in-out transform {controlsVisible
+                ? 'translate-y-0 opacity-100'
+                : '-translate-y-10 opacity-0 pointer-events-none'}"
+        >
             <button
                 class="bg-[#000000]/20 backdrop-blur-md hover:bg-[#FFFFFF]/20 transition-colors duration-200 rounded-full p-4 cursor-pointer"
                 on:click={onClose}
@@ -982,7 +948,9 @@
         </div>
 
         <div
-            class="absolute left-1/2 -translate-x-1/2 bottom-[50px] z-50 flex flex-col gap-[10px]"
+            class="absolute left-1/2 -translate-x-1/2 bottom-[50px] z-50 flex flex-col gap-[10px] transition-all duration-300 ease-in-out transform {controlsVisible
+                ? 'translate-y-0 opacity-100'
+                : 'translate-y-10 opacity-0 pointer-events-none'}"
         >
             <PlayerOverlays
                 {showSkipIntro}
