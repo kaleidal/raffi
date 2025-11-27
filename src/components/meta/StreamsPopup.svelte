@@ -101,13 +101,13 @@
             </h2>
 
             {#if filteredAddons.length > 1}
-                <div class="flex flex-row gap-4 overflow-x-auto pb-2">
+                <div class="flex flex-wrap gap-3 pb-2">
                     {#each filteredAddons as addon}
                         <button
-                            class="px-6 py-3 rounded-full text-sm font-medium transition-colors cursor-pointer whitespace-nowrap {selectedAddon ===
+                            class="px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 cursor-pointer whitespace-nowrap {selectedAddon ===
                             addon.transport_url
-                                ? 'bg-white text-black'
-                                : 'bg-white/10 text-white hover:bg-white/20'}"
+                                ? 'bg-white text-black border-white shadow-lg shadow-white/10'
+                                : 'bg-[#1A1A1A] text-[#A0A0A0] border-[#333] hover:border-[#555] hover:text-white'}"
                             on:click={() =>
                                 (selectedAddon = addon.transport_url)}
                         >
@@ -117,7 +117,9 @@
                 </div>
             {/if}
 
-            <div class="flex flex-col gap-4 overflow-y-auto pr-2">
+            <div
+                class="flex flex-col gap-4 overflow-y-auto pr-2 flex-1 min-h-0"
+            >
                 {#if loadingStreams}
                     <div class="flex justify-center py-10">
                         <LoadingSpinner size="40px" />
@@ -129,25 +131,44 @@
                 {:else}
                     {#each streams as stream}
                         <button
-                            class="w-full bg-white/5 hover:bg-white/10 p-4 rounded-xl flex flex-col gap-1 text-left transition-colors group cursor-pointer"
+                            class="w-full bg-[#1A1A1A] hover:bg-[#222] p-5 rounded-2xl flex flex-col gap-2 text-left transition-all duration-200 group cursor-pointer relative overflow-hidden shrink-0"
                             on:click={() => onStreamClick(stream)}
                         >
                             <div
-                                class="flex flex-row justify-between items-center w-full"
+                                class="flex flex-row justify-between items-start w-full gap-4"
                             >
-                                <span class="text-white font-medium text-lg"
-                                    >{truncateWords(
-                                        getStreamTitle(stream),
-                                        10,
-                                    )}</span
+                                <div class="flex-1 min-w-0">
+                                    <h3
+                                        class="text-white font-medium text-lg line-clamp-2 leading-snug"
+                                        title={getStreamTitle(stream)}
+                                    >
+                                        {getStreamTitle(stream)}
+                                    </h3>
+                                </div>
+                                <div
+                                    class="flex flex-col items-end gap-1 shrink-0"
                                 >
-                                <span class="text-white/50 text-sm"
-                                    >{stream.name}</span
-                                >
+                                    {#if stream.infoHash || (stream.url && stream.url.startsWith("magnet:"))}
+                                        <div
+                                            class="bg-green-500/10 text-green-400 px-2 py-1 rounded-md text-[10px] font-bold border border-green-500/20 flex items-center gap-1 uppercase tracking-wider"
+                                        >
+                                            P2P
+                                        </div>
+                                    {/if}
+                                    <span class="text-[#888] text-xs font-mono"
+                                        >{stream.name}</span
+                                    >
+                                </div>
                             </div>
-                            <span class="text-white/40 text-sm line-clamp-1"
-                                >{getStreamDetails(stream)}</span
+                            <div
+                                class="flex flex-row items-center gap-2 w-full"
                             >
+                                <span
+                                    class="text-[#666] text-sm truncate font-medium w-full"
+                                >
+                                    {getStreamDetails(stream)}
+                                </span>
+                            </div>
                         </button>
                     {/each}
                 {/if}
