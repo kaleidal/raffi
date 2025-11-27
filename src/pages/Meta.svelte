@@ -18,6 +18,7 @@
     import ActionButtons from "../components/meta/ActionButtons.svelte";
     import EpisodeContextMenu from "../components/meta/EpisodeContextMenu.svelte";
     import LoadingSpinner from "../components/common/LoadingSpinner.svelte";
+    import TorrentWarningModal from "../components/meta/TorrentWarningModal.svelte";
 
     let addons: Addon[] = [];
 
@@ -53,11 +54,15 @@
     let playerVisible = false;
     let streams: any[] = [];
     let selectedStreamUrl: string | null = null;
+    let selectedFileIdx: number | null = null;
     let selectedAddon: string = "";
     let loadingStreams = false;
     let selectedEpisode: any = null;
     let progressMap: any = {};
     let libraryItem: any = null;
+
+    let showTorrentWarning = false;
+    let pendingTorrentStream: any = null;
 
     let selectedStream: any = null;
 
@@ -99,11 +104,47 @@
     let startTime = 0;
 
     const onStreamClick = (stream: any) => {
-        // stream.url or stream.infoHash
-        // For now assuming stream.url as torrenting hasn't been implemented yet.
-        if (stream.url) {
+        // Check if it's a torrent
+        const isTorrent =
+            stream.infoHash || (stream.url && stream.url.startsWith("magnet:"));
+
+        if (isTorrent) {
+            const hasSeenWarning = localStorage.getItem("torrentWarningShown");
+            if (!hasSeenWarning) {
+                pendingTorrentStream = stream;
+                showTorrentWarning = true;
+                return;
+            }
+        }
+
+        playStream(stream);
+    };
+
+    const handleTorrentWarningConfirm = () => {
+        localStorage.setItem("torrentWarningShown", "true");
+        showTorrentWarning = false;
+        if (pendingTorrentStream) {
+            playStream(pendingTorrentStream);
+            pendingTorrentStream = null;
+        }
+    };
+
+    const handleTorrentWarningCancel = () => {
+        showTorrentWarning = false;
+        pendingTorrentStream = null;
+    };
+
+    const playStream = (stream: any) => {
+        let url = stream.url;
+        let fileIdx = stream.fileIdx;
+        if (stream.infoHash && fileIdx !== undefined) {
+            url = `magnet:?xt=urn:btih:${stream.infoHash}`;
+            selectedFileIdx = fileIdx;
+        }
+
+        if (url) {
             selectedStream = stream;
-            selectedStreamUrl = stream.url;
+            selectedStreamUrl = url;
 
             if (selectedEpisode) {
                 if (metaData.meta.type === "movie") {
@@ -121,7 +162,6 @@
                         startTime = 0;
                     }
                 }
-                console.log("Setting startTime:", startTime);
             }
 
             playerVisible = true;
@@ -179,7 +219,16 @@
 
             if (match) {
                 console.log("Auto-selecting matching stream:", match);
-                onStreamClick(match);
+                const isTorrent =
+                    match.infoHash ||
+                    (match.url && match.url.startsWith("magnet:"));
+                if (isTorrent && !localStorage.getItem("torrentWarningShown")) {
+                    pendingTorrentStream = match;
+                    showTorrentWarning = true;
+                    playerVisible = false;
+                } else {
+                    playStream(match);
+                }
             } else {
                 streamsPopupVisible = true;
                 playerVisible = false;
@@ -213,7 +262,7 @@
                 watched: isWatched,
                 updatedAt: Date.now(),
             };
-            progressMap = progressMap; // Trigger reactivity
+            progressMap = progressMap;
         }
 
         const now = Date.now();
@@ -223,7 +272,6 @@
         }
     };
 
-    // Context Menu Logic
     let showEpisodeContextMenu = false;
     let contextMenuX = 0;
     let contextMenuY = 0;
@@ -245,14 +293,11 @@
     async function handleContextMarkWatched() {
         if (!contextEpisode || !imdbID) return;
         const key = `${contextEpisode.season}:${contextEpisode.episode}`;
-        // Assume standard duration if unknown, or just set watched=true
-        // If we don't have duration, we can't set time accurately, but watched=true is key.
-        // We'll preserve existing duration if available.
         const existing = progressMap[key] || {};
         const duration = existing.duration || 0;
 
         progressMap[key] = {
-            time: duration, // Set to end
+            time: duration,
             duration: duration,
             watched: true,
             updatedAt: Date.now(),
@@ -312,9 +357,6 @@
         for (const ep of episodesInSeason) {
             const key = `${ep.season}:${ep.episode}`;
             const existing = progressMap[key] || {};
-            // If already watched, skip to avoid unnecessary updates/overwrites if we want to preserve exact times?
-            // Actually, just ensuring it's marked as watched is enough.
-            // We'll set time to duration if available, or just mark watched.
             const duration = existing.duration || 0;
 
             progressMap[key] = {
@@ -324,7 +366,7 @@
                 updatedAt: Date.now(),
             };
         }
-        progressMap = progressMap; // Trigger reactivity
+        progressMap = progressMap;
         await updateLibraryProgress(
             imdbID,
             progressMap,
@@ -351,7 +393,7 @@
                 updatedAt: Date.now(),
             };
         }
-        progressMap = progressMap; // Trigger reactivity
+        progressMap = progressMap;
         await updateLibraryProgress(
             imdbID,
             progressMap,
@@ -371,7 +413,6 @@
         loadedMeta = false;
         try {
             metaData = await getMetaData(imdbID, titleType);
-            console.log("Loaded metadata:", metaData);
 
             if (expectedName && metaData.meta.name !== expectedName) {
                 console.warn(
@@ -423,8 +464,6 @@
             if (item) {
                 libraryItem = item;
                 progressMap = item.progress || {};
-
-                // lastWatched is now reactive, no need to calculate here
             }
         } catch (e) {
             console.error("Failed to load library item", e);
@@ -775,6 +814,13 @@
         />
     {/if}
 
+    {#if showTorrentWarning}
+        <TorrentWarningModal
+            on:confirm={handleTorrentWarningConfirm}
+            on:cancel={handleTorrentWarningCancel}
+        />
+    {/if}
+
     <StreamsPopup
         bind:streamsPopupVisible
         {addons}
@@ -790,6 +836,7 @@
         <div class="w-screen h-screen z-100 fixed top-0 left-0">
             <Player
                 videoSrc={selectedStreamUrl}
+                fileIdx={selectedFileIdx}
                 {metaData}
                 {startTime}
                 onClose={closePlayer}
