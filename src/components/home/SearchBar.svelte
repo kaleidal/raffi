@@ -147,7 +147,7 @@
         class="cursor-pointer hover:opacity-80 transition-opacity"
         on:click={() => router.navigate("home")}
     >
-        <img src="/raffi.svg" alt="Raffi Logo" class="h-[80px]" />
+        <img src="raffi.svg" alt="Raffi Logo" class="h-[80px]" />
     </button>
 
     <div class="flex flex-col absolute left-1/2 -translate-x-1/2">
@@ -175,7 +175,7 @@
             <input
                 type="text"
                 placeholder="search for a movie or show"
-                class="bg-[#000000]/50 text-[#D4D4D4] text-center py-[20px] text-[28px] font-poppins font-normal w-fit outline-none focus:outline-none focus:ring-0"
+                class="bg-[#000000]/50 text-[#D4D4D4] text-center py-[20px] w-fit text-[28px] font-poppins font-normal outline-none focus:outline-none focus:ring-0"
                 on:input={handleSearch}
                 on:focus={() => {
                     if (searchQuery) showSearchResults = true;

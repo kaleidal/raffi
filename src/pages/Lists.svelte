@@ -545,7 +545,8 @@
                                 <iframe
                                     bind:this={playerIframe}
                                     frameborder="0"
-                                    src={`https://www.youtube.com/embed/${selectedItem.trailerStreams.at(-1).ytId}?controls=0&modestbranding=1&rel=0&autoplay=1&mute=1&loop=1&playlist=${selectedItem.trailerStreams.at(-1).ytId}&showinfo=0&iv_load_policy=3&disablekb=1&enablejsapi=1`}
+                                    referrerpolicy="strict-origin-when-cross-origin"
+                                    src={`https://www.youtube-nocookie.com/embed/${selectedItem.trailerStreams.at(-1).ytId}?controls=0&modestbranding=1&rel=0&autoplay=1&mute=1&loop=1&playlist=${selectedItem.trailerStreams.at(-1).ytId}&showinfo=0&iv_load_policy=3&disablekb=1&enablejsapi=1`}
                                     class="w-full h-full object-cover scale-[1.35]"
                                     title="Trailer"
                                 ></iframe>
@@ -753,7 +754,7 @@
                                                         {selectedItem.imdbRating}
                                                     </span>
                                                     <img
-                                                        src="/imdb.png"
+                                                        src="imdb.png"
                                                         alt="IMDb"
                                                         class="w-[50px] h-[24px] object-contain"
                                                     />
@@ -763,7 +764,7 @@
                                     </div>
 
                                     <button
-                                        class="bg-[#FF4444]/20 hover:bg-[#FF4444]/30 aspect-square items-center justify-center text-[#FF6666] rounded-full font-poppins font-medium text-[16px] transition-colors flex items-center gap-2 cursor-pointer"
+                                        class="bg-[#FF4444]/20 hover:bg-[#FF4444]/30 h-full p-[30px] aspect-square items-center justify-center text-[#FF6666] rounded-full font-poppins font-medium text-[16px] transition-colors flex items-center gap-2 cursor-pointer"
                                         on:click={handleRemoveFromList}
                                         aria-label="Remove from list"
                                     >

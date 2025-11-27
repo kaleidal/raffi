@@ -932,6 +932,12 @@
     }
 
     let seekFeedbackTimeout: any;
+
+    let objectFit: "contain" | "cover" = "contain";
+
+    function toggleObjectFit() {
+        objectFit = objectFit === "contain" ? "cover" : "contain";
+    }
 </script>
 
 <svelte:window on:mousemove={handleMouseMove} on:keydown={handleKeydown} />
@@ -956,7 +962,8 @@
             on:play={handlePlay}
             on:pause={handlePause}
             on:click={togglePlay}
-            class="absolute inset-0 z-0 w-full h-full object-contain"
+            class="absolute inset-0 z-0 w-full h-full"
+            style:object-fit={objectFit}
         >
             <track kind="captions" />
         </video>
@@ -1022,6 +1029,8 @@
                 {onSeekChange}
                 {onVolumeChange}
                 {toggleFullscreen}
+                {objectFit}
+                {toggleObjectFit}
                 onNextEpisode={handleNextEpisodeClick}
                 on:audioClick={() => (showAudioSelection = true)}
                 on:subtitleClick={() => (showSubtitleSelection = true)}
