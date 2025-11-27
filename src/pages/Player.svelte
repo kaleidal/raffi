@@ -12,9 +12,11 @@
     import PlayerOverlays from "../components/player/PlayerOverlays.svelte";
     import TrackSelectionModal from "../components/player/TrackSelectionModal.svelte";
     import SeekFeedback from "../components/player/SeekFeedback.svelte";
+    import PlayerErrorModal from "../components/player/PlayerErrorModal.svelte";
     import { getAddons } from "../lib/db/db";
 
     export let videoSrc: string | null = null;
+    export let fileIdx: number | null = null;
     export let metaData: ShowResponse | null = null;
     export let autoPlay: boolean = true;
     export let onClose: () => void = () => {};
@@ -57,6 +59,10 @@
 
     let seekFeedback: { type: "forward" | "backward"; id: number } | null =
         null;
+
+    let showError = false;
+    let errorMessage = "";
+    let errorDetails = "";
 
     const IDLE_DELAY = 5000;
 
@@ -286,6 +292,9 @@
             loading = true;
             showCanvas = false;
             isPlaying = false;
+            showError = false;
+            errorMessage = "";
+            errorDetails = "";
 
             currentTime = 0;
             duration = 0;
@@ -302,7 +311,16 @@
             currentAudioLabel = "Default";
             currentSubtitleLabel = "Off";
 
-            sessionId = await createSession(src, "http", startTime);
+            const kind = src.startsWith("magnet:") ? "torrent" : "http";
+            if (fileIdx) {
+                console.log(
+                    "Creating torrent session with file index:",
+                    fileIdx,
+                );
+                sessionId = await createSession(src, kind, startTime, fileIdx);
+            } else {
+                sessionId = await createSession(src, kind, startTime);
+            }
             playbackOffset = startTime;
 
             const res = await fetch(`${serverUrl}/sessions/${sessionId}`);
@@ -339,9 +357,26 @@
             initHLS(sessionId, startTime);
         } catch (err) {
             console.error("Error loading video:", err);
+            errorMessage = "Failed to initialize playback";
+            errorDetails = err instanceof Error ? err.message : String(err);
+            showError = true;
             loading = false;
         }
     };
+
+    function handleRetry() {
+        showError = false;
+        errorMessage = "";
+        errorDetails = "";
+        if (videoSrc) {
+            loadVideo(videoSrc);
+        }
+    }
+
+    function handleErrorBack() {
+        showError = false;
+        onClose();
+    }
 
     async function handleAudioSelect(e: CustomEvent) {
         const track = e.detail;
@@ -745,6 +780,19 @@
                 console.error("HLS ERROR", data);
                 if (data.fatal) {
                     seekGuard = false;
+                    // Show error modal for fatal errors
+                    if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                        errorMessage = "Network error loading stream";
+                        errorDetails = data.details || "";
+                    } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+                        errorMessage = "Media playback error";
+                        errorDetails = data.details || "";
+                    } else {
+                        errorMessage = "Failed to load stream";
+                        errorDetails = data.details || "";
+                    }
+                    showError = true;
+                    loading = false;
                 }
             });
 
@@ -1013,6 +1061,15 @@
                 </div>
             {/if}
         </div>
+    {/if}
+
+    {#if showError}
+        <PlayerErrorModal
+            {errorMessage}
+            {errorDetails}
+            on:retry={handleRetry}
+            on:back={handleErrorBack}
+        />
     {/if}
 </div>
 
