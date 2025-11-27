@@ -15,11 +15,18 @@
 
 /* Hide scrollbar for IE, Edge and Firefox */
 .no-scrollbar {
-  -ms-overflow-style: none; /* IE and Edge */
-  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
 }
 
 body {
   background-color: #090909;
   color: #ffffff;
+}
+
+/* Globally hide scrollbars */
+::-webkit-scrollbar {
+  display: none;
 }

@@ -757,7 +757,7 @@
                                     class="cursor-pointer hover:opacity-60 transition-opacity duration-200"
                                 >
                                     <img
-                                        src="/imdb.png"
+                                        src="imdb.png"
                                         alt="IMDB Logo"
                                         class="h-[50px] w-auto object-contain"
                                     />

@@ -15,12 +15,14 @@
     export let metaData: ShowResponse | null = null;
     export let currentAudioLabel: string = "";
     export let currentSubtitleLabel: string = "";
+    export let objectFit: "contain" | "cover" = "contain";
 
     export let togglePlay: () => void;
     export let onSeekInput: (e: Event) => void;
     export let onSeekChange: (e: Event) => void;
     export let onVolumeChange: (e: Event) => void;
     export let toggleFullscreen: () => void;
+    export let toggleObjectFit: () => void;
     export let onNextEpisode: () => void;
 
     const dispatch = createEventDispatcher();
@@ -124,6 +126,45 @@
                         stroke-linejoin="round"
                     />
                 </svg>
+            </ExpandingButton>
+
+            <ExpandingButton
+                label={objectFit === "contain" ? "Zoom" : "Fit"}
+                onClick={toggleObjectFit}
+            >
+                {#if objectFit === "contain"}
+                    <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                    >
+                        <path
+                            d="M15 3H21M21 3V9M21 3L14 10M9 21H3M3 21V15M3 21L10 14"
+                            stroke="#E9E9E9"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        />
+                    </svg>
+                {:else}
+                    <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                    >
+                        <path
+                            d="M4 14L10 20M10 20H4M10 20V14M20 10L14 4M14 4H20M14 4V10"
+                            stroke="#E9E9E9"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        />
+                    </svg>
+                {/if}
             </ExpandingButton>
 
             <ExpandingButton
