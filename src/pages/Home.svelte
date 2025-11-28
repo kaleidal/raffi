@@ -11,6 +11,7 @@
     import SearchBar from "../components/home/SearchBar.svelte";
     import ContinueWatching from "../components/home/sections/ContinueWatching.svelte";
     import AddonsModal from "../components/AddonsModal.svelte";
+    import SettingsModal from "../components/SettingsModal.svelte";
     import PopularSection from "../components/home/sections/PopularSection.svelte";
     import GenreSection from "../components/home/sections/GenreSection.svelte";
     import LoadingSpinner from "../components/common/LoadingSpinner.svelte";
@@ -20,6 +21,7 @@
     let continueWatchingMeta: (ShowResponse & { libraryItem: any })[] = [];
     let popularMeta: PopularTitleMeta[] = [];
     let showAddonsModal = false;
+    let showSettingsModal = false;
     let genreMap: Record<string, PopularTitleMeta[]> = {};
     let topGenres: string[] = [];
 
@@ -198,6 +200,10 @@
     function handleOpenAddons() {
         showAddonsModal = true;
     }
+
+    function handleOpenSettings() {
+        showSettingsModal = true;
+    }
 </script>
 
 <div class="bg-[#090909] h-fit min-h-screen flex flex-col pb-[100px]">
@@ -209,6 +215,7 @@
 
             <SearchBar
                 on:openAddons={handleOpenAddons}
+                on:openSettings={handleOpenSettings}
                 on:openProfile={() => {}}
             />
 
@@ -224,6 +231,7 @@
             </div>
 
             <AddonsModal bind:showAddonsModal />
+            <SettingsModal bind:showSettings={showSettingsModal} />
         </div>
     {:else}
         <div

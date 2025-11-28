@@ -15,6 +15,8 @@ declare global {
         electronAPI?: {
             setActivity: (activity: ActivityDetails) => void;
             clearActivity: () => void;
+            enableRPC: () => void;
+            disableRPC: () => void;
         };
     }
 }
@@ -30,5 +32,17 @@ export function setActivity(activity: ActivityDetails) {
 export function clearActivity() {
     if (window.electronAPI) {
         window.electronAPI.clearActivity();
+    }
+}
+
+export function enableRPC() {
+    if (window.electronAPI) {
+        window.electronAPI.enableRPC();
+    }
+}
+
+export function disableRPC() {
+    if (window.electronAPI) {
+        window.electronAPI.disableRPC();
     }
 }

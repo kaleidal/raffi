@@ -130,6 +130,7 @@ const clientId = '1443935459079094396';
 let rpc;
 
 function initRPC() {
+    if (rpc) return;
     rpc = new DiscordRPC.Client({ transport: 'ipc' });
 
     rpc.on('ready', () => {
@@ -138,10 +139,16 @@ function initRPC() {
 
     rpc.login({ clientId }).catch(e => {
         console.warn('Discord RPC connection failed (is Discord running?):', e.message);
+        rpc = null;
     });
 }
 
-// Initialize RPC
+function destroyRPC() {
+    if (!rpc) return;
+    rpc.destroy().catch(console.error);
+    rpc = null;
+}
+
 initRPC();
 
 ipcMain.on('RPC_SET_ACTIVITY', (event, activity) => {
@@ -152,4 +159,12 @@ ipcMain.on('RPC_SET_ACTIVITY', (event, activity) => {
 ipcMain.on('RPC_CLEAR_ACTIVITY', () => {
     if (!rpc) return;
     rpc.clearActivity().catch(console.error);
+});
+
+ipcMain.on('RPC_ENABLE', () => {
+    initRPC();
+});
+
+ipcMain.on('RPC_DISABLE', () => {
+    destroyRPC();
 });
