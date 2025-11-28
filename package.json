@@ -12,7 +12,7 @@
   "homepage": "https://lantharos.com/raffi",
   "scripts": {
     "dev": "vite",
-    "electron:dev": "cross-env NODE_ENV=development concurrently \"npm run dev\" \"wait-on http://localhost:5173 && ELECTRON_DISABLE_SANDBOX=1 electron .\"",
+    "electron:dev": "cross-env NODE_ENV=development concurrently \"npm run dev\" \"wait-on http://localhost:5173 && cross-env ELECTRON_DISABLE_SANDBOX=1 electron .\"",
     "build": "vite build",
     "dist": "npm run build && electron-builder"
   },
@@ -50,6 +50,10 @@
       {
         "from": "electron/decoder-x86_64-unknown-linux-gnu",
         "to": "decoder-x86_64-unknown-linux-gnu"
+      },
+      {
+        "from": "electron/decoder-windows-amd64.exe",
+        "to": "decoder-windows-amd64.exe"
       }
     ],
     "linux": {
@@ -59,6 +63,10 @@
       ],
       "icon": "build/icons",
       "category": "Video"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "build/icons/512x512.png"
     }
   },
   "dependencies": {
