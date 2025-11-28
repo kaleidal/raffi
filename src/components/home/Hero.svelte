@@ -46,7 +46,7 @@
 
         <div class="flex flex-row gap-[10px] items-center">
             <button
-                class="bg-[#FFFFFF]/80 hover:bg-[#D3D3D3]/80 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-[20px] text-black text-[36px] font-poppins font-medium px-[100px] py-[20px] w-fit rounded-[50px] transition-colors duration-200"
+                class="bg-[#FFFFFF]/80 hover:bg-[#D3D3D3]/80 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-[20px] text-black text-[36px] font-poppins font-medium px-[100px] py-[20px] w-fit rounded-full transition-colors duration-200"
                 on:click={() =>
                     navigateToMeta(showcasedTitle.imdb_id, showcasedTitle.type)}
             >
