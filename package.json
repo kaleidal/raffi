@@ -62,9 +62,11 @@
     }
   },
   "dependencies": {
+    "@ryuziii/discord-rpc": "^1.0.1-rc.1",
     "@stremio/stremio-core-web": "^0.50.0",
     "@supabase/supabase-js": "^2.83.0",
     "@tailwindcss/vite": "^4.1.17",
+    "discord-rpc": "^4.0.1",
     "eventemitter3": "^5.0.1",
     "express": "^5.1.0",
     "hls.js": "^1.6.14",

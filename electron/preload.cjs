@@ -1,5 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
-    // Add Tauri-like commands here if needed
+    setActivity: (activity) => ipcRenderer.send('RPC_SET_ACTIVITY', activity),
+    clearActivity: () => ipcRenderer.send('RPC_CLEAR_ACTIVITY')
 });
