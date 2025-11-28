@@ -6,13 +6,14 @@
         deleteList,
         getListItems,
         getLists,
+        getListsWithItems,
         removeFromList,
         updateList,
         updateListItemPosition,
         updateListItemPoster,
         type List,
     } from "../lib/db/db";
-    import { getMetaData } from "../lib/library/library";
+    import { getCachedMetaData } from "../lib/library/metaCache";
     import { router } from "../lib/stores/router";
     import ExpandingButton from "../components/ExpandingButton.svelte";
     import AddonsModal from "../components/AddonsModal.svelte";
@@ -59,10 +60,14 @@
 
     async function loadLists() {
         try {
-            lists = await getLists();
-            for (const list of lists) {
-                await loadListItems(list.list_id);
+            const listsWithItems = await getListsWithItems();
+            lists = listsWithItems as List[];
+
+            // Load metadata for all items
+            for (const list of listsWithItems) {
+                await loadListItems(list.list_id, list.list_items);
             }
+
             if (!selectedItem && lists.length > 0) {
                 const firstListId = lists[0].list_id;
                 if (
@@ -77,13 +82,14 @@
         }
     }
 
-    async function loadListItems(listId: string) {
+    async function loadListItems(listId: string, items?: any[]) {
         try {
-            const items = await getListItems(listId);
+            if (!items) {
+                items = await getListItems(listId);
+            }
 
             const metaPromises = items.map(async (item) => {
                 if (item.poster) {
-                    // Use cached poster
                     return {
                         poster: item.poster,
                         imdb_id: item.imdb_id,
@@ -95,9 +101,11 @@
                 }
 
                 try {
-                    const data = await getMetaData(item.imdb_id, item.type);
+                    const data = await getCachedMetaData(
+                        item.imdb_id,
+                        item.type,
+                    );
                     if (data && data.meta) {
-                        // Backfill poster if missing in DB
                         if (!item.poster && data.meta.poster) {
                             try {
                                 await updateListItemPoster(
@@ -105,7 +113,7 @@
                                     item.imdb_id,
                                     data.meta.poster,
                                 );
-                                // Update local item so we know it's backfilled
+
                                 item.poster = data.meta.poster;
                             } catch (e) {
                                 console.error("Failed to backfill poster", e);
@@ -121,12 +129,10 @@
 
             const metas = await Promise.all(metaPromises);
 
-            // Merge DB info (position) with Meta info
             listItemsMap[listId] = metas
                 .filter((m): m is NonNullable<typeof m> => !!m)
                 .map((m) => ({
                     ...m,
-                    // Prefer DB poster if available (though we just fetched meta)
                     poster: m.db_item.poster || m.poster,
                     position: m.db_item.position,
                 }))
@@ -169,15 +175,20 @@
         }
     }
 
+    let loadingItem: string | null = null;
+
     async function selectItem(item: any, listId: string) {
+        if (loadingItem === item.imdb_id) return; // Prevent double clicks
+
         selectedListId = listId;
         isPaused = false;
         isMuted = true;
 
         if (item._partial) {
+            loadingItem = item.imdb_id;
             // Fetch full meta
             try {
-                const data = await getMetaData(item.imdb_id, item.type);
+                const data = await getCachedMetaData(item.imdb_id, item.type);
                 if (data && data.meta) {
                     selectedItem = {
                         ...data.meta,
@@ -200,6 +211,8 @@
             } catch (e) {
                 console.error("Failed to fetch full meta for selected item", e);
                 selectedItem = item; // Fallback
+            } finally {
+                loadingItem = null;
             }
         } else {
             selectedItem = item;
@@ -321,7 +334,7 @@
 
     {#if loaded}
         <div
-            class="flex flex-row gap-[10px] mt-[50px] items-start justify-center w-full max-w-screen h-[calc(100vh-200px)] px-[20px] z-10"
+            class="flex flex-row gap-[10px] mt-[50px] items-start justify-center w-full max-w-screen h-[calc(100vh-200px)] px-[20px] z-10 rounded-[20px]"
             in:fade={{ duration: 300 }}
         >
             <!-- Left Panel: Lists -->
@@ -502,6 +515,19 @@
                                                 <div
                                                     class="absolute inset-0 bg-black/20 rounded-[12px]"
                                                 ></div>
+                                            {/if}
+
+                                            {#if loadingItem === item.imdb_id}
+                                                <div
+                                                    class="absolute inset-0 flex items-center justify-center bg-black/40 rounded-[12px] backdrop-blur-[2px]"
+                                                    transition:fade={{
+                                                        duration: 200,
+                                                    }}
+                                                >
+                                                    <div
+                                                        class="w-8 h-8 border-4 border-white/20 border-t-white rounded-full animate-spin"
+                                                    ></div>
+                                                </div>
                                             {/if}
                                         </button>
                                     {/each}

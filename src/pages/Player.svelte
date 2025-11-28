@@ -7,6 +7,7 @@
         getStreamUrl,
         serverUrl,
     } from "../lib/client";
+    import { setActivity, clearActivity } from "../lib/rpc";
     import type { ShowResponse } from "../lib/library/types/meta_types";
     import PlayerControls from "../components/player/PlayerControls.svelte";
     import PlayerOverlays from "../components/player/PlayerOverlays.svelte";
@@ -271,6 +272,7 @@
     let currentVideoSrc: string | null = null;
 
     const cleanupSession = () => {
+        clearActivity();
         if (hls) {
             hls.destroy();
             hls = null;
@@ -353,6 +355,31 @@
 
             await tick();
             if (!videoElem) return;
+
+            // Update Discord RPC
+            if (metaData) {
+                const isSeries = metaData.meta.type === "series";
+                let details = metaData.meta.name;
+                let state = isSeries ? `S${season} E${episode}` : "Movie";
+
+                if (isSeries && season && episode && metaData.meta.videos) {
+                    const ep = metaData.meta.videos.find(
+                        (v) => v.season === season && v.episode === episode,
+                    );
+                    if (ep && ep.name) {
+                        state += ` - ${ep.name}`;
+                    }
+                }
+
+                setActivity({
+                    details: `Watching ${details}`,
+                    state: state,
+                    startTimestamp: Math.floor(Date.now() / 1000),
+                    largeImageKey: "raffi_logo", // Assuming you might have this or just default
+                    largeImageText: "Raffi",
+                    instance: false,
+                });
+            }
 
             initHLS(sessionId, startTime);
         } catch (err) {

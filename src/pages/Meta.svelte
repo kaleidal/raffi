@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { getMetaData } from "../lib/library/library";
+    import { getCachedMetaData } from "../lib/library/metaCache";
     import type { ShowResponse } from "../lib/library/types/meta_types";
     import { onDestroy, onMount } from "svelte";
     import Player from "./Player.svelte";
@@ -412,14 +412,14 @@
         if (!imdbID) return;
         loadedMeta = false;
         try {
-            metaData = await getMetaData(imdbID, titleType);
+            metaData = await getCachedMetaData(imdbID, titleType);
 
             if (expectedName && metaData.meta.name !== expectedName) {
                 console.warn(
                     `Name mismatch: expected "${expectedName}", got "${metaData.meta.name}". Trying fallback type.`,
                 );
                 const fallbackType = titleType === "movie" ? "series" : "movie";
-                metaData = await getMetaData(imdbID, fallbackType);
+                metaData = await getCachedMetaData(imdbID, fallbackType);
                 titleType = fallbackType;
             }
 
@@ -428,7 +428,7 @@
                     "Missing logo or background. Trying fallback type.",
                 );
                 const fallbackType = titleType === "movie" ? "series" : "movie";
-                metaData = await getMetaData(imdbID, fallbackType);
+                metaData = await getCachedMetaData(imdbID, fallbackType);
                 titleType = fallbackType;
             }
         } catch (e) {
@@ -437,7 +437,7 @@
             );
             try {
                 const fallbackType = titleType === "movie" ? "series" : "movie";
-                metaData = await getMetaData(imdbID, fallbackType);
+                metaData = await getCachedMetaData(imdbID, fallbackType);
                 titleType = fallbackType;
             } catch (e2) {
                 console.error("Failed to load meta (fallback)", e2);

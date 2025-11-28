@@ -1,6 +1,5 @@
 <script lang="ts">
     import { fade, scale } from "svelte/transition";
-    import { onMount } from "svelte";
     import { getAddons, addAddon, removeAddon } from "../lib/db/db";
     import type { Addon } from "../lib/db/db";
     import LoadingSpinner from "./common/LoadingSpinner.svelte";

@@ -121,3 +121,35 @@ process.on('SIGTERM', () => {
     cleanup();
     process.exit(0);
 });
+
+// --- Discord RPC ---
+const DiscordRPC = require('discord-rpc');
+const { ipcMain } = require('electron');
+
+const clientId = '1443935459079094396';
+let rpc;
+
+function initRPC() {
+    rpc = new DiscordRPC.Client({ transport: 'ipc' });
+
+    rpc.on('ready', () => {
+        console.log('Discord RPC ready');
+    });
+
+    rpc.login({ clientId }).catch(e => {
+        console.warn('Discord RPC connection failed (is Discord running?):', e.message);
+    });
+}
+
+// Initialize RPC
+initRPC();
+
+ipcMain.on('RPC_SET_ACTIVITY', (event, activity) => {
+    if (!rpc) return;
+    rpc.setActivity(activity).catch(console.error);
+});
+
+ipcMain.on('RPC_CLEAR_ACTIVITY', () => {
+    if (!rpc) return;
+    rpc.clearActivity().catch(console.error);
+});

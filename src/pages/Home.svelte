@@ -1,7 +1,8 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import { fade } from "svelte/transition";
-    import { getMetaData, getPopularTitles } from "../lib/library/library";
+    import { getCachedMetaData } from "../lib/library/metaCache";
+    import { getPopularTitles } from "../lib/library/library";
     import type { ShowResponse } from "../lib/library/types/meta_types";
     import type { PopularTitleMeta } from "../lib/library/types/popular_types";
     import { getLibrary, updateLibraryPoster } from "../lib/db/db";
@@ -126,12 +127,18 @@
 
                     let meta: ShowResponse;
                     if (item.type) {
-                        meta = await getMetaData(item.imdb_id, item.type);
+                        meta = await getCachedMetaData(item.imdb_id, item.type);
                     } else {
                         try {
-                            meta = await getMetaData(item.imdb_id, "series");
+                            meta = await getCachedMetaData(
+                                item.imdb_id,
+                                "series",
+                            );
                         } catch {
-                            meta = await getMetaData(item.imdb_id, "movie");
+                            meta = await getCachedMetaData(
+                                item.imdb_id,
+                                "movie",
+                            );
                         }
                     }
 

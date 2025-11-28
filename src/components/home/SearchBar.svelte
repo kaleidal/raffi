@@ -1,6 +1,7 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte";
-    import { searchTitles, getMetaData } from "../../lib/library/library";
+    import { searchTitles } from "../../lib/library/library";
+    import { getCachedMetaData } from "../../lib/library/metaCache";
     import { router } from "../../lib/stores/router";
     import Skeleton from "../common/Skeleton.svelte";
     import { fade } from "svelte/transition";
@@ -85,7 +86,10 @@
         // Search results default to "movie", but might be "series"
         // We use the same heuristic as Meta page
         try {
-            let metaData = await getMetaData(selectedImdbId, selectedType);
+            let metaData = await getCachedMetaData(
+                selectedImdbId,
+                selectedType,
+            );
 
             let typeChanged = false;
             if (selectedTitle && metaData.meta.name !== selectedTitle) {
@@ -104,7 +108,7 @@
                 const fallbackType =
                     selectedType === "movie" ? "series" : "movie";
                 try {
-                    const fallbackMeta = await getMetaData(
+                    const fallbackMeta = await getCachedMetaData(
                         selectedImdbId,
                         fallbackType,
                     );
@@ -122,7 +126,7 @@
             try {
                 const fallbackType =
                     selectedType === "movie" ? "series" : "movie";
-                const fallbackMeta = await getMetaData(
+                const fallbackMeta = await getCachedMetaData(
                     selectedImdbId,
                     fallbackType,
                 );

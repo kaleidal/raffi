@@ -4,11 +4,11 @@
     import Home from "./pages/Home.svelte";
     import Player from "./pages/Player.svelte";
     import { router } from "./lib/stores/router";
-    import { supabase } from "./lib/db/supabase";
     import { onMount } from "svelte";
     import Lists from "./pages/Lists.svelte";
 
     import LoadingSpinner from "./components/common/LoadingSpinner.svelte";
+    import { currentUser, initAuth } from "./lib/stores/authStore";
 
     const pages = {
         home: Home,
@@ -18,38 +18,24 @@
         lists: Lists,
     };
 
-    let isAuthenticated = false;
     let checkingAuth = true;
 
-    onMount(() => {
-        (async () => {
-            const {
-                data: { user },
-            } = await supabase.auth.getUser();
-            isAuthenticated = !!user;
-            checkingAuth = false;
+    onMount(async () => {
+        await initAuth();
+        checkingAuth = false;
 
-            if (!isAuthenticated && $router.page !== "login") {
-                router.navigate("login");
-            }
-        })();
-
-        const {
-            data: { subscription },
-        } = supabase.auth.onAuthStateChange((event, session) => {
-            isAuthenticated = !!session?.user;
-
-            if (!isAuthenticated && $router.page !== "login") {
-                router.navigate("login");
-            } else if (isAuthenticated && $router.page === "login") {
-                router.navigate("home");
-            }
-        });
-
-        return () => {
-            subscription.unsubscribe();
-        };
+        if (!$currentUser && $router.page !== "login") {
+            router.navigate("login");
+        }
     });
+
+    $: if (!checkingAuth) {
+        if (!$currentUser && $router.page !== "login") {
+            router.navigate("login");
+        } else if ($currentUser && $router.page === "login") {
+            router.navigate("home");
+        }
+    }
 </script>
 
 {#if checkingAuth}
@@ -58,7 +44,7 @@
     >
         <LoadingSpinner size="60px" />
     </div>
-{:else if !isAuthenticated && $router.page !== "login"}
+{:else if !$currentUser && $router.page !== "login"}
     <Login />
 {:else}
     <svelte:component this={pages[$router.page]} />
