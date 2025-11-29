@@ -178,8 +178,8 @@
 
             <input
                 type="text"
-                placeholder="search for a movie or show"
-                class="bg-[#000000]/50 text-[#D4D4D4] text-center py-[20px] w-fit text-[28px] font-poppins font-normal outline-none focus:outline-none focus:ring-0"
+                placeholder="search for anything"
+                class="bg-[#000000]/50 text-[#D4D4D4] text-center py-[20px] px-[70px] w-fit text-[28px] font-poppins font-normal outline-none focus:outline-none focus:ring-0"
                 on:input={handleSearch}
                 on:focus={() => {
                     if (searchQuery) showSearchResults = true;
