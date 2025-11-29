@@ -9,6 +9,20 @@ let httpServer;
 
 const isDev = !app.isPackaged;
 
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+    app.quit();
+} else {
+    app.on('second-instance', (event, commandLine, workingDirectory) => {
+        // Someone tried to run a second instance, we should focus our window.
+        if (mainWindow) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.focus();
+        }
+    });
+}
+
 function getDecoderPath() {
     const platform = process.platform;
 
@@ -57,10 +71,9 @@ function createWindow() {
         const distPath = path.join(__dirname, '..', 'dist');
         expressApp.use(express.static(distPath));
 
-        httpServer = expressApp.listen(0, '127.0.0.1', () => {
-            const port = httpServer.address().port;
-            console.log(`Serving app on http://127.0.0.1:${port}`);
-            mainWindow.loadURL(`http://127.0.0.1:${port}`);
+        httpServer = expressApp.listen(11420, '127.0.0.1', () => {
+            console.log(`Serving app on http://127.0.0.1:11420`);
+            mainWindow.loadURL(`http://127.0.0.1:11420`);
         });
     }
 
