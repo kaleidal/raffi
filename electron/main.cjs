@@ -79,7 +79,9 @@ function createWindow() {
 
     mainWindow.setMenuBarVisibility(false);
 
-    if (isDev) mainWindow.webContents.openDevTools();
+    mainWindow.webContents.on('did-finish-load', () => {
+        mainWindow.webContents.setZoomFactor(1.0);
+    });
 }
 
 app.whenReady().then(() => {
@@ -136,7 +138,7 @@ process.on('SIGTERM', () => {
 });
 
 // --- Discord RPC ---
-const DiscordRPC = require('discord-rpc');
+const { DiscordRPCClient } = require('@ryuziii/discord-rpc');
 const { ipcMain } = require('electron');
 
 const clientId = '1443935459079094396';
@@ -144,34 +146,62 @@ let rpc;
 
 function initRPC() {
     if (rpc) return;
-    rpc = new DiscordRPC.Client({ transport: 'ipc' });
-
-    rpc.on('ready', () => {
-        console.log('Discord RPC ready');
+    rpc = new DiscordRPCClient({
+        clientId,
+        transport: 'ipc',
     });
 
-    rpc.login({ clientId }).catch(e => {
-        console.warn('Discord RPC connection failed (is Discord running?):', e.message);
+    rpc.connect().catch(e => {
+        console.warn('Discord RPC connection failed:', e.message);
         rpc = null;
     });
 }
 
 function destroyRPC() {
     if (!rpc) return;
-    rpc.destroy().catch(console.error);
+    try {
+        rpc.destroy();
+    } catch (e) { }
     rpc = null;
 }
 
 initRPC();
 
-ipcMain.on('RPC_SET_ACTIVITY', (event, activity) => {
+ipcMain.on('RPC_SET_ACTIVITY', (event, data) => {
     if (!rpc) return;
-    rpc.setActivity(activity).catch(console.error);
+
+    try {
+        if (data.useProgressBar && data.duration > 0) {
+            const options = {
+                state: data.state,
+                largeImageKey: data.largeImageKey || 'raffi_logo',
+                largeImageText: data.largeImageText || 'Raffi',
+                smallImageKey: data.smallImageKey || 'play',
+                smallImageText: data.smallImageText || 'Playing',
+            };
+
+            rpc.setProgressBar(data.details, data.duration, options);
+        } else {
+            rpc.setActivity({
+                state: data.state,
+                largeImageKey: data.largeImageKey || 'raffi_logo',
+                largeImageText: data.largeImageText || 'Raffi',
+                smallImageKey: data.smallImageKey || 'play',
+                smallImageText: data.smallImageText || 'Playing',
+            });
+        }
+    } catch (err) {
+        console.error('RPC_SET_ACTIVITY error:', err);
+    }
 });
 
 ipcMain.on('RPC_CLEAR_ACTIVITY', () => {
     if (!rpc) return;
-    rpc.clearActivity().catch(console.error);
+    try {
+        rpc.clearActivity();
+    } catch (err) {
+        console.error('RPC_CLEAR_ACTIVITY error:', err);
+    }
 });
 
 ipcMain.on('RPC_ENABLE', () => {

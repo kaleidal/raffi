@@ -66,13 +66,23 @@
 
     let selectedStream: any = null;
 
-    const fetchStreams = async (episode: any, silent: boolean = false) => {
+    let backgroundFailed = false;
+    let logoFailed = false;
+
+    const fetchStreams = async (
+        episode: any,
+        silent: boolean = false,
+        setActive: boolean = true,
+    ) => {
         loadingStreams = true;
         streams = [];
         if (!silent) {
             streamsPopupVisible = true;
         }
-        selectedEpisode = episode;
+
+        if (setActive) {
+            selectedEpisode = episode;
+        }
 
         try {
             const type = metaData.meta.type;
@@ -200,7 +210,7 @@
                 currentSeason = nextEp.season;
             }
 
-            const nextStreams = await fetchStreams(nextEp, true);
+            const nextStreams = await fetchStreams(nextEp, true, false);
 
             let match = null;
             if (selectedStream && nextStreams.length > 0) {
@@ -226,13 +236,16 @@
                     pendingTorrentStream = match;
                     showTorrentWarning = true;
                     playerVisible = false;
+                    selectedEpisode = nextEp;
                 } else {
+                    selectedEpisode = nextEp;
                     playStream(match);
                 }
             } else {
                 streamsPopupVisible = true;
                 playerVisible = false;
                 selectedStreamUrl = null;
+                selectedEpisode = nextEp;
             }
         } else {
             console.log("No next episode found");
@@ -241,8 +254,11 @@
     };
 
     let lastUpdate = 0;
+    let playerHasStarted = false;
     const handleProgress = async (time: number, duration: number) => {
         if (!selectedEpisode || !imdbID) return;
+        if (!playerHasStarted) return;
+        if (duration < 60) return;
 
         const isWatched = time > duration * 0.9;
         const type = metaData.meta.type;
@@ -443,6 +459,19 @@
                 console.error("Failed to load meta (fallback)", e2);
             }
         }
+        if (metaData && metaData.meta && metaData.meta.background) {
+            try {
+                await new Promise((resolve) => {
+                    const img = new Image();
+                    img.onload = resolve;
+                    img.onerror = resolve;
+                    img.src = metaData.meta.background || "";
+                    setTimeout(resolve, 5000);
+                });
+            } catch (e) {
+                console.warn("Failed to preload background", e);
+            }
+        }
         loadedMeta = true;
 
         episodes = (metaData.meta.videos || []).filter(
@@ -484,6 +513,7 @@
         if (latestKey) {
             const [s, e] = latestKey.split(":").map(Number);
             lastWatched = { season: s, episode: e };
+            currentSeason = s;
         }
     }
 
@@ -505,12 +535,19 @@
 
 {#if loadedMeta}
     <div class="bg-[#090909] flex-1" in:fade={{ duration: 300 }}>
-        <div class="w-screen h-screen">
-            <img
-                src={metaData.meta.background ?? ""}
-                alt="Cover"
-                class="h-screen opacity-60 w-full object-cover"
-            />
+        <div class="w-[100vw] h-[100vh]">
+            {#if metaData.meta.background && !backgroundFailed}
+                <img
+                    src={metaData.meta.background}
+                    alt="Cover"
+                    class="h-[100vh] opacity-60 w-full object-cover"
+                    on:error={() => (backgroundFailed = true)}
+                />
+            {:else}
+                <div
+                    class="h-[100vh] w-full bg-gradient-to-b from-[#1a1a1a] to-[#090909] opacity-60"
+                ></div>
+            {/if}
 
             <button
                 class="absolute top-[50px] left-[50px] z-50 bg-[#FFFFFF]/10 hover:bg-[#FFFFFF]/20 backdrop-blur-md p-4 rounded-full transition-colors duration-200 cursor-pointer"
@@ -546,11 +583,20 @@
                     <div
                         class="flex flex-col gap-[20px] justify-start items-start"
                     >
-                        <img
-                            src={metaData.meta.logo ?? ""}
-                            alt="Logo"
-                            class="h-[250px] w-auto object-contain"
-                        />
+                        {#if metaData.meta.logo && !logoFailed}
+                            <img
+                                src={metaData.meta.logo}
+                                alt="Logo"
+                                class="h-[250px] w-auto object-contain"
+                                on:error={() => (logoFailed = true)}
+                            />
+                        {:else}
+                            <h1
+                                class="text-[#E1E1E1] text-[64px] font-poppins font-bold leading-tight max-w-[800px]"
+                            >
+                                {metaData.meta.name}
+                            </h1>
+                        {/if}
                         <span class="text-[#E1E1E1] text-[20px] font-[500]"
                             >{metaData.meta.description ?? ""}</span
                         >
@@ -844,6 +890,7 @@
                 onProgress={handleProgress}
                 season={selectedEpisode?.season}
                 episode={selectedEpisode?.episode}
+                bind:hasStarted={playerHasStarted}
             />
         </div>
     {/if}
