@@ -17,7 +17,7 @@
         >
     {/if}
     <div
-        class="relative w-full h-[4px] hover:h-2 cursor-pointer transition-all duration-150"
+        class="slider-track relative w-full h-[4px] hover:h-2 cursor-pointer transition-all duration-150"
     >
         <div
             class="absolute inset-y-0 left-0 rounded-full bg-white transition-[width] duration-150"
@@ -51,7 +51,7 @@
     }
 
     /* show thumb only on hover / active */
-    input[type="range"]:hover::-webkit-slider-thumb,
+    .slider-track:hover input[type="range"]::-webkit-slider-thumb,
     input[type="range"]:active::-webkit-slider-thumb {
         appearance: none;
         width: 18px;
@@ -68,7 +68,7 @@
         border: none;
     }
 
-    input[type="range"]:hover::-moz-range-thumb,
+    .slider-track:hover input[type="range"]::-moz-range-thumb,
     input[type="range"]:active::-moz-range-thumb {
         width: 18px;
         height: 18px;
@@ -84,7 +84,7 @@
         border: none;
     }
 
-    input[type="range"]:hover::-ms-thumb,
+    .slider-track:hover input[type="range"]::-ms-thumb,
     input[type="range"]:active::-ms-thumb {
         width: 18px;
         height: 18px;

@@ -6,9 +6,9 @@
     let listsPopupVisible = false;
 </script>
 
-<div class="flex flex-row gap-[20px]">
+<div class="flex flex-row gap-[20px] justify-between w-full">
     <button
-        class="px-[50px] py-[20px] flex flex-row gap-[20px] items-center cursor-pointer hover:bg-[#D3D3D3]/10 transition-all duration-200 bg-[#FFFFFF]/10 backdrop-blur-[16px] rounded-[64px] justify-center"
+        class="px-[50px] py-[20px] flex flex-grow flex-row gap-[20px] items-center cursor-pointer hover:bg-[#D3D3D3]/10 transition-all duration-200 bg-[#FFFFFF]/10 backdrop-blur-[16px] rounded-[64px] justify-center"
         on:click={() => (listsPopupVisible = true)}
     >
         <svg
