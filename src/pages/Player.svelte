@@ -14,7 +14,15 @@
     import TrackSelectionModal from "../components/player/TrackSelectionModal.svelte";
     import SeekFeedback from "../components/player/SeekFeedback.svelte";
     import PlayerErrorModal from "../components/player/PlayerErrorModal.svelte";
+    import WatchPartyModal from "../components/player/WatchPartyModal.svelte";
+    import WatchPartyOverlay from "../components/player/WatchPartyOverlay.svelte";
     import { getAddons } from "../lib/db/db";
+    import {
+        watchParty,
+        setSyncCallback,
+        updatePlaybackState,
+        leaveWatchParty,
+    } from "../lib/stores/watchPartyStore";
 
     export let videoSrc: string | null = null;
     export let fileIdx: number | null = null;
@@ -28,6 +36,7 @@
     export let startTime: number = 0;
     export let season: number | null = null;
     export let episode: number | null = null;
+    export let watchPartyId: string | null = null;
 
     interface Chapter {
         startTime: number;
@@ -65,6 +74,37 @@
     let showError = false;
     let errorMessage = "";
     let errorDetails = "";
+    let showWatchPartyModal = false;
+
+    // Watch party sync callback
+    let ignoreNextPlayPause = false;
+    let ignoreNextSeek = false;
+
+    setSyncCallback((syncTime, syncIsPlaying) => {
+        if (!videoElem) return;
+
+        console.log(
+            "[Player] Syncing to:",
+            syncTime,
+            syncIsPlaying ? "playing" : "paused",
+        );
+
+        // Seek to sync time if difference is significant
+        const timeDiff = Math.abs(currentTime - syncTime);
+        if (timeDiff > 2) {
+            ignoreNextSeek = true;
+            performSeek(syncTime);
+        }
+
+        // Sync play/pause state
+        if (syncIsPlaying && videoElem.paused) {
+            ignoreNextPlayPause = true;
+            videoElem.play();
+        } else if (!syncIsPlaying && !videoElem.paused) {
+            ignoreNextPlayPause = true;
+            videoElem.pause();
+        }
+    });
 
     const IDLE_DELAY = 5000;
 
@@ -82,6 +122,9 @@
 
     const togglePlay = () => {
         if (!videoElem) return;
+        // Disable for participants
+        if ($watchParty.isActive && !$watchParty.isHost) return;
+
         if (videoElem.paused) {
             void videoElem.play();
         } else {
@@ -110,11 +153,23 @@
         isPlaying = true;
         hasStarted = true;
         updateDiscordActivity();
+
+        // Broadcast to watch party if host
+        if ($watchParty.isHost && !ignoreNextPlayPause) {
+            updatePlaybackState(currentTime, true);
+        }
+        ignoreNextPlayPause = false;
     };
 
     const handlePause = () => {
         isPlaying = false;
         updateDiscordActivity();
+
+        // Broadcast to watch party if host
+        if ($watchParty.isHost && !ignoreNextPlayPause) {
+            updatePlaybackState(currentTime, false);
+        }
+        ignoreNextPlayPause = false;
     };
 
     function checkChapters(time: number) {
@@ -196,6 +251,9 @@
     }
 
     const onSeekInput = (event: Event) => {
+        // Disable for participants
+        if ($watchParty.isActive && !$watchParty.isHost) return;
+
         const remaining = Number((event.target as HTMLInputElement).value);
         const desiredGlobal = Math.max(
             0,
@@ -223,6 +281,12 @@
         }
         currentTime = targetGlobal;
         updateDiscordActivity();
+
+        // Broadcast to watch party if host
+        if ($watchParty.isHost && !ignoreNextSeek) {
+            updatePlaybackState(targetGlobal, isPlaying);
+        }
+        ignoreNextSeek = false;
     };
 
     const onSeekChange = (event: Event) => {
@@ -247,6 +311,9 @@
     };
 
     const handleKeydown = (event: KeyboardEvent) => {
+        // Disable controls for participants
+        if ($watchParty.isActive && !$watchParty.isHost) return;
+
         if (event.code === "Space") {
             event.preventDefault();
             togglePlay();
@@ -279,6 +346,12 @@
 
     const cleanupSession = () => {
         clearActivity();
+
+        // Leave watch party
+        if ($watchParty.isActive) {
+            leaveWatchParty();
+        }
+
         if (hls) {
             hls.destroy();
             hls = null;
@@ -1147,6 +1220,7 @@
                 onNextEpisode={handleNextEpisodeClick}
                 on:audioClick={() => (showAudioSelection = true)}
                 on:subtitleClick={() => (showSubtitleSelection = true)}
+                on:watchPartyClick={() => (showWatchPartyModal = true)}
             />
         </div>
     {/if}
@@ -1177,6 +1251,19 @@
             on:back={handleErrorBack}
         />
     {/if}
+
+    {#if showWatchPartyModal}
+        <WatchPartyModal
+            imdbId={metaData?.meta.imdb_id || ""}
+            {season}
+            {episode}
+            streamSource={videoSrc || ""}
+            {fileIdx}
+            onClose={() => (showWatchPartyModal = false)}
+        />
+    {/if}
+
+    <WatchPartyOverlay />
 </div>
 
 <style>

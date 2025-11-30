@@ -255,3 +255,145 @@ export const updateListItemPoster = async (list_id: string, imdb_id: string, pos
     const { error } = await supabase.from('list_items').update({ poster }).eq('list_id', list_id).eq('imdb_id', imdb_id);
     if (error) throw error;
 };
+
+// Watch Parties
+export interface WatchParty {
+    party_id: string;
+    host_user_id: string;
+    imdb_id: string;
+    season: number | null;
+    episode: number | null;
+    stream_source: string;
+    file_idx: number | null;
+    created_at: string;
+    expires_at: string;
+    current_time_seconds: number;
+    is_playing: boolean;
+    last_update: string;
+}
+
+export interface WatchPartyMember {
+    party_id: string;
+    user_id: string;
+    joined_at: string;
+    last_seen: string;
+}
+
+export const createWatchParty = async (
+    imdbId: string,
+    streamSource: string,
+    season: number | null = null,
+    episode: number | null = null,
+    fileIdx: number | null = null
+) => {
+    const user = getCachedUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { data, error } = await supabase
+        .from('watch_parties')
+        .insert({
+            host_user_id: user.id,
+            imdb_id: imdbId,
+            season,
+            episode,
+            stream_source: streamSource,
+            file_idx: fileIdx,
+        })
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data as WatchParty;
+};
+
+export const joinWatchParty = async (partyId: string) => {
+    const user = getCachedUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { error } = await supabase.from('watch_party_members').insert({
+        party_id: partyId,
+        user_id: user.id,
+    });
+
+    if (error) throw error;
+};
+
+export const leaveWatchParty = async (partyId: string) => {
+    const user = getCachedUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { error } = await supabase
+        .from('watch_party_members')
+        .delete()
+        .eq('party_id', partyId)
+        .eq('user_id', user.id);
+
+    if (error) throw error;
+};
+
+export const updateWatchPartyState = async (
+    partyId: string,
+    currentTimeSeconds: number,
+    isPlaying: boolean
+) => {
+    const user = getCachedUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { error } = await supabase
+        .from('watch_parties')
+        .update({
+            current_time_seconds: currentTimeSeconds,
+            is_playing: isPlaying,
+            last_update: new Date().toISOString(),
+        })
+        .eq('party_id', partyId)
+        .eq('host_user_id', user.id); // Only host can update
+
+    if (error) throw error;
+};
+
+export const getWatchParty = async (partyId: string) => {
+    const { data, error } = await supabase
+        .from('watch_parties')
+        .select('*')
+        .eq('party_id', partyId)
+        .single();
+
+    if (error) throw error;
+    return data as WatchParty;
+};
+
+export const getActiveWatchParties = async () => {
+    const { data, error } = await supabase
+        .from('watch_parties')
+        .select('*')
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data as WatchParty[];
+};
+
+export const updateMemberLastSeen = async (partyId: string) => {
+    const user = getCachedUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { error } = await supabase
+        .from('watch_party_members')
+        .update({ last_seen: new Date().toISOString() })
+        .eq('party_id', partyId)
+        .eq('user_id', user.id);
+
+    if (error) throw error;
+};
+
+export const getWatchPartyMembers = async (partyId: string) => {
+    const { data, error } = await supabase
+        .from('watch_party_members')
+        .select('*')
+        .eq('party_id', partyId)
+        .order('joined_at', { ascending: true });
+
+    if (error) throw error;
+    return data as WatchPartyMember[];
+};
