@@ -28,7 +28,7 @@
                         item.libraryItem.imdb_id,
                         item.libraryItem.progress,
                         item.libraryItem.type,
-                        false,
+                        undefined,
                         item.meta.poster,
                     );
                     item.libraryItem.poster = item.meta.poster;

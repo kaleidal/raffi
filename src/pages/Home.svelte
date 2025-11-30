@@ -103,7 +103,9 @@
                     new Date(a.last_watched).getTime(),
             );
 
-            const recent = library.filter((item) => item.shown !== false);
+            const recent = library.filter(
+                (item) => item.shown !== false && !item.completed_at,
+            );
             for (const item of recent) {
                 try {
                     if (item.poster) {
