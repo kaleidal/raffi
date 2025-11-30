@@ -1,7 +1,7 @@
 <script lang="ts">
     import type { PopularTitleMeta } from "../../lib/library/types/popular_types";
     import { router } from "../../lib/stores/router";
-    import ExpandingButton from "../ExpandingButton.svelte";
+    import ExpandingButton from "../common/ExpandingButton.svelte";
 
     export let showcasedTitle: PopularTitleMeta;
 
@@ -53,20 +53,20 @@
                 <svg
                     width="48"
                     height="48"
-                    viewBox="0 0 92 92"
+                    viewBox="0 0 36 36"
                     fill="none"
                     xmlns="http://www.w3.org/2000/svg"
                 >
                     <path
-                        d="M23 11.5L76.6667 46L23 80.5V11.5Z"
+                        d="M18 24V18M18 12H18.015M33 18C33 26.2843 26.2843 33 18 33C9.71573 33 3 26.2843 3 18C3 9.71573 9.71573 3 18 3C26.2843 3 33 9.71573 33 18Z"
                         stroke="black"
-                        stroke-width="10"
+                        stroke-width="4"
                         stroke-linecap="round"
                         stroke-linejoin="round"
                     />
                 </svg>
 
-                Watch now
+                Details
             </button>
 
             <ExpandingButton

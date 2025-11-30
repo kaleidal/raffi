@@ -10,8 +10,8 @@
     import Hero from "../components/home/Hero.svelte";
     import SearchBar from "../components/home/SearchBar.svelte";
     import ContinueWatching from "../components/home/sections/ContinueWatching.svelte";
-    import AddonsModal from "../components/AddonsModal.svelte";
-    import SettingsModal from "../components/SettingsModal.svelte";
+    import AddonsModal from "../components/home/modals/AddonsModal.svelte";
+    import SettingsModal from "../components/home/modals/SettingsModal.svelte";
     import PopularSection from "../components/home/sections/PopularSection.svelte";
     import GenreSection from "../components/home/sections/GenreSection.svelte";
     import LoadingSpinner from "../components/common/LoadingSpinner.svelte";

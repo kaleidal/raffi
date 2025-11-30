@@ -1,8 +1,8 @@
 <script lang="ts">
     import { fade } from "svelte/transition";
     import { createEventDispatcher } from "svelte";
-    import type { Addon } from "../../lib/db/db";
-    import LoadingSpinner from "../common/LoadingSpinner.svelte";
+    import type { Addon } from "../../../lib/db/db";
+    import LoadingSpinner from "../../common/LoadingSpinner.svelte";
 
     export let streamsPopupVisible = false;
     export let addons: Addon[] = [];

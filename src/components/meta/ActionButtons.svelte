@@ -1,5 +1,5 @@
 <script lang="ts">
-    import ListsPopup from "./ListsPopup.svelte";
+    import ListsPopup from "./modals/ListsPopup.svelte";
 
     export let metaData: any;
 

@@ -34,35 +34,31 @@ const initialState: WatchPartyState = {
     episode: null,
 };
 
-// Internal store
 const watchPartyState = writable<WatchPartyState>(initialState);
 
-// Public readonly store
 export const watchParty = derived(watchPartyState, $state => $state);
 
-// Realtime channel
 let realtimeChannel: RealtimeChannel | null = null;
-
-// Heartbeat interval
 let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
-
-// Callback for playback sync events (called when we need to sync video player)
 type SyncCallback = (currentTime: number, isPlaying: boolean) => void;
 let syncCallback: SyncCallback | null = null;
+type PartyEndCallback = (reason: 'host_left' | 'party_deleted') => void;
+let partyEndCallback: PartyEndCallback | null = null;
 
 export function setSyncCallback(callback: SyncCallback | null) {
     syncCallback = callback;
 }
 
-// Subscribe to realtime updates
+export function setPartyEndCallback(callback: PartyEndCallback | null) {
+    partyEndCallback = callback;
+}
+
 function subscribeToParty(partyId: string) {
-    // Unsubscribe from previous channel if exists
     if (realtimeChannel) {
         realtimeChannel.unsubscribe();
         realtimeChannel = null;
     }
 
-    // Create new channel
     realtimeChannel = supabase
         .channel(`watch_party:${partyId}`)
         .on(
@@ -77,22 +73,60 @@ function subscribeToParty(partyId: string) {
                 const update = payload.new as WatchPartyUpdate;
                 const state = get(watchPartyState);
 
-                // Only sync if we're a participant (not the host)
                 if (!state.isHost && state.partyId === update.party_id) {
-                    console.log('[WatchParty] Received update:', update);
-
-                    // Update local state
                     watchPartyState.update(s => ({
                         ...s,
                         currentTimeSeconds: update.current_time_seconds,
                         isPlaying: update.is_playing,
                     }));
 
-                    // Trigger sync callback
                     if (syncCallback) {
                         syncCallback(update.current_time_seconds, update.is_playing);
                     }
                 }
+            }
+        )
+        .on(
+            'postgres_changes',
+            {
+                event: 'DELETE',
+                schema: 'public',
+                table: 'watch_parties',
+                filter: `party_id=eq.${partyId}`,
+            },
+            () => {
+                console.log('[WatchParty] Party deleted');
+                if (partyEndCallback) {
+                    partyEndCallback('party_deleted');
+                }
+            }
+        )
+        .on(
+            'postgres_changes',
+            {
+                event: '*',
+                schema: 'public',
+                table: 'watch_party_members',
+                filter: `party_id=eq.${partyId}`,
+            },
+            async () => {
+                const { count } = await supabase
+                    .from('watch_party_members')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('party_id', partyId);
+
+                const state = get(watchPartyState);
+                console.log('[WatchParty] Member count update:', count);
+
+                if (!state.isHost && count === 0) {
+                    console.log('[WatchParty] Host appears to have left');
+                    if (partyEndCallback) {
+                        partyEndCallback('host_left');
+                    }
+                    return;
+                }
+
+                watchPartyState.update(s => ({ ...s, memberCount: count || 0 }));
             }
         )
         .subscribe();
@@ -100,7 +134,6 @@ function subscribeToParty(partyId: string) {
     console.log('[WatchParty] Subscribed to party:', partyId);
 }
 
-// Start heartbeat to update last_seen
 function startHeartbeat(partyId: string) {
     if (heartbeatInterval) {
         clearInterval(heartbeatInterval);
@@ -122,7 +155,6 @@ function startHeartbeat(partyId: string) {
     }, 10000); // Every 10 seconds
 }
 
-// Stop heartbeat
 function stopHeartbeat() {
     if (heartbeatInterval) {
         clearInterval(heartbeatInterval);
@@ -130,7 +162,6 @@ function stopHeartbeat() {
     }
 }
 
-// Create a new watch party (host)
 export async function createWatchParty(
     imdbId: string,
     streamSource: string,
@@ -142,7 +173,6 @@ export async function createWatchParty(
     if (!user) throw new Error('Not authenticated');
 
     try {
-        // Create party
         const { data, error } = await supabase
             .from('watch_parties')
             .insert({
@@ -160,7 +190,6 @@ export async function createWatchParty(
 
         const partyId = data.party_id;
 
-        // Join as host
         await supabase
             .from('watch_party_members')
             .insert({
@@ -168,7 +197,6 @@ export async function createWatchParty(
                 user_id: user.id,
             });
 
-        // Update local state
         watchPartyState.set({
             partyId,
             isHost: true,
@@ -181,7 +209,6 @@ export async function createWatchParty(
             episode,
         });
 
-        // Subscribe to updates (to see member changes)
         subscribeToParty(partyId);
         startHeartbeat(partyId);
 
@@ -193,13 +220,11 @@ export async function createWatchParty(
     }
 }
 
-// Join an existing watch party (participant)
 export async function joinWatchParty(partyId: string): Promise<void> {
     const user = getCachedUser();
     if (!user) throw new Error('Not authenticated');
 
     try {
-        // Get party details
         const { data: party, error: partyError } = await supabase
             .from('watch_parties')
             .select('*')
@@ -209,12 +234,9 @@ export async function joinWatchParty(partyId: string): Promise<void> {
         if (partyError) throw partyError;
         if (!party) throw new Error('Party not found');
 
-        // Check if party expired
         if (new Date(party.expires_at) < new Date()) {
             throw new Error('Party has expired');
         }
-
-        // Join party
         const { error: joinError } = await supabase
             .from('watch_party_members')
             .insert({
@@ -223,19 +245,16 @@ export async function joinWatchParty(partyId: string): Promise<void> {
             });
 
         if (joinError) {
-            // Ignore duplicate key error (already joined)
             if (joinError.code !== '23505') {
                 throw joinError;
             }
         }
 
-        // Get member count
         const { count } = await supabase
             .from('watch_party_members')
             .select('*', { count: 'exact', head: true })
             .eq('party_id', partyId);
 
-        // Update local state
         watchPartyState.set({
             partyId,
             isHost: party.host_user_id === user.id,
@@ -248,7 +267,6 @@ export async function joinWatchParty(partyId: string): Promise<void> {
             episode: party.episode,
         });
 
-        // Subscribe to updates
         subscribeToParty(partyId);
         startHeartbeat(partyId);
 
@@ -259,7 +277,6 @@ export async function joinWatchParty(partyId: string): Promise<void> {
     }
 }
 
-// Leave the current watch party
 export async function leaveWatchParty(): Promise<void> {
     const user = getCachedUser();
     if (!user) return;
@@ -268,14 +285,12 @@ export async function leaveWatchParty(): Promise<void> {
     if (!state.partyId) return;
 
     try {
-        // Remove member
         await supabase
             .from('watch_party_members')
             .delete()
             .eq('party_id', state.partyId)
             .eq('user_id', user.id);
 
-        // If host, delete the party
         if (state.isHost) {
             await supabase
                 .from('watch_parties')
@@ -287,7 +302,6 @@ export async function leaveWatchParty(): Promise<void> {
     } catch (err) {
         console.error('[WatchParty] Failed to leave party:', err);
     } finally {
-        // Clean up
         if (realtimeChannel) {
             realtimeChannel.unsubscribe();
             realtimeChannel = null;
@@ -297,7 +311,6 @@ export async function leaveWatchParty(): Promise<void> {
     }
 }
 
-// Update playback state (host only)
 export async function updatePlaybackState(
     currentTime: number,
     isPlaying: boolean
@@ -315,7 +328,6 @@ export async function updatePlaybackState(
             })
             .eq('party_id', state.partyId);
 
-        // Update local state
         watchPartyState.update(s => ({
             ...s,
             currentTimeSeconds: currentTime,
@@ -326,7 +338,6 @@ export async function updatePlaybackState(
     }
 }
 
-// Get party info (for UI)
 export async function getWatchPartyInfo(partyId: string) {
     try {
         const { data: party, error: partyError } = await supabase
@@ -352,7 +363,6 @@ export async function getWatchPartyInfo(partyId: string) {
     }
 }
 
-// Cleanup on module unload
 if (typeof window !== 'undefined') {
     window.addEventListener('beforeunload', () => {
         void leaveWatchParty();

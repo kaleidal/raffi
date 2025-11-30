@@ -8,7 +8,7 @@
         forgetProgress,
         updateLibraryProgress,
     } from "../../../lib/db/db";
-    import ListsPopup from "../../meta/ListsPopup.svelte";
+    import ListsPopup from "../../meta/modals/ListsPopup.svelte";
 
     import { onMount } from "svelte";
 
