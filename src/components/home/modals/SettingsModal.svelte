@@ -1,11 +1,11 @@
 <script lang="ts">
     import { createEventDispatcher, onMount } from "svelte";
     import { fade, scale } from "svelte/transition";
-    import { getLibrary, getListsWithItems } from "../lib/db/db";
-    import { enableRPC, disableRPC } from "../lib/rpc";
-    import { supabase } from "../lib/db/supabase";
-    import { currentUser } from "../lib/stores/authStore";
-    import { router } from "../lib/stores/router";
+    import { getLibrary, getListsWithItems } from "../../../lib/db/db";
+    import { enableRPC, disableRPC } from "../../../lib/rpc";
+    import { supabase } from "../../../lib/db/supabase";
+    import { currentUser } from "../../../lib/stores/authStore";
+    import { router } from "../../../lib/stores/router";
 
     export let showSettings = false;
 

@@ -3,7 +3,7 @@
     import { router } from "../../../lib/stores/router";
     import { fade } from "svelte/transition";
     import TitleContextMenu from "../context_menus/TitleContextMenu.svelte";
-    import ListsPopup from "../../meta/ListsPopup.svelte";
+    import ListsPopup from "../../meta/modals/ListsPopup.svelte";
     import { onMount } from "svelte";
 
     export let genre: string;

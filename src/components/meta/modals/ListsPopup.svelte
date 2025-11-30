@@ -7,9 +7,9 @@
         removeFromList,
         createList,
         type List,
-    } from "../../lib/db/db";
-    import { supabase } from "../../lib/db/supabase";
-    import LoadingSpinner from "../common/LoadingSpinner.svelte";
+    } from "../../../lib/db/db";
+    import { supabase } from "../../../lib/db/supabase";
+    import LoadingSpinner from "../../common/LoadingSpinner.svelte";
 
     export let visible = false;
     export let imdbId: string;
