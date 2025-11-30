@@ -1,11 +1,11 @@
 <script lang="ts">
-    import Meta from "./pages/Meta.svelte";
+    import Meta from "./pages/meta/Meta.svelte";
     import Login from "./pages/auth/Login.svelte";
     import Home from "./pages/Home.svelte";
-    import Player from "./pages/Player.svelte";
+    import Player from "./pages/player/Player.svelte";
     import { router } from "./lib/stores/router";
     import { onMount } from "svelte";
-    import Lists from "./pages/Lists.svelte";
+    import Lists from "./pages/lists/Lists.svelte";
 
     import LoadingSpinner from "./components/common/LoadingSpinner.svelte";
     import { currentUser, initAuth } from "./lib/stores/authStore";
