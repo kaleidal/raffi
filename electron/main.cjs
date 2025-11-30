@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, dialog } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const express = require('express');
@@ -47,6 +47,140 @@ function getDecoderPath() {
     }
 }
 
+function commandExists(command) {
+    return new Promise(resolve => {
+        const checkCmd = process.platform === 'win32' ? 'where' : 'which';
+        const checker = spawn(checkCmd, [command]);
+        checker.on('close', code => resolve(code === 0));
+        checker.on('error', () => resolve(false));
+    });
+}
+
+function hasFFmpeg() {
+    return new Promise(resolve => {
+        const probe = spawn('ffmpeg', ['-version']);
+        probe.on('close', code => resolve(code === 0));
+        probe.on('error', () => resolve(false));
+    });
+}
+
+function runLoggedCommand(command, args, options = {}) {
+    return new Promise(resolve => {
+        const child = spawn(command, args, {
+            ...options,
+            stdio: 'pipe',
+        });
+
+        if (child.stdout) {
+            child.stdout.on('data', data => {
+                console.log(`[${command}] ${data.toString()}`);
+            });
+        }
+        if (child.stderr) {
+            child.stderr.on('data', data => {
+                console.error(`[${command} err] ${data.toString()}`);
+            });
+        }
+
+        child.on('close', code => resolve(code === 0));
+        child.on('error', err => {
+            console.error(`${command} failed:`, err.message);
+            resolve(false);
+        });
+    });
+}
+
+function runShellCommand(cmd) {
+    if (process.platform === 'win32') {
+        return runLoggedCommand('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', cmd]);
+    }
+    return runLoggedCommand('bash', ['-lc', cmd]);
+}
+
+async function installFFmpegOnWindows() {
+    const hasWinget = await commandExists('winget');
+    if (!hasWinget) {
+        console.warn('winget not available, cannot auto-install ffmpeg');
+        return false;
+    }
+    console.log('Attempting to install FFmpeg via winget...');
+    return runLoggedCommand('winget', [
+        'install',
+        '--id',
+        'FFmpeg.FFmpeg',
+        '-e',
+        '--accept-package-agreements',
+        '--accept-source-agreements',
+    ]);
+}
+
+async function installFFmpegOnLinux() {
+    const packageManagers = [
+        {
+            name: 'apt-get',
+            command: 'sudo -n apt-get update && sudo -n apt-get install -y ffmpeg',
+        },
+        {
+            name: 'dnf',
+            command: 'sudo -n dnf install -y ffmpeg',
+        },
+        {
+            name: 'pacman',
+            command: 'sudo -n pacman -Sy --noconfirm ffmpeg',
+        },
+    ];
+
+    for (const pm of packageManagers) {
+        if (await commandExists(pm.name)) {
+            console.log(`Attempting to install FFmpeg via ${pm.name}...`);
+            const success = await runShellCommand(pm.command);
+            if (success) return true;
+        }
+    }
+    return false;
+}
+
+async function tryAutoInstallFFmpeg() {
+    if (process.platform === 'win32') {
+        return installFFmpegOnWindows();
+    }
+    if (process.platform === 'linux') {
+        return installFFmpegOnLinux();
+    }
+    return false;
+}
+
+function getManualInstallMessage() {
+    if (process.platform === 'win32') {
+        return 'FFmpeg is required to start the local decoder. Please install it via https://ffmpeg.org or by running "winget install FFmpeg.FFmpeg" in PowerShell, then restart Raffi.';
+    }
+    if (process.platform === 'darwin') {
+        return 'FFmpeg is required to start the local decoder. Install it via Homebrew ("brew install ffmpeg") or from https://ffmpeg.org, then restart Raffi.';
+    }
+    return 'FFmpeg is required to start the local decoder. Install it with your package manager (for example: "sudo apt install ffmpeg") or from https://ffmpeg.org, then restart Raffi.';
+}
+
+async function ensureFFmpegAvailable() {
+    if (await hasFFmpeg()) {
+        return true;
+    }
+
+    const installed = await tryAutoInstallFFmpeg();
+    if (installed && (await hasFFmpeg())) {
+        return true;
+    }
+
+    await dialog.showMessageBox({
+        type: 'error',
+        buttons: ['Quit'],
+        title: 'FFmpeg Required',
+        message: 'FFmpeg was not found on this system.',
+        detail: getManualInstallMessage(),
+    });
+
+    return false;
+}
+
 function createWindow() {
     mainWindow = new BrowserWindow({
         width: 1778,
@@ -84,7 +218,7 @@ function createWindow() {
     });
 }
 
-app.whenReady().then(() => {
+function startGoServer() {
     const binPath = getDecoderPath();
     console.log('Binary path:', binPath);
 
@@ -92,7 +226,16 @@ app.whenReady().then(() => {
 
     goServer.stdout.on('data', d => console.log('[go]', d.toString()));
     goServer.stderr.on('data', d => console.error('[go err]', d.toString()));
+}
 
+app.whenReady().then(async () => {
+    const ffmpegReady = await ensureFFmpegAvailable();
+    if (!ffmpegReady) {
+        app.quit();
+        return;
+    }
+
+    startGoServer();
     createWindow();
 });
 

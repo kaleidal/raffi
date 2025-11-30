@@ -8,6 +8,48 @@ import type { ProgressMap, ProgressItem } from "./types";
 
 let lastUpdate = 0;
 
+const isEpisodeReleased = (episode: any): boolean => {
+    if (!episode) return false;
+    if (!episode.released) return true;
+    const releasedAt = new Date(episode.released).getTime();
+    if (Number.isNaN(releasedAt)) return true;
+    return releasedAt <= Date.now();
+};
+
+const isSeriesCompleted = (
+    progress: ProgressMap,
+    videos: any[] = [],
+): boolean => {
+    if (!progress) return false;
+    const releasedEpisodes = videos.filter(
+        (video) => video && video.season > 0 && video.episode > 0 && isEpisodeReleased(video),
+    );
+    if (releasedEpisodes.length === 0) return false;
+
+    const map = progress as Record<string, ProgressItem>;
+    return releasedEpisodes.every((episode) => {
+        const key = `${episode.season}:${episode.episode}`;
+        return Boolean(map[key]?.watched);
+    });
+};
+
+const isMovieCompleted = (progress: ProgressMap): boolean => {
+    if (!progress) return false;
+    const movieProgress = progress as ProgressItem;
+    return Boolean(movieProgress.watched);
+};
+
+const determineCompletion = (
+    type: string,
+    progress: ProgressMap,
+    videos: any[] = [],
+): boolean => {
+    if (type === "movie") {
+        return isMovieCompleted(progress);
+    }
+    return isSeriesCompleted(progress, videos);
+};
+
 export const getProgress = (map: ProgressMap, key?: string): ProgressItem | undefined => {
     if (!map) return undefined;
     if (key) {
@@ -51,7 +93,8 @@ export const handleProgress = async (time: number, duration: number, imdbID: str
     const now = Date.now();
     if (now - lastUpdate > 5000 || isWatched) {
         lastUpdate = now;
-        await updateLibraryProgress(imdbID, currentMap, type, false);
+        const completed = determineCompletion(type, currentMap, data.meta.videos);
+        await updateLibraryProgress(imdbID, currentMap, type, completed);
     }
 };
 
@@ -81,7 +124,17 @@ export const handleContextMarkWatched = async (imdbID: string) => {
 
     const data = get(metaData);
     if (data) {
-        await updateLibraryProgress(imdbID, currentMap, data.meta.type, false);
+        const completed = determineCompletion(
+            data.meta.type,
+            currentMap,
+            data.meta.videos,
+        );
+        await updateLibraryProgress(
+            imdbID,
+            currentMap,
+            data.meta.type,
+            completed,
+        );
     }
 };
 
@@ -104,7 +157,17 @@ export const handleContextMarkUnwatched = async (imdbID: string) => {
 
     const data = get(metaData);
     if (data) {
-        await updateLibraryProgress(imdbID, currentMap, data.meta.type, false);
+        const completed = determineCompletion(
+            data.meta.type,
+            currentMap,
+            data.meta.videos,
+        );
+        await updateLibraryProgress(
+            imdbID,
+            currentMap,
+            data.meta.type,
+            completed ? true : false,
+        );
     }
 };
 
@@ -121,7 +184,17 @@ export const handleContextResetProgress = async (imdbID: string) => {
 
         const data = get(metaData);
         if (data) {
-            await updateLibraryProgress(imdbID, currentMap, data.meta.type, false);
+            const completed = determineCompletion(
+                data.meta.type,
+                currentMap,
+                data.meta.videos,
+            );
+            await updateLibraryProgress(
+                imdbID,
+                currentMap,
+                data.meta.type,
+                completed,
+            );
         }
     }
 };
@@ -152,7 +225,17 @@ export const handleContextMarkSeasonWatched = async (imdbID: string) => {
     }
 
     progressMap.set(currentMap);
-    await updateLibraryProgress(imdbID, currentMap, data.meta.type, false);
+    const completed = determineCompletion(
+        data.meta.type,
+        currentMap,
+        data.meta.videos,
+    );
+    await updateLibraryProgress(
+        imdbID,
+        currentMap,
+        data.meta.type,
+        completed,
+    );
 };
 
 export const handleContextMarkSeasonUnwatched = async (imdbID: string) => {
@@ -180,5 +263,15 @@ export const handleContextMarkSeasonUnwatched = async (imdbID: string) => {
     }
 
     progressMap.set(currentMap);
-    await updateLibraryProgress(imdbID, currentMap, data.meta.type, false);
+    const completed = determineCompletion(
+        data.meta.type,
+        currentMap,
+        data.meta.videos,
+    );
+    await updateLibraryProgress(
+        imdbID,
+        currentMap,
+        data.meta.type,
+        completed,
+    );
 };

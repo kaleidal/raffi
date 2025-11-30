@@ -52,6 +52,21 @@ export async function loadMetaData(imdbID: string, titleType: string, expectedNa
         }
     }
 
+    const filterUnreleasedEpisodes = (videos: any[] = []) => {
+        const now = Date.now();
+        return videos.filter((video) => {
+            if (!video) return false;
+            if (!video.released) return true;
+            const releasedAt = new Date(video.released).getTime();
+            if (Number.isNaN(releasedAt)) return true;
+            return releasedAt <= now;
+        });
+    };
+
+    if (data && data.meta) {
+        data.meta.videos = filterUnreleasedEpisodes(data.meta.videos);
+    }
+
     if (data && data.meta && data.meta.background) {
         try {
             await new Promise((resolve) => {
@@ -70,17 +85,27 @@ export async function loadMetaData(imdbID: string, titleType: string, expectedNa
     loadedMeta.set(true);
 
     if (data) {
-        const epCount = (data.meta.videos || []).filter((video: any) => video.season > 0).length;
+        const availableEpisodes = (data.meta.videos || []).filter(
+            (video: any) => video.season > 0,
+        );
+        const epCount = availableEpisodes.length;
         episodes.set(epCount);
 
-        const seasonCount = Math.max(0, ...(data.meta.videos || []).map((video: any) => video.season));
-        seasons.set(seasonCount);
+        const seasonSet = new Set<number>(
+            availableEpisodes.map((video: any) => Number(video.season) || 0),
+        );
+        const uniqueSeasons: number[] = Array.from(seasonSet)
+            .filter((season) => season > 0)
+            .sort((a, b) => a - b);
 
-        const sArray = [];
-        for (let i = 1; i <= seasonCount; i++) {
-            sArray.push(i);
+        seasons.set(uniqueSeasons.length);
+        seasonsArray.set(uniqueSeasons);
+
+        if (uniqueSeasons.length === 0) {
+            currentSeason.set(0);
+        } else if (!uniqueSeasons.includes(get(currentSeason))) {
+            currentSeason.set(uniqueSeasons[0]);
         }
-        seasonsArray.set(sArray);
 
         try {
             const item = await getLibraryItem(imdbID);

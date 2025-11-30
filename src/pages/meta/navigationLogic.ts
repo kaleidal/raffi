@@ -30,11 +30,24 @@ export const handleNextEpisode = async (imdbID: string, progressMap: any) => {
 
         let match = null;
         if (currentStream && nextStreams.length > 0) {
-            match = nextStreams.find(
-                (s: any) =>
-                    s.name === currentStream.name &&
-                    s.title.includes(currentStream.title.split("\n")[0]),
-            );
+            const currentGroup = currentStream.behaviorHints?.bingeGroup;
+
+            if (currentGroup) {
+                match = nextStreams.find(
+                    (s: any) =>
+                        s.behaviorHints?.bingeGroup === currentGroup,
+                );
+            }
+
+            if (!match) {
+                match = nextStreams.find((s: any) => {
+                    if (s.name !== currentStream.name) return false;
+                    const currentTitle = currentStream.title?.split("\n")[0];
+                    return currentTitle
+                        ? s.title?.includes(currentTitle)
+                        : true;
+                });
+            }
 
             if (!match) {
                 match = nextStreams.find(

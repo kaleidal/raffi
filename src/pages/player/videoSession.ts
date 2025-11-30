@@ -190,21 +190,12 @@ export function initHLS(
     setPlaybackOffset(startOffset);
 
     let hls: Hls | null = null;
-    let firstSeekLoad = false;
 
     if (Hls.isSupported()) {
         hls = new Hls({
             lowLatencyMode: false,
             maxBufferLength: 30,
             backBufferLength: 30,
-            xhrSetup: (xhr, url) => {
-                if (url.includes("seek=") && !firstSeekLoad) {
-                    const cleanUrl = url.split("?")[0];
-                    xhr.open("GET", cleanUrl, true);
-                } else if (url.includes("seek=")) {
-                    firstSeekLoad = false;
-                }
-            },
         });
 
         const onInitialParsed = () => {
@@ -334,13 +325,13 @@ export function performSeek(
 
 export function createSeekHandler(
     videoElem: HTMLVideoElement,
-    hls: Hls | null,
+    getHls: () => Hls | null,
     sessionId: string,
-    pendingSeek: number | null,
-    seekGuard: boolean,
-    playbackOffset: number,
-    subtitleTracks: Track[],
-    currentSubtitleLabel: string,
+    getPendingSeek: () => number | null,
+    getSeekGuard: () => boolean,
+    getPlaybackOffset: () => number,
+    getSubtitleTracks: () => Track[],
+    getCurrentSubtitleLabel: () => string,
     handleSubtitleSelect: (track: Track) => void,
     setStates: {
         setPendingSeek: (seek: number | null) => void;
@@ -355,11 +346,12 @@ export function createSeekHandler(
 
     return () => {
         if (!videoElem) return;
-        if (pendingSeek == null || seekGuard) return;
+        const pending = getPendingSeek();
+        if (pending == null || getSeekGuard()) return;
 
-        const desiredGlobal = pendingSeek;
+        const desiredGlobal = pending;
         setPendingSeek(null);
-
+        const playbackOffset = getPlaybackOffset();
         const localTarget = desiredGlobal - playbackOffset;
 
         if (isTimeBuffered(videoElem, localTarget)) {
@@ -372,10 +364,12 @@ export function createSeekHandler(
         setShowCanvas(true);
         setFirstSeekLoad(true);
         const seekId = Math.random().toString(36).substring(7);
-        const url = `${getStreamUrl(sessionId)}/child.m3u8?seek=${Math.floor(desiredGlobal)}&seek_id=${seekId}`;
+        const url = `${getStreamUrl(sessionId)}/child.m3u8?seek=${Math.floor(desiredGlobal)}&seek_id=${seekId}&force_slice=1`;
         console.log("Hard seek to", desiredGlobal, "->", url);
 
-        if (hls) {
+        const hlsInstance = getHls();
+
+        if (hlsInstance) {
             const onSeekParsed = () => {
                 console.log("HLS MANIFEST_PARSED (seek)");
                 setPlaybackOffset(desiredGlobal);
@@ -384,8 +378,9 @@ export function createSeekHandler(
                 setShowCanvas(false);
 
                 // Re-fetch subtitles if active
+                const currentSubtitleLabel = getCurrentSubtitleLabel();
                 if (currentSubtitleLabel !== "Off") {
-                    const track = subtitleTracks.find((t) => t.selected);
+                    const track = getSubtitleTracks().find((t) => t.selected);
                     if (track) {
                         handleSubtitleSelect(track);
                     }
@@ -395,12 +390,12 @@ export function createSeekHandler(
                     console.warn("play after seek failed:", err);
                 });
 
-                hls?.off(Hls.Events.MANIFEST_PARSED, onSeekParsed);
+                hlsInstance?.off(Hls.Events.MANIFEST_PARSED, onSeekParsed);
             };
 
-            hls.on(Hls.Events.MANIFEST_PARSED, onSeekParsed);
-            hls.loadSource(url);
-            hls.startLoad(0);
+            hlsInstance.on(Hls.Events.MANIFEST_PARSED, onSeekParsed);
+            hlsInstance.loadSource(url);
+            hlsInstance.startLoad(0);
         } else {
             videoElem.src = url;
             videoElem.onloadedmetadata = () => {
@@ -411,8 +406,9 @@ export function createSeekHandler(
                 setShowCanvas(false);
 
                 // Re-fetch subtitles if active
+                const currentSubtitleLabel = getCurrentSubtitleLabel();
                 if (currentSubtitleLabel !== "Off") {
-                    const track = subtitleTracks.find((t) => t.selected);
+                    const track = getSubtitleTracks().find((t) => t.selected);
                     if (track) {
                         handleSubtitleSelect(track);
                     }

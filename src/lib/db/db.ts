@@ -114,7 +114,13 @@ export const forgetProgress = async (imdb_id: string) => {
     if (error) throw error;
 };
 
-export const updateLibraryProgress = async (imdb_id: string, progress: any, type: string, completed: boolean = false, poster?: string) => {
+export const updateLibraryProgress = async (
+    imdb_id: string,
+    progress: any,
+    type: string,
+    completed?: boolean,
+    poster?: string,
+) => {
     const user = getCachedUser();
     if (!user) throw new Error('Not authenticated');
 
@@ -126,8 +132,10 @@ export const updateLibraryProgress = async (imdb_id: string, progress: any, type
         type,
         shown: true,
     };
-    if (completed) {
+    if (completed === true) {
         updates.completed_at = new Date().toISOString();
+    } else if (completed === false) {
+        updates.completed_at = null;
     }
     if (poster) {
         updates.poster = poster;

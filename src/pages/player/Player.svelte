@@ -86,6 +86,7 @@
     // Lifecycle
     onMount(() => {
         resetPlayerState();
+        hasStarted = false;
 
         WatchParty.setupWatchPartySync(
             videoElem,
@@ -136,6 +137,7 @@
             $watchParty.isActive,
         );
         resetPlayerState();
+        hasStarted = false;
     });
 
     // Event Handlers
@@ -160,7 +162,7 @@
 
     const handlePlay = () => {
         isPlaying.set(true);
-        hasStartedStore.set(true);
+        hasStarted = true;
         Discord.updateDiscordActivity(
             metaData,
             season,
@@ -199,7 +201,7 @@
                     setLoading: loading.set,
                     setShowCanvas: showCanvas.set,
                     setIsPlaying: isPlaying.set,
-                    setHasStarted: hasStartedStore.set,
+                    setHasStarted: (value: boolean) => (hasStarted = value),
                     setShowError: showError.set,
                     setErrorMessage: errorMessage.set,
                     setErrorDetails: errorDetails.set,
@@ -252,13 +254,13 @@
                 autoPlay,
                 Session.createSeekHandler(
                     videoElem,
-                    hls,
+                    () => hls,
                     sessionId,
-                    $pendingSeek,
-                    $seekGuard,
-                    $playbackOffset,
-                    $subtitleTracks,
-                    $currentSubtitleLabel,
+                    () => $pendingSeek,
+                    () => $seekGuard,
+                    () => $playbackOffset,
+                    () => $subtitleTracks,
+                    () => $currentSubtitleLabel,
                     (t) =>
                         Subtitles.handleSubtitleSelect(
                             t,
@@ -309,6 +311,7 @@
 
     $: if (videoSrc && videoSrc !== currentVideoSrc) {
         currentVideoSrc = videoSrc;
+        hasStarted = false;
         Session.cleanupSession(
             hls,
             sessionId,
@@ -460,6 +463,7 @@
                 isPlaying={$isPlaying}
                 duration={$duration}
                 currentTime={$currentTime}
+                pendingSeek={$pendingSeek}
                 volume={$volume}
                 controlsVisible={$controlsVisible}
                 loading={$loading}
@@ -544,13 +548,13 @@
                         true,
                         Session.createSeekHandler(
                             videoElem,
-                            hls,
+                            () => hls,
                             sid,
-                            $pendingSeek,
-                            $seekGuard,
-                            $playbackOffset,
-                            $subtitleTracks,
-                            $currentSubtitleLabel,
+                            () => $pendingSeek,
+                            () => $seekGuard,
+                            () => $playbackOffset,
+                            () => $subtitleTracks,
+                            () => $currentSubtitleLabel,
                             (tr) =>
                                 Subtitles.handleSubtitleSelect(
                                     tr,
