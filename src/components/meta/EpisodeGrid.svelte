@@ -18,6 +18,13 @@
     function handleEpisodeClick(episode: any) {
         dispatch("episodeClick", episode);
     }
+
+    let failedImages = new Set<string>();
+
+    function handleImageError(id: string) {
+        failedImages.add(id);
+        failedImages = failedImages; // Trigger reactivity
+    }
 </script>
 
 <div class="grid grid-cols-4 gap-[30px]">
@@ -38,17 +45,18 @@
                 class="w-full h-[150px] bg-gradient-to-t from-[#090909] to-transparent absolute bottom-0 left-0"
             ></div>
 
-            {#if episode.thumbnail}
+            {#if episode.thumbnail && !failedImages.has(epKey)}
                 <img
                     src={episode.thumbnail}
                     alt="Episode Thumbnail"
                     class="w-full h-full object-cover aspect-video {isWatched
                         ? 'grayscale'
                         : ''}"
+                    on:error={() => handleImageError(epKey)}
                 />
             {:else}
                 <div
-                    class="w-full aspect-video bg-[#1a1a1a] flex items-center justify-center"
+                    class="w-full aspect-video bg-[#1a1a1a] flex items-start justify-center pt-[30px]"
                 >
                     <svg
                         width="40"

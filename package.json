@@ -67,16 +67,15 @@
     "win": {
       "target": [
         "nsis",
-        "msi",
-        "appx"
+        "msi"
       ],
       "icon": "build/icons/512x512.png"
     }
   },
   "dependencies": {
+    "@ryuziii/discord-rpc": "^1.0.1-rc.1",
     "@supabase/supabase-js": "^2.83.0",
     "@tailwindcss/vite": "^4.1.17",
-    "discord-rpc": "^4.0.1",
     "eventemitter3": "^5.0.1",
     "express": "^5.1.0",
     "hls.js": "^1.6.14",

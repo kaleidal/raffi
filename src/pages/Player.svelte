@@ -22,6 +22,7 @@
     export let autoPlay: boolean = true;
     export let onClose: () => void = () => {};
     export let onNextEpisode: () => void = () => {};
+    export let hasStarted = false;
 
     export let onProgress: (time: number, duration: number) => void = () => {};
     export let startTime: number = 0;
@@ -107,10 +108,13 @@
 
     const handlePlay = () => {
         isPlaying = true;
+        hasStarted = true;
+        updateDiscordActivity();
     };
 
     const handlePause = () => {
         isPlaying = false;
+        updateDiscordActivity();
     };
 
     function checkChapters(time: number) {
@@ -217,6 +221,8 @@
             showCanvas = true;
             videoElem.currentTime = Math.max(localTarget, 0);
         }
+        currentTime = targetGlobal;
+        updateDiscordActivity();
     };
 
     const onSeekChange = (event: Event) => {
@@ -294,6 +300,7 @@
             loading = true;
             showCanvas = false;
             isPlaying = false;
+            hasStarted = false;
             showError = false;
             errorMessage = "";
             errorDetails = "";
@@ -357,31 +364,19 @@
             if (!videoElem) return;
 
             // Update Discord RPC
-            if (metaData) {
-                const isSeries = metaData.meta.type === "series";
-                let details = metaData.meta.name;
-                let state = isSeries ? `S${season} E${episode}` : "Movie";
-
-                if (isSeries && season && episode && metaData.meta.videos) {
-                    const ep = metaData.meta.videos.find(
-                        (v) => v.season === season && v.episode === episode,
-                    );
-                    if (ep && ep.name) {
-                        state += ` - ${ep.name}`;
-                    }
-                }
-
-                setActivity({
-                    details: `Watching ${details}`,
-                    state: state,
-                    startTimestamp: Math.floor(Date.now() / 1000),
-                    largeImageKey: "raffi_logo", // Assuming you might have this or just default
-                    largeImageText: "Raffi",
-                    instance: false,
-                });
-            }
+            updateDiscordActivity();
 
             initHLS(sessionId, startTime);
+
+            // Set timeout for loading
+            setTimeout(() => {
+                if (loading && !hasStarted && !isPlaying) {
+                    loading = false;
+                    showError = true;
+                    errorMessage = "Stream took too long to load";
+                    errorDetails = "Please try another stream.";
+                }
+            }, 30000);
         } catch (err) {
             console.error("Error loading video:", err);
             errorMessage = "Failed to initialize playback";
@@ -390,6 +385,57 @@
             loading = false;
         }
     };
+
+    function updateDiscordActivity() {
+        if (!metaData) return;
+
+        const isSeries = metaData.meta.type === "series";
+        let details = metaData.meta.name;
+        let state = isSeries ? `S${season} E${episode}` : "Movie";
+
+        if (isSeries && season && episode && metaData.meta.videos) {
+            const ep = metaData.meta.videos.find(
+                (v) => v.season === season && v.episode === episode,
+            );
+            if (ep && ep.name) {
+                state += ` - ${ep.name}`;
+            }
+        }
+
+        if (duration > 0 && isFinite(duration) && isFinite(currentTime)) {
+            // Use setProgressBar with remaining time
+            const remaining = Math.floor(duration - currentTime);
+
+            const activity: any = {
+                useProgressBar: true,
+                details: details,
+                state: state,
+                duration: remaining,
+                largeImageKey: "raffi_logo",
+                largeImageText: "Raffi",
+            };
+
+            if (isPlaying) {
+                activity.smallImageKey = "play";
+                activity.smallImageText = "Playing";
+            } else {
+                activity.smallImageKey = "pause";
+                activity.smallImageText = "Paused";
+            }
+
+            setActivity(activity);
+        } else {
+            // Fallback for when there's no valid duration
+            const activity: any = {
+                details: `Watching ${details}`,
+                state: state,
+                largeImageKey: "raffi_logo",
+                largeImageText: "Raffi",
+                instance: false,
+            };
+            setActivity(activity);
+        }
+    }
 
     function handleRetry() {
         showError = false;
@@ -1000,6 +1046,46 @@
         <SeekFeedback type={seekFeedback.type} id={seekFeedback.id} />
     {/if}
 
+    {#if loading}
+        <div
+            class="fixed inset-0 z-50 bg-[#000000]/90 backdrop-blur-[12px] flex items-center justify-center flex-col gap-8"
+        >
+            {#if metaData}
+                <div class="relative z-10 flex flex-col items-center gap-8">
+                    <img
+                        src={metaData.meta.logo ?? ""}
+                        alt="Logo"
+                        class="w-[400px] object-contain animate-pulse"
+                    />
+                </div>
+            {/if}
+
+            <div class="absolute left-0 top-0 p-10 z-50">
+                <button
+                    class="bg-[#000000]/20 backdrop-blur-md hover:bg-[#FFFFFF]/20 transition-colors duration-200 rounded-full p-4 cursor-pointer"
+                    on:click={onClose}
+                    aria-label="Close player"
+                >
+                    <svg
+                        width="30"
+                        height="30"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                    >
+                        <path
+                            d="M15 19L8 12L15 5"
+                            stroke="white"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    {/if}
+
     {#if !loading}
         <div
             class="absolute left-0 top-0 p-10 z-50 transition-all duration-300 ease-in-out transform {controlsVisible
@@ -1081,22 +1167,6 @@
             on:select={handleSubtitleSelect}
             on:close={() => (showSubtitleSelection = false)}
         />
-    {/if}
-
-    {#if loading}
-        <div
-            class="fixed inset-0 z-50 bg-[#000000]/10 backdrop-blur-[12px] flex items-center justify-center"
-        >
-            {#if metaData}
-                <div class="relative z-10 flex flex-col items-center gap-8">
-                    <img
-                        src={metaData.meta.logo ?? ""}
-                        alt="Logo"
-                        class="w-[400px] object-contain animate-pulse"
-                    />
-                </div>
-            {/if}
-        </div>
     {/if}
 
     {#if showError}
