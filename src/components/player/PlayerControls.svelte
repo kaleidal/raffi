@@ -16,6 +16,7 @@
     export let currentAudioLabel: string = "";
     export let currentSubtitleLabel: string = "";
     export let objectFit: "contain" | "cover" = "contain";
+    export let pendingSeek: number | null = null;
 
     export let togglePlay: () => void;
     export let onSeekInput: (e: Event) => void;
@@ -41,8 +42,12 @@
         return `${minutes}:${seconds}`;
     };
 
-    // percent *elapsed*
-    $: progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+    $: displayedTime = pendingSeek ?? currentTime;
+    $: remainingTime = Math.max(0, duration - displayedTime);
+    $: progress = duration > 0 ? (displayedTime / duration) * 100 : 0;
+    $: sliderValue = duration > 0 ? duration - displayedTime : 0;
+    $: hasHourFormat = duration >= 3600;
+    $: timeLabelWidth = hasHourFormat ? "6ch" : "4ch";
 </script>
 
 {#if controlsVisible && !loading}
@@ -87,7 +92,8 @@
 
             <span
                 class="text-[22px] font-poppins font-[500] text-[#D3D3D3] text-center"
-                >{formatTime(Math.max(0, duration - currentTime))}</span
+                style={`min-width:${timeLabelWidth}; display:inline-block; font-variant-numeric: tabular-nums; font-feature-settings:'tnum';`}
+                >{formatTime(remainingTime)}</span
             >
 
             <div class="relative flex-grow h-2">
@@ -96,7 +102,7 @@
                     widthGrey={progress}
                     onInput={onSeekInput}
                     onChange={onSeekChange}
-                    value={duration - currentTime}
+                    value={sliderValue}
                     min={0}
                     max={duration}
                     step={0.1}
