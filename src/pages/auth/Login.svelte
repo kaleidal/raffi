@@ -4,12 +4,20 @@
 
     let email = "";
     let password = "";
+    let statusMessage = "";
+    let statusType: "error" | "success" | "" = "";
+
+    const setStatus = (type: "error" | "success" | "", message = "") => {
+        statusType = type;
+        statusMessage = message;
+    };
 
     const login = async () => {
         if (!email || !password) {
-            alert("please fill in all fields");
+            setStatus("error", "please fill in all fields");
             return;
         }
+        setStatus("", "");
 
         const { data, error } = await supabase.auth.signInWithPassword({
             email,
@@ -18,16 +26,19 @@
 
         if (error) {
             console.error(error);
-            alert(error.message);
+            setStatus("error", error.message);
             return;
         }
+
+        setStatus("success", "signed in!");
     };
 
     const register = async () => {
         if (!email || !password) {
-            alert("please fill in all fields");
+            setStatus("error", "please fill in all fields");
             return;
         }
+        setStatus("", "");
 
         const { data, error } = await supabase.auth.signUp({
             email,
@@ -36,11 +47,11 @@
 
         if (error) {
             console.error(error);
-            alert(error.message);
+            setStatus("error", error.message);
             return;
         }
 
-        alert("check your email for the confirmation link!");
+        setStatus("success", "check your email for the confirmation link!");
     };
 
     onMount(async () => {
@@ -76,6 +87,12 @@
             placeholder="password"
             bind:value={password}
         />
+
+        {#if statusMessage}
+            <div class={`w-[80%] text-center text-[18px] font-poppins ${statusType === "error" ? "text-[#B00020]" : "text-[#1B5E20]"}`}>
+                {statusMessage}
+            </div>
+        {/if}
 
         <div class="flex flex-row gap-0 w-[80%] items-center justify-end">
             <button

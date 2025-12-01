@@ -5,6 +5,7 @@ import {
     libraryItem, progressMap, lastWatched, currentSeason, addons, selectedAddon
 } from "./metaState";
 import { get } from "svelte/store";
+import type { ProgressMap } from "./types";
 
 export async function loadAddons() {
     try {
@@ -82,7 +83,7 @@ export async function loadMetaData(imdbID: string, titleType: string, expectedNa
     }
 
     metaData.set(data);
-    loadedMeta.set(true);
+    let progressData: ProgressMap = {};
 
     if (data) {
         const availableEpisodes = (data.meta.videos || []).filter(
@@ -111,12 +112,12 @@ export async function loadMetaData(imdbID: string, titleType: string, expectedNa
             const item = await getLibraryItem(imdbID);
             if (item) {
                 libraryItem.set(item);
-                progressMap.set(item.progress || {});
+                progressData = item.progress || {};
 
                 // Calculate last watched
                 let latest = 0;
                 let latestKey = "";
-                const prog = item.progress || {};
+                const prog = progressData;
 
                 for (const [key, val] of Object.entries(prog)) {
                     const v = val as any;
@@ -131,11 +132,19 @@ export async function loadMetaData(imdbID: string, titleType: string, expectedNa
                     lastWatched.set({ season: s, episode: e });
                     currentSeason.set(s);
                 }
+            } else {
+                progressData = {};
             }
         } catch (e) {
             console.error("Failed to load library item", e);
+            progressData = {};
+        } finally {
+            progressMap.set(progressData);
         }
+    } else {
+        progressMap.set(progressData);
     }
 
+    loadedMeta.set(true);
     return finalType;
 }
