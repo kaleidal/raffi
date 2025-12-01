@@ -20,13 +20,37 @@
 
     let checkingAuth = true;
 
-    onMount(async () => {
-        await initAuth();
-        checkingAuth = false;
-
-        if (!$currentUser && $router.page !== "login") {
-            router.navigate("login");
+    function handlePointerButtons(event: PointerEvent) {
+        if (event.pointerType !== "mouse") return;
+        if (event.button === 3) {
+            const navigated = router.back();
+            if (navigated) {
+                event.preventDefault();
+            }
         }
+    }
+
+    onMount(() => {
+        let disposed = false;
+
+        const init = async () => {
+            await initAuth();
+            if (disposed) return;
+
+            checkingAuth = false;
+
+            if (!$currentUser && $router.page !== "login") {
+                router.navigate("login");
+            }
+        };
+
+        init();
+        window.addEventListener("pointerup", handlePointerButtons);
+
+        return () => {
+            disposed = true;
+            window.removeEventListener("pointerup", handlePointerButtons);
+        };
     });
 
     $: if (!checkingAuth) {

@@ -54,6 +54,7 @@
     // Local state for player start
     let playerHasStarted = false;
     let startTime = 0;
+    let streamsModalKey = "initial";
 
     onMount(async () => {
         resetMetaState();
@@ -104,6 +105,32 @@
                 startTime = 0;
             }
         }
+    }
+
+    $: if ($progressMap) {
+        streamsModalKey = (() => {
+            if ($metaData?.meta.type === "movie") {
+                const entry: any = $progressMap;
+                return [
+                    "movie",
+                    entry?.time ?? 0,
+                    entry?.duration ?? 0,
+                    entry?.watched ?? false,
+                    entry?.updatedAt ?? 0,
+                ].join(":");
+            }
+            const parts = Object.entries($progressMap || {}).map(
+                ([key, value]: [string, any]) =>
+                    [
+                        key,
+                        value?.time ?? 0,
+                        value?.duration ?? 0,
+                        value?.watched ?? false,
+                        value?.updatedAt ?? 0,
+                    ].join("-"),
+            );
+            return parts.join("|") || "series:empty";
+        })();
     }
 </script>
 
@@ -462,6 +489,9 @@
         loadingStreams={$loadingStreams}
         streams={$streams}
         metaData={$metaData}
+        selectedEpisode={$selectedEpisode}
+        progressMap={$progressMap}
+        progressSignature={streamsModalKey}
         onCloseStreamsPopup={StreamLogic.closeStreamsPopup}
         onStreamClick={(stream) =>
             StreamLogic.onStreamClick(stream, $progressMap)}
