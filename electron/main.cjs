@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog } = require('electron');
+const { app, BrowserWindow, dialog, screen } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const express = require('express');
@@ -6,6 +6,10 @@ const express = require('express');
 let mainWindow;
 let goServer;
 let httpServer;
+
+const MIN_ZOOM = 0.75;
+const MAX_ZOOM = 1.0;
+const WIDTH_THRESHOLD = 1600;
 
 const isDev = !app.isPackaged;
 
@@ -185,8 +189,8 @@ function createWindow() {
     mainWindow = new BrowserWindow({
         width: 1778,
         height: 1000,
-        minHeight: 1000,
-        minWidth: 1778,
+        minHeight: 800,
+        minWidth: 1200,
         autoHideMenuBar: true,
         webPreferences: {
             nodeIntegration: false,
@@ -213,9 +217,23 @@ function createWindow() {
 
     mainWindow.setMenuBarVisibility(false);
 
-    mainWindow.webContents.on('did-finish-load', () => {
-        mainWindow.webContents.setZoomFactor(1.0);
-    });
+    const applyDisplayZoom = () => {
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        const { width } = mainWindow.getBounds();
+        const primary = screen.getPrimaryDisplay();
+        const scaleFactor = primary?.scaleFactor || 1;
+        const dpiZoom = 1 / scaleFactor;
+        const widthZoom = width < WIDTH_THRESHOLD ? width / WIDTH_THRESHOLD : 1;
+        const zoom = Math.min(
+            MAX_ZOOM,
+            Math.max(MIN_ZOOM, dpiZoom * widthZoom),
+        );
+        mainWindow.webContents.setZoomFactor(zoom);
+    };
+
+    mainWindow.webContents.on('did-finish-load', applyDisplayZoom);
+    mainWindow.on('resize', applyDisplayZoom);
+    screen.on('display-metrics-changed', applyDisplayZoom);
 }
 
 function startGoServer() {

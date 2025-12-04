@@ -10,7 +10,8 @@
     import ListItemGrid from "./components/ListItemGrid.svelte";
 
     import { loadLists } from "./dataLoader";
-    import { loaded, showAddonsModal } from "./listsState";
+    import { loaded, showAddonsModal, showSettingsModal } from "./listsState";
+    import SettingsModal from "../../components/home/modals/SettingsModal.svelte";
 
     onMount(async () => {
         await loadLists();
@@ -19,6 +20,7 @@
 </script>
 
 <AddonsModal bind:showAddonsModal={$showAddonsModal} />
+<SettingsModal bind:showSettings={$showSettingsModal} />
 
 <div
     class="bg-[#090909] h-screen w-screen flex flex-col overflow-hidden overflow-x-hidden items-center"
@@ -26,6 +28,7 @@
     <SearchBar
         absolute={false}
         on:openAddons={() => ($showAddonsModal = true)}
+        on:openSettings={() => ($showSettingsModal = true)}
     />
 
     {#if $loaded}
