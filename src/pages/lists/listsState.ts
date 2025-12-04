@@ -25,3 +25,4 @@ export const dragState = writable<DragState>({
 
 export const loaded = writable<boolean>(false);
 export const showAddonsModal = writable<boolean>(false);
+export const showSettingsModal = writable<boolean>(false);

@@ -175,6 +175,28 @@
                 <div
                     class="w-[40vw] h-full flex gap-[50px] flex-col justify-between items-start"
                 >
+
+            <style>
+                .resume-button-shell {
+                    border-radius: clamp(30px, 5vw, 50px);
+                    overflow: hidden;
+                }
+
+                .resume-button {
+                    min-height: 80px;
+                    padding: clamp(14px, 2vw, 25px) clamp(40px, 6vw, 130px);
+                    font-size: clamp(24px, 2.4vw, 48px);
+                }
+
+                .resume-button__label {
+                    white-space: nowrap;
+                }
+
+                .resume-button__icon {
+                    width: clamp(32px, 4vw, 70px);
+                    height: clamp(32px, 4vw, 70px);
+                }
+            </style>
                     <div
                         class="flex flex-col gap-[10px] justify-start items-start w-full"
                     >
@@ -207,9 +229,9 @@
                             !lastEpProgress.watched &&
                             lastEpProgress.time > 0}
 
-                        <div class="relative overflow-hidden rounded-[50px]">
+                        <div class="relative rounded-[50px] resume-button-shell">
                             <button
-                                class="bg-[#FFFFFF]/80 hover:bg-[#D3D3D3]/80 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-[20px] text-black text-[48px] font-poppins font-medium px-[130px] py-[25px] w-full transition-colors duration-200 relative z-10"
+                                class="bg-[#FFFFFF]/80 hover:bg-[#D3D3D3]/80 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-[20px] text-black font-poppins font-medium w-full transition-colors duration-200 relative z-10 resume-button"
                                 on:click={() => {
                                     const nextEpIndex =
                                         $metaData.meta.videos.findIndex(
@@ -253,8 +275,7 @@
                                 }}
                             >
                                 <svg
-                                    width="70"
-                                    height="70"
+                                    class="resume-button__icon"
                                     viewBox="0 0 92 92"
                                     fill="none"
                                     xmlns="http://www.w3.org/2000/svg"
@@ -268,9 +289,10 @@
                                     />
                                 </svg>
 
-                                {#if isResumable}
-                                    Resume S{$lastWatched.season}E{$lastWatched.episode}
-                                {:else if lastEpProgress && lastEpProgress.watched}
+                                <span class="resume-button__label">
+                                    {#if isResumable}
+                                        Resume S{$lastWatched.season}E{$lastWatched.episode}
+                                    {:else if lastEpProgress && lastEpProgress.watched}
                                     {@const nextEpIndex =
                                         $metaData.meta.videos.findIndex(
                                             (v) =>
@@ -279,23 +301,24 @@
                                                 v.episode ===
                                                     $lastWatched.episode,
                                         )}
-                                    {#if nextEpIndex !== -1 && nextEpIndex < $metaData.meta.videos.length - 1}
-                                        {@const nextEp =
-                                            $metaData.meta.videos[
-                                                nextEpIndex + 1
-                                            ]}
-                                        Watch S{nextEp.season}E{nextEp.episode}
+                                        {#if nextEpIndex !== -1 && nextEpIndex < $metaData.meta.videos.length - 1}
+                                            {@const nextEp =
+                                                $metaData.meta.videos[
+                                                    nextEpIndex + 1
+                                                ]}
+                                            Watch S{nextEp.season}E{nextEp.episode}
+                                        {:else}
+                                            Watch S1E1
+                                        {/if}
                                     {:else}
-                                        Watch S1E1
+                                        Watch S{$lastWatched.season}E{$lastWatched.episode ||
+                                            1}
                                     {/if}
-                                {:else}
-                                    Watch S{$lastWatched.season}E{$lastWatched.episode ||
-                                        1}
-                                {/if}
+                                </span>
                             </button>
                             {#if isResumable}
                                 <div
-                                    class="absolute bottom-0 left-0 h-[6px] bg-[#676767] z-20"
+                                    class="absolute bottom-0 left-0 h-[6px] bg-[#676767] z-20 rounded-full overflow-hidden"
                                     style="width: {(lastEpProgress.time /
                                         lastEpProgress.duration) *
                                         100}%"
@@ -310,9 +333,9 @@
                             !movieProgress.watched &&
                             movieProgress.time > 0}
 
-                        <div class="relative overflow-hidden rounded-[50px]">
+                        <div class="relative rounded-[50px] resume-button-shell">
                             <button
-                                class="bg-[#FFFFFF]/80 hover:bg-[#D3D3D3]/80 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-[20px] text-black text-[48px] font-poppins font-medium px-[130px] py-[25px] w-full transition-colors duration-200 relative z-10"
+                                class="bg-[#FFFFFF]/80 hover:bg-[#D3D3D3]/80 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-[20px] text-black font-poppins font-medium w-full transition-colors duration-200 relative z-10 resume-button"
                                 on:click={() =>
                                     StreamLogic.episodeClicked(
                                         { season: 0, episode: 0 },
@@ -320,8 +343,7 @@
                                     )}
                             >
                                 <svg
-                                    width="70"
-                                    height="70"
+                                    class="resume-button__icon"
                                     viewBox="0 0 92 92"
                                     fill="none"
                                     xmlns="http://www.w3.org/2000/svg"
@@ -334,15 +356,17 @@
                                         stroke-linejoin="round"
                                     />
                                 </svg>
-                                {#if isMovieResumable}
-                                    Resume
-                                {:else}
-                                    Watch Movie
-                                {/if}
+                                <span class="resume-button__label">
+                                    {#if isMovieResumable}
+                                        Resume
+                                    {:else}
+                                        Watch Movie
+                                    {/if}
+                                </span>
                             </button>
                             {#if isMovieResumable}
                                 <div
-                                    class="absolute bottom-0 left-0 h-[6px] bg-[#676767] z-20"
+                                    class="absolute bottom-0 left-0 h-[6px] bg-[#676767] z-20 rounded-full overflow-hidden"
                                     style="width: {(movieProgress.time /
                                         movieProgress.duration) *
                                         100}%"
