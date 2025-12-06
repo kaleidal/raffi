@@ -55,6 +55,14 @@ func main() {
 			log.Printf("Removed torrent directory: %s", torrentDir)
 		}
 
+		// Remove raffi temp directory
+		raffiDir := filepath.Join(os.TempDir(), "raffi")
+		if err := os.RemoveAll(raffiDir); err != nil {
+			log.Printf("Warning: failed to remove raffi directory: %v", err)
+		} else {
+			log.Printf("Removed raffi directory: %s", raffiDir)
+		}
+
 		log.Println("Cleanup complete, exiting")
 		os.Exit(0)
 	}()

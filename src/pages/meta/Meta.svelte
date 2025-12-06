@@ -45,6 +45,7 @@
     import * as NavigationLogic from "./navigationLogic";
     import ActionButtons from "../../components/meta/ActionButtons.svelte";
     import MetaInfo from "./components/MetaInfo.svelte";
+    import UnsupportedTitleModal from "../../components/meta/modals/UnsupportedTitleModal.svelte";
 
     // Router params
     $: imdbID = $router.params.imdbId;
@@ -55,6 +56,7 @@
     let playerHasStarted = false;
     let startTime = 0;
     let streamsModalKey = "initial";
+    let unsupportedReason: string | null = null;
 
     onMount(async () => {
         resetMetaState();
@@ -76,8 +78,21 @@
         );
     }
 
+    $: if ($loadedMeta && $metaData) {
+        if (!$metaData.meta?.background) {
+            unsupportedReason = "This title is missing metadata.";
+        } else if (
+            $metaData.meta?.type === "series" &&
+            (!$metaData.meta?.videos || $metaData.meta.videos.length === 0)
+        ) {
+            unsupportedReason = "No episodes found for this series.";
+        } else {
+            unsupportedReason = null;
+        }
+    }
+
     $: {
-        if ($playerVisible || $streamsPopupVisible) {
+        if ($playerVisible || $streamsPopupVisible || unsupportedReason) {
             document.body.style.overflow = "hidden";
         } else {
             document.body.style.overflow = "";
@@ -89,7 +104,7 @@
     }
 
     $: if ($playerVisible && $selectedStreamUrl) {
-        if ($metaData?.meta.type === "movie") {
+        if ($metaData?.meta?.type === "movie") {
             const prog = ProgressLogic.getProgress($progressMap);
             if (prog && !prog.watched) {
                 startTime = prog.time || 0;
@@ -109,7 +124,7 @@
 
     $: if ($progressMap) {
         streamsModalKey = (() => {
-            if ($metaData?.meta.type === "movie") {
+            if ($metaData?.meta?.type === "movie") {
                 const entry: any = $progressMap;
                 return [
                     "movie",
@@ -134,7 +149,7 @@
     }
 </script>
 
-{#if $loadedMeta && $metaData}
+{#if $loadedMeta && $metaData && $metaData.meta}
     <div class="bg-[#090909] flex-1" in:fade={{ duration: 300 }}>
         <div class="w-[100vw] h-[100vh]">
             <div class="h-[100vh] opacity-60 w-full">
@@ -505,6 +520,15 @@
         />
     {/if}
 
+    {#if unsupportedReason}
+        <UnsupportedTitleModal
+            title="Unsupported Title"
+            message={unsupportedReason}
+            on:back={() => router.navigate("home")}
+            on:retry={() => window.location.reload()}
+        />
+    {/if}
+
     <MetaModals
         streamsPopupVisible={$streamsPopupVisible}
         showTorrentWarning={$showTorrentWarning}
@@ -548,10 +572,19 @@
         </div>
     {/if}
 {:else}
-    <div
-        class="w-full h-screen flex items-center justify-center"
-        out:fade={{ duration: 200 }}
-    >
-        <LoadingSpinner size="60px" />
-    </div>
+    {#if unsupportedReason}
+        <UnsupportedTitleModal
+            title="Unsupported Title"
+            message={unsupportedReason}
+            on:back={() => router.navigate("home")}
+            on:retry={() => window.location.reload()}
+        />
+    {:else}
+        <div
+            class="w-full h-screen flex items-center justify-center"
+            out:fade={{ duration: 200 }}
+        >
+            <LoadingSpinner size="60px" />
+        </div>
+    {/if}
 {/if}

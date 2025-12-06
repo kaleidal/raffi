@@ -64,7 +64,7 @@ export async function loadMetaData(imdbID: string, titleType: string, expectedNa
         });
     };
 
-    if (data && data.meta) {
+    if (data && data.meta && Array.isArray(data.meta.videos)) {
         data.meta.videos = filterUnreleasedEpisodes(data.meta.videos);
     }
 
@@ -85,7 +85,7 @@ export async function loadMetaData(imdbID: string, titleType: string, expectedNa
     metaData.set(data);
     let progressData: ProgressMap = {};
 
-    if (data) {
+    if (data && data.meta) {
         const availableEpisodes = (data.meta.videos || []).filter(
             (video: any) => video.season > 0,
         );

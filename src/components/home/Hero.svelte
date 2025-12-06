@@ -1,9 +1,12 @@
 <script lang="ts">
+    import { createEventDispatcher } from "svelte";
     import type { PopularTitleMeta } from "../../lib/library/types/popular_types";
     import { router } from "../../lib/stores/router";
     import ExpandingButton from "../common/ExpandingButton.svelte";
 
     export let showcasedTitle: PopularTitleMeta;
+
+    const dispatch = createEventDispatcher();
 
     let playerIframe: HTMLIFrameElement;
     let isPaused = false;
@@ -42,6 +45,7 @@
             src={showcasedTitle.logo ?? ""}
             alt="Logo"
             class="w-[600px] h-fit"
+            on:error={() => dispatch("logoError")}
         />
 
         <div class="flex flex-row gap-[10px] items-center">
