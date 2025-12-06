@@ -6,10 +6,10 @@
   "main": "electron/main.cjs",
   "description": "A modern video player",
   "author": {
-    "name": "Lantharos",
-    "email": "hello@lantharos.com"
+    "name": "Kaleidal",
+    "email": "hello@kaleid.al"
   },
-  "homepage": "https://lantharos.com/raffi",
+  "homepage": "https://kaleid.al/raffi",
   "scripts": {
     "dev": "vite",
     "electron:dev": "npm run server:build && cross-env NODE_ENV=development concurrently \"npm run dev\" \"wait-on http://localhost:5173 && cross-env ELECTRON_DISABLE_SANDBOX=1 electron .\"",
@@ -32,11 +32,16 @@
     "wait-on": "^9.0.3"
   },
   "build": {
-    "appId": "com.lantharos.raffi",
+    "appId": "al.kaleid.raffi",
     "productName": "Raffi",
     "directories": {
       "buildResources": "build",
       "output": "release"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "kaleidal",
+      "repo": "raffi"
     },
     "files": [
       "dist/**/*",
@@ -77,6 +82,7 @@
     "@ryuziii/discord-rpc": "^1.0.1-rc.1",
     "@supabase/supabase-js": "^2.83.0",
     "@tailwindcss/vite": "^4.1.17",
+    "electron-updater": "^6.6.2",
     "eventemitter3": "^5.0.1",
     "express": "^5.1.0",
     "hls.js": "^1.6.14",

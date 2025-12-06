@@ -71,11 +71,11 @@
     let hls: any = null;
     let sessionId: string;
     let currentVideoSrc: string | null = null;
+    let metadataCheckInterval: any;
+    let reprobeAttempted = false;
 
-    // Sync hasStarted prop
     $: hasStartedStore.set(hasStarted);
 
-    // Initialize controls manager
     $: controlsManager = Controls.createControlsManager(
         playerContainer,
         videoElem,
@@ -83,7 +83,6 @@
         $watchParty.isHost,
     );
 
-    // Lifecycle
     onMount(() => {
         resetPlayerState();
         hasStarted = false;
@@ -126,9 +125,39 @@
             showPartyEndModal.set,
             partyEndReason.set,
         );
+
+        metadataCheckInterval = setInterval(() => {
+            if (!videoElem) return;
+
+            const currentTime = videoElem.currentTime;
+            const durationVal = videoElem.duration;
+
+            if (
+                currentTime > 2 &&
+                !videoElem.paused &&
+                (isNaN(durationVal) || durationVal === 0)
+            ) {
+                if (!reprobeAttempted) {
+                    console.log(
+                        "Missing metadata detected, attempting to reload session...",
+                    );
+                    reprobeAttempted = true;
+                    reloadSession();
+                } else if (currentTime > 10) {
+                    showError.set(true);
+                    errorMessage.set("Stream Error");
+                    errorDetails.set(
+                        "Metadata missing. Please select another stream.",
+                    );
+                    videoElem.pause();
+                    clearInterval(metadataCheckInterval);
+                }
+            }
+        }, 1000);
     });
 
     onDestroy(() => {
+        clearInterval(metadataCheckInterval);
         Session.cleanupSession(
             hls,
             sessionId,
@@ -140,7 +169,6 @@
         hasStarted = false;
     });
 
-    // Event Handlers
     const handleTimeUpdate = () => {
         if (!videoElem) return;
         const time = $playbackOffset + videoElem.currentTime;
@@ -189,6 +217,19 @@
         if ($watchParty.isHost) {
             WatchParty.updatePlaybackState($currentTime, false);
         }
+    };
+
+    const reloadSession = () => {
+        if (!currentVideoSrc) return;
+
+        Session.cleanupSession(
+            hls,
+            sessionId,
+            Discord.clearDiscordActivity,
+            WatchParty.leaveWatchParty,
+            $watchParty.isActive,
+        );
+        loadVideo(currentVideoSrc);
     };
 
     const loadVideo = async (src: string) => {
@@ -288,7 +329,6 @@
                 },
             );
 
-            // Timeout check
             setTimeout(() => {
                 if ($loading && !$hasStartedStore && !$isPlaying) {
                     loading.set(false);

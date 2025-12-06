@@ -24,6 +24,7 @@
     let showSettingsModal = false;
     let genreMap: Record<string, PopularTitleMeta[]> = {};
     let topGenres: string[] = [];
+    let absolutePopularTitles: PopularTitleMeta[] = [];
 
     async function checkTrailer(videoId: string): Promise<boolean> {
         try {
@@ -38,26 +39,12 @@
         }
     }
 
-    onMount(async () => {
-        let absolutePopularTitles = [];
-        let mostPopularMovies = await getPopularTitles("movie");
-        let mostPopularSeries = await getPopularTitles("series");
-        absolutePopularTitles = [...mostPopularMovies, ...mostPopularSeries];
-
-        if (absolutePopularTitles.length > 0) {
-            absolutePopularTitles.sort(
-                (a, b) =>
-                    (b.popularities.moviedb || 0) -
-                    (a.popularities.moviedb || 0),
-            );
-
-            absolutePopularTitles = absolutePopularTitles.slice(0, 20);
-
-            popularMeta = absolutePopularTitles;
-        }
+    async function refreshFeatured() {
+        if (absolutePopularTitles.length === 0) return;
 
         let attempts = 0;
         const maxAttempts = 10;
+        let newTitle: PopularTitleMeta | undefined;
 
         while (attempts < maxAttempts) {
             let randomIndex = Math.floor(
@@ -81,19 +68,41 @@
                     randomTitle.trailerStreams[0].ytId,
                 );
                 if (isPlayable) {
-                    showcasedTitle = randomTitle;
+                    newTitle = randomTitle;
                     break;
                 }
             }
             attempts++;
         }
 
-        if (!showcasedTitle) {
+        if (!newTitle) {
             const fallback = absolutePopularTitles.find(
                 (t) => t.trailerStreams && t.trailerStreams.length > 0,
             );
-            if (fallback) showcasedTitle = fallback;
+            if (fallback) newTitle = fallback;
         }
+
+        if (newTitle) showcasedTitle = newTitle;
+    }
+
+    onMount(async () => {
+        let mostPopularMovies = await getPopularTitles("movie");
+        let mostPopularSeries = await getPopularTitles("series");
+        absolutePopularTitles = [...mostPopularMovies, ...mostPopularSeries];
+
+        if (absolutePopularTitles.length > 0) {
+            absolutePopularTitles.sort(
+                (a, b) =>
+                    (b.popularities.moviedb || 0) -
+                    (a.popularities.moviedb || 0),
+            );
+
+            absolutePopularTitles = absolutePopularTitles.slice(0, 20);
+
+            popularMeta = absolutePopularTitles;
+        }
+
+        await refreshFeatured();
 
         try {
             const library = await getLibrary();
@@ -212,13 +221,14 @@
     {#if fetchedTitles}
         <div in:fade={{ duration: 300 }}>
             {#if showcasedTitle}
-                <Hero {showcasedTitle} />
+                <Hero {showcasedTitle} on:logoError={refreshFeatured} />
             {/if}
 
             <SearchBar
                 on:openAddons={handleOpenAddons}
                 on:openSettings={handleOpenSettings}
                 on:openProfile={() => {}}
+                onLogoClick={refreshFeatured}
             />
 
             <div

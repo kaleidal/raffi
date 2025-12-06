@@ -1,5 +1,7 @@
 const { app, BrowserWindow, dialog, screen } = require('electron');
 const { spawn } = require('child_process');
+const {autoUpdater} = require('electron-updater');
+
 const path = require('path');
 const express = require('express');
 
@@ -205,6 +207,8 @@ function createWindow() {
     if (isDev) {
         mainWindow.loadURL('http://localhost:5173');
     } else {
+        autoUpdater.checkForUpdatesAndNotify();
+        
         const expressApp = express();
         const distPath = path.join(__dirname, '..', 'dist');
         expressApp.use(express.static(distPath));
@@ -219,7 +223,15 @@ function createWindow() {
 
     const applyDisplayZoom = () => {
         if (!mainWindow || mainWindow.isDestroyed()) return;
-        const { width } = mainWindow.getBounds();
+        const { width, height } = mainWindow.getBounds();
+        
+        // Force 16:9 aspect ratio if height is less than 1000px
+        if (height < 1000) {
+            mainWindow.setAspectRatio(16/9);
+        } else {
+            mainWindow.setAspectRatio(0);
+        }
+
         const primary = screen.getPrimaryDisplay();
         const scaleFactor = primary?.scaleFactor || 1;
         const dpiZoom = 1 / scaleFactor;
