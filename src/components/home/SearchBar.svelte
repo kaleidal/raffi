@@ -16,6 +16,7 @@
     let showSearchResults = false;
     let loading = false;
     export let absolute: boolean = true;
+    export let onLogoClick: () => void = () => {};
 
     // Context Menu State
     let showContextMenu = false;
@@ -42,8 +43,14 @@
         showSearchResults = true;
 
         searchTimeout = setTimeout(async () => {
-            searchResults = await searchTitles(query);
-            loading = false;
+            try {
+                searchResults = await searchTitles(query);
+            } catch (e) {
+                console.error("Search failed", e);
+                searchResults = [];
+            } finally {
+                loading = false;
+            }
         }, 500);
     }
 
@@ -149,7 +156,10 @@
 >
     <button
         class="cursor-pointer hover:opacity-80 transition-opacity"
-        on:click={() => router.navigate("home")}
+        on:click={() => {
+            router.navigate("home");
+            onLogoClick();
+        }}
     >
         <img src="raffi.svg" alt="Raffi Logo" class="h-[80px]" />
     </button>
