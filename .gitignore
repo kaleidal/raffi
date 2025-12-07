@@ -25,3 +25,4 @@ release
 *.sw?
 electron/decoder-windows-amd64.exe
 electron/decoder-x86_64-unknown-linux-gnu
+electron/decoder-*
