@@ -20,9 +20,12 @@ async function build() {
     console.log('Building Windows binary (static CGO)...');
     await runCommand('go', [
       'build',
-      '-ldflags', '-s -w -extldflags "-static"',
-      '-tags', 'sqlite_omit_load_extension',
-      '-o', '../electron/decoder-windows-amd64.exe',
+      '-ldflags',
+      '-s -w -extldflags "-static"',
+      '-tags',
+      'sqlite_omit_load_extension',
+      '-o',
+      '../electron/decoder-windows-amd64.exe',
       '.'
     ], {
       cwd: serverDir,
@@ -37,9 +40,12 @@ async function build() {
     console.log('Building Linux binary (static CGO)...');
     await runCommand('go', [
       'build',
-      '-ldflags', '-s -w -extldflags "-static"',
-      '-tags', 'sqlite_omit_load_extension',
-      '-o', '../electron/decoder-x86_64-unknown-linux-gnu',
+      '-ldflags',
+      '-s -w -extldflags "-static"',
+      '-tags',
+      'sqlite_omit_load_extension',
+      '-o',
+      '../electron/decoder-x86_64-unknown-linux-gnu',
       '.'
     ], {
       cwd: serverDir,
