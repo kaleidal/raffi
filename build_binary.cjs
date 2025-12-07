@@ -17,16 +17,37 @@ async function build() {
   const serverDir = path.join(__dirname, 'raffi-server');
   
   if (platform === 'win32') {
-    console.log('Building Windows binary...');
-    await runCommand('go', ['build', '-o', '../electron/decoder-windows-amd64.exe', '.'], {
+    console.log('Building Windows binary (static CGO)...');
+    await runCommand('go', [
+      'build',
+      '-ldflags', '-s -w -extldflags "-static"',
+      '-tags', 'sqlite_omit_load_extension',
+      '-o', '../electron/decoder-windows-amd64.exe',
+      '.'
+    ], {
       cwd: serverDir,
-      shell: true
+      shell: true,
+      env: {
+        ...process.env,
+        CGO_ENABLED: '1',
+        CC: 'gcc'
+      }
     });
   } else if (platform === 'linux') {
-    console.log('Building Linux binary...');
-    await runCommand('go', ['build', '-o', '../electron/decoder-x86_64-unknown-linux-gnu', '.'], {
+    console.log('Building Linux binary (static CGO)...');
+    await runCommand('go', [
+      'build',
+      '-ldflags', '-s -w -extldflags "-static"',
+      '-tags', 'sqlite_omit_load_extension',
+      '-o', '../electron/decoder-x86_64-unknown-linux-gnu',
+      '.'
+    ], {
       cwd: serverDir,
-      shell: true
+      shell: true,
+      env: {
+        ...process.env,
+        CGO_ENABLED: '1'
+      }
     });
   } else {
     throw new Error(`Unsupported platform: ${platform}`);
