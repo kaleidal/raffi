@@ -14,6 +14,10 @@
     let isMuted = true;
     let wasPlayingBeforeHidden = false;
 
+    $: if (showcasedTitle) {
+        isMuted = true;
+    }
+
     onMount(() => {
         const observer = new IntersectionObserver(
             (entries) => {
