@@ -1,6 +1,7 @@
 <script lang="ts">
     export let showSkipIntro = false;
     export let showNextEpisode = false;
+    export let isWatchPartyMember = false;
     export let skipChapter: () => void;
     export let nextEpisode: () => void;
 </script>
@@ -8,7 +9,7 @@
 <div
     class="flex flex-col gap-2 w-full items-center justify-end transition-all duration-300"
 >
-    {#if showSkipIntro}
+    {#if showSkipIntro && !isWatchPartyMember}
         <button
             class="bg-white text-black px-6 py-2 rounded-full font-bold hover:bg-[#FFFFFF]/70 cursor-pointer transition-colors flex items-center gap-2"
             on:click={skipChapter}
@@ -39,7 +40,7 @@
         </button>
     {/if}
 
-    {#if showNextEpisode}
+    {#if showNextEpisode && !isWatchPartyMember}
         <button
             class="bg-white text-black px-6 py-2 rounded-full font-bold hover:bg-[#FFFFFF]/70 cursor-pointer transition-colors flex items-center gap-2"
             on:click={nextEpisode}

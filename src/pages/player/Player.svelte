@@ -468,6 +468,7 @@
             <PlayerOverlays
                 showSkipIntro={$showSkipIntro}
                 showNextEpisode={$showNextEpisode}
+                isWatchPartyMember={$watchParty.isActive && !$watchParty.isHost}
                 skipChapter={() =>
                     Chapters.skipChapter($currentChapter, (t) =>
                         Session.performSeek(
@@ -511,6 +512,7 @@
                 {metaData}
                 currentAudioLabel={$currentAudioLabel}
                 currentSubtitleLabel={$currentSubtitleLabel}
+                isWatchPartyMember={$watchParty.isActive && !$watchParty.isHost}
                 togglePlay={() =>
                     controlsManager.togglePlay(controlsVisible.set)}
                 onSeekInput={(e) =>
