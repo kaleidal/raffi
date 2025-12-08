@@ -1,9 +1,11 @@
 <script lang="ts">
     import ListsPopup from "./modals/ListsPopup.svelte";
+    import TrailerModal from "./modals/TrailerModal.svelte";
 
     export let metaData: any;
 
     let listsPopupVisible = false;
+    let trailerVisible = false;
 </script>
 
 <div class="flex flex-row gap-[20px] justify-between w-full">
@@ -41,11 +43,7 @@
 
     <button
         class="px-[50px] py-[20px] flex flex-row gap-[20px] items-center cursor-pointer hover:bg-[#D3D3D3]/10 transition-all duration-200 bg-[#FFFFFF]/10 backdrop-blur-[16px] rounded-[64px] justify-center"
-        on:click={() =>
-            window.open(
-                `https://www.youtube.com/watch?v=${metaData.meta.trailers[0]?.source}`,
-                "_blank",
-            )}
+        on:click={() => (trailerVisible = true)}
     >
         <svg
             width="30"
@@ -67,4 +65,12 @@
             >Trailer</span
         >
     </button>
+
+    {#if metaData.meta.trailers && metaData.meta.trailers.length > 0}
+        <TrailerModal
+            bind:visible={trailerVisible}
+            ytId={metaData.meta.trailers[0].source}
+            on:close={() => (trailerVisible = false)}
+        />
+    {/if}
 </div>
