@@ -45,18 +45,33 @@ export function createControlsManager(
         // Disable for participants
         if (isWatchPartyActive && !isWatchPartyHost) return;
 
-        const remaining = Number((event.target as HTMLInputElement).value);
-        const desiredGlobal = Math.max(
-            0,
-            Math.min(duration, duration - remaining),
-        );
+        const value = Number((event.target as HTMLInputElement).value);
+        const seekBarStyle = localStorage.getItem("seek_bar_style") || "raffi";
+        
+        let desiredGlobal;
+        if (seekBarStyle === "normal") {
+            desiredGlobal = value;
+        } else {
+            desiredGlobal = Math.max(
+                0,
+                Math.min(duration, duration - value),
+            );
+        }
 
         setPendingSeek(desiredGlobal);
     }
 
     function onSeekChange(event: Event, duration: number, performSeek: (time: number) => void) {
-        const remaining = Number((event.target as HTMLInputElement).value);
-        const desiredGlobal = duration - remaining;
+        const value = Number((event.target as HTMLInputElement).value);
+        const seekBarStyle = localStorage.getItem("seek_bar_style") || "raffi";
+
+        let desiredGlobal;
+        if (seekBarStyle === "normal") {
+            desiredGlobal = value;
+        } else {
+            desiredGlobal = duration - value;
+        }
+        
         performSeek(desiredGlobal);
     }
 
@@ -92,17 +107,35 @@ export function createControlsManager(
             event.preventDefault();
             togglePlayFn();
         } else if (event.code === "ArrowLeft") {
-            // Forward 5s (inverted)
-            performSeek(currentTime + 5);
-            if (seekFeedbackTimeout) clearTimeout(seekFeedbackTimeout);
-            setSeekFeedback({ type: "forward", id: Date.now() });
-            seekFeedbackTimeout = setTimeout(() => setSeekFeedback(null), 500);
+            const seekBarStyle = localStorage.getItem("seek_bar_style") || "raffi";
+            if (seekBarStyle === "normal") {
+                // Backward 5s
+                performSeek(currentTime - 5);
+                if (seekFeedbackTimeout) clearTimeout(seekFeedbackTimeout);
+                setSeekFeedback({ type: "backward", id: Date.now() });
+                seekFeedbackTimeout = setTimeout(() => setSeekFeedback(null), 500);
+            } else {
+                // Forward 5s (inverted)
+                performSeek(currentTime + 5);
+                if (seekFeedbackTimeout) clearTimeout(seekFeedbackTimeout);
+                setSeekFeedback({ type: "forward", id: Date.now() });
+                seekFeedbackTimeout = setTimeout(() => setSeekFeedback(null), 500);
+            }
         } else if (event.code === "ArrowRight") {
-            // Backward 5s (inverted)
-            performSeek(currentTime - 5);
-            if (seekFeedbackTimeout) clearTimeout(seekFeedbackTimeout);
-            setSeekFeedback({ type: "backward", id: Date.now() });
-            seekFeedbackTimeout = setTimeout(() => setSeekFeedback(null), 500);
+            const seekBarStyle = localStorage.getItem("seek_bar_style") || "raffi";
+            if (seekBarStyle === "normal") {
+                // Forward 5s
+                performSeek(currentTime + 5);
+                if (seekFeedbackTimeout) clearTimeout(seekFeedbackTimeout);
+                setSeekFeedback({ type: "forward", id: Date.now() });
+                seekFeedbackTimeout = setTimeout(() => setSeekFeedback(null), 500);
+            } else {
+                // Backward 5s (inverted)
+                performSeek(currentTime - 5);
+                if (seekFeedbackTimeout) clearTimeout(seekFeedbackTimeout);
+                setSeekFeedback({ type: "backward", id: Date.now() });
+                seekFeedbackTimeout = setTimeout(() => setSeekFeedback(null), 500);
+            }
         } else if (event.code === "ArrowUp") {
             const newVolume = Math.min(1, volume + 0.1);
             setVolume(newVolume);

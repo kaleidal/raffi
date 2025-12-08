@@ -17,6 +17,7 @@
 	};
 
 	let discordRpcEnabled = true;
+	let seekBarStyle = "raffi";
 	let email = "";
 	let newEmail = "";
 	let newPassword = "";
@@ -37,6 +38,9 @@
 		const storedRpc = localStorage.getItem("discord_rpc_enabled");
 		discordRpcEnabled = storedRpc !== null ? storedRpc === "true" : true;
 
+		const storedSeek = localStorage.getItem("seek_bar_style");
+		seekBarStyle = storedSeek || "raffi";
+
 		if ($currentUser?.email) {
 			email = $currentUser.email;
 		}
@@ -55,6 +59,11 @@
 		} else {
 			disableRPC();
 		}
+	}
+
+	function toggleSeekBar() {
+		seekBarStyle = seekBarStyle === "raffi" ? "normal" : "raffi";
+		localStorage.setItem("seek_bar_style", seekBarStyle);
 	}
 
 	async function downloadData() {
@@ -237,6 +246,30 @@
 								>
 									{discordRpcEnabled ? "ON" : "OFF"}
 								</span>
+							</button>
+						</div>
+
+						<div class="rounded-2xl bg-white/[0.08] p-4 flex flex-wrap items-center gap-4 justify-between">
+							<div>
+								<p class="text-white font-medium">
+									Seek Bar Style
+								</p>
+								<p class="text-white/60 text-sm">
+									Choose between Raffi (inverted) or Standard style.
+								</p>
+							</div>
+							<button
+								class="relative h-9 w-[160px] rounded-full border border-white/10 transition-colors duration-200 cursor-pointer bg-white/10 p-1"
+								on:click={toggleSeekBar}
+								aria-label="Toggle Seek Bar Style"
+							>
+								<div class="relative z-10 flex w-full h-full items-center">
+									<span class={`flex-1 text-center text-xs font-semibold tracking-wider transition-colors duration-200 ${seekBarStyle === 'raffi' ? 'text-black' : 'text-white/60'}`}>RAFFI</span>
+									<span class={`flex-1 text-center text-xs font-semibold tracking-wider transition-colors duration-200 ${seekBarStyle === 'normal' ? 'text-black' : 'text-white/60'}`}>NORMAL</span>
+								</div>
+								<div 
+									class={`absolute top-1 bottom-1 left-1 w-[calc(50%-4px)] bg-white rounded-full transition-transform duration-200 ${seekBarStyle === 'normal' ? 'translate-x-full' : 'translate-x-0'}`}
+								></div>
 							</button>
 						</div>
 					</section>

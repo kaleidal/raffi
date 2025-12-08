@@ -3,7 +3,7 @@
     import ExpandingButton from "../common/ExpandingButton.svelte";
     import { slide } from "svelte/transition";
     import type { ShowResponse } from "../../lib/library/types/meta_types";
-    import { createEventDispatcher } from "svelte";
+    import { createEventDispatcher, onMount } from "svelte";
 
     export let isPlaying = false;
     export let duration = 0;
@@ -17,6 +17,7 @@
     export let currentSubtitleLabel: string = "";
     export let objectFit: "contain" | "cover" = "contain";
     export let pendingSeek: number | null = null;
+    export let isWatchPartyMember = false;
 
     export let togglePlay: () => void;
     export let onSeekInput: (e: Event) => void;
@@ -27,6 +28,13 @@
     export let onNextEpisode: () => void;
 
     const dispatch = createEventDispatcher();
+
+    let seekBarStyle = "raffi";
+
+    onMount(() => {
+        const storedSeek = localStorage.getItem("seek_bar_style");
+        seekBarStyle = storedSeek || "raffi";
+    });
 
     const formatTime = (t: number) => {
         if (!isFinite(t) || t < 0) return "0:00";
@@ -45,7 +53,12 @@
     $: displayedTime = pendingSeek ?? currentTime;
     $: remainingTime = Math.max(0, duration - displayedTime);
     $: progress = duration > 0 ? (displayedTime / duration) * 100 : 0;
-    $: sliderValue = duration > 0 ? duration - displayedTime : 0;
+    $: sliderValue =
+        seekBarStyle === "normal"
+            ? displayedTime
+            : duration > 0
+              ? duration - displayedTime
+              : 0;
     $: hasHourFormat = duration >= 3600;
     $: timeLabelWidth = hasHourFormat ? "6ch" : "4ch";
 </script>
@@ -57,49 +70,61 @@
         class="z-10 items-center bg-[#000000]/10 backdrop-blur-[24px] rounded-[32px] w-[1000px] flex flex-col gap-2 px-[30px] py-[20px] text-white"
     >
         <div class="flex flex-row gap-[20px] items-center w-full">
-            <button
-                on:click={togglePlay}
-                class="w-[60px] h-[60px] cursor-pointer hover:opacity-80 transition-opacity duration-200"
-            >
-                {#if isPlaying}
-                    <svg
-                        width="60"
-                        height="60"
-                        viewBox="0 0 60 60"
-                        fill="none"
-                        xmlns="http://www.w3.org/2000/svg"
-                    >
-                        <path
-                            d="M30 0C37.9565 0 45.5868 3.16102 51.2129 8.78711C56.839 14.4132 60 22.0435 60 30C60 37.9565 56.839 45.5868 51.2129 51.2129C45.5868 56.839 37.9565 60 30 60C22.0435 60 14.4132 56.839 8.78711 51.2129C3.16102 45.5868 0 37.9565 0 30C0 22.0435 3.16102 14.4132 8.78711 8.78711C14.4132 3.16102 22.0435 0 30 0ZM21.3574 17C20.0725 17 19.0002 18.0279 19 19.333V40.667C19.0002 41.9721 20.0725 43 21.3574 43H25.4287C26.7136 42.9999 27.786 41.9721 27.7861 40.667V19.333C27.786 18.0279 26.7136 17.0001 25.4287 17H21.3574ZM33.5713 17C32.2864 17.0001 31.214 18.0279 31.2139 19.333V40.667C31.214 41.9721 32.2864 42.9999 33.5713 43H37.6426C38.9275 43 39.9998 41.9721 40 40.667V19.333C39.9998 18.0279 38.9275 17 37.6426 17H33.5713Z"
-                            fill="white"
-                        />
-                    </svg>
-                {:else}
-                    <svg
-                        width="60"
-                        height="60"
-                        viewBox="0 0 60 60"
-                        fill="none"
-                        xmlns="http://www.w3.org/2000/svg"
-                    >
-                        <path
-                            d="M0 30C0 22.0435 3.16071 14.4129 8.7868 8.7868C14.4129 3.16071 22.0435 0 30 0C37.9565 0 45.5871 3.16071 51.2132 8.7868C56.8393 14.4129 60 22.0435 60 30C60 37.9565 56.8393 45.5871 51.2132 51.2132C45.5871 56.8393 37.9565 60 30 60C22.0435 60 14.4129 56.8393 8.7868 51.2132C3.16071 45.5871 0 37.9565 0 30ZM22.0664 17.2383C21.1758 17.7305 20.625 18.6797 20.625 19.6875V40.3125C20.625 41.332 21.1758 42.2695 22.0664 42.7617C22.957 43.2539 24.0352 43.2422 24.9141 42.7031L41.7891 32.3906C42.6211 31.875 43.1367 30.9727 43.1367 29.9883C43.1367 29.0039 42.6211 28.1016 41.7891 27.5859L24.9141 17.2734C24.0469 16.7461 22.957 16.7227 22.0664 17.2148V17.2383Z"
-                            fill="white"
-                        />
-                    </svg>
-                {/if}
-            </button>
+            {#if !isWatchPartyMember}
+                <button
+                    on:click={togglePlay}
+                    class="w-[60px] h-[60px] cursor-pointer hover:opacity-80 transition-opacity duration-200"
+                >
+                    {#if isPlaying}
+                        <svg
+                            width="60"
+                            height="60"
+                            viewBox="0 0 60 60"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                        >
+                            <path
+                                d="M30 0C37.9565 0 45.5868 3.16102 51.2129 8.78711C56.839 14.4132 60 22.0435 60 30C60 37.9565 56.839 45.5868 51.2129 51.2129C45.5868 56.839 37.9565 60 30 60C22.0435 60 14.4132 56.839 8.78711 51.2129C3.16102 45.5868 0 37.9565 0 30C0 22.0435 3.16102 14.4132 8.78711 8.78711C14.4132 3.16102 22.0435 0 30 0ZM21.3574 17C20.0725 17 19.0002 18.0279 19 19.333V40.667C19.0002 41.9721 20.0725 43 21.3574 43H25.4287C26.7136 42.9999 27.786 41.9721 27.7861 40.667V19.333C27.786 18.0279 26.7136 17.0001 25.4287 17H21.3574ZM33.5713 17C32.2864 17.0001 31.214 18.0279 31.2139 19.333V40.667C31.214 41.9721 32.2864 42.9999 33.5713 43H37.6426C38.9275 43 39.9998 41.9721 40 40.667V19.333C39.9998 18.0279 38.9275 17 37.6426 17H33.5713Z"
+                                fill="white"
+                            />
+                        </svg>
+                    {:else}
+                        <svg
+                            width="60"
+                            height="60"
+                            viewBox="0 0 60 60"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                        >
+                            <path
+                                d="M0 30C0 22.0435 3.16071 14.4129 8.7868 8.7868C14.4129 3.16071 22.0435 0 30 0C37.9565 0 45.5871 3.16071 51.2132 8.7868C56.8393 14.4129 60 22.0435 60 30C60 37.9565 56.8393 45.5871 51.2132 51.2132C45.5871 56.8393 37.9565 60 30 60C22.0435 60 14.4129 56.8393 8.7868 51.2132C3.16071 45.5871 0 37.9565 0 30ZM22.0664 17.2383C21.1758 17.7305 20.625 18.6797 20.625 19.6875V40.3125C20.625 41.332 21.1758 42.2695 22.0664 42.7617C22.957 43.2539 24.0352 43.2422 24.9141 42.7031L41.7891 32.3906C42.6211 31.875 43.1367 30.9727 43.1367 29.9883C43.1367 29.0039 42.6211 28.1016 41.7891 27.5859L24.9141 17.2734C24.0469 16.7461 22.957 16.7227 22.0664 17.2148V17.2383Z"
+                                fill="white"
+                            />
+                        </svg>
+                    {/if}
+                </button>
+            {/if}
 
             <span
                 class="text-[22px] font-poppins font-[500] text-[#D3D3D3] text-center"
                 style={`min-width:${timeLabelWidth}; display:inline-block; font-variant-numeric: tabular-nums; font-feature-settings:'tnum';`}
-                >{formatTime(remainingTime)}</span
+                >{formatTime(
+                    seekBarStyle === "normal" ? displayedTime : remainingTime,
+                )}</span
             >
 
-            <div class="relative flex-grow h-2">
+            <div
+                class="relative flex-grow h-2 {isWatchPartyMember
+                    ? 'pointer-events-none'
+                    : ''}"
+            >
                 <Slider
-                    widthProgress={100 - progress}
-                    widthGrey={progress}
+                    widthProgress={seekBarStyle === "normal"
+                        ? progress
+                        : 100 - progress}
+                    widthGrey={seekBarStyle === "normal"
+                        ? 100 - progress
+                        : progress}
                     onInput={onSeekInput}
                     onChange={onSeekChange}
                     value={sliderValue}
@@ -107,7 +132,14 @@
                     max={duration}
                     step={0.1}
                 />
-            </div>
+            </div>            
+            {#if seekBarStyle === "normal"}
+                <span
+                    class="text-[22px] font-poppins font-[500] text-[#D3D3D3] text-center"
+                    style={`min-width:${timeLabelWidth}; display:inline-block; font-variant-numeric: tabular-nums; font-feature-settings:'tnum';`}
+                    >{formatTime(duration)}</span
+                >
+            {/if}
         </div>
 
         <div class="flex items-center w-full justify-center gap-4">
@@ -173,26 +205,28 @@
                 {/if}
             </ExpandingButton>
 
-            <ExpandingButton
-                label={currentAudioLabel || "Audio"}
-                onClick={() => dispatch("audioClick")}
-            >
-                <svg
-                    width="20"
-                    height="20"
-                    viewBox="0 0 20 20"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
+            {#if !isWatchPartyMember}
+                <ExpandingButton
+                    label={currentAudioLabel || "Audio"}
+                    onClick={() => dispatch("audioClick")}
                 >
-                    <path
-                        d="M1.6665 8.33333V10.8333M4.99984 5V14.1667M8.33317 2.5V17.5M11.6665 6.66667V12.5M14.9998 4.16667V15M18.3332 8.33333V10.8333"
-                        stroke="#E9E9E9"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                    />
-                </svg>
-            </ExpandingButton>
+                    <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 20 20"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                    >
+                        <path
+                            d="M1.6665 8.33333V10.8333M4.99984 5V14.1667M8.33317 2.5V17.5M11.6665 6.66667V12.5M14.9998 4.16667V15M18.3332 8.33333V10.8333"
+                            stroke="#E9E9E9"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        />
+                    </svg>
+                </ExpandingButton>
+            {/if}
 
             <ExpandingButton
                 label={currentSubtitleLabel || "Subtitles: Off"}
@@ -236,7 +270,7 @@
                 </svg>
             </ExpandingButton>
 
-            {#if metaData?.meta.type === "series"}
+            {#if metaData?.meta.type === "series" && onNextEpisode && !isWatchPartyMember}
                 <ExpandingButton label={"Next Episode"} onClick={onNextEpisode}>
                     <svg
                         width="20"
