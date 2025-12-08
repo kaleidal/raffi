@@ -325,7 +325,6 @@ function initRPC() {
     });
 
     rpc.connect().catch(e => {
-        console.warn('Discord RPC connection failed:', e.message);
         rpc = null;
     });
 }
@@ -364,7 +363,7 @@ ipcMain.on('RPC_SET_ACTIVITY', (event, data) => {
             });
         }
     } catch (err) {
-        console.error('RPC_SET_ACTIVITY error:', err);
+        console.log('RPC_SET_ACTIVITY error:', err);
     }
 });
 
@@ -373,7 +372,7 @@ ipcMain.on('RPC_CLEAR_ACTIVITY', () => {
     try {
         rpc.clearActivity();
     } catch (err) {
-        console.error('RPC_CLEAR_ACTIVITY error:', err);
+        console.log('RPC_CLEAR_ACTIVITY error:', err);
     }
 });
 

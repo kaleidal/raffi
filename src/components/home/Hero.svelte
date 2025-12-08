@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { createEventDispatcher } from "svelte";
+    import { createEventDispatcher, onMount } from "svelte";
     import type { PopularTitleMeta } from "../../lib/library/types/popular_types";
     import { router } from "../../lib/stores/router";
     import ExpandingButton from "../common/ExpandingButton.svelte";
@@ -9,8 +9,49 @@
     const dispatch = createEventDispatcher();
 
     let playerIframe: HTMLIFrameElement;
+    let container: HTMLDivElement;
     let isPaused = false;
     let isMuted = true;
+    let wasPlayingBeforeHidden = false;
+
+    onMount(() => {
+        const observer = new IntersectionObserver(
+            (entries) => {
+                entries.forEach((entry) => {
+                    if (!entry.isIntersecting) {
+                        if (!isPaused) {
+                            wasPlayingBeforeHidden = true;
+                            playerIframe?.contentWindow?.postMessage(
+                                JSON.stringify({
+                                    event: "command",
+                                    func: "pauseVideo",
+                                    args: [],
+                                }),
+                                "*",
+                            );
+                        }
+                    } else {
+                        if (wasPlayingBeforeHidden) {
+                            playerIframe?.contentWindow?.postMessage(
+                                JSON.stringify({
+                                    event: "command",
+                                    func: "playVideo",
+                                    args: [],
+                                }),
+                                "*",
+                            );
+                            wasPlayingBeforeHidden = false;
+                        }
+                    }
+                });
+            },
+            { threshold: 0.1 },
+        );
+
+        if (container) observer.observe(container);
+
+        return () => observer.disconnect();
+    });
 
     function togglePlay() {
         if (!playerIframe) return;
@@ -37,7 +78,10 @@
     }
 </script>
 
-<div class="w-screen h-[80vh] relative overflow-hidden">
+<div
+    class="w-screen h-[80vh] relative overflow-hidden"
+    bind:this={container}
+>
     <div
         class="absolute bottom-[100px] left-[100px] z-10 flex flex-col gap-[50px]"
     >
