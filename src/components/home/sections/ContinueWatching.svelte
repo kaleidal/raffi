@@ -52,6 +52,7 @@
     let selectedImdbId = "";
     let selectedType = "";
     let showListsPopup = false;
+    let isExpanded = false;
 
     function handleContextMenu(e: MouseEvent, imdbId: string, type: string) {
         e.preventDefault();
@@ -138,7 +139,7 @@
 
 {#if continueWatchingMeta.length > 0}
     <div class="w-full h-fit flex flex-col gap-4 relative group">
-        <div class="flex flex-row gap-[10px] items-center">
+        <div class="flex flex-row gap-[10px] items-center w-full">
             <svg
                 width="50"
                 height="50"
@@ -158,10 +159,35 @@
             <h1 class="font-poppins text-[#E0E0E6] font-medium text-[48px]">
                 Jump back into it
             </h1>
+
+            <button
+                class="ml-auto p-2 rounded-full hover:bg-white/10 transition-colors duration-200 group/btn cursor-pointer"
+                on:click={() => (isExpanded = !isExpanded)}
+                aria-label={isExpanded ? "Collapse" : "Expand"}
+            >
+                <svg
+                    width="32"
+                    height="32"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="transition-transform duration-300 {isExpanded
+                        ? 'rotate-180'
+                        : ''}"
+                >
+                    <path
+                        d="M6 9L12 15L18 9"
+                        stroke="#E0E0E6"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    />
+                </svg>
+            </button>
         </div>
 
         <div class="relative">
-            {#if showLeftButton}
+            {#if showLeftButton && !isExpanded}
                 <button
                     class="absolute h-full left-[-25px] top-1/2 -translate-y-1/2 z-20 bg-black/50 hover:bg-black/80 backdrop-blur-md text-white p-3 transition-all duration-200 cursor-pointer"
                     on:click={scrollLeft}
@@ -183,7 +209,9 @@
             {/if}
 
             <div
-                class="flex flex-row gap-[20px] overflow-x-auto w-full pb-4 no-scrollbar scroll-smooth"
+                class="flex gap-[20px] w-full pb-4 transition-all duration-300 {isExpanded
+                    ? 'flex-wrap'
+                    : 'flex-row overflow-x-auto no-scrollbar scroll-smooth'}"
                 bind:this={scrollContainer}
                 on:scroll={updateScrollButtons}
             >
@@ -231,7 +259,7 @@
                 {/each}
             </div>
 
-            {#if showRightButton}
+            {#if showRightButton && !isExpanded}
                 <button
                     class="absolute h-full right-[-25px] top-1/2 -translate-y-1/2 z-20 bg-black/50 hover:bg-black/80 backdrop-blur-md text-white p-3 transition-all duration-200 cursor-pointer"
                     on:click={scrollRight}
