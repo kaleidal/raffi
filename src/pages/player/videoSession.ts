@@ -188,6 +188,10 @@ export function initHLS(
 
     let baseManifest = `${getStreamUrl(sessionId)}/child.m3u8`;
     setPlaybackOffset(startOffset);
+    
+    if (startOffset === 0) {
+        videoElem.currentTime = 0;
+    }
 
     let hls: Hls | null = null;
 
@@ -243,19 +247,24 @@ export function initHLS(
         hls.on(Hls.Events.ERROR, (_, data) => {
             console.error("HLS ERROR", data);
             if (data.fatal) {
-                // Show error modal for fatal errors
-                if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-                    setErrorMessage("Network error loading stream");
-                    setErrorDetails(data.details || "");
-                } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-                    setErrorMessage("Media playback error");
-                    setErrorDetails(data.details || "");
-                } else {
-                    setErrorMessage("Failed to load stream");
-                    setErrorDetails(data.details || "");
+                switch (data.type) {
+                    case Hls.ErrorTypes.NETWORK_ERROR:
+                        console.log("fatal network error encountered, try to recover");
+                        hls?.startLoad();
+                        break;
+                    case Hls.ErrorTypes.MEDIA_ERROR:
+                        console.log("fatal media error encountered, try to recover");
+                        hls?.recoverMediaError();
+                        break;
+                    default:
+                        // cannot recover
+                        hls?.destroy();
+                        setErrorMessage("Failed to load stream");
+                        setErrorDetails(data.details || "");
+                        setShowError(true);
+                        setLoading(false);
+                        break;
                 }
-                setShowError(true);
-                setLoading(false);
             }
         });
 
