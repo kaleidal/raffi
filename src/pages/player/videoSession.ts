@@ -194,7 +194,8 @@ export function initHLS(
     if (Hls.isSupported()) {
         hls = new Hls({
             lowLatencyMode: false,
-            maxBufferLength: 30,
+            maxBufferLength: 60,
+            maxMaxBufferLength: 120,
             backBufferLength: 30,
         });
 

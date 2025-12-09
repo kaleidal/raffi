@@ -24,7 +24,7 @@
                         bind:this={playerIframe}
                         frameborder="0"
                         referrerpolicy="strict-origin-when-cross-origin"
-                        src={`https://www.youtube-nocookie.com/embed/${$selectedItem.trailerStreams.at(-1).ytId}?controls=0&modestbranding=1&rel=0&autoplay=1&mute=1&loop=1&playlist=${$selectedItem.trailerStreams.at(-1).ytId}&showinfo=0&iv_load_policy=3&disablekb=1&enablejsapi=1`}
+                        src={`https://www.youtube-nocookie.com/embed/${$selectedItem.trailerStreams.at(-1).ytId}?controls=0&modestbranding=1&rel=0&autoplay=1&mute=1&loop=1&playlist=${$selectedItem.trailerStreams.at(-1).ytId}&showinfo=0&iv_load_policy=3&disablekb=1&enablejsapi=1&origin=${window.location.origin}`}
                         class="w-full h-full object-cover scale-[1.35]"
                         title="Trailer"
                     ></iframe>

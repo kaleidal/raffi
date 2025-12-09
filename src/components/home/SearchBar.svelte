@@ -7,6 +7,7 @@
     import { fade } from "svelte/transition";
     import TitleContextMenu from "./context_menus/TitleContextMenu.svelte";
     import ListsPopup from "../meta/modals/ListsPopup.svelte";
+    import PlayModal from "./modals/PlayModal.svelte";
 
     const dispatch = createEventDispatcher();
 
@@ -26,6 +27,7 @@
     let selectedType = "movie"; // Default to movie for search results
     let selectedTitle = ""; // Store title for verification
     let showListsPopup = false;
+    let showPlayModal = false;
 
     function handleSearch(e: Event) {
         const query = (e.target as HTMLInputElement).value;
@@ -268,6 +270,11 @@
         />
     {/if}
 
+    {#if showPlayModal}
+        <PlayModal onClose={() => showPlayModal = false} />
+    {/if}
+
+
     <ListsPopup
         bind:visible={showListsPopup}
         imdbId={selectedImdbId}
@@ -276,6 +283,16 @@
     />
 
     <div class="flex flex-row gap-[10px]">
+        <button
+            class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
+            aria-label="addons"
+            on:click={() => showPlayModal = true}
+        >
+            <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M8.33337 8.33334C8.3332 7.74683 8.48778 7.17066 8.78151 6.66299C9.07524 6.15533 9.49772 5.73416 10.0063 5.442C10.5149 5.14985 11.0915 4.99705 11.678 4.99904C12.2645 5.00103 12.8401 5.15774 13.3467 5.45334L33.3417 17.1167C33.8463 17.4095 34.2652 17.8296 34.5566 18.335C34.848 18.8405 35.0016 19.4135 35.0021 19.9969C35.0026 20.5803 34.85 21.1536 34.5595 21.6596C34.269 22.1655 33.8508 22.5863 33.3467 22.88L13.3467 34.5467C12.8401 34.8423 12.2645 34.999 11.678 35.001C11.0915 35.003 10.5149 34.8502 10.0063 34.558C9.49772 34.2659 9.07524 33.8447 8.78151 33.337C8.48778 32.8294 8.3332 32.2532 8.33337 31.6667V8.33334Z" stroke="#C3C3C3" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </button> 
+
         <button
             class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
             aria-label="addons"
