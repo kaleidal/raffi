@@ -441,6 +441,9 @@
             on:play={handlePlay}
             on:pause={handlePause}
             on:click={() => controlsManager.togglePlay(controlsVisible.set)}
+            on:waiting={() => loading.set(true)}
+            on:playing={() => loading.set(false)}
+            on:canplay={() => loading.set(false)}
         />
     </div>
 

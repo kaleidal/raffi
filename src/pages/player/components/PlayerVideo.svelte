@@ -17,6 +17,9 @@
     on:play
     on:pause
     on:click
+    on:waiting
+    on:playing
+    on:canplay
 >
     <track kind="captions" />
 </video>
