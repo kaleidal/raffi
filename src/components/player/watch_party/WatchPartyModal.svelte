@@ -6,21 +6,37 @@
         leaveWatchParty,
     } from "../../../lib/stores/watchPartyStore";
     import { fade, scale } from "svelte/transition";
+    import { supabase } from "../../../lib/db/supabase";
+    import { onMount } from "svelte";
 
     export let onClose: () => void;
     export let onPartyCreated: (partyId: string) => void = () => {};
+    export let onFileSelected: (file: any) => void = () => {};
     export let imdbId: string = "";
     export let season: number | null = null;
     export let episode: number | null = null;
     export let streamSource: string = "";
     export let fileIdx: number | null = null;
+    export let initialPartyCode: string | null = null;
+    export let autoJoin: boolean = false;
 
-    let activeTab: "create" | "join" = "create";
-    let partyIdInput = "";
+    let activeTab: "create" | "join" = initialPartyCode ? "join" : "create";
+    let partyIdInput = initialPartyCode || "";
     let createdPartyId = "";
     let loading = false;
     let error = "";
     let showCopied = false;
+
+    // Join Flow State
+    let joinStep: "input" | "preview" | "select-file" = "input";
+    let partyPreview: any = null;
+    let selectedFile: File | null = null;
+
+    onMount(() => {
+        if (initialPartyCode && autoJoin) {
+            handlePreviewParty();
+        }
+    });
 
     async function handleCreateParty() {
         if (!imdbId || !streamSource) {
@@ -49,7 +65,7 @@
         }
     }
 
-    async function handleJoinParty() {
+    async function handlePreviewParty() {
         if (!partyIdInput.trim()) {
             error = "Please enter a party ID";
             return;
@@ -59,7 +75,57 @@
         error = "";
 
         try {
+            const { data, error: fetchError } = await supabase
+                .from("watch_parties")
+                .select("*, watch_party_members(count)")
+                .eq("party_id", partyIdInput.trim())
+                .single();
+
+            if (fetchError) throw fetchError;
+            if (!data) throw new Error("Party not found");
+
+            partyPreview = data;
+            joinStep = "preview";
+        } catch (err: any) {
+            console.error("Failed to preview party:", err);
+            error = err.message || "Failed to find watch party";
+            joinStep = "input";
+        } finally {
+            loading = false;
+        }
+    }
+
+    function handleContinueToJoin() {
+        if (!partyPreview) return;
+
+        // Check if the party is using a local file (heuristic: not http/https)
+        const isLocal =
+            partyPreview.stream_source &&
+            !partyPreview.stream_source.startsWith("http");
+
+        if (isLocal) {
+            joinStep = "select-file";
+        } else {
+            handleFinalJoin();
+        }
+    }
+
+    async function handleFinalJoin() {
+        loading = true;
+        error = "";
+
+        try {
             await joinParty(partyIdInput.trim());
+            
+            if (selectedFile) {
+                // Create a file object that matches what the player expects
+                // The player expects a file object with a path property for Electron
+                // Or just the path string if it's handled that way.
+                // But the input file object from browser has 'path' property in Electron?
+                // In Electron, File object has 'path' property.
+                onFileSelected(selectedFile);
+            }
+
             onPartyCreated(partyIdInput.trim());
             onClose();
         } catch (err: any) {
@@ -83,6 +149,13 @@
         setTimeout(() => {
             showCopied = false;
         }, 2000);
+    }
+
+    function handleFileChange(event: Event) {
+        const input = event.target as HTMLInputElement;
+        if (input.files && input.files.length > 0) {
+            selectedFile = input.files[0];
+        }
     }
 </script>
 
@@ -516,63 +589,120 @@
                         </div>
                     {/if}
                 {:else}
-                    <div class="flex flex-col gap-6">
-                        <div
-                            class="flex flex-col items-center gap-4 text-center py-4"
-                        >
-                            <svg
-                                width="64"
-                                height="64"
-                                viewBox="0 0 20 20"
-                                fill="none"
-                                xmlns="http://www.w3.org/2000/svg"
-                            >
-                                <g clip-path="url(#clip0_273_275)">
-                                    <path
-                                        d="M4.83317 9.41663L1.6665 18.3333L10.5832 15.175M3.33317 2.49996H3.3415M18.3332 6.66663H18.3415M12.4998 1.66663H12.5082M18.3332 16.6666H18.3415M18.3332 1.66663L16.4665 2.29163C15.9352 2.46862 15.4818 2.82466 15.1839 3.2989C14.8859 3.77313 14.762 4.33612 14.8332 4.89163C14.9165 5.60829 14.3582 6.24996 13.6248 6.24996H13.3082C12.5915 6.24996 11.9748 6.74996 11.8415 7.44996L11.6665 8.33329M18.3332 10.8333L17.6498 10.5583C16.9332 10.275 16.1332 10.725 15.9998 11.4833C15.9082 12.0666 15.3998 12.5 14.8082 12.5H14.1665M9.1665 1.66663L9.4415 2.34996C9.72484 3.06663 9.27484 3.86663 8.5165 3.99996C7.93317 4.08329 7.49984 4.59996 7.49984 5.19163V5.83329M9.1665 10.8333C10.7748 12.4416 11.5248 14.3083 10.8332 15C10.1415 15.6916 8.27484 14.9416 6.6665 13.3333C5.05817 11.725 4.30817 9.85829 4.99984 9.16663C5.6915 8.47496 7.55817 9.22496 9.1665 10.8333Z"
-                                        stroke="#878787"
-                                        stroke-width="2"
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                    />
-                                </g>
-                                <defs>
-                                    <clipPath id="clip0_273_275">
-                                        <rect
-                                            width="20"
-                                            height="20"
-                                            fill="#878787"
-                                        />
-                                    </clipPath>
-                                </defs>
-                            </svg>
-
+                    <div class="space-y-4" in:fade={{ duration: 200 }}>
+                        {#if joinStep === "input"}
                             <div>
-                                <h3 class="text-lg font-bold text-white mb-2">
-                                    Join a Party
-                                </h3>
-                                <p class="text-[#878787] text-sm">
-                                    Enter the party ID to join your friend's
-                                    watch session
-                                </p>
+                                <label for="party-code" class="block text-sm font-medium text-white/60 mb-2">Party Code</label>
+                                <input
+                                    id="party-code"
+                                    type="text"
+                                    bind:value={partyIdInput}
+                                    placeholder="Enter code..."
+                                    class="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-primary-500 transition-colors font-mono text-center text-lg tracking-widest uppercase"
+                                    onkeydown={(e) => e.key === "Enter" && handlePreviewParty()}
+                                />
                             </div>
-                        </div>
 
-                        <input
-                            type="text"
-                            bind:value={partyIdInput}
-                            placeholder="Enter Party ID..."
-                            class="w-full px-4 py-3 bg-[#1a1a1a] border border-white/10 rounded-xl text-white placeholder-[#878787] focus:outline-none focus:border-white/30 font-mono transition-colors disabled:opacity-50"
-                            disabled={loading}
-                        />
+                            <button
+                                class="w-full py-3 bg-white text-black rounded-xl font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                onclick={handlePreviewParty}
+                                disabled={loading || !partyIdInput.trim()}
+                            >
+                                {#if loading}
+                                    <div class="w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin"></div>
+                                    Checking...
+                                {:else}
+                                    Preview Party
+                                {/if}
+                            </button>
+                        {:else if joinStep === "preview"}
+                            <div class="text-center py-4">
+                                <h3 class="text-lg font-bold text-white mb-1">Party Found!</h3>
+                                <p class="text-white/60 text-sm mb-6">Ready to join?</p>
 
-                        <button
-                            class="w-full py-3 px-4 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                            onclick={handleJoinParty}
-                            disabled={loading || !partyIdInput.trim()}
-                        >
-                            {loading ? "Joining..." : "Join Party"}
-                        </button>
+                                <div class="bg-white/5 rounded-xl p-4 mb-6 text-left">
+                                    <div class="flex items-center gap-3 mb-3">
+                                        <div class="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-400"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                                        </div>
+                                        <div>
+                                            <p class="text-white font-medium">
+                                                {partyPreview?.watch_party_members[0]?.count || 0} Members
+                                            </p>
+                                            <p class="text-white/40 text-xs">Currently Watching</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="pl-13">
+                                        <p class="text-white/80 text-sm break-all">
+                                            {partyPreview?.stream_source}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div class="flex gap-3">
+                                    <button
+                                        class="flex-1 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-medium transition-colors"
+                                        onclick={() => joinStep = "input"}
+                                    >
+                                        Back
+                                    </button>
+                                    <button
+                                        class="flex-1 py-3 bg-white text-black rounded-xl font-bold transition-colors"
+                                        onclick={handleContinueToJoin}
+                                    >
+                                        Join
+                                    </button>
+                                </div>
+                            </div>
+                        {:else if joinStep === "select-file"}
+                            <div class="text-center py-4">
+                                <h3 class="text-lg font-bold text-white mb-1">Select File</h3>
+                                <p class="text-white/60 text-sm mb-6">This party is watching a local file. Please select your copy.</p>
+
+                                <div class="bg-white/5 rounded-xl p-6 mb-6 border-2 border-dashed border-white/10 hover:border-blue-500/50 transition-colors relative group">
+                                    <input
+                                        type="file"
+                                        class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                        onchange={handleFileChange}
+                                        accept="video/*,.mkv,.mp4,.avi,.mov"
+                                    />
+                                    <div class="flex flex-col items-center gap-3 pointer-events-none">
+                                        <div class="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center group-hover:bg-blue-500/20 transition-colors">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white/40 group-hover:text-blue-400"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+                                        </div>
+                                        {#if selectedFile}
+                                            <div class="text-center">
+                                                <p class="text-white font-medium truncate max-w-[200px]">{selectedFile.name}</p>
+                                                <p class="text-white/40 text-xs">{(selectedFile.size / (1024 * 1024)).toFixed(2)} MB</p>
+                                            </div>
+                                        {:else}
+                                            <p class="text-white/60 text-sm">Click or drag file here</p>
+                                        {/if}
+                                    </div>
+                                </div>
+
+                                <div class="flex gap-3">
+                                    <button
+                                        class="flex-1 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-medium transition-colors"
+                                        onclick={() => joinStep = "preview"}
+                                    >
+                                        Back
+                                    </button>
+                                    <button
+                                        class="flex-1 py-3 bg-white text-black rounded-xl font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        onclick={handleFinalJoin}
+                                        disabled={!selectedFile || loading}
+                                    >
+                                        {#if loading}
+                                            Joining...
+                                        {:else}
+                                            Start Watching
+                                        {/if}
+                                    </button>
+                                </div>
+                            </div>
+                        {/if}
                     </div>
                 {/if}
             </div>

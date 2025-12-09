@@ -13,6 +13,7 @@
   "scripts": {
     "dev": "vite",
     "electron:dev": "npm run server:build && cross-env NODE_ENV=development concurrently \"npm run dev\" \"wait-on http://localhost:5173 && cross-env ELECTRON_DISABLE_SANDBOX=1 electron .\"",
+    "electron:dev:only": "cross-env ELECTRON_DISABLE_SANDBOX=1 electron .",
     "build": "vite build",
     "server:build": "node build_binary.cjs",
     "dist": "npm run server:build && npm run build && electron-builder"
@@ -76,7 +77,20 @@
         "msi"
       ],
       "icon": "build/icons/512x512.png"
-    }
+    },
+    "fileAssociations": [
+      {
+        "ext": [
+          "mp4",
+          "mkv",
+          "avi",
+          "webm",
+          "mov"
+        ],
+        "name": "Video File",
+        "role": "Viewer"
+      }
+    ]
   },
   "dependencies": {
     "@ryuziii/discord-rpc": "^1.0.1-rc.1",

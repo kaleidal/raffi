@@ -47,6 +47,21 @@
         init();
         window.addEventListener("pointerup", handlePointerButtons);
 
+        // Listen for file open events
+        if ((window as any).electronAPI?.onOpenFile) {
+            (window as any).electronAPI.onOpenFile((filePath: string) => {
+                console.log("Opening file:", filePath);
+                router.navigate("player", { 
+                    videoSrc: filePath,
+                    startTime: 0,
+                    metaData: null,
+                    fileIdx: null,
+                    season: null,
+                    episode: null
+                });
+            });
+        }
+
         return () => {
             disposed = true;
             window.removeEventListener("pointerup", handlePointerButtons);
@@ -71,5 +86,5 @@
 {:else if !$currentUser && $router.page !== "login"}
     <Login />
 {:else}
-    <svelte:component this={pages[$router.page]} />
+    <svelte:component this={pages[$router.page]} {...$router.params as any} />
 {/if}

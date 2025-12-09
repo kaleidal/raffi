@@ -1,5 +1,6 @@
 <script lang="ts">
     import { onDestroy, onMount, tick } from "svelte";
+    import { router } from "../../lib/stores/router";
     import PlayerControls from "../../components/player/PlayerControls.svelte";
     import PlayerOverlays from "../../components/player/PlayerOverlays.svelte";
     import SeekFeedback from "../../components/player/SeekFeedback.svelte";
@@ -63,6 +64,20 @@
     export let startTime: number = 0;
     export let season: number | null = null;
     export let episode: number | null = null;
+    export let joinPartyId: string | null = null;
+    export let autoJoin: boolean = false;
+
+    const handleClose = () => {
+        if (videoSrc) {
+            router.navigate("home");
+        } else {
+            if (onClose && onClose !== (() => {})) {
+                onClose();
+            } else {
+                router.back();
+            }
+        }
+    };
 
     // Local refs
     let videoElem: HTMLVideoElement;
@@ -86,6 +101,10 @@
     onMount(() => {
         resetPlayerState();
         hasStarted = false;
+
+        if (joinPartyId && autoJoin) {
+            showWatchPartyModal.set(true);
+        }
 
         WatchParty.setupWatchPartySync(
             videoElem,
@@ -429,7 +448,7 @@
         <SeekFeedback type={$seekFeedback.type} id={$seekFeedback.id} />
     {/if}
 
-    <PlayerLoadingScreen loading={$loading} {onClose} {metaData} />
+    <PlayerLoadingScreen loading={$loading} onClose={handleClose} {metaData} />
 
     {#if !$loading}
         <div
@@ -439,7 +458,7 @@
         >
             <button
                 class="bg-[#000000]/20 backdrop-blur-md hover:bg-[#FFFFFF]/20 transition-colors duration-200 rounded-full p-4 cursor-pointer"
-                on:click={onClose}
+                on:click={handleClose}
                 aria-label="Close player"
             >
                 <svg
@@ -655,11 +674,19 @@
         }}
         onErrorBack={() => {
             showError.set(false);
-            onClose();
+            handleClose();
         }}
         onCloseAudio={() => showAudioSelection.set(false)}
         onCloseSubtitle={() => showSubtitleSelection.set(false)}
         onCloseWatchParty={() => showWatchPartyModal.set(false)}
+        initialPartyCode={joinPartyId}
+        autoJoin={autoJoin}
+        onFileSelected={(file) => {
+            // If the user selects a file in the watch party modal, load it
+            if (file && file.path) {
+                loadVideo(file.path);
+            }
+        }}
     />
 
     <PlayerWatchParty
@@ -668,7 +695,7 @@
         onContinue={() => showPartyEndModal.set(false)}
         onLeave={() => {
             showPartyEndModal.set(false);
-            onClose();
+            handleClose();
         }}
     />
 </div>

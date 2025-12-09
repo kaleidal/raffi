@@ -17,6 +17,9 @@
     export let episode: number | null;
     export let videoSrc: string | null;
     export let fileIdx: number | null;
+    export let initialPartyCode: string | null = null;
+    export let autoJoin: boolean = false;
+    export let onFileSelected: (file: any) => void = () => {};
 
     export let onAudioSelect: (detail: any) => void;
     export let onSubtitleSelect: (detail: any) => void;
@@ -62,5 +65,8 @@
         streamSource={videoSrc || ""}
         {fileIdx}
         onClose={onCloseWatchParty}
+        {initialPartyCode}
+        {autoJoin}
+        {onFileSelected}
     />
 {/if}
