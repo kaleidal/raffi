@@ -53,40 +53,56 @@
     "asarUnpack": [
       "electron/decoder-*"
     ],
-    "extraResources": [
-      {
-        "from": "electron/decoder-x86_64-unknown-linux-gnu",
-        "to": "decoder-x86_64-unknown-linux-gnu"
-      },
-      {
-        "from": "electron/decoder-windows-amd64.exe",
-        "to": "decoder-windows-amd64.exe"
-      }
-    ],
     "linux": {
       "target": [
         "deb",
         "AppImage"
       ],
       "icon": "build/icons",
-      "category": "Video"
+      "category": "Video",
+      "extraResources": [
+        {
+          "from": "electron/decoder-x86_64-unknown-linux-gnu",
+          "to": "decoder-x86_64-unknown-linux-gnu"
+        }
+      ]
     },
     "win": {
       "target": [
         "nsis",
         "msi"
       ],
-      "icon": "build/icons/512x512.png"
+      "icon": "build/icons/512x512.png",
+      "extraResources": [
+        {
+          "from": "electron/decoder-windows-amd64.exe",
+          "to": "decoder-windows-amd64.exe"
+        }
+      ]
     },
     "fileAssociations": [
       {
-        "ext": [
-          "mp4",
-          "mkv",
-          "avi",
-          "webm",
-          "mov"
-        ],
+        "ext": "mp4",
+        "name": "Video File",
+        "role": "Viewer"
+      },
+      {
+        "ext": "mkv",
+        "name": "Video File",
+        "role": "Viewer"
+      },
+      {
+        "ext": "avi",
+        "name": "Video File",
+        "role": "Viewer"
+      },
+      {
+        "ext": "webm",
+        "name": "Video File",
+        "role": "Viewer"
+      },
+      {
+        "ext": "mov",
         "name": "Video File",
         "role": "Viewer"
       }
