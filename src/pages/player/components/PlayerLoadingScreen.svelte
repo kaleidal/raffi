@@ -8,7 +8,7 @@
 
 {#if loading}
     <div
-        class="fixed inset-0 z-50 bg-[#000000]/90 backdrop-blur-[12px] flex items-center justify-center flex-col gap-8"
+        class="fixed inset-0 z-50 backdrop-blur-[12px] flex items-center justify-center flex-col gap-8"
     >
         {#if metaData}
             <div class="relative z-10 flex flex-col items-center gap-8">
