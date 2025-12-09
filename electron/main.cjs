@@ -8,6 +8,7 @@ const express = require('express');
 let mainWindow;
 let goServer;
 let httpServer;
+let fileToOpen = null;
 
 const MIN_ZOOM = 0.75;
 const MAX_ZOOM = 1.0;
@@ -17,6 +18,17 @@ const isDev = !app.isPackaged;
 
 const gotTheLock = app.requestSingleInstanceLock();
 
+// Handle file association on macOS
+app.on('open-file', (event, path) => {
+    event.preventDefault();
+    fileToOpen = path;
+    if (mainWindow && mainWindow.webContents) {
+        mainWindow.webContents.send('open-file', fileToOpen);
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.focus();
+    }
+});
+
 if (!gotTheLock) {
     app.quit();
 } else {
@@ -25,6 +37,13 @@ if (!gotTheLock) {
         if (mainWindow) {
             if (mainWindow.isMinimized()) mainWindow.restore();
             mainWindow.focus();
+
+            // Handle file open from second instance
+            // On Windows, the file path is usually the last argument
+            const filePath = commandLine[commandLine.length - 1];
+            if (filePath && !filePath.startsWith('-') && filePath !== '.') {
+                mainWindow.webContents.send('open-file', filePath);
+            }
         }
     });
 }
@@ -243,7 +262,13 @@ function createWindow() {
         mainWindow.webContents.setZoomFactor(zoom);
     };
 
-    mainWindow.webContents.on('did-finish-load', applyDisplayZoom);
+    mainWindow.webContents.on('did-finish-load', () => {
+        applyDisplayZoom();
+        if (fileToOpen) {
+            mainWindow.webContents.send('open-file', fileToOpen);
+            fileToOpen = null;
+        }
+    });
     mainWindow.on('resize', applyDisplayZoom);
     screen.on('display-metrics-changed', applyDisplayZoom);
 }
@@ -259,6 +284,23 @@ function startGoServer() {
 }
 
 app.whenReady().then(async () => {
+    if (process.platform === 'win32' || process.platform === 'linux') {
+        const argv = process.argv;
+        console.log('Command line args:', argv);
+        
+        let filePath = null;
+        if (isDev && argv.length >= 3) {
+            filePath = argv[2];
+        } else if (!isDev && argv.length >= 2) {
+            filePath = argv[1];
+        }
+
+        if (filePath && !filePath.startsWith('-')) {
+            console.log('Found file to open:', filePath);
+            fileToOpen = filePath;
+        }
+    }
+
     const ffmpegReady = await ensureFFmpegAvailable();
     if (!ffmpegReady) {
         app.quit();

@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -65,16 +66,27 @@ func DefaultTranscoder(
 
 	args := []string{
 		"-hwaccel", "auto",
-		"-reconnect", "1",
-		"-reconnect_at_eof", "1",
-		"-reconnect_streamed", "1",
-		"-reconnect_delay_max", "5",
-		"-ss", fmt.Sprintf("%f", startSeconds),
+	}
+
+	if strings.HasPrefix(source, "http://") || strings.HasPrefix(source, "https://") {
+		args = append(args,
+			"-reconnect", "1",
+			"-reconnect_at_eof", "1",
+			"-reconnect_streamed", "1",
+			"-reconnect_delay_max", "5",
+		)
+	}
+
+	if startSeconds > 0 {
+		args = append(args, "-ss", fmt.Sprintf("%f", startSeconds))
+	}
+
+	args = append(args,
 		"-i", source,
 		"-map", "0:v:0",
 		"-map", fmt.Sprintf("0:a:%d", audioIndex),
 		"-c:v", videoCodec,
-	}
+	)
 	args = append(args, videoArgs...)
 	hlsFlags := "independent_segments+temp_file"
 	if appendMode {
@@ -104,6 +116,7 @@ func DefaultTranscoder(
 		"-f", "hls",
 		"-hls_time", fmt.Sprintf("%.2f", segmentDur.Seconds()),
 		"-hls_list_size", "0",
+		"-hls_playlist_type", "event",
 		"-hls_flags", hlsFlags,
 		"-start_number", strconv.Itoa(startSeq),
 		"-hls_segment_filename", filepath.Join(outDir, "segment%05d.ts"),
