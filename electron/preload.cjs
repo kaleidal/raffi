@@ -6,5 +6,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     enableRPC: () => ipcRenderer.send('RPC_ENABLE'),
     disableRPC: () => ipcRenderer.send('RPC_DISABLE'),
     onOpenFile: (callback) => ipcRenderer.on('open-file', (_event, value) => callback(value)),
-    getFilePath: (file) => webUtils.getPathForFile(file)
+    getFilePath: (file) => webUtils.getPathForFile(file),
+    saveClipPath: (suggestedName) => ipcRenderer.invoke('SAVE_CLIP_DIALOG', suggestedName),
 });

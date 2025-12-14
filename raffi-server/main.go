@@ -186,6 +186,12 @@ func (s *Server) handleSessionByID(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(path, "/")
 	id := parts[0]
 
+	// /sessions/{id}/clip
+	if len(parts) == 2 && parts[1] == "clip" {
+		s.handleClip(w, r, id)
+		return
+	}
+
 	if len(parts) >= 3 && parts[1] == "stream" {
 		// /sessions/{id}/stream/{asset}
 		asset := strings.Join(parts[2:], "/")

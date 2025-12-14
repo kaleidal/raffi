@@ -4,6 +4,8 @@
     import { slide } from "svelte/transition";
     import type { ShowResponse } from "../../lib/library/types/meta_types";
     import { createEventDispatcher, onMount } from "svelte";
+    import ClipPanel from "./ClipPanel.svelte";
+    import { formatTime } from "../../lib/time";
 
     export let isPlaying = false;
     export let duration = 0;
@@ -13,6 +15,7 @@
     export let loading = false;
     export let videoSrc: string | null = null;
     export let metaData: ShowResponse | null = null;
+    export let sessionId: string;
     export let currentAudioLabel: string = "";
     export let currentSubtitleLabel: string = "";
     export let objectFit: "contain" | "cover" = "contain";
@@ -36,20 +39,6 @@
         seekBarStyle = storedSeek || "raffi";
     });
 
-    const formatTime = (t: number) => {
-        if (!isFinite(t) || t < 0) return "0:00";
-        const hours = Math.floor(t / 3600);
-        const minutes = Math.floor((t % 3600) / 60);
-        const seconds = Math.floor(t % 60)
-            .toString()
-            .padStart(2, "0");
-
-        if (hours > 0) {
-            return `${hours}:${minutes.toString().padStart(2, "0")}:${seconds}`;
-        }
-        return `${minutes}:${seconds}`;
-    };
-
     $: displayedTime = pendingSeek ?? currentTime;
     $: remainingTime = Math.max(0, duration - displayedTime);
     $: progress = duration > 0 ? (displayedTime / duration) * 100 : 0;
@@ -61,6 +50,13 @@
               : 0;
     $: hasHourFormat = duration >= 3600;
     $: timeLabelWidth = hasHourFormat ? "6ch" : "4ch";
+
+    let showClipPanel = false;
+
+    const setClipPanelOpen = (open: boolean) => {
+        showClipPanel = open;
+        dispatch("clipPanelOpenChange", { open });
+    };
 </script>
 
 {#if controlsVisible && !loading}
@@ -317,6 +313,18 @@
             </ExpandingButton>
             {/if}
 
+            {#if !isWatchPartyMember}
+                <ExpandingButton
+                    label={"Clip"}
+                    onClick={() => setClipPanelOpen(!showClipPanel)}
+                >
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M6.76667 6.76667L10 10M16.6667 3.33333L6.76667 13.2333M12.3333 12.3333L16.6667 16.6667M7.5 5C7.5 6.38071 6.38071 7.5 5 7.5C3.61929 7.5 2.5 6.38071 2.5 5C2.5 3.61929 3.61929 2.5 5 2.5C6.38071 2.5 7.5 3.61929 7.5 5ZM7.5 15C7.5 16.3807 6.38071 17.5 5 17.5C3.61929 17.5 2.5 16.3807 2.5 15C2.5 13.6193 3.61929 12.5 5 12.5C6.38071 12.5 7.5 13.6193 7.5 15Z" stroke="#E9E9E9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+
+                </ExpandingButton>
+            {/if}
+
             <div class="w-[180px]">
                 <Slider
                     widthProgress={volume * 100}
@@ -330,5 +338,15 @@
                 />
             </div>
         </div>
+
+        <ClipPanel
+            open={showClipPanel}
+            {sessionId}
+            {duration}
+            currentTime={displayedTime}
+            inverted={seekBarStyle !== "normal"}
+            {isWatchPartyMember}
+            on:close={() => setClipPanelOpen(false)}
+        />
     </div>
 {/if}

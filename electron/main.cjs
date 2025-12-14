@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, screen } = require('electron');
+const { app, BrowserWindow, dialog, screen, ipcMain } = require('electron');
 const { spawn } = require('child_process');
 const {autoUpdater} = require('electron-updater');
 
@@ -296,6 +296,20 @@ function startGoServer() {
     goServer.stderr.on('data', d => console.error('[go err]', d.toString()));
 }
 
+ipcMain.handle('SAVE_CLIP_DIALOG', async (_event, suggestedName) => {
+    try {
+        const defaultName = (suggestedName && typeof suggestedName === 'string') ? suggestedName : 'clip.mp4';
+        const res = await dialog.showSaveDialog(mainWindow, {
+            title: 'Save Clip',
+            defaultPath: defaultName,
+            filters: [{ name: 'MP4 Video', extensions: ['mp4'] }],
+        });
+        return { canceled: res.canceled, filePath: res.filePath || null };
+    } catch (e) {
+        return { canceled: true, filePath: null, error: String(e) };
+    }
+});
+
 app.whenReady().then(async () => {
     if (process.platform === 'win32' || process.platform === 'linux') {
         const argv = process.argv;
@@ -364,7 +378,6 @@ process.on('SIGTERM', () => {
 
 // --- Discord RPC ---
 const { DiscordRPCClient } = require('@ryuziii/discord-rpc');
-const { ipcMain } = require('electron');
 
 const clientId = '1443935459079094396';
 let rpc;
