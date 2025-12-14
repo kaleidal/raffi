@@ -98,6 +98,11 @@
         $watchParty.isHost,
     );
 
+    // When clipping is open, keep controls visible (no idle auto-hide).
+    $: if (controlsManager?.setPinned) {
+        controlsManager.setPinned(clipPanelOpen, controlsVisible.set);
+    }
+
     onMount(() => {
         resetPlayerState();
         hasStarted = false;
@@ -361,14 +366,54 @@
         }
     };
 
+    let nextEpisodeAttemptId = 0;
+
+    const showActionLoading = (actionLabel: string, err: unknown) => {
+        loading.set(false);
+        showError.set(true);
+        errorMessage.set(actionLabel);
+        errorDetails.set(err instanceof Error ? err.message : String(err));
+    };
+
     const handleNextEpisodeClick = () => {
+        // Immediately show loading overlay so the action can't be triggered twice.
+        nextEpisodeAttemptId += 1;
+        const attemptId = nextEpisodeAttemptId;
+        const beforeSrc = currentVideoSrc;
+        loading.set(true);
+
         if ($duration > 0 && $duration - $currentTime <= 600) {
             onProgress($duration, $duration);
         }
-        onNextEpisode();
+
+        try {
+            const res = (onNextEpisode as unknown as (() => unknown))?.();
+            if (res && typeof (res as any).then === "function") {
+                (res as Promise<unknown>).catch((err) => {
+                    if (attemptId !== nextEpisodeAttemptId) return;
+                    showActionLoading("Next Episode Failed", err);
+                });
+            }
+        } catch (err) {
+            if (attemptId !== nextEpisodeAttemptId) return;
+            showActionLoading("Next Episode Failed", err);
+            return;
+        }
+
+        // If nothing changes, don't fail silently.
+        window.setTimeout(() => {
+            if (attemptId !== nextEpisodeAttemptId) return;
+            if ($loading && currentVideoSrc === beforeSrc) {
+                showActionLoading(
+                    "Next Episode Failed",
+                    "No new stream started. Please try again.",
+                );
+            }
+        }, 10000);
     };
 
     let controlsOverlayElem: HTMLElement | null = null;
+    let clipPanelOpen = false;
     let cueLinePercent = 92;
     let resizeCounter = 0;
     let cueRecalcTimeout: number | null = null;
@@ -571,7 +616,7 @@
                             },
                         ),
                     )}
-                nextEpisode={onNextEpisode}
+                nextEpisode={handleNextEpisodeClick}
             />
             <PlayerControls
                 isPlaying={$isPlaying}
@@ -581,6 +626,7 @@
                 volume={$volume}
                 controlsVisible={$controlsVisible}
                 loading={$loading}
+                {sessionId}
                 {videoSrc}
                 {metaData}
                 currentAudioLabel={$currentAudioLabel}
@@ -629,6 +675,10 @@
                 on:audioClick={() => showAudioSelection.set(true)}
                 on:subtitleClick={() => showSubtitleSelection.set(true)}
                 on:watchPartyClick={() => showWatchPartyModal.set(true)}
+                on:clipPanelOpenChange={(e) => {
+                    clipPanelOpen = !!e.detail?.open;
+                    controlsManager?.setPinned?.(clipPanelOpen, controlsVisible.set);
+                }}
             />
         </div>
     {/if}

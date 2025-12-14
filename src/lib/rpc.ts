@@ -17,6 +17,8 @@ declare global {
             clearActivity: () => void;
             enableRPC: () => void;
             disableRPC: () => void;
+            getFilePath?: (file: any) => string;
+            saveClipPath?: (suggestedName?: string) => Promise<{ canceled: boolean; filePath: string | null; error?: string }>;
         };
     }
 }

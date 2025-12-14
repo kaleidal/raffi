@@ -11,16 +11,40 @@ export function createControlsManager(
 ) {
     let hideTimeout: ReturnType<typeof setTimeout> | null = null;
     let seekFeedbackTimeout: any = null;
+    let pinned = false;
+
+    function clearHideTimer() {
+        if (hideTimeout) clearTimeout(hideTimeout);
+        hideTimeout = null;
+    }
+
+    function setPinned(
+        nextPinned: boolean,
+        setControlsVisible: (visible: boolean) => void
+    ) {
+        pinned = nextPinned;
+        setControlsVisible(true);
+        clearHideTimer();
+        if (!pinned) {
+            resetHideTimer(setControlsVisible);
+        }
+    }
 
     function resetHideTimer(setControlsVisible: (visible: boolean) => void) {
         setControlsVisible(true);
-        if (hideTimeout) clearTimeout(hideTimeout);
+        clearHideTimer();
+        if (pinned) return;
         hideTimeout = setTimeout(() => {
             setControlsVisible(false);
         }, IDLE_DELAY);
     }
 
     function handleMouseMove(setControlsVisible: (visible: boolean) => void) {
+        if (pinned) {
+            setControlsVisible(true);
+            clearHideTimer();
+            return;
+        }
         resetHideTimer(setControlsVisible);
     }
 
@@ -161,6 +185,7 @@ export function createControlsManager(
     return {
         resetHideTimer,
         handleMouseMove,
+        setPinned,
         togglePlay,
         onSeekInput,
         onSeekChange,
