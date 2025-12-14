@@ -237,7 +237,7 @@ func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request, id str
 			}
 		}
 
-		if sess.DurationSeconds == 0 || len(sess.Chapters) == 0 || len(sess.AvailableStreams) == 0 {
+		if !sess.IsTorrent && (sess.DurationSeconds == 0 || len(sess.Chapters) == 0 || len(sess.AvailableStreams) == 0) {
 			if meta, err := s.hlsController.ProbeMetadata(r.Context(), sess.ID, sess.Source); err == nil && meta != nil {
 				sess.DurationSeconds = meta.Format.DurationSeconds
 				sess.Chapters = make([]session.Chapter, len(meta.Chapters))
@@ -249,7 +249,6 @@ func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request, id str
 					}
 				}
 
-				// Populate available streams and select preferred audio
 				sess.AvailableStreams = nil
 				audioCount := 0
 				preferredIndex := 0

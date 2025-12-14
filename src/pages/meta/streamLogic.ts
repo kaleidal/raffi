@@ -57,11 +57,10 @@ export const episodeClicked = async (episode: any, imdbID: string) => {
 
 export const playStream = (stream: Stream, progressMap: any) => {
     let url = stream.url;
-    let fileIdx = stream.fileIdx;
 
-    if (stream.infoHash && fileIdx !== undefined) {
+    if (stream.infoHash) {
         url = `magnet:?xt=urn:btih:${stream.infoHash}`;
-        selectedFileIdx.set(fileIdx);
+        selectedFileIdx.set(stream.fileIdx ?? null);
     } else {
         selectedFileIdx.set(null);
     }

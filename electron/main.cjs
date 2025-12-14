@@ -14,11 +14,13 @@ const MIN_ZOOM = 0.75;
 const MAX_ZOOM = 1.0;
 const WIDTH_THRESHOLD = 1600;
 
+const DEFAULT_WINDOW_WIDTH = 1778;
+const DEFAULT_WINDOW_HEIGHT = 1000;
+
 const isDev = !app.isPackaged;
 
 const gotTheLock = app.requestSingleInstanceLock();
 
-// Handle file association on macOS
 app.on('open-file', (event, path) => {
     event.preventDefault();
     fileToOpen = path;
@@ -37,9 +39,7 @@ if (!gotTheLock) {
         if (mainWindow) {
             if (mainWindow.isMinimized()) mainWindow.restore();
             mainWindow.focus();
-
-            // Handle file open from second instance
-            // On Windows, the file path is usually the last argument
+            
             const filePath = commandLine[commandLine.length - 1];
             if (filePath && !filePath.startsWith('-') && filePath !== '.') {
                 mainWindow.webContents.send('open-file', filePath);
@@ -208,8 +208,8 @@ async function ensureFFmpegAvailable() {
 
 function createWindow() {
     mainWindow = new BrowserWindow({
-        width: 1778,
-        height: 1000,
+        width: DEFAULT_WINDOW_WIDTH,
+        height: DEFAULT_WINDOW_HEIGHT,
         minHeight: 800,
         minWidth: 1200,
         autoHideMenuBar: true,
@@ -220,6 +220,20 @@ function createWindow() {
             preload: path.join(__dirname, 'preload.cjs'),
         },
     });
+
+    try {
+        const primary = screen.getPrimaryDisplay();
+        const workArea = primary?.workAreaSize;
+        if (
+            workArea &&
+            (workArea.width < DEFAULT_WINDOW_WIDTH ||
+                workArea.height < DEFAULT_WINDOW_HEIGHT)
+        ) {
+            mainWindow.maximize();
+        }
+    } catch (e) {
+        console.warn('Error maximizing window on small screens:', e);
+    }
 
     // Dev: load Vite dev server
     // Prod: serve built dist via Express on localhost (doing this all because of youtube iframe)
@@ -244,7 +258,6 @@ function createWindow() {
         if (!mainWindow || mainWindow.isDestroyed()) return;
         const { width, height } = mainWindow.getBounds();
         
-        // Force 16:9 aspect ratio if height is less than 1000px
         if (height < 1000) {
             mainWindow.setAspectRatio(16/9);
         } else {
@@ -311,7 +324,6 @@ app.whenReady().then(async () => {
     createWindow();
 });
 
-// Cleanup function
 function cleanup() {
     console.log('Cleaning up...');
     if (goServer) {
@@ -329,7 +341,6 @@ function cleanup() {
     }
 }
 
-// Clean up on all exit scenarios
 app.on('before-quit', cleanup);
 app.on('will-quit', cleanup);
 app.on('quit', cleanup);
@@ -341,7 +352,6 @@ app.on('window-all-closed', () => {
     }
 });
 
-// Handle process termination signals
 process.on('SIGINT', () => {
     cleanup();
     process.exit(0);

@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -26,6 +27,142 @@ type TorrentStream struct {
 	t        *torrent.Torrent
 	file     *torrent.File
 	filePath string
+	fileIdx  *int
+
+	readyOnce sync.Once
+	readyCh   chan struct{}
+	readyErr  error
+}
+
+func newTorrentStream(t *torrent.Torrent, fileIdx *int) *TorrentStream {
+	return &TorrentStream{
+		t:       t,
+		fileIdx: fileIdx,
+		readyCh: make(chan struct{}),
+	}
+}
+
+func (ts *TorrentStream) ensureReady() error {
+	ts.readyOnce.Do(func() {
+		ts.readyErr = ts.prepare()
+		close(ts.readyCh)
+	})
+	<-ts.readyCh
+	return ts.readyErr
+}
+
+func (ts *TorrentStream) prepare() error {
+	if ts.t == nil {
+		return errors.New("torrent is nil")
+	}
+
+	log.Printf("Torrent %s: waiting for metadata...", ts.t.InfoHash().HexString())
+	select {
+	case <-ts.t.GotInfo():
+		// ok
+	case <-time.After(2 * time.Minute):
+		return fmt.Errorf("timeout waiting for torrent metadata")
+	}
+
+	log.Printf("Got info for torrent %s: %q, length=%d bytes",
+		ts.t.InfoHash().HexString(), ts.t.Name(), ts.t.Length())
+
+	files := ts.t.Files()
+	if len(files) == 0 {
+		return fmt.Errorf("no files found in torrent")
+	}
+	log.Printf("files:")
+	for i, f := range files {
+		log.Printf("  [%d] %q (%d bytes)", i, f.Path(), f.Length())
+	}
+
+	// Pick target file
+	var targetFile *torrent.File
+	if ts.fileIdx != nil && *ts.fileIdx >= 0 && *ts.fileIdx < len(files) {
+		targetFile = files[*ts.fileIdx]
+		log.Printf("Using specified file index %d: %q", *ts.fileIdx, targetFile.Path())
+	} else {
+		// Default: pick the largest file (usually the main video)
+		var maxSize int64
+		for _, f := range files {
+			if f.Length() > maxSize {
+				maxSize = f.Length()
+				targetFile = f
+			}
+		}
+		log.Printf("No file index specified, selected largest file: %q", targetFile.Path())
+	}
+	if targetFile == nil {
+		return fmt.Errorf("failed to select target file")
+	}
+
+	// Disable download for all other files so we don't fill disk with the whole torrent
+	for _, f := range files {
+		if f != targetFile {
+			f.SetPriority(torrent.PiecePriorityNone)
+		}
+	}
+
+	// Enable download only for this file
+	targetFile.Download()
+
+	pl := int64(ts.t.Info().PieceLength)
+	if pl <= 0 {
+		return fmt.Errorf("invalid piece length: %d", pl)
+	}
+
+	startPiece := int(targetFile.Offset() / pl)
+	endPiece := int((targetFile.Offset() + 10*1024*1024) / pl)
+	if startPiece < 0 || startPiece >= ts.t.NumPieces() {
+		return fmt.Errorf("startPiece %d out of range (numPieces=%d)", startPiece, ts.t.NumPieces())
+	}
+	if endPiece >= ts.t.NumPieces() {
+		endPiece = ts.t.NumPieces() - 1
+	}
+
+	log.Printf("Streaming file %q (%d bytes), startPiece=%d endPiece=%d pieceLen=%d",
+		targetFile.Path(), targetFile.Length(), startPiece, endPiece, pl)
+
+	// Aggressively prioritize the first ~10MB for fast start
+	for i := startPiece; i <= endPiece; i++ {
+		p := ts.t.Piece(i)
+		p.SetPriority(torrent.PiecePriorityNow)
+	}
+
+	// Stats logger
+	go func(infoHash string) {
+		for range time.Tick(5 * time.Second) {
+			st := ts.t.Stats()
+			log.Printf("Torrent %s: peers=%d, have=%d/%d, downUseful=%dB, up=%dB",
+				infoHash,
+				st.ActivePeers,
+				st.PiecesComplete,
+				ts.t.NumPieces(),
+				st.BytesReadUsefulData.Int64(),
+				st.BytesWrittenData.Int64(),
+			)
+		}
+	}(ts.t.InfoHash().HexString())
+
+	// Best-effort short wait for the first piece, but don't block forever
+	log.Printf("Waiting for first piece of torrent %s (piece %d)...",
+		ts.t.InfoHash().HexString(), startPiece)
+	deadline := time.Now().Add(90 * time.Second)
+	for {
+		if ts.t.Piece(startPiece).State().Complete {
+			log.Printf("First piece ready, streaming can start")
+			break
+		}
+		if time.Now().After(deadline) {
+			log.Printf("Timeout waiting for first piece, proceeding anyway")
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	ts.file = targetFile
+	ts.filePath = targetFile.Path()
+	return nil
 }
 
 func NewTorrentStreamer(dataDir string) *TorrentStreamer {
@@ -79,104 +216,20 @@ func (s *TorrentStreamer) AddTorrent(magnetOrInfoHash string, fileIdx *int) (str
 		return "", "", fmt.Errorf("failed to add torrent: %w", err)
 	}
 
-	log.Printf("Added torrent, waiting for metadata...")
-	<-t.GotInfo()
-	log.Printf("Got info for torrent %s: %q, length=%d bytes",
-		t.InfoHash().HexString(), t.Name(), t.Length())
+	infoHash := t.InfoHash().HexString()
 
-	files := t.Files()
+	// Store stream immediately so session creation doesn't block on metadata.
+	stream := newTorrentStream(t, fileIdx)
+	s.mu.Lock()
+	s.streams[infoHash] = stream
+	s.mu.Unlock()
 
-	// Pick target file
-	var targetFile *torrent.File
-	if fileIdx != nil && *fileIdx >= 0 && *fileIdx < len(files) {
-		targetFile = files[*fileIdx]
-		log.Printf("Using specified file index %d: %q", *fileIdx, targetFile.Path())
-	} else {
-		var maxSize int64
-		for _, f := range files {
-			if f.Length() > maxSize {
-				maxSize = f.Length()
-				targetFile = f
-			}
-		}
-		log.Printf("No file index specified, selected largest file: %q", targetFile.Path())
-	}
-	if targetFile == nil {
-		return "", "", fmt.Errorf("no files found in torrent")
-	}
-
-	// Disable download for all other files so we don't fill disk with the whole season
-	for _, f := range files {
-		if f != targetFile {
-			f.SetPriority(torrent.PiecePriorityNone)
-		}
-	}
-
-	// Enable download only for this file
-	targetFile.Download() // marks its pieces as wanted [web:18]
-
-	pl := int64(t.Info().PieceLength)
-	if pl <= 0 {
-		return "", "", fmt.Errorf("invalid piece length: %d", pl)
-	}
-
-	startPiece := int(targetFile.Offset() / pl)
-	endPiece := int((targetFile.Offset() + 10*1024*1024) / pl)
-	if startPiece < 0 || startPiece >= t.NumPieces() {
-		return "", "", fmt.Errorf("startPiece %d out of range (numPieces=%d)", startPiece, t.NumPieces())
-	}
-	if endPiece >= t.NumPieces() {
-		endPiece = t.NumPieces() - 1
-	}
-
-	log.Printf("Streaming file %q (%d bytes), startPiece=%d endPiece=%d pieceLen=%d",
-		targetFile.Path(), targetFile.Length(), startPiece, endPiece, pl)
-
-	// Aggressively prioritize the first ~10MB for fast start
-	for i := startPiece; i <= endPiece; i++ {
-		p := t.Piece(i)
-		p.SetPriority(torrent.PiecePriorityNow)
-	}
-
-	// Stats logger
+	// Kick off metadata + file selection in the background.
 	go func() {
-		for range time.Tick(5 * time.Second) {
-			st := t.Stats()
-			log.Printf("Torrent %s: peers=%d, have=%d/%d, downUseful=%dB, up=%dB",
-				t.InfoHash().HexString(),
-				st.ActivePeers,
-				st.PiecesComplete,
-				t.NumPieces(),
-				st.BytesReadUsefulData.Int64(),
-				st.BytesWrittenData.Int64(),
-			)
+		if err := stream.ensureReady(); err != nil {
+			log.Printf("Torrent %s: prepare failed: %v", infoHash, err)
 		}
 	}()
-
-	log.Printf("Waiting for first piece of torrent %s (piece %d)...",
-		t.InfoHash().HexString(), startPiece)
-
-	deadline := time.Now().Add(90 * time.Second)
-	for {
-		if t.Piece(startPiece).State().Complete {
-			log.Printf("First piece ready, streaming can start")
-			break
-		}
-		if time.Now().After(deadline) {
-			log.Printf("Timeout waiting for first piece, proceeding anyway")
-			break
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
-
-	infoHash := t.InfoHash().HexString()
-	s.mu.Lock()
-	s.streams[infoHash] = &TorrentStream{
-		t:        t,
-		file:     targetFile,
-		filePath: targetFile.Path(),
-	}
-	s.mu.Unlock()
 
 	return fmt.Sprintf("http://127.0.0.1:6969/torrents/%s", infoHash), infoHash, nil
 }
@@ -193,8 +246,16 @@ func (s *TorrentStreamer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.mu.RLock()
 	stream, ok := s.streams[infoHash]
 	s.mu.RUnlock()
-	if !ok || stream == nil || stream.file == nil {
+	if !ok || stream == nil {
 		http.NotFound(w, r)
+		return
+	}
+	if err := stream.ensureReady(); err != nil {
+		http.Error(w, fmt.Sprintf("torrent not ready: %v", err), http.StatusGatewayTimeout)
+		return
+	}
+	if stream.file == nil {
+		http.Error(w, "torrent has no selected file", http.StatusInternalServerError)
 		return
 	}
 
