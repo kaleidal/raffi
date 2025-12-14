@@ -6,6 +6,7 @@
     import { router } from "./lib/stores/router";
     import { onMount } from "svelte";
     import Lists from "./pages/lists/Lists.svelte";
+    import { enableRPC, disableRPC } from "./lib/rpc";
 
     import LoadingSpinner from "./components/common/LoadingSpinner.svelte";
     import { currentUser, initAuth } from "./lib/stores/authStore";
@@ -32,6 +33,18 @@
 
     onMount(() => {
         let disposed = false;
+
+        try {
+            const storedRpc = localStorage.getItem("discord_rpc_enabled");
+            const rpcEnabled = storedRpc !== null ? storedRpc === "true" : true;
+            if (rpcEnabled) {
+                enableRPC();
+            } else {
+                disableRPC();
+            }
+        } catch (e) {
+            // ignore
+        }
 
         const init = async () => {
             await initAuth();
