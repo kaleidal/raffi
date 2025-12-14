@@ -6,6 +6,35 @@ import type { Track, ParsedCue } from "./types";
 let currentSubtitleAbort: AbortController | null = null;
 let parsedCues: ParsedCue[] = [];
 
+const SUBTITLE_DELAY_STORAGE_KEY = "raffi.subtitleDelaySeconds";
+
+let subtitleDelaySeconds = (() => {
+    try {
+        const raw = localStorage.getItem(SUBTITLE_DELAY_STORAGE_KEY);
+        if (raw == null) return 0;
+        const n = Number(raw);
+        return Number.isFinite(n) ? n : 0;
+    } catch {
+        return 0;
+    }
+})();
+
+export function getSubtitleDelaySeconds() {
+    return subtitleDelaySeconds;
+}
+
+export function setSubtitleDelaySeconds(seconds: number) {
+    subtitleDelaySeconds = Number.isFinite(seconds) ? seconds : 0;
+    try {
+        localStorage.setItem(
+            SUBTITLE_DELAY_STORAGE_KEY,
+            String(subtitleDelaySeconds),
+        );
+    } catch {
+        // ignore
+    }
+}
+
 export function parseVTTTime(timeStr: string): number | null {
     const parts = timeStr.split(":");
     let seconds = 0;
@@ -65,8 +94,6 @@ export function parseAndAddCue(track: TextTrack, block: string, getCurrentCueLin
     const start = parseVTTTime(startStr);
     const end = parseVTTTime(endStr);
 
-    const SUBTITLE_DELAY = 0.2;
-
     if (start !== null && end !== null) {
         parsedCues.push({ start, end, text });
 
@@ -74,11 +101,13 @@ export function parseAndAddCue(track: TextTrack, block: string, getCurrentCueLin
             const cleanText = text.replace(/<[^>]+>/g, "");
 
             const cue = new VTTCue(
-                start + SUBTITLE_DELAY,
-                end + SUBTITLE_DELAY,
+                start + subtitleDelaySeconds,
+                end + subtitleDelaySeconds,
                 cleanText,
             );
 
+            cue.snapToLines = false;
+            cue.lineAlign = "end";
             cue.line = getCurrentCueLine();
 
             track.addCue(cue);
@@ -124,8 +153,8 @@ export function parseAndAddSRTCue(
     const end = parseSRTTime(endStr);
 
     if (start !== null && end !== null) {
-        const adjustedStart = start - offset;
-        const adjustedEnd = end - offset;
+        const adjustedStart = start - offset + subtitleDelaySeconds;
+        const adjustedEnd = end - offset + subtitleDelaySeconds;
 
         if (adjustedEnd < 0) return;
 
@@ -140,6 +169,8 @@ export function parseAndAddSRTCue(
                 .replace(/&gt;/g, ">");
 
             const cue = new VTTCue(adjustedStart, adjustedEnd, decodedText);
+            cue.snapToLines = false;
+            cue.lineAlign = "end";
             cue.line = getCurrentCueLine();
             track.addCue(cue);
         } catch (e) {
@@ -192,7 +223,11 @@ export async function handleSubtitleSelect(
             let response;
             let isSrt = false;
 
-            if (track.isAddon) {
+            if (track.format === "srt") {
+                isSrt = true;
+            }
+
+            if (track.isAddon || track.isLocal || track.url.startsWith("blob:")) {
                 console.log("Fetching addon subtitle:", track.url);
                 response = await fetch(track.url, {
                     signal: currentSubtitleAbort.signal,
@@ -321,17 +356,19 @@ export async function fetchAddonSubtitles(
     }
 }
 
-export function updateCuePositions(videoElem: HTMLVideoElement | null, showControls: boolean) {
+export function updateCuePositions(videoElem: HTMLVideoElement | null, cueLinePercent: number) {
     const video = videoElem;
     if (!video) return;
 
-    const linePosition = showControls ? -5 : -3;
+    const linePosition = Math.max(5, Math.min(95, cueLinePercent));
 
     for (let i = 0; i < video.textTracks.length; i++) {
         const track = video.textTracks[i];
         if (track.mode === "showing" && track.cues) {
             for (let j = 0; j < track.cues.length; j++) {
                 const cue = track.cues[j] as VTTCue;
+                cue.snapToLines = false;
+                cue.lineAlign = "end";
                 cue.line = linePosition;
             }
         }
@@ -339,5 +376,28 @@ export function updateCuePositions(videoElem: HTMLVideoElement | null, showContr
 }
 
 export function getCurrentCueLine(controlsVisible: boolean) {
-    return controlsVisible ? -5 : -3;
+    // Back-compat fallback (prefer computeCueLinePercent in Player.svelte).
+    return controlsVisible ? 78 : 92;
+}
+
+export function computeCueLinePercent(
+    playerContainer: HTMLElement | null,
+    controlsOverlay: HTMLElement | null,
+    controlsVisible: boolean,
+    marginPx: number = 14
+) {
+    if (!playerContainer) return controlsVisible ? 78 : 92;
+
+    const containerRect = playerContainer.getBoundingClientRect();
+    if (!containerRect.height) return controlsVisible ? 78 : 92;
+
+    if (!controlsVisible || !controlsOverlay) {
+        return 92;
+    }
+
+    const overlayRect = controlsOverlay.getBoundingClientRect();
+    // Position the bottom of the cue box just above the controls overlay.
+    const targetY = overlayRect.top - containerRect.top - marginPx;
+    const pct = (targetY / containerRect.height) * 100;
+    return Math.max(5, Math.min(95, pct));
 }

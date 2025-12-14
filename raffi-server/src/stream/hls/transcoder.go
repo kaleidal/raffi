@@ -42,11 +42,6 @@ func DefaultTranscoder(
 		}
 	}
 
-	listSize := int(bufferAhead / segmentDur)
-	if listSize < 3 {
-		listSize = 3
-	}
-
 	videoCodec := "libx264"
 	videoArgs := []string{}
 
@@ -94,19 +89,17 @@ func DefaultTranscoder(
 	}
 
 	// Audio transcoding logic
-	audioArgs := []string{}
 	if audioCodec == "aac" {
-		audioArgs = []string{"-c:a", "copy"}
+		args = append(args, []string{"-c:a", "copy"}...)
 	} else {
-		audioArgs = []string{
+		args = append(args, []string{
 			"-c:a", "aac",
 			"-ac", "2",
 			"-ar", "48000",
 			"-b:a", "160k",
 			"-af", "aresample=async=1",
-		}
+		}...)
 	}
-	args = append(args, audioArgs...)
 
 	args = append(args,
 		"-avoid_negative_ts", "make_zero",
