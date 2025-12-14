@@ -7,12 +7,24 @@ import {
 import { get } from "svelte/store";
 import type { ProgressMap } from "./types";
 
+function addonHasStreamResource(addon: any): boolean {
+    const resources = addon?.manifest?.resources;
+    if (!Array.isArray(resources)) return false;
+    return resources.some(
+        (resource: any) =>
+            resource === "stream" ||
+            (resource && typeof resource === "object" && resource.name === "stream"),
+    );
+}
+
 export async function loadAddons() {
     try {
         const dbAddons = await getAddons();
         if (dbAddons.length > 0) {
             addons.set(dbAddons);
-            selectedAddon.set(dbAddons[0].transport_url);
+
+            const streamAddon = dbAddons.find(addonHasStreamResource);
+            selectedAddon.set((streamAddon ?? dbAddons[0]).transport_url);
         }
     } catch (e) {
         console.error("Failed to load addons", e);

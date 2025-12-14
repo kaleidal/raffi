@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -33,6 +34,12 @@ func NewController() *Controller {
 	}
 }
 
+func isTorrentSource(source string) bool {
+	// Raffi torrent sessions use a local HTTP source like:
+	// http://127.0.0.1:6969/torrents/{infoHash}
+	return strings.Contains(source, "/torrents/")
+}
+
 func (c *Controller) EnsureSession(ctx context.Context, id, source string, startTime float64) (float64, string, error) {
 	c.mu.Lock()
 	sess := c.sessions[id]
@@ -43,7 +50,14 @@ func (c *Controller) EnsureSession(ctx context.Context, id, source string, start
 			return 0, "", err
 		}
 
-		meta, codec, err := c.ffprobeFn(ctx, source)
+		probeCtx := ctx
+		if isTorrentSource(source) {
+			ctxProbe, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
+			probeCtx = ctxProbe
+		}
+
+		meta, codec, err := c.ffprobeFn(probeCtx, source)
 		if err != nil {
 			c.mu.Unlock()
 			return 0, "", err
@@ -128,7 +142,11 @@ func (c *Controller) EnsureSession(ctx context.Context, id, source string, start
 	manifestPath := filepath.Join(sliceDir, "child.m3u8")
 	c.mu.Unlock()
 
-	if err := waitForManifestReady(manifestPath, 10*time.Second); err != nil {
+	manifestTimeout := 10 * time.Second
+	if isTorrentSource(source) {
+		manifestTimeout = 60 * time.Second
+	}
+	if err := waitForManifestReady(manifestPath, manifestTimeout); err != nil {
 		return 0, "", err
 	}
 
@@ -148,7 +166,13 @@ func (c *Controller) Seek(ctx context.Context, id, source string, target float64
 			return 0, 0, "", err
 		}
 
-		meta, codec, err := c.ffprobeFn(ctx, source)
+		probeCtx := ctx
+		if isTorrentSource(source) {
+			ctxProbe, cancel := context.WithTimeout(ctx, 2*time.Minute)
+			defer cancel()
+			probeCtx = ctxProbe
+		}
+		meta, codec, err := c.ffprobeFn(probeCtx, source)
 		if err != nil {
 			c.mu.Unlock()
 			return 0, 0, "", err
@@ -211,7 +235,11 @@ func (c *Controller) Seek(ctx context.Context, id, source string, target float64
 		manifestPath := filepath.Join(sliceDir, "child.m3u8")
 		c.mu.Unlock()
 
-		if err := waitForManifestReady(manifestPath, 10*time.Second); err != nil {
+		manifestTimeout := 10 * time.Second
+		if isTorrentSource(source) {
+			manifestTimeout = 60 * time.Second
+		}
+		if err := waitForManifestReady(manifestPath, manifestTimeout); err != nil {
 			return 0, 0, "", err
 		}
 

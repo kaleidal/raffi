@@ -116,7 +116,7 @@ export async function loadVideoSession(
         const kind = src.startsWith("magnet:") ? "torrent" : "http";
         let sessionId: string;
 
-        if (fileIdx) {
+        if (fileIdx !== null && fileIdx !== undefined) {
             console.log(
                 "Creating torrent session with file index:",
                 fileIdx,

@@ -14,6 +14,8 @@ export interface Track {
     lang?: string;
     url?: string;
     isAddon?: boolean;
+    isLocal?: boolean;
+    format?: "vtt" | "srt";
 }
 
 export interface SessionData {

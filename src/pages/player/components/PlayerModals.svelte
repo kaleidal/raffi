@@ -23,6 +23,8 @@
 
     export let onAudioSelect: (detail: any) => void;
     export let onSubtitleSelect: (detail: any) => void;
+    export let onSubtitleDelayChange: (detail: { seconds: number }) => void = () => {};
+    export let onAddLocalSubtitle: (detail: any) => void = () => {};
     export let onErrorRetry: () => void;
     export let onErrorBack: () => void;
     export let onCloseAudio: () => void;
@@ -42,8 +44,11 @@
 {#if showSubtitleSelection}
     <TrackSelectionModal
         title="Subtitles"
+        kind="subtitles"
         tracks={subtitleTracks}
         on:select={(e) => onSubtitleSelect(e.detail)}
+        on:delayChange={(e) => onSubtitleDelayChange(e.detail)}
+        on:addLocalSubtitle={(e) => onAddLocalSubtitle(e.detail)}
         on:close={onCloseSubtitle}
     />
 {/if}

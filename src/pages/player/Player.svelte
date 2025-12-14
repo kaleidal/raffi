@@ -327,7 +327,7 @@
                             videoElem,
                             $currentTime,
                             $playbackOffset,
-                            () => Subtitles.getCurrentCueLine($controlsVisible),
+                            () => cueLinePercent,
                         ),
                     {
                         setPendingSeek: pendingSeek.set,
@@ -368,6 +368,24 @@
         onNextEpisode();
     };
 
+    let controlsOverlayElem: HTMLElement | null = null;
+    let cueLinePercent = 92;
+    let resizeCounter = 0;
+    let cueRecalcTimeout: number | null = null;
+    let lastControlsVisible: boolean | null = null;
+
+    const SUBTITLE_CONTROLS_MARGIN_PX = 26;
+
+    const recomputeCueLinePercent = () => {
+        cueLinePercent = Subtitles.computeCueLinePercent(
+            playerContainer,
+            controlsOverlayElem,
+            $controlsVisible,
+            SUBTITLE_CONTROLS_MARGIN_PX,
+        );
+        Subtitles.updateCuePositions(videoElem, cueLinePercent);
+    };
+
     $: if (videoSrc && videoSrc !== currentVideoSrc) {
         currentVideoSrc = videoSrc;
         hasStarted = false;
@@ -381,11 +399,43 @@
         loadVideo(videoSrc);
     }
 
-    $: Subtitles.updateCuePositions(videoElem, $controlsVisible);
+    $: {
+        resizeCounter;
+        cueLinePercent = Subtitles.computeCueLinePercent(
+            playerContainer,
+            controlsOverlayElem,
+            $controlsVisible,
+            SUBTITLE_CONTROLS_MARGIN_PX,
+        );
+    }
+    $: Subtitles.updateCuePositions(videoElem, cueLinePercent);
+
+    $: if (typeof window !== "undefined") {
+        if (lastControlsVisible !== $controlsVisible) {
+            lastControlsVisible = $controlsVisible;
+
+            // Instant update on toggle.
+            recomputeCueLinePercent();
+
+            // Follow up during the transition/layout settling.
+            window.requestAnimationFrame(() => recomputeCueLinePercent());
+            window.requestAnimationFrame(() => {
+                window.requestAnimationFrame(() => recomputeCueLinePercent());
+            });
+
+            if (cueRecalcTimeout != null) {
+                window.clearTimeout(cueRecalcTimeout);
+            }
+            cueRecalcTimeout = window.setTimeout(recomputeCueLinePercent, 350);
+        }
+    }
 </script>
 
 <svelte:window
     on:mousemove={() => controlsManager.handleMouseMove(controlsVisible.set)}
+    on:resize={() => {
+        resizeCounter += 1;
+    }}
     on:keydown={(e) =>
         controlsManager.handleKeydown(
             e,
@@ -486,6 +536,7 @@
             class="absolute left-1/2 -translate-x-1/2 bottom-[50px] z-50 flex flex-col gap-[10px] transition-all duration-300 ease-in-out transform {$controlsVisible
                 ? 'translate-y-0 opacity-100'
                 : 'translate-y-10 opacity-0 pointer-events-none'}"
+            bind:this={controlsOverlayElem}
         >
             <PlayerOverlays
                 showSkipIntro={$showSkipIntro}
@@ -625,10 +676,7 @@
                                     videoElem,
                                     $currentTime,
                                     $playbackOffset,
-                                    () =>
-                                        Subtitles.getCurrentCueLine(
-                                            $controlsVisible,
-                                        ),
+                                    () => cueLinePercent,
                                 ),
                             {
                                 setPendingSeek: pendingSeek.set,
@@ -666,7 +714,36 @@
                 videoElem,
                 $currentTime,
                 $playbackOffset,
-                () => Subtitles.getCurrentCueLine($controlsVisible),
+                () => cueLinePercent,
+            );
+        }}
+        onSubtitleDelayChange={({ seconds }) => {
+            // Delay is stored in Subtitles module; re-apply current subtitle to rebuild cues.
+            const selected = $subtitleTracks.find((t) => t.selected);
+            if (selected && selected.id !== "off") {
+                Subtitles.handleSubtitleSelect(
+                    selected,
+                    videoElem,
+                    $currentTime,
+                    $playbackOffset,
+                    () => cueLinePercent,
+                );
+            }
+        }}
+        onAddLocalSubtitle={(track) => {
+            subtitleTracks.update((tracks) => {
+                const next = tracks
+                    .filter((t) => !(t.isLocal && String(t.id).startsWith("local:")))
+                    .map((t) => ({ ...t, selected: false }));
+                return [...next, { ...track, selected: true }];
+            });
+            currentSubtitleLabel.set(track.label);
+            Subtitles.handleSubtitleSelect(
+                track,
+                videoElem,
+                $currentTime,
+                $playbackOffset,
+                () => cueLinePercent,
             );
         }}
         onErrorRetry={() => {

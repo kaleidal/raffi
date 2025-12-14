@@ -54,6 +54,57 @@
     let showListsPopup = false;
     let isExpanded = false;
 
+    const BASE_CARD_WIDTH = 200;
+    const MAX_CARD_WIDTH_DELTA = 50;
+    const CARD_GAP_PX = 20;
+
+    function recomputeCardWidth() {
+        if (!scrollContainer) return;
+
+        const containerWidth = scrollContainer.clientWidth;
+        if (!containerWidth || containerWidth < 1) return;
+
+        const minW = BASE_CARD_WIDTH - MAX_CARD_WIDTH_DELTA;
+        const maxW = BASE_CARD_WIDTH + MAX_CARD_WIDTH_DELTA;
+
+        const preferredMinW = Math.max(minW, BASE_CARD_WIDTH - 20);
+
+        const maxVisibleCount = Math.max(
+            1,
+            Math.floor((containerWidth + CARD_GAP_PX) / (minW + CARD_GAP_PX)),
+        );
+        const maxCount = Math.max(
+            1,
+            Math.min(maxVisibleCount, continueWatchingMeta.length || 1),
+        );
+
+        let bestWidth: number | null = null;
+        let bestScore = Number.POSITIVE_INFINITY;
+
+        for (let count = 1; count <= maxCount; count++) {
+            const w = (containerWidth - CARD_GAP_PX * (count - 1)) / count;
+            if (w < minW || w > maxW) continue;
+
+            const penaltyTooSmall = w < preferredMinW ? (preferredMinW - w) * 3 : 0;
+            const score = Math.abs(w - BASE_CARD_WIDTH) + penaltyTooSmall;
+
+            if (score < bestScore) {
+                bestScore = score;
+                bestWidth = w;
+            }
+        }
+
+        // Fallback: if no count produces an in-range width (rare), clamp.
+        const finalW =
+            bestWidth ?? Math.max(minW, Math.min(maxW, BASE_CARD_WIDTH));
+
+        // Use sub-pixel precision to avoid visible right-side gaps.
+        scrollContainer.style.setProperty(
+            "--cw-card-w",
+            `${finalW.toFixed(2)}px`,
+        );
+    }
+
     function handleContextMenu(e: MouseEvent, imdbId: string, type: string) {
         e.preventDefault();
         contextMenuX = e.clientX;
@@ -114,9 +165,28 @@
 
     onMount(() => {
         updateScrollButtons();
+        recomputeCardWidth();
+
+        let ro: ResizeObserver | null = null;
+        if (typeof ResizeObserver !== "undefined") {
+            ro = new ResizeObserver(() => {
+                updateScrollButtons();
+                recomputeCardWidth();
+            });
+            ro.observe(scrollContainer);
+        }
+
         window.addEventListener("resize", updateScrollButtons);
-        return () => window.removeEventListener("resize", updateScrollButtons);
+        return () => {
+            window.removeEventListener("resize", updateScrollButtons);
+            ro?.disconnect();
+        };
     });
+
+    $: if (continueWatchingMeta.length) {
+        // Re-run sizing when the number of items changes.
+        recomputeCardWidth();
+    }
 </script>
 
 {#if showContextMenu}
@@ -227,7 +297,7 @@
                             movieProgress.time > 0}
 
                         <button
-                            class="w-[200px] h-fit rounded-[16px] hover:opacity-80 transition-all duration-200 ease-out cursor-pointer overflow-clip relative flex-shrink-0"
+                            class="w-[var(--cw-card-w)] h-fit rounded-[16px] hover:opacity-80 transition-all duration-200 ease-out cursor-pointer overflow-clip relative flex-shrink-0"
                             on:click={() =>
                                 navigateToMeta(
                                     title.meta.imdb_id,
