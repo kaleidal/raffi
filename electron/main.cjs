@@ -4,6 +4,38 @@ const {autoUpdater} = require('electron-updater');
 
 const path = require('path');
 const express = require('express');
+const fs = require('fs');
+
+function isDiscordIPCConnectError(err) {
+    const msg = (err && (err.message || String(err))) || '';
+    // Matches the exact failure users hit when Discord isn't installed/running.
+    return (
+        (err && err.name === 'DiscordRPCError') || msg.includes('DiscordRPCError')
+    ) && (
+        msg.includes('IPC connection error') ||
+        msg.includes('discord-ipc-') ||
+        msg.includes('\\\\.\\pipe\\discord-ipc') ||
+        msg.includes('connect ENOENT')
+    );
+}
+
+// The discord RPC lib can throw from a socket error handler (not just reject a promise).
+// Without a handler, Electron shows a fatal crash dialog. We only swallow the specific
+// Discord IPC connect failure, and let all other errors crash normally.
+process.on('uncaughtException', (err) => {
+    if (isDiscordIPCConnectError(err)) {
+        console.log('Ignoring Discord IPC connect failure:', err?.message || err);
+        return;
+    }
+    throw err;
+});
+
+process.on('unhandledRejection', (reason) => {
+    if (isDiscordIPCConnectError(reason)) {
+        console.log('Ignoring Discord IPC rejection:', (reason && reason.message) || reason);
+        return;
+    }
+});
 
 let mainWindow;
 let goServer;
@@ -381,31 +413,16 @@ const { DiscordRPCClient } = require('@ryuziii/discord-rpc');
 
 const clientId = '1443935459079094396';
 let rpc;
+let rpcEnabled = true;
+let rpcConnected = false;
+let rpcConnectPromise = null;
+let lastRpcConnectAttemptAt = 0;
+let pendingActivity = null;
 
-function initRPC() {
-    if (rpc) return;
-    rpc = new DiscordRPCClient({
-        clientId,
-        transport: 'ipc',
-    });
+const RPC_CONNECT_COOLDOWN_MS = 15_000;
 
-    rpc.connect().catch(e => {
-        rpc = null;
-    });
-}
-
-function destroyRPC() {
-    if (!rpc) return;
-    try {
-        rpc.destroy();
-    } catch (e) { }
-    rpc = null;
-}
-
-initRPC();
-
-ipcMain.on('RPC_SET_ACTIVITY', (event, data) => {
-    if (!rpc) return;
+function applyActivity(data) {
+    if (!rpc || !rpcConnected) return;
 
     try {
         if (data.useProgressBar && data.duration > 0) {
@@ -430,10 +447,89 @@ ipcMain.on('RPC_SET_ACTIVITY', (event, data) => {
     } catch (err) {
         console.log('RPC_SET_ACTIVITY error:', err);
     }
+}
+
+function createRPCClient() {
+    const client = new DiscordRPCClient({
+        clientId,
+        transport: 'ipc',
+    });
+
+    // IMPORTANT: discord-rpc emits 'error' when Discord isn't running.
+    // If nobody listens for it, Node treats it as an uncaught exception.
+    client.on('error', (err) => {
+        // Swallow connection errors (e.g. ENOENT \\.\\pipe\\discord-ipc-0).
+        // Keep the app running even if Discord isn't installed/running.
+        console.log('Discord RPC error (ignored):', err?.message || err);
+        destroyRPC();
+    });
+
+    return client;
+}
+
+function initRPC() {
+    if (!rpcEnabled) return;
+    if (rpcConnected) return;
+
+    const now = Date.now();
+    if (rpcConnectPromise) return;
+    if (now - lastRpcConnectAttemptAt < RPC_CONNECT_COOLDOWN_MS) return;
+    lastRpcConnectAttemptAt = now;
+
+    if (!rpc) {
+        rpc = createRPCClient();
+    }
+
+    rpcConnectPromise = rpc.connect()
+        .then(() => {
+            rpcConnected = true;
+            rpcConnectPromise = null;
+            if (pendingActivity) {
+                const next = pendingActivity;
+                pendingActivity = null;
+                applyActivity(next);
+            }
+        })
+        .catch((err) => {
+            rpcConnectPromise = null;
+            rpcConnected = false;
+
+            if (isDiscordIPCConnectError(err)) {
+                rpcEnabled = false;
+                pendingActivity = null;
+            }
+            destroyRPC();
+        });
+}
+
+function destroyRPC() {
+    if (!rpc) return;
+    try {
+        rpcConnected = false;
+        rpcConnectPromise = null;
+        try { rpc.removeAllListeners?.(); } catch (e) { }
+        rpc.destroy();
+    } catch (e) { }
+    rpc = null;
+}
+
+initRPC();
+
+ipcMain.on('RPC_SET_ACTIVITY', (event, data) => {
+    if (!rpcEnabled) return;
+
+    pendingActivity = data;
+    if (!rpcConnected) {
+        initRPC();
+        return;
+    }
+
+    applyActivity(data);
 });
 
 ipcMain.on('RPC_CLEAR_ACTIVITY', () => {
-    if (!rpc) return;
+    pendingActivity = null;
+    if (!rpc || !rpcConnected) return;
     try {
         rpc.clearActivity();
     } catch (err) {
@@ -442,9 +538,11 @@ ipcMain.on('RPC_CLEAR_ACTIVITY', () => {
 });
 
 ipcMain.on('RPC_ENABLE', () => {
+    rpcEnabled = true;
     initRPC();
 });
 
 ipcMain.on('RPC_DISABLE', () => {
+    rpcEnabled = false;
     destroyRPC();
 });
