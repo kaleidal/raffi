@@ -220,6 +220,7 @@
     }
 
     function parseStreamMetadata(stream: any): ParsedStreamMetadata {
+        const isLocal = stream?.raffiSource === "local";
         const title = stream?.title ?? "";
         const lines = title.split("\n").map((line: string) => line.trim()).filter(Boolean);
         const detailText = lines.slice(1).join(" ") || lines.join(" ");
@@ -259,11 +260,12 @@
             ? `${sizeMatch[1]} ${sizeMatch[2].toUpperCase()}`
             : null;
 
-        const provider =
-            detectProvider(detailText) ||
-            detectProvider(fullText) ||
-            stream?.name ||
-            "Unknown Source";
+                const provider = isLocal
+                        ? "Local"
+                        : detectProvider(detailText) ||
+                            detectProvider(fullText) ||
+                            stream?.name ||
+                            "Unknown Source";
 
         const hostLabel =
             stream?.name && stream.name !== provider ? stream.name : null;
@@ -273,8 +275,9 @@
         );
 
         const isP2P =
-            Boolean(stream?.infoHash) ||
-            Boolean(stream?.url && stream.url.startsWith("magnet:"));
+            !isLocal &&
+            (Boolean(stream?.infoHash) ||
+                Boolean(stream?.url && stream.url.startsWith("magnet:")));
 
         const peerCount = isP2P ? parsePeerCount(detailText) : null;
 
@@ -292,6 +295,10 @@
 
         if (availability) {
             statusBadges.push({ label: availability, variant: "accent" });
+        }
+
+        if (isLocal) {
+            statusBadges.push({ label: "LOCAL", variant: "accent" });
         }
 
         if (isP2P) {
@@ -367,6 +374,13 @@
 
         return [...p2p, ...rest];
     })();
+
+    $: localFilteredStreams = filteredStreams.filter(
+        (item) => item.stream?.raffiSource === "local",
+    );
+    $: addonFilteredStreams = filteredStreams.filter(
+        (item) => item.stream?.raffiSource !== "local",
+    );
 
     $: filtersActive = resolutionFilter !== "all" || excludeHDR;
 
@@ -807,74 +821,142 @@
                                     : "No streams match the current filters."}
                             </div>
                         {:else}
-                            {#each filteredStreams as item (item.key)}
-                                <button
-                                    class="w-full bg-[#1A1A1A] hover:bg-[#222] p-5 rounded-2xl flex flex-col gap-3 text-left transition-all duration-200 cursor-pointer"
-                                    on:click={() => onStreamClick(item.stream)}
-                                >
-                                    <div class="flex flex-row justify-between items-start w-full gap-4">
-                                        <div class="flex flex-col gap-1">
-                                            <span class="text-white text-lg font-semibold">
-                                                {item.meta.providerLabel}
-                                            </span>
-                        
-                                            {#if item.meta.infoLine}
-                                                <span class="text-[10px] uppercase tracking-[0.4em] text-white/40">
-                                                    {item.meta.infoLine}
+                            {#if localFilteredStreams.length}
+                                <div class="flex items-center justify-between">
+                                    <span class="text-white/60 text-xs font-semibold tracking-[0.25em] uppercase">
+                                        Local
+                                    </span>
+                                </div>
+                                {#each localFilteredStreams as item (item.key)}
+                                    <button
+                                        class="w-full bg-[#1A1A1A] hover:bg-[#222] p-5 rounded-2xl flex flex-col gap-3 text-left transition-all duration-200 cursor-pointer"
+                                        on:click={() => onStreamClick(item.stream)}
+                                    >
+                                        <div class="flex flex-row justify-between items-start w-full gap-4">
+                                            <div class="flex flex-col gap-1">
+                                                <span class="text-white text-lg font-semibold">
+                                                    {item.meta.providerLabel}
                                                 </span>
-                                            {/if}
 
-                                            {#if item.meta.isP2P && item.meta.peerCount != null}
-                                                <span class="flex items-center gap-2 text-xs text-white/70">
-                                                    <svg
-                                                        width="14"
-                                                        height="14"
-                                                        viewBox="0 0 24 24"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        stroke-width="2"
-                                                        stroke-linecap="round"
-                                                        stroke-linejoin="round"
-                                                    >
-                                                        <circle cx="12" cy="12" r="3" />
-                                                        <path d="M19.4 15a1 1 0 0 0 .6-1.1 7 7 0 0 0-1.3-3.1 1 1 0 0 0-1-.4l-1.9.3a1 1 0 0 1-.9-.3l-.9-.9a1 1 0 0 1-.3-.9l.3-1.9a1 1 0 0 0-.4-1A7 7 0 0 0 10.1 4 1 1 0 0 0 9 4.6l-.8 1.8a1 1 0 0 1-.8.6L5.6 7a1 1 0 0 0-1 .4 7 7 0 0 0-1.3 3.1 1 1 0 0 0 .6 1.1l1.8.8a1 1 0 0 1 .6.8l.2 2a1 1 0 0 0 .3.7l1.4 1.4a1 1 0 0 0 .7.3l2-.2a1 1 0 0 1 .8.6l.8 1.8a1 1 0 0 0 1.1.6 7 7 0 0 0 3.1-1.3 1 1 0 0 0 .4-1l-.3-1.9a1 1 0 0 1 .3-.9l.9-.9a1 1 0 0 1 .9-.3z" />
-                                                    </svg>
-                                                    <span>{item.meta.peerCount} peers online</span>
-                                                </span>
+                                                {#if item.meta.infoLine}
+                                                    <span class="text-[10px] uppercase tracking-[0.4em] text-white/40">
+                                                        {item.meta.infoLine}
+                                                    </span>
+                                                {/if}
+                                            </div>
+                                            {#if item.meta.statusBadges.length}
+                                                <div class="flex flex-wrap gap-2 justify-end">
+                                                    {#each item.meta.statusBadges as badge (badge.label)}
+                                                        <span
+                                                            class={`px-3 py-1 rounded-full text-[11px] font-semibold tracking-wide uppercase ${badge.variant ===
+                                                            'accent'
+                                                                ? 'bg-white text-black'
+                                                                : 'border border-white/20 text-white/80'}`}
+                                                        >
+                                                            {badge.label}
+                                                        </span>
+                                                    {/each}
+                                                </div>
                                             {/if}
                                         </div>
-                                        {#if item.meta.statusBadges.length}
-                                            <div class="flex flex-wrap gap-2 justify-end">
-                                                {#each item.meta.statusBadges as badge (badge.label)}
+
+                                        {#if item.meta.featureBadges.length}
+                                            <div class="flex flex-wrap gap-2">
+                                                {#each item.meta.featureBadges as badge (badge.label)}
                                                     <span
-                                                        class={`px-3 py-1 rounded-full text-[11px] font-semibold tracking-wide uppercase ${badge.variant ===
-                                                        'accent'
-                                                            ? 'bg-white text-black'
-                                                            : 'border border-white/20 text-white/80'}`}
+                                                        class={`px-3 py-1 rounded-full text-xs font-medium tracking-wide ${badge.variant ===
+                                                        'muted'
+                                                            ? 'bg-white/5 text-white/50'
+                                                            : 'bg-white/10 text-white'}`}
                                                     >
                                                         {badge.label}
                                                     </span>
                                                 {/each}
                                             </div>
                                         {/if}
-                                    </div>
+                                    </button>
+                                {/each}
 
-                                    {#if item.meta.featureBadges.length}
-                                        <div class="flex flex-wrap gap-2">
-                                            {#each item.meta.featureBadges as badge (badge.label)}
-                                                <span
-                                                    class={`px-3 py-1 rounded-full text-xs font-medium tracking-wide ${badge.variant ===
-                                                    'muted'
-                                                        ? 'bg-white/5 text-white/50'
-                                                        : 'bg-white/10 text-white'}`}
-                                                >
-                                                    {badge.label}
+                                {#if addonFilteredStreams.length}
+                                    <div class="h-px bg-white/10"></div>
+                                {/if}
+                            {/if}
+
+                            {#if addonFilteredStreams.length}
+                                <div class="flex items-center justify-between">
+                                    <span class="text-white/60 text-xs font-semibold tracking-[0.25em] uppercase">
+                                        {addonFilteredStreams.length} Sources
+                                    </span>
+                                </div>
+                                {#each addonFilteredStreams as item (item.key)}
+                                    <button
+                                        class="w-full bg-[#1A1A1A] hover:bg-[#222] p-5 rounded-2xl flex flex-col gap-3 text-left transition-all duration-200 cursor-pointer"
+                                        on:click={() => onStreamClick(item.stream)}
+                                    >
+                                        <div class="flex flex-row justify-between items-start w-full gap-4">
+                                            <div class="flex flex-col gap-1">
+                                                <span class="text-white text-lg font-semibold">
+                                                    {item.meta.providerLabel}
                                                 </span>
-                                            {/each}
+
+                                                {#if item.meta.infoLine}
+                                                    <span class="text-[10px] uppercase tracking-[0.4em] text-white/40">
+                                                        {item.meta.infoLine}
+                                                    </span>
+                                                {/if}
+
+                                                {#if item.meta.isP2P && item.meta.peerCount != null}
+                                                    <span class="flex items-center gap-2 text-xs text-white/70">
+                                                        <svg
+                                                            width="14"
+                                                            height="14"
+                                                            viewBox="0 0 24 24"
+                                                            fill="none"
+                                                            stroke="currentColor"
+                                                            stroke-width="2"
+                                                            stroke-linecap="round"
+                                                            stroke-linejoin="round"
+                                                        >
+                                                            <circle cx="12" cy="12" r="3" />
+                                                            <path d="M19.4 15a1 1 0 0 0 .6-1.1 7 7 0 0 0-1.3-3.1 1 1 0 0 0-1-.4l-1.9.3a1 1 0 0 1-.9-.3l-.9-.9a1 1 0 0 1-.3-.9l.3-1.9a1 1 0 0 0-.4-1A7 7 0 0 0 10.1 4 1 1 0 0 0 9 4.6l-.8 1.8a1 1 0 0 1-.8.6L5.6 7a1 1 0 0 0-1 .4 7 7 0 0 0-1.3 3.1 1 1 0 0 0 .6 1.1l1.8.8a1 1 0 0 1 .6.8l.2 2a1 1 0 0 0 .3.7l1.4 1.4a1 1 0 0 0 .7.3l2-.2a1 1 0 0 1 .8.6l.8 1.8a1 1 0 0 0 1.1.6 7 7 0 0 0 3.1-1.3 1 1 0 0 0 .4-1l-.3-1.9a1 1 0 0 1 .3-.9l.9-.9a1 1 0 0 1 .9-.3z" />
+                                                        </svg>
+                                                        <span>{item.meta.peerCount} peers online</span>
+                                                    </span>
+                                                {/if}
+                                            </div>
+                                            {#if item.meta.statusBadges.length}
+                                                <div class="flex flex-wrap gap-2 justify-end">
+                                                    {#each item.meta.statusBadges as badge (badge.label)}
+                                                        <span
+                                                            class={`px-3 py-1 rounded-full text-[11px] font-semibold tracking-wide uppercase ${badge.variant ===
+                                                            'accent'
+                                                                ? 'bg-white text-black'
+                                                                : 'border border-white/20 text-white/80'}`}
+                                                        >
+                                                            {badge.label}
+                                                        </span>
+                                                    {/each}
+                                                </div>
+                                            {/if}
                                         </div>
-                                    {/if}
-                                </button>
-                            {/each}
+
+                                        {#if item.meta.featureBadges.length}
+                                            <div class="flex flex-wrap gap-2">
+                                                {#each item.meta.featureBadges as badge (badge.label)}
+                                                    <span
+                                                        class={`px-3 py-1 rounded-full text-xs font-medium tracking-wide ${badge.variant ===
+                                                        'muted'
+                                                            ? 'bg-white/5 text-white/50'
+                                                            : 'bg-white/10 text-white'}`}
+                                                    >
+                                                        {badge.label}
+                                                    </span>
+                                                {/each}
+                                            </div>
+                                        {/if}
+                                    </button>
+                                {/each}
+                            {/if}
                         {/if}
                     </div>
                 </section>

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -29,6 +30,15 @@ func (c *Controller) monitorBuffer(id string, ctx context.Context) {
 }
 
 func (c *Controller) adjustThrottleLocked(sess *Session) {
+	// Local files (non-HTTP sources) should not be treated like a live stream.
+	// Throttling/pause-resume keeps HLS in a "live edge" state and makes small seeks snap back.
+	if sess != nil {
+		src := sess.Source
+		if src != "" && !strings.HasPrefix(src, "http://") && !strings.HasPrefix(src, "https://") {
+			return
+		}
+	}
+
 	mediaSeq, segCount, err := readPlaylistState(filepath.Join(sess.WorkDir, fmt.Sprintf("slice_%03d", sess.SliceIndex), "child.m3u8"))
 	if err != nil || segCount == 0 {
 		return

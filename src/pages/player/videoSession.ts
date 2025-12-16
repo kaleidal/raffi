@@ -186,6 +186,24 @@ export function initHLS(
 ): Hls | null {
     const { setLoading, setShowCanvas, setPlaybackOffset, setShowError, setErrorMessage, setErrorDetails } = setStates;
 
+    const treatAsLocalFile = videoElem?.dataset?.raffiSource === "local";
+    let didEnforceInitialStart = false;
+    const enforceLocalStartAtZero = () => {
+        if (didEnforceInitialStart) return;
+        if (startOffset !== 0) return;
+        if (!Number.isFinite(videoElem.duration) || videoElem.duration <= 0) return;
+        if (!Number.isFinite(videoElem.currentTime)) return;
+
+        if (videoElem.currentTime > 1) {
+            try {
+                videoElem.currentTime = 0;
+                didEnforceInitialStart = true;
+            } catch {
+                // ignore
+            }
+        }
+    };
+
     let baseManifest = `${getStreamUrl(sessionId)}/child.m3u8`;
     setPlaybackOffset(startOffset);
     
@@ -208,6 +226,13 @@ export function initHLS(
             console.log("HLS MANIFEST_PARSED (initial)");
             setLoading(false);
             setShowCanvas(false);
+
+            // Best-effort: after manifest is parsed, browsers typically have enough info
+            // for currentTime corrections to stick.
+            enforceLocalStartAtZero();
+            setTimeout(enforceLocalStartAtZero, 200);
+            setTimeout(enforceLocalStartAtZero, 600);
+
             if (autoPlay) {
                 videoElem.play().catch((err) => {
                     console.warn("autoplay failed:", err);
@@ -229,7 +254,11 @@ export function initHLS(
                     const val = parseFloat(startHeader);
                     if (!isNaN(val)) {
                         console.log("Received slice start offset:", val);
-                        setPlaybackOffset(val);
+                        // For local files, we want strict, stable offsets (and local seeks)
+                        // and the server may be mid-transcode; don't let header updates yank the offset.
+                        if (!treatAsLocalFile) {
+                            setPlaybackOffset(val);
+                        }
                     } else {
                         console.warn(
                             "Invalid slice start header:",
@@ -270,9 +299,13 @@ export function initHLS(
 
         hls.loadSource(baseManifest);
         hls.attachMedia(videoElem);
+
+        // Extra safety for offset-start sources (one-shot only).
+        videoElem.addEventListener("loadedmetadata", enforceLocalStartAtZero, { once: true });
     } else if (videoElem.canPlayType("application/vnd.apple.mpegurl")) {
         videoElem.src = baseManifest;
         videoElem.addEventListener("loadedmetadata", () => {
+            enforceLocalStartAtZero();
             if (autoPlay) {
                 videoElem.play().catch((err) => {
                     console.warn("autoplay failed:", err);

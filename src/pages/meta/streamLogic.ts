@@ -5,6 +5,7 @@ import {
     selectedStream, selectedFileIdx, showTorrentWarning, pendingTorrentStream
 } from "./metaState";
 import type { Stream } from "./types";
+import { getLocalStreamsFor } from "../../lib/localLibrary/localLibrary";
 
 export const fetchStreams = async (
     episode: any,
@@ -39,12 +40,25 @@ export const fetchStreams = async (
         );
         const result = await response.json();
 
-        if (result.streams) {
-            streams.set(result.streams);
-            return result.streams;
-        }
+        const remoteStreams: Stream[] = Array.isArray(result.streams)
+            ? result.streams
+            : [];
+
+        const localStreams = getLocalStreamsFor(imdbID, type as any, episode);
+        const combined = [...(localStreams as any), ...remoteStreams];
+        streams.set(combined);
+        return combined;
     } catch (e) {
         console.error("Failed to fetch streams", e);
+        try {
+            const data = get(metaData);
+            const type = data?.meta?.type || "movie";
+            const localStreams = getLocalStreamsFor(imdbID, type as any, episode);
+            streams.set(localStreams as any);
+            return localStreams as any;
+        } catch {
+            // ignore
+        }
     } finally {
         loadingStreams.set(false);
     }

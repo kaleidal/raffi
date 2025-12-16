@@ -324,6 +324,19 @@
             await tick();
             if (!videoElem) return;
 
+            // Hint for the HLS layer: local file paths behave differently than addon/torrent HTTP sources.
+            // Used to prevent live-edge style snapping during small seeks.
+            try {
+                const isLocalFile =
+                    typeof src === "string" &&
+                    !src.startsWith("http://") &&
+                    !src.startsWith("https://") &&
+                    !src.startsWith("magnet:");
+                videoElem.dataset.raffiSource = isLocalFile ? "local" : "remote";
+            } catch {
+                // ignore
+            }
+
             Discord.updateDiscordActivity(
                 metaData,
                 season,

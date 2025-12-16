@@ -8,4 +8,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onOpenFile: (callback) => ipcRenderer.on('open-file', (_event, value) => callback(value)),
     getFilePath: (file) => webUtils.getPathForFile(file),
     saveClipPath: (suggestedName) => ipcRenderer.invoke('SAVE_CLIP_DIALOG', suggestedName),
+    localLibrary: {
+        pickFolder: () => ipcRenderer.invoke('LOCAL_LIBRARY_PICK_FOLDER'),
+        scan: (roots) => ipcRenderer.invoke('LOCAL_LIBRARY_SCAN', roots),
+    },
 });
