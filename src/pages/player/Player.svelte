@@ -4,6 +4,7 @@
     import PlayerControls from "../../components/player/PlayerControls.svelte";
     import PlayerOverlays from "../../components/player/PlayerOverlays.svelte";
     import SeekFeedback from "../../components/player/SeekFeedback.svelte";
+    import PlayPauseFeedback from "../../components/player/PlayPauseFeedback.svelte";
     import PlayerVideo from "./components/PlayerVideo.svelte";
     import PlayerLoadingScreen from "./components/PlayerLoadingScreen.svelte";
     import PlayerModals from "./components/PlayerModals.svelte";
@@ -88,6 +89,25 @@
     let currentVideoSrc: string | null = null;
     let metadataCheckInterval: any;
     let reprobeAttempted = false;
+
+    let playPauseFeedback: { type: "play" | "pause"; id: number } | null = null;
+    let playPauseFeedbackTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const triggerPlayPauseFeedback = (type: "play" | "pause") => {
+        if (playPauseFeedbackTimeout) clearTimeout(playPauseFeedbackTimeout);
+        playPauseFeedback = { type, id: Date.now() };
+        playPauseFeedbackTimeout = setTimeout(() => {
+            playPauseFeedback = null;
+        }, 450);
+    };
+
+    const togglePlayWithFeedback = () => {
+        if (!videoElem) return;
+        if ($watchParty.isActive && !$watchParty.isHost) return;
+
+        triggerPlayPauseFeedback(videoElem.paused ? "play" : "pause");
+        controlsManager.togglePlay(controlsVisible.set);
+    };
 
     $: hasStartedStore.set(hasStarted);
 
@@ -182,6 +202,7 @@
 
     onDestroy(() => {
         clearInterval(metadataCheckInterval);
+        if (playPauseFeedbackTimeout) clearTimeout(playPauseFeedbackTimeout);
         Session.cleanupSession(
             hls,
             sessionId,
@@ -516,7 +537,7 @@
                 ),
             volume.set,
             seekFeedback.set,
-            () => controlsManager.togglePlay(controlsVisible.set),
+            togglePlayWithFeedback,
         )}
 />
 
@@ -535,12 +556,19 @@
             on:timeupdate={handleTimeUpdate}
             on:play={handlePlay}
             on:pause={handlePause}
-            on:click={() => controlsManager.togglePlay(controlsVisible.set)}
+            on:click={togglePlayWithFeedback}
             on:waiting={() => loading.set(true)}
             on:playing={() => loading.set(false)}
             on:canplay={() => loading.set(false)}
         />
     </div>
+
+    {#if playPauseFeedback}
+        <PlayPauseFeedback
+            type={playPauseFeedback.type}
+            id={playPauseFeedback.id}
+        />
+    {/if}
 
     {#if $seekFeedback}
         <SeekFeedback type={$seekFeedback.type} id={$seekFeedback.id} />
@@ -632,8 +660,7 @@
                 currentAudioLabel={$currentAudioLabel}
                 currentSubtitleLabel={$currentSubtitleLabel}
                 isWatchPartyMember={$watchParty.isActive && !$watchParty.isHost}
-                togglePlay={() =>
-                    controlsManager.togglePlay(controlsVisible.set)}
+                togglePlay={togglePlayWithFeedback}
                 onSeekInput={(e) =>
                     controlsManager.onSeekInput(e, $duration, pendingSeek.set)}
                 onSeekChange={(e) =>
