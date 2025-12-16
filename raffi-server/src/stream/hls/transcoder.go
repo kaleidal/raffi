@@ -103,6 +103,7 @@ func DefaultTranscoder(
 
 	args = append(args,
 		"-avoid_negative_ts", "make_zero",
+		"-reset_timestamps", "1",
 		"-muxdelay", "0",
 		"-muxpreload", "0",
 		"-max_interleave_delta", "0",

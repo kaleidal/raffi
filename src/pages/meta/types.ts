@@ -17,6 +17,7 @@ export interface Stream {
     url?: string;
     infoHash?: string;
     fileIdx?: number;
+    raffiSource?: "local" | "addon";
     behaviorHints?: {
         bingeGroup?: string;
     };
