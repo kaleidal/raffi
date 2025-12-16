@@ -1,6 +1,7 @@
 <script lang="ts">
     import TrackSelectionModal from "../../../components/player/TrackSelectionModal.svelte";
     import PlayerErrorModal from "../../../components/player/modals/PlayerErrorModal.svelte";
+    import SeekStyleInfoModal from "../../../components/player/modals/SeekStyleInfoModal.svelte";
     import WatchPartyModal from "../../../components/player/watch_party/WatchPartyModal.svelte";
     import type { ShowResponse } from "../../../lib/library/types/meta_types";
 
@@ -8,10 +9,12 @@
     export let showSubtitleSelection: boolean;
     export let showError: boolean;
     export let showWatchPartyModal: boolean;
+    export let showSeekStyleModal: boolean = false;
     export let audioTracks: any[];
     export let subtitleTracks: any[];
     export let errorMessage: string;
     export let errorDetails: string;
+    export let seekBarStyle: "raffi" | "normal" = "raffi";
     export let metaData: ShowResponse | null;
     export let season: number | null;
     export let episode: number | null;
@@ -30,6 +33,9 @@
     export let onCloseAudio: () => void;
     export let onCloseSubtitle: () => void;
     export let onCloseWatchParty: () => void;
+
+    export let onSeekStyleAcknowledge: () => void = () => {};
+    export let onSeekStyleChange: (style: "raffi" | "normal") => void = () => {};
 </script>
 
 {#if showAudioSelection}
@@ -59,6 +65,14 @@
         {errorDetails}
         on:retry={onErrorRetry}
         on:back={onErrorBack}
+    />
+{/if}
+
+{#if showSeekStyleModal}
+    <SeekStyleInfoModal
+        {seekBarStyle}
+        on:styleChange={(e) => onSeekStyleChange(e.detail.style)}
+        on:acknowledge={onSeekStyleAcknowledge}
     />
 {/if}
 

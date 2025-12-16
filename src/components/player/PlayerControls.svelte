@@ -3,7 +3,7 @@
     import ExpandingButton from "../common/ExpandingButton.svelte";
     import { slide } from "svelte/transition";
     import type { ShowResponse } from "../../lib/library/types/meta_types";
-    import { createEventDispatcher, onMount } from "svelte";
+    import { createEventDispatcher } from "svelte";
     import ClipPanel from "./ClipPanel.svelte";
     import { formatTime } from "../../lib/time";
 
@@ -22,6 +22,8 @@
     export let pendingSeek: number | null = null;
     export let isWatchPartyMember = false;
 
+    export let seekBarStyle: "raffi" | "normal" = "raffi";
+
     export let togglePlay: () => void;
     export let onSeekInput: (e: Event) => void;
     export let onSeekChange: (e: Event) => void;
@@ -31,13 +33,6 @@
     export let onNextEpisode: () => void;
 
     const dispatch = createEventDispatcher();
-
-    let seekBarStyle = "raffi";
-
-    onMount(() => {
-        const storedSeek = localStorage.getItem("seek_bar_style");
-        seekBarStyle = storedSeek || "raffi";
-    });
 
     $: displayedTime = pendingSeek ?? currentTime;
     $: remainingTime = Math.max(0, duration - displayedTime);

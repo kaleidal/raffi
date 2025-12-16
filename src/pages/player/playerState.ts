@@ -33,6 +33,9 @@ export const showAudioSelection = writable(false);
 export const showSubtitleSelection = writable(false);
 export const seekFeedback = writable<SeekFeedback | null>(null);
 
+// First-play guidance
+export const showSeekStyleModal = writable(false);
+
 // Error state
 export const showError = writable(false);
 export const errorMessage = writable("");
@@ -74,6 +77,7 @@ export function resetPlayerState() {
     showAudioSelection.set(false);
     showSubtitleSelection.set(false);
     seekFeedback.set(null);
+    showSeekStyleModal.set(false);
     showError.set(false);
     errorMessage.set("");
     errorDetails.set("");
