@@ -46,6 +46,13 @@
     const supportsResource = (manifest: any, target: "stream" | "subtitles") =>
         matchesResource(manifest, (name) => name === target);
 
+    const isUuid = (value: unknown): value is string => {
+        if (typeof value !== "string") return false;
+        return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+            value,
+        );
+    };
+
     async function loadAddons() {
         loadingAddons = true;
         try {
@@ -140,11 +147,13 @@
 
     async function installCommunityAddon(addon: any) {
         try {
+            const manifestId = addon?.manifest?.id;
             await addAddon({
                 transport_url: normalizeTransportUrl(addon.transportUrl ?? addon.transport_url),
                 manifest: addon.manifest,
                 flags: { protected: false, official: false },
-                addon_id: addon.manifest?.id || crypto.randomUUID(),
+                // DB column is a UUID; many community manifest ids are not UUIDs (e.g. "stremio.addons...|...").
+                addon_id: isUuid(manifestId) ? manifestId : crypto.randomUUID(),
             });
             await loadAddons();
         } catch (e) {

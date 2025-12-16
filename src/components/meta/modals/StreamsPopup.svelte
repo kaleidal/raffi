@@ -885,7 +885,7 @@
                             {#if addonFilteredStreams.length}
                                 <div class="flex items-center justify-between">
                                     <span class="text-white/60 text-xs font-semibold tracking-[0.25em] uppercase">
-                                        {addonFilteredStreams.length} Sources
+                                        {addonFilteredStreams.length} Source{addonFilteredStreams.length > 1 ? 's' : ''}
                                     </span>
                                 </div>
                                 {#each addonFilteredStreams as item (item.key)}
