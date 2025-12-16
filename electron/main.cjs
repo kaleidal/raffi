@@ -2,6 +2,10 @@ const { app, BrowserWindow, dialog, screen, ipcMain } = require('electron');
 const { spawn } = require('child_process');
 const {autoUpdater} = require('electron-updater');
 
+if (process.platform === 'win32') {
+    app.setAppUserModelId('al.kaleid.raffi');
+}
+
 const path = require('path');
 const express = require('express');
 const fs = require('fs');
