@@ -1,7 +1,7 @@
 {
   "name": "raffi",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "main": "electron/main.cjs",
   "description": "A modern video player",
@@ -26,6 +26,7 @@
     "cross-env": "^10.1.0",
     "electron": "^39.2.4",
     "electron-builder": "^26.0.12",
+    "png-to-ico": "^3.0.1",
     "svelte": "^5.43.5",
     "svelte-check": "^4.3.3",
     "typescript": "~5.9.3",
@@ -72,7 +73,7 @@
         "nsis",
         "msi"
       ],
-      "icon": "build/icons/512x512.png",
+      "icon": "build/icons/icon.ico",
       "extraResources": [
         {
           "from": "electron/decoder-windows-amd64.exe",
