@@ -41,6 +41,7 @@
         pendingSeek,
         seekGuard,
         firstSeekLoad,
+        showSeekStyleModal,
         hasStarted as hasStartedStore,
         currentChapter,
         resetPlayerState,
@@ -67,6 +68,49 @@
     export let episode: number | null = null;
     export let joinPartyId: string | null = null;
     export let autoJoin: boolean = false;
+
+    type SeekBarStyle = "raffi" | "normal";
+    const SEEK_BAR_STYLE_KEY = "seek_bar_style";
+    const SEEK_STYLE_INFO_ACK_KEY = "seek_style_info_ack";
+
+    let seekBarStyle: SeekBarStyle = "raffi";
+    let pendingStartAfterSeekStyleModal = false;
+
+    const getSeekBarStyleFromStorage = (): SeekBarStyle => {
+        const v = localStorage.getItem(SEEK_BAR_STYLE_KEY);
+        return v === "normal" ? "normal" : "raffi";
+    };
+
+    const shouldShowSeekStyleInfoModal = (): boolean => {
+        const ack = localStorage.getItem(SEEK_STYLE_INFO_ACK_KEY);
+        if (ack === "true") return false;
+
+        const storedSeek = localStorage.getItem(SEEK_BAR_STYLE_KEY);
+        if (storedSeek !== null) return false;
+
+        return true;
+    };
+
+    const handleSeekStyleChange = (style: SeekBarStyle) => {
+        seekBarStyle = style;
+        localStorage.setItem(SEEK_BAR_STYLE_KEY, style);
+    };
+
+    const handleSeekStyleAcknowledge = async () => {
+        localStorage.setItem(SEEK_STYLE_INFO_ACK_KEY, "true");
+        showSeekStyleModal.set(false);
+
+        if (!pendingStartAfterSeekStyleModal) return;
+        pendingStartAfterSeekStyleModal = false;
+
+        if (!videoElem) return;
+        if ($watchParty.isActive && !$watchParty.isHost) return;
+        try {
+            await videoElem.play();
+        } catch {
+            // ignore
+        }
+    };
 
     const handleClose = () => {
         if (videoSrc) {
@@ -105,6 +149,14 @@
         if (!videoElem) return;
         if ($watchParty.isActive && !$watchParty.isHost) return;
 
+        if ($showSeekStyleModal) return;
+
+        if (shouldShowSeekStyleInfoModal()) {
+            showSeekStyleModal.set(true);
+            pendingStartAfterSeekStyleModal = true;
+            return;
+        }
+
         triggerPlayPauseFeedback(videoElem.paused ? "play" : "pause");
         controlsManager.togglePlay(controlsVisible.set);
     };
@@ -126,6 +178,8 @@
     onMount(() => {
         resetPlayerState();
         hasStarted = false;
+
+        seekBarStyle = getSeekBarStyleFromStorage();
 
         if (joinPartyId && autoJoin) {
             showWatchPartyModal.set(true);
@@ -346,11 +400,17 @@
                 false,
             );
 
+            const needsSeekStyleModal = !!autoPlay && shouldShowSeekStyleInfoModal();
+            if (needsSeekStyleModal) {
+                showSeekStyleModal.set(true);
+                pendingStartAfterSeekStyleModal = true;
+            }
+
             hls = Session.initHLS(
                 videoElem,
                 sessionId,
                 startTime,
-                autoPlay,
+                needsSeekStyleModal ? false : autoPlay,
                 Session.createSeekHandler(
                     videoElem,
                     () => hls,
@@ -667,6 +727,7 @@
                 volume={$volume}
                 controlsVisible={$controlsVisible}
                 loading={$loading}
+                {seekBarStyle}
                 {sessionId}
                 {videoSrc}
                 {metaData}
@@ -728,15 +789,19 @@
         showSubtitleSelection={$showSubtitleSelection}
         showError={$showError}
         showWatchPartyModal={$showWatchPartyModal}
+        showSeekStyleModal={$showSeekStyleModal}
         audioTracks={$audioTracks}
         subtitleTracks={$subtitleTracks}
         errorMessage={$errorMessage}
         errorDetails={$errorDetails}
+        {seekBarStyle}
         {metaData}
         {season}
         {episode}
         {videoSrc}
         {fileIdx}
+        onSeekStyleChange={handleSeekStyleChange}
+        onSeekStyleAcknowledge={handleSeekStyleAcknowledge}
         onAudioSelect={(detail) =>
             Session.handleAudioSelect(
                 detail,
