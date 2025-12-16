@@ -42,6 +42,104 @@ let goServer;
 let httpServer;
 let fileToOpen = null;
 
+const LOCAL_MEDIA_EXTS = new Set([
+    '.mp4',
+    '.mkv',
+    '.webm',
+    '.avi',
+    '.mov',
+    '.m4v',
+]);
+
+function cleanTitle(raw) {
+    if (!raw) return '';
+    return String(raw)
+        .replace(/[._]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function stripReleaseJunk(name) {
+    return String(name)
+        .replace(/\b(480p|720p|1080p|2160p|4k)\b/gi, '')
+        .replace(/\b(webrip|web[- ]?dl|bluray|brrip|hdtv|dvdrip)\b/gi, '')
+        .replace(/\b(x264|x265|h264|h265|hevc|av1)\b/gi, '')
+        .replace(/\b(aac|ac3|eac3|dts|truehd|opus)\b/gi, '')
+        .replace(/\b(extended|remux|repack|proper)\b/gi, '')
+        .replace(/\[.*?\]/g, '')
+        .replace(/\(.*?\)/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function parseMediaFilename(fileName) {
+    const base = path.basename(fileName, path.extname(fileName));
+    const cleaned = stripReleaseJunk(base);
+
+    // S01E01 / S1E1
+    let m = cleaned.match(/\bS(\d{1,2})\s*E(\d{1,2})\b/i);
+    if (!m) {
+        // 1x01
+        m = cleaned.match(/\b(\d{1,2})\s*x\s*(\d{1,2})\b/i);
+    }
+
+    if (m) {
+        const season = Number(m[1]);
+        const episode = Number(m[2]);
+        const titlePart = cleaned.slice(0, m.index).trim();
+        const title = cleanTitle(titlePart || cleaned);
+        if (title && Number.isFinite(season) && Number.isFinite(episode)) {
+            return { kind: 'episode', title, season, episode };
+        }
+    }
+
+    // Movie fallback: use folder/file base as title
+    const title = cleanTitle(cleaned);
+    if (!title) return null;
+    return { kind: 'movie', title };
+}
+
+async function scanDirRecursive(rootPath, out, options) {
+    const { maxFiles } = options;
+    if (out.length >= maxFiles) return;
+
+    let entries;
+    try {
+        entries = await fs.promises.readdir(rootPath, { withFileTypes: true });
+    } catch {
+        return;
+    }
+
+    for (const ent of entries) {
+        if (out.length >= maxFiles) return;
+        const full = path.join(rootPath, ent.name);
+        if (ent.isDirectory()) {
+            // Skip very common junk folders
+            const lower = ent.name.toLowerCase();
+            if (lower === 'sample' || lower === 'samples') continue;
+            await scanDirRecursive(full, out, options);
+        } else if (ent.isFile()) {
+            const ext = path.extname(ent.name).toLowerCase();
+            if (!LOCAL_MEDIA_EXTS.has(ext)) continue;
+            const parsed = parseMediaFilename(ent.name);
+            if (!parsed) continue;
+            out.push({ path: full, parsed });
+        }
+    }
+}
+
+async function scanLibraryRoots(roots) {
+    const out = [];
+    const options = { maxFiles: 20000 };
+    for (const r of roots || []) {
+        if (typeof r !== 'string' || !r) continue;
+        const resolved = path.resolve(r);
+        await scanDirRecursive(resolved, out, options);
+        if (out.length >= options.maxFiles) break;
+    }
+    return out;
+}
+
 const MIN_ZOOM = 0.75;
 const MAX_ZOOM = 1.0;
 const WIDTH_THRESHOLD = 1600;
@@ -339,6 +437,34 @@ ipcMain.handle('SAVE_CLIP_DIALOG', async (_event, suggestedName) => {
         return { canceled: res.canceled, filePath: res.filePath || null };
     } catch (e) {
         return { canceled: true, filePath: null, error: String(e) };
+    }
+});
+
+ipcMain.handle('LOCAL_LIBRARY_PICK_FOLDER', async () => {
+    if (!mainWindow) return null;
+    const res = await dialog.showOpenDialog(mainWindow, {
+        title: 'Select Library Folder',
+        properties: ['openDirectory'],
+    });
+    if (res.canceled) return null;
+    const folder = res.filePaths && res.filePaths[0];
+    return folder || null;
+});
+
+ipcMain.handle('LOCAL_LIBRARY_SCAN', async (_event, roots) => {
+    try {
+        if (!Array.isArray(roots)) return [];
+        // Defensive: avoid scanning crazy inputs
+        const sanitized = roots
+            .filter((r) => typeof r === 'string')
+            .map((r) => r.trim())
+            .filter(Boolean)
+            .slice(0, 20);
+
+        return await scanLibraryRoots(sanitized);
+    } catch (e) {
+        console.error('LOCAL_LIBRARY_SCAN failed:', e);
+        return [];
     }
 });
 
