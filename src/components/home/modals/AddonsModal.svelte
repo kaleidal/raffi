@@ -2,6 +2,7 @@
     import { fade, scale } from "svelte/transition";
     import { getAddons, addAddon, removeAddon } from "../../../lib/db/db";
     import type { Addon } from "../../../lib/db/db";
+    import { serverUrl } from "../../../lib/client";
     import LoadingSpinner from "../../common/LoadingSpinner.svelte";
 
     export let showAddonsModal = false;
@@ -11,11 +12,13 @@
     let loadingAddons = false;
     let communityAddons: any[] = [];
     let loadingCommunity = false;
+    let communitySearch = "";
+    let communityResourceFilter: "all" | "stream" | "subtitles" = "all";
 
     const COMMUNITY_ENDPOINTS = [
-        "https://stremio-addons.com/catalog.json",
-        "https://cors.isomorphic-git.org/http://stremio-addons.com/catalog.json",
-        "https://raw.githubusercontent.com/Stremio/stremio-addons/master/catalog.json",
+        `${serverUrl}/community-addons`,
+        "https://api.strem.io/addonscollection.json",
+        "https://stremio-addons.com/catalog.json"
     ];
     const SUPPORTED_RESOURCES = new Set(["stream", "subtitles"]);
 
@@ -57,19 +60,34 @@
     async function loadCommunityAddons() {
         loadingCommunity = true;
         try {
-            let data: any[] | null = null;
+            const combined: any[] = [];
             for (const endpoint of COMMUNITY_ENDPOINTS) {
                 try {
-                    const response = await fetch(endpoint);
+                    const response = await fetch(endpoint, {
+                        headers: { Accept: "application/json" },
+                    });
                     if (!response.ok) continue;
-                    data = await response.json();
-                    break;
+                    const json = await response.json();
+                    if (Array.isArray(json)) {
+                        combined.push(...json);
+                    }
                 } catch (innerError) {
                     console.warn("Community endpoint failed", endpoint, innerError);
                 }
             }
-            if (!data) throw new Error("All community endpoints failed");
-            communityAddons = (data || []).filter((addon: any) =>
+            if (combined.length === 0) throw new Error("All community endpoints failed");
+
+            const deduped = new Map<string, any>();
+            for (const addon of combined) {
+                const transportUrl = addon?.transportUrl ?? addon?.transport_url ?? "";
+                const transportKey = transportUrl ? normalizeTransportUrl(String(transportUrl)) : "";
+                const idKey = addon?.manifest?.id ? String(addon.manifest.id) : "";
+                const key = transportKey || idKey;
+                if (!key) continue;
+                if (!deduped.has(key)) deduped.set(key, addon);
+            }
+
+            communityAddons = Array.from(deduped.values()).filter((addon: any) =>
                 hasSupportedResource(addon?.manifest),
             );
         } catch (e) {
@@ -170,6 +188,27 @@
     $: installedTransportUrls = new Set(
         addonsList.map((addon) => normalizeTransportUrl(addon.transport_url)),
     );
+
+    $: filteredCommunityAddons = communityAddons.filter((addon: any) => {
+        const manifest = addon?.manifest ?? {};
+
+        if (communityResourceFilter !== "all") {
+            if (!supportsResource(manifest, communityResourceFilter)) return false;
+        }
+
+        const q = String(communitySearch ?? "").trim().toLowerCase();
+        if (!q) return true;
+        const name = String(manifest?.name ?? "").toLowerCase();
+        const description = String(manifest?.description ?? "").toLowerCase();
+        const id = String(manifest?.id ?? "").toLowerCase();
+        const transportUrl = String(addon?.transportUrl ?? addon?.transport_url ?? "").toLowerCase();
+        return (
+            name.includes(q) ||
+            description.includes(q) ||
+            id.includes(q) ||
+            transportUrl.includes(q)
+        );
+    });
 </script>
 
 {#if showAddonsModal}
@@ -221,39 +260,82 @@
 
             <div class="flex-1 min-h-0">
                 <div class="flex h-full flex-col gap-6 overflow-hidden lg:flex-row lg:gap-8">
-                    <section class="rounded-[28px] bg-white/[0.04] p-5 md:p-6 flex flex-col gap-4 flex-1 min-h-0 shadow-[0_25px_60px_rgba(0,0,0,0.4)]">
+                    <section class="rounded-[28px] bg-white/[0.04] p-5 md:p-6 flex flex-col gap-4 flex-1 min-h-0">
                         <div class="flex flex-col gap-1">
                         <div class="flex items-center gap-3 flex-wrap">
                             <h3 class="text-white text-xl font-semibold">
                                 Community Addons
                             </h3>
-                            <span class="px-3 py-1 rounded-full text-[11px] font-semibold tracking-[0.2em] uppercase bg-white/10 text-white/70">
-                                Coming Soon
-                            </span>
                         </div>
                         <p class="text-white/60 text-sm">
                             Browse and install addons shared by the community.
                         </p>
                     </div>
 
+                        <div class="pt-1">
+                            <input
+                                type="text"
+                                placeholder="Search community addons"
+                                class="w-full bg-white/5 rounded-xl px-4 py-3 text-white outline-none focus:border-white/30"
+                                bind:value={communitySearch}
+                            />
+                        </div>
+
+                        <div class="flex flex-wrap gap-2">
+                            <button
+                                class={`px-3 py-2 rounded-full text-xs font-semibold tracking-[0.18em] uppercase transition-colors ${
+                                    communityResourceFilter === "all"
+                                        ? "bg-white text-black"
+                                        : "bg-white/10 text-white/70 hover:text-white"
+                                }`}
+                                on:click={() => (communityResourceFilter = "all")}
+                            >
+                                All
+                            </button>
+                            <button
+                                class={`px-3 py-2 rounded-full text-xs font-semibold tracking-[0.18em] uppercase transition-colors ${
+                                    communityResourceFilter === "stream"
+                                        ? "bg-white text-black"
+                                        : "bg-white/10 text-white/70 hover:text-white"
+                                }`}
+                                on:click={() => (communityResourceFilter = "stream")}
+                            >
+                                Streams
+                            </button>
+                            <button
+                                class={`px-3 py-2 rounded-full text-xs font-semibold tracking-[0.18em] uppercase transition-colors ${
+                                    communityResourceFilter === "subtitles"
+                                        ? "bg-white text-black"
+                                        : "bg-white/10 text-white/70 hover:text-white"
+                                }`}
+                                on:click={() => (communityResourceFilter = "subtitles")}
+                            >
+                                Subtitles
+                            </button>
+                        </div>
+
                         <div class="flex-1 min-h-0 space-y-3 overflow-y-auto pr-1">
                         {#if loadingCommunity}
                             <div class="flex justify-center py-6">
                                 <LoadingSpinner size="40px" />
                             </div>
-                        {:else if communityAddons.length === 0}
+                        {:else if filteredCommunityAddons.length === 0}
                             <div class="text-white/50 text-center py-6 text-sm">
-                                No community addons found.
+                                {communitySearch.trim().length || communityResourceFilter !== "all"
+                                    ? "No matching addons found."
+                                    : "No community addons found."}
                             </div>
                         {:else}
-                            {#each communityAddons as addon}
-                                {@const transportBase = normalizeTransportUrl(addon.transportUrl)}
+                            {#each filteredCommunityAddons as addon}
+                                {@const transportUrl = addon.transportUrl ?? addon.transport_url}
+                                {@const transportBase = normalizeTransportUrl(transportUrl)}
                                 {@const installed = installedTransportUrls.has(transportBase)}
+                                {@const logoUrl = addon.manifest?.logo ?? addon.manifest?.icon}
                                 <div class="rounded-2xl bg-white/[0.08] p-4 flex flex-col gap-3">
                                     <div class="flex gap-3">
-                                        {#if addon.manifest.logo}
+                                        {#if logoUrl}
                                             <img
-                                                src={addon.manifest.logo}
+                                                src={logoUrl}
                                                 alt="{addon.manifest.name} logo"
                                                 class="w-14 h-14 object-contain rounded-xl bg-white/5"
                                             />
@@ -292,7 +374,7 @@
                                         {#if addon.manifest.behaviorHints?.configurable}
                                             <button
                                                 class="px-4 py-2 rounded-xl bg-white/[0.08] text-white/80 hover:text-white cursor-pointer"
-                                                on:click={() => handleConfigure(addon.transportUrl)}
+                                                on:click={() => handleConfigure(transportUrl)}
                                             >
                                                 Configure
                                             </button>
@@ -315,7 +397,7 @@
                         </div>
                     </section>
 
-                    <section class="rounded-[28px] bg-white/[0.04] p-5 md:p-6 flex flex-col gap-4 flex-1 min-h-0 shadow-[0_25px_60px_rgba(0,0,0,0.4)]">
+                    <section class="rounded-[28px] bg-white/[0.04] p-5 md:p-6 flex flex-col gap-4 flex-1 min-h-0">
                         <div class="flex flex-col gap-1">
                         <h3 class="text-white text-xl font-semibold">
                             Installed Addons

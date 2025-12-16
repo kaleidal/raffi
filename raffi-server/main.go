@@ -81,6 +81,7 @@ func main() {
 	mux.HandleFunc("/sessions/", srv.handleSessionByID)
 	mux.HandleFunc("/cleanup", srv.handleCleanup)
 	mux.HandleFunc("/torrents/", srv.torrentStreamer.ServeHTTP)
+	mux.HandleFunc("/community-addons", srv.handleCommunityAddons)
 
 	addr := "127.0.0.1:6969"
 	listener, err := net.Listen("tcp4", addr)
