@@ -12,7 +12,7 @@ jobs:
     
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]  # build on both platforms
+        os: [ubuntu-latest, blacksmith-4vcpu-windows-2025]  # build on both platforms
     
     steps:
       - name: Checkout code
