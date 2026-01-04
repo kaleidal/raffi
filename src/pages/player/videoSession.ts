@@ -34,8 +34,49 @@ export function captureFrame(
     canvasElem.height = videoElem.videoHeight;
     const ctx = canvasElem.getContext("2d");
     if (ctx) {
-        ctx.drawImage(videoElem, 0, 0, canvasElem.width, canvasElem.height);
+        try {
+            ctx.drawImage(
+                videoElem,
+                0,
+                0,
+                canvasElem.width,
+                canvasElem.height,
+            );
+        } catch {
+            // Cross-origin video (e.g. direct debrid links) can taint the canvas.
+            // In that case, just skip the frame capture.
+        }
     }
+}
+
+export function supportsEac3Playback(videoElem?: HTMLVideoElement): boolean {
+    const elem = videoElem ?? document.createElement("video");
+
+    const candidates = [
+        'audio/mp4; codecs="ec-3"',
+        'audio/mp4; codecs="ec-3, mp4a.40.2"',
+        'video/mp4; codecs="avc1.42E01E, ec-3"',
+        'video/mp4; codecs="hvc1.1.6.L93.B0, ec-3"',
+    ];
+
+    for (const type of candidates) {
+        const res = elem.canPlayType(type);
+        if (res === "probably" || res === "maybe") return true;
+    }
+    return false;
+}
+
+export function shouldBypassServerForHttpStream(
+    src: string,
+    videoElem?: HTMLVideoElement,
+): boolean {
+    if (!src) return false;
+    if (!/^https?:\/\//i.test(src)) return false;
+
+    // If the addon already provides an HLS manifest, let the existing pipeline handle it.
+    if (/\.m3u8(\?|$)/i.test(src)) return false;
+
+    return supportsEac3Playback(videoElem);
 }
 
 export async function loadVideoSession(
@@ -44,6 +85,9 @@ export async function loadVideoSession(
     startTime: number,
     setStates: {
         setLoading: (loading: boolean) => void;
+        setLoadingStage?: (stage: string) => void;
+        setLoadingDetails?: (details: string) => void;
+        setLoadingProgress?: (progress: number | null) => void;
         setShowCanvas: (show: boolean) => void;
         setIsPlaying: (playing: boolean) => void;
         setHasStarted: (started: boolean) => void;
@@ -68,6 +112,9 @@ export async function loadVideoSession(
 ): Promise<{ sessionId: string; sessionData: any }> {
     const {
         setLoading,
+        setLoadingStage,
+        setLoadingDetails,
+        setLoadingProgress,
         setShowCanvas,
         setIsPlaying,
         setHasStarted,
@@ -91,6 +138,9 @@ export async function loadVideoSession(
 
     try {
         setLoading(true);
+        setLoadingStage?.("Initializing player");
+        setLoadingDetails?.("");
+        setLoadingProgress?.(null);
         setShowCanvas(false);
         setIsPlaying(false);
         setHasStarted(false);
@@ -121,11 +171,26 @@ export async function loadVideoSession(
                 "Creating torrent session with file index:",
                 fileIdx,
             );
+
+            setLoadingStage?.("Creating torrent session");
+            setLoadingDetails?.("Adding torrent and selecting file...");
             sessionId = await createSession(src, kind, startTime, fileIdx);
         } else {
+
+            setLoadingStage?.(
+                kind === "torrent" ? "Creating torrent session" : "Creating stream session",
+            );
+            setLoadingDetails?.(
+                kind === "torrent"
+                    ? "Adding torrent and fetching metadata..."
+                    : "Contacting local server...",
+            );
             sessionId = await createSession(src, kind, startTime);
         }
         setPlaybackOffset(startTime);
+
+        setLoadingStage?.("Loading stream info");
+        setLoadingDetails?.("Probing metadata and tracks...");
 
         const res = await fetch(`${serverUrl}/sessions/${sessionId}`);
         if (!res.ok) throw new Error("Failed to load session info");
@@ -156,7 +221,11 @@ export async function loadVideoSession(
             if (selectedAudio) setCurrentAudioLabel(selectedAudio.label);
         }
 
+		setLoadingStage?.("Loading subtitles");
+		setLoadingDetails?.("Fetching addon subtitles...");
         await fetchAddonSubtitles();
+		setLoadingDetails?.("");
+		setLoadingProgress?.(null);
 
         return { sessionId, sessionData };
     } catch (err) {

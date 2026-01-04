@@ -4,21 +4,40 @@
     export let loading: boolean;
     export let onClose: () => void;
     export let metaData: ShowResponse | null;
+
+	export let stage: string = "Loading...";
+	export let details: string = "";
+	export let progress: number | null = null;
 </script>
 
 {#if loading}
     <div
-        class="fixed inset-0 z-50 backdrop-blur-[12px] flex items-center justify-center flex-col gap-8"
+        class="fixed inset-0 z-50 backdrop-blur-md flex items-center justify-center flex-col gap-8"
     >
         {#if metaData}
             <div class="relative z-10 flex flex-col items-center gap-8">
                 <img
                     src={metaData.meta.logo ?? ""}
                     alt="Logo"
-                    class="w-[400px] object-contain animate-pulse"
+                    class="w-100 object-contain animate-pulse"
                 />
             </div>
         {/if}
+
+        <div class="relative z-10 flex flex-col items-center gap-3 w-full max-w-130 px-8">
+            <div class="text-white/90 text-[18px] font-medium text-center">{stage}</div>
+            {#if details}
+                <div class="text-white/70 text-[14px] text-center wrap-break-word">{details}</div>
+            {/if}
+            {#if progress !== null}
+                <div class="w-full h-2 rounded-full bg-white/15 overflow-hidden">
+                    <div
+                        class="h-full bg-white/60 transition-all duration-300"
+                        style={`width: ${Math.max(0, Math.min(1, progress)) * 100}%`}
+                    ></div>
+                </div>
+            {/if}
+        </div>
 
         <div class="absolute left-0 top-0 p-10 z-50">
             <button

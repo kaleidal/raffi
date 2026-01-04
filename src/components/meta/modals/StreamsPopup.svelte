@@ -198,15 +198,16 @@
 
     function parsePeerCount(text: string | null) {
         if (!text) return null;
-        const peerMatch = text.match(/(\d+)\s*(?:peers?|seeders?|seeds?)/i);
-        if (peerMatch) {
-            const value = parseInt(peerMatch[1], 10);
+
+        const emojiMatch = text.match(/(?:👤|👥)\s*(\d{1,5})/);
+        if (emojiMatch) {
+            const value = parseInt(emojiMatch[1], 10);
             if (!Number.isNaN(value)) return value;
         }
 
-        const leadingMatch = text.trim().match(/^(\d{1,4})(?=\s)/);
-        if (leadingMatch) {
-            const value = parseInt(leadingMatch[1], 10);
+        const peerMatch = text.match(/(\d{1,5})\s*(?:peers?|seeders?|seeds?)/i);
+        if (peerMatch) {
+            const value = parseInt(peerMatch[1], 10);
             if (!Number.isNaN(value)) return value;
         }
 
@@ -222,9 +223,22 @@
     function parseStreamMetadata(stream: any): ParsedStreamMetadata {
         const isLocal = stream?.raffiSource === "local";
         const title = stream?.title ?? "";
-        const lines = title.split("\n").map((line: string) => line.trim()).filter(Boolean);
+        const description = stream?.description ?? "";
+        const behaviorFilename = stream?.behaviorHints?.filename ?? "";
+        const behaviorGroup = stream?.behaviorHints?.bingeGroup ?? "";
+
+        const primaryText = [title, description]
+            .map((v) => String(v ?? ""))
+            .filter(Boolean)
+            .join("\n");
+
+        const lines = primaryText
+            .split("\n")
+            .map((line: string) => line.trim())
+            .filter(Boolean);
+
         const detailText = lines.slice(1).join(" ") || lines.join(" ");
-        const fullText = `${title} ${stream?.name ?? ""}`;
+        const fullText = `${primaryText} ${stream?.name ?? ""} ${behaviorFilename} ${behaviorGroup}`;
 
         let resolutionMatch = fullText.match(/(2160|1440|1080|720|540|480|360|240)p/i);
         let resolution: string | null = resolutionMatch ? `${resolutionMatch[1]}p` : null;
@@ -279,7 +293,8 @@
             (Boolean(stream?.infoHash) ||
                 Boolean(stream?.url && stream.url.startsWith("magnet:")));
 
-        const peerCount = isP2P ? parsePeerCount(detailText) : null;
+        const peerCount = parsePeerCount(fullText) ?? parsePeerCount(detailText);
+        const isP2PAdjusted = isP2P || peerCount != null;
 
         const featureBadges: StreamBadge[] = [];
         const statusBadges: StreamBadge[] = [];
@@ -324,7 +339,7 @@
             featureBadges,
             statusBadges,
             peerCount,
-            isP2P,
+            isP2P: isP2PAdjusted,
             infoLine: hostLabel ? `via ${hostLabel}` : null,
         };
     }
@@ -602,6 +617,8 @@
         metaData?.meta?.type !== "movie" &&
         episodeSeasonNumber &&
         episodeNumber;
+
+    $: console.log(streams)
 </script>
 
 {#if streamsPopupVisible}
@@ -614,7 +631,7 @@
         transition:fade={{ duration: 200 }}
     >
         <div
-            class="bg-[#121212] w-full max-w-6xl max-h-full rounded-[32px] p-6 sm:p-8 lg:p-10 flex flex-col gap-6 overflow-hidden relative"
+            class="bg-[#121212] w-full max-w-6xl max-h-full rounded-4xl p-6 sm:p-8 lg:p-10 flex flex-col gap-6 overflow-hidden relative"
         >
             <button
                 class="absolute top-6 right-6 text-white/50 hover:text-white cursor-pointer"
@@ -641,7 +658,7 @@
 
             <div class="flex flex-col lg:flex-row gap-8 flex-1 min-h-0">
                 <aside
-                    class="bg-[#1A1A1A] rounded-[28px] p-5 lg:p-6 flex flex-col gap-4 lg:w-[320px] xl:w-[360px] flex-shrink-0 max-h-full overflow-y-auto"
+                    class="bg-[#1A1A1A] rounded-[28px] p-5 lg:p-6 flex flex-col gap-4 lg:w-[320px] xl:w-90 shrink-0 max-h-full overflow-y-auto"
                 >
                     {#if selectedEpisode}
                         <div class="flex flex-col gap-4">
@@ -665,7 +682,7 @@
 
                                 {#if progressDetails}
                                     <div
-                                        class="absolute bottom-0 left-0 w-full p-3 bg-gradient-to-t from-black/80 via-black/40 to-transparent flex flex-col gap-1.5 z-10"
+                                        class="absolute bottom-0 left-0 w-full p-3 bg-linear-to-t from-black/80 via-black/40 to-transparent flex flex-col gap-1.5 z-10"
                                     >
                                         <div
                                             class="flex items-center justify-between text-[10px] uppercase tracking-[0.35em] text-white/70"

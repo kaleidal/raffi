@@ -42,6 +42,44 @@ export interface UserMeta {
     settings: any;
 }
 
+export const ensureDefaultAddonsForUser = async (userId: string) => {
+    if (!userId) return;
+
+    const transportUrl = "https://opensubtitles-v3.strem.io";
+    const manifest = {
+        id: "org.stremio.opensubtitlesv3",
+        logo: "http://www.strem.io/images/addons/opensubtitles-logo.png",
+        name: "OpenSubtitles v3",
+        types: ["movie", "series"],
+        version: "1.0.0",
+        catalogs: [],
+        resources: ["subtitles"],
+        idPrefixes: ["tt"],
+        description: "OpenSubtitles v3 Addon for Stremio",
+    };
+
+    try {
+        const { data, error } = await supabase
+            .from("addons")
+            .select("transport_url")
+            .eq("user_id", userId)
+            .eq("transport_url", transportUrl)
+            .maybeSingle();
+        if (error) throw error;
+        if (data) return;
+
+        const { error: insertError } = await supabase.from("addons").insert({
+            user_id: userId,
+            transport_url: transportUrl,
+            manifest,
+            flags: { protected: false, official: false },
+        });
+        if (insertError) throw insertError;
+    } catch (e) {
+        console.warn("Failed to seed default addons", e);
+    }
+};
+
 // Addons
 export const getAddons = async () => {
     const { data, error } = await supabase.from('addons').select('*');
