@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -34,6 +35,65 @@ type TorrentStream struct {
 	readyErr  error
 }
 
+type TorrentStatus struct {
+	Stage           string  `json:"stage"`
+	Ready           bool    `json:"ready"`
+	Error           string  `json:"error,omitempty"`
+	Peers           int     `json:"peers,omitempty"`
+	PiecesComplete  int     `json:"piecesComplete,omitempty"`
+	PiecesTotal     int     `json:"piecesTotal,omitempty"`
+	Progress        float64 `json:"progress,omitempty"`
+	DownUsefulBytes int64   `json:"downUsefulBytes,omitempty"`
+}
+
+func (ts *TorrentStream) status() TorrentStatus {
+	st := TorrentStatus{}
+	if ts == nil || ts.t == nil {
+		st.Stage = "missing"
+		st.Error = "torrent is nil"
+		return st
+	}
+
+	readyDone := false
+	select {
+	case <-ts.readyCh:
+		readyDone = true
+	default:
+	}
+
+	infoReady := false
+	select {
+	case <-ts.t.GotInfo():
+		infoReady = true
+	default:
+	}
+
+	if readyDone {
+		if ts.readyErr != nil {
+			st.Stage = "error"
+			st.Error = ts.readyErr.Error()
+			return st
+		}
+		st.Ready = ts.file != nil
+		st.Stage = "ready"
+	} else if !infoReady {
+		st.Stage = "metadata"
+	} else {
+		st.Stage = "downloading"
+	}
+
+	stats := ts.t.Stats()
+	st.Peers = stats.ActivePeers
+	st.PiecesComplete = stats.PiecesComplete
+	st.PiecesTotal = ts.t.NumPieces()
+	if st.PiecesTotal > 0 {
+		st.Progress = float64(st.PiecesComplete) / float64(st.PiecesTotal)
+	}
+	st.DownUsefulBytes = stats.BytesReadUsefulData.Int64()
+
+	return st
+}
+
 func newTorrentStream(t *torrent.Torrent, fileIdx *int) *TorrentStream {
 	return &TorrentStream{
 		t:       t,
@@ -60,7 +120,7 @@ func (ts *TorrentStream) prepare() error {
 	select {
 	case <-ts.t.GotInfo():
 		// ok
-	case <-time.After(2 * time.Minute):
+	case <-time.After(20 * time.Second):
 		return fmt.Errorf("timeout waiting for torrent metadata")
 	}
 
@@ -250,6 +310,17 @@ func (s *TorrentStreamer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+
+	if len(parts) >= 2 && parts[1] == "status" {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(stream.status())
+		return
+	}
+
 	if err := stream.ensureReady(); err != nil {
 		http.Error(w, fmt.Sprintf("torrent not ready: %v", err), http.StatusGatewayTimeout)
 		return

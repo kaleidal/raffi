@@ -115,12 +115,16 @@ func (s *Server) handleClip(w http.ResponseWriter, r *http.Request, id string) {
 	}
 
 	// Place -ss/-to before -i for speed.
+	audioMap := "0:a:0?"
+	if sess.AudioIndex > 0 {
+		audioMap = fmt.Sprintf("0:a:%d?", sess.AudioIndex)
+	}
 	args = append(args,
 		"-ss", fmt.Sprintf("%.3f", req.Start),
 		"-to", fmt.Sprintf("%.3f", req.End),
 		"-i", input,
 		"-map", "0:v:0",
-		"-map", "0:a:0?",
+		"-map", audioMap,
 		"-c:v", "libx264",
 		"-preset", "veryfast",
 		"-crf", "23",

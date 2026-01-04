@@ -21,6 +21,7 @@
     export let objectFit: "contain" | "cover" = "contain";
     export let pendingSeek: number | null = null;
     export let isWatchPartyMember = false;
+    export let hasNextEpisode = true;
 
     export let seekBarStyle: "raffi" | "normal" = "raffi";
 
@@ -48,6 +49,32 @@
 
     let showClipPanel = false;
 
+    let seekHoverVisible = false;
+    let seekHoverLeftPct = 0;
+    let seekHoverTime = 0;
+
+    const updateSeekHover = (event: MouseEvent) => {
+        if (!duration || duration <= 0) return;
+        const el = event.currentTarget as HTMLElement | null;
+        if (!el) return;
+
+        const rect = el.getBoundingClientRect();
+        const raw = (event.clientX - rect.left) / rect.width;
+        const ratio = Math.max(0, Math.min(1, raw));
+
+        const timeAtCursor = ratio * duration;
+        const desiredGlobal =
+            seekBarStyle === "normal" ? timeAtCursor : duration - timeAtCursor;
+
+        seekHoverVisible = true;
+        seekHoverLeftPct = ratio * 100;
+        seekHoverTime = Math.max(0, Math.min(duration, desiredGlobal));
+    };
+
+    const hideSeekHover = () => {
+        seekHoverVisible = false;
+    };
+
     const setClipPanelOpen = (open: boolean) => {
         showClipPanel = open;
         dispatch("clipPanelOpenChange", { open });
@@ -58,13 +85,13 @@
     <div
         in:slide={{ duration: 200, axis: "y" }}
         out:slide={{ duration: 200, axis: "y" }}
-        class="z-10 items-center bg-[#000000]/10 backdrop-blur-[24px] rounded-[32px] w-[1000px] flex flex-col gap-2 px-[30px] py-[20px] text-white"
+        class="z-10 items-center bg-[#000000]/10 backdrop-blur-xl rounded-4xl w-250 flex flex-col gap-2 px-7.5 py-5 text-white"
     >
-        <div class="flex flex-row gap-[20px] items-center w-full">
+        <div class="flex flex-row gap-5 items-center w-full">
             {#if !isWatchPartyMember}
                 <button
                     on:click={togglePlay}
-                    class="w-[60px] h-[60px] cursor-pointer hover:opacity-80 transition-opacity duration-200"
+                    class="w-15 h-15 cursor-pointer hover:opacity-80 transition-opacity duration-200"
                 >
                     {#if isPlaying}
                         <svg
@@ -97,7 +124,7 @@
             {/if}
 
             <span
-                class="text-[22px] font-poppins font-[500] text-[#D3D3D3] text-center"
+                class="text-[22px] font-poppins font-medium text-[#D3D3D3] text-center"
                 style={`min-width:${timeLabelWidth}; display:inline-block; font-variant-numeric: tabular-nums; font-feature-settings:'tnum';`}
                 >{formatTime(
                     seekBarStyle === "normal" ? displayedTime : remainingTime,
@@ -105,9 +132,13 @@
             >
 
             <div
-                class="relative flex-grow h-2 {isWatchPartyMember
+                class="relative grow h-2 {isWatchPartyMember
                     ? 'pointer-events-none'
                     : ''}"
+                role="presentation"
+                on:mouseenter={(e) => updateSeekHover(e as unknown as MouseEvent)}
+                on:mousemove={(e) => updateSeekHover(e as unknown as MouseEvent)}
+                on:mouseleave={hideSeekHover}
             >
                 <Slider
                     widthProgress={seekBarStyle === "normal"
@@ -123,10 +154,24 @@
                     max={duration}
                     step={0.1}
                 />
+
+                {#if seekHoverVisible && duration > 0}
+                    <div
+                        class="absolute -top-9 z-10 pointer-events-none"
+                        style={`left: ${seekHoverLeftPct}%; transform: translateX(-50%);`}
+                    >
+                        <div
+                            class="bg-[#000000]/60 backdrop-blur-md text-white text-[12px] px-2 py-1 rounded-md"
+                            style="font-variant-numeric: tabular-nums; font-feature-settings:'tnum';"
+                        >
+                            {formatTime(seekHoverTime)}
+                        </div>
+                    </div>
+                {/if}
             </div>            
             {#if seekBarStyle === "normal"}
                 <span
-                    class="text-[22px] font-poppins font-[500] text-[#D3D3D3] text-center"
+                    class="text-[22px] font-poppins font-medium text-[#D3D3D3] text-center"
                     style={`min-width:${timeLabelWidth}; display:inline-block; font-variant-numeric: tabular-nums; font-feature-settings:'tnum';`}
                     >{formatTime(duration)}</span
                 >
@@ -263,7 +308,7 @@
                 </ExpandingButton>
             {/if}
 
-            {#if metaData?.meta.type === "series" && onNextEpisode && !isWatchPartyMember}
+            {#if metaData?.meta.type === "series" && onNextEpisode && !isWatchPartyMember && hasNextEpisode}
                 <ExpandingButton label={"Next Episode"} onClick={onNextEpisode}>
                     <svg
                         width="20"
@@ -320,7 +365,7 @@
                 </ExpandingButton>
             {/if}
 
-            <div class="w-[180px]">
+            <div class="w-45">
                 <Slider
                     widthProgress={volume * 100}
                     widthGrey={100}
