@@ -26,8 +26,8 @@ type Session struct {
 	Chapters         []Chapter    `json:"chapters,omitempty"`
 	AvailableStreams []StreamInfo `json:"availableStreams,omitempty"`
 	AudioIndex       int          `json:"audioIndex"`
-	IsTorrent        bool         `json:"-"` // Internal flag for torrent-sourced sessions
-	TorrentInfoHash  string       `json:"-"` // InfoHash of torrent if torrent-sourced
+	IsTorrent        bool         `json:"isTorrent,omitempty"`
+	TorrentInfoHash  string       `json:"torrentInfoHash,omitempty"`
 }
 
 type StreamInfo struct {

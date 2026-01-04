@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	DefaultSegmentDuration = 2 * time.Second
+	DefaultSegmentDuration = 6 * time.Second
 	MaxBufferAhead         = 90 * time.Second
 	sliceReuseSafetyMargin = 5.0
 )
