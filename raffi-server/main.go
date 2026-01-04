@@ -245,7 +245,26 @@ func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request, id str
 		}
 
 		if !sess.IsTorrent && (sess.DurationSeconds == 0 || len(sess.Chapters) == 0 || len(sess.AvailableStreams) == 0) {
-			if meta, err := s.hlsController.ProbeMetadata(r.Context(), sess.ID, sess.Source); err == nil && meta != nil {
+			var meta *hls.Metadata
+			var probeErr error
+			for attempt := 0; attempt < 3; attempt++ {
+				ctx := r.Context()
+				ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
+				meta, probeErr = s.hlsController.ProbeMetadata(ctx, sess.ID, sess.Source)
+				cancel()
+				if probeErr == nil && meta != nil {
+					break
+				}
+				if attempt < 2 {
+					select {
+					case <-time.After(time.Duration(200*(attempt+1)) * time.Millisecond):
+					case <-r.Context().Done():
+						break
+					}
+				}
+			}
+
+			if probeErr == nil && meta != nil {
 				sess.DurationSeconds = meta.Format.DurationSeconds
 				sess.Chapters = make([]session.Chapter, len(meta.Chapters))
 				for i, c := range meta.Chapters {
@@ -279,8 +298,8 @@ func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request, id str
 				if len(sess.AvailableStreams) > 0 {
 					sess.AudioIndex = preferredIndex
 				}
-			} else if err != nil {
-				log.Printf("metadata probe failed for session %s: %v", sess.ID, err)
+			} else if probeErr != nil {
+				log.Printf("metadata probe failed for session %s: %v", sess.ID, probeErr)
 			}
 		}
 	}

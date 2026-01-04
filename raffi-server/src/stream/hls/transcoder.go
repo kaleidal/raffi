@@ -53,10 +53,10 @@ func DefaultTranscoder(
 		videoArgs = append(videoArgs, "-tag:v", "hvc1")
 	case "libx264":
 		videoCodec = "libx264"
-		videoArgs = append(videoArgs, "-preset", "ultrafast")
+		videoArgs = append(videoArgs, "-preset", "veryfast")
 	default:
 		videoCodec = "libx264"
-		videoArgs = append(videoArgs, "-preset", "ultrafast")
+		videoArgs = append(videoArgs, "-preset", "veryfast")
 	}
 
 	args := []string{
@@ -97,7 +97,8 @@ func DefaultTranscoder(
 			"-ac", "2",
 			"-ar", "48000",
 			"-b:a", "160k",
-			"-af", "aresample=async=1",
+			"-af", "aresample=async=1,loudnorm=I=-16:TP=-1.5:LRA=11",
+			"-ac", "2", "-af", "pan=stereo|FL=FC+0.30*FL+0.30*BL|FR=FC+0.30*FR+0.30*BR",
 		}...)
 	}
 

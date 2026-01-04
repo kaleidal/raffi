@@ -15,6 +15,9 @@
     import {
         isPlaying,
         loading,
+        loadingStage,
+        loadingDetails,
+        loadingProgress,
         showCanvas,
         currentTime,
         duration,
@@ -53,6 +56,8 @@
     import * as Chapters from "./chapters";
     import * as Discord from "./discord";
     import * as WatchParty from "./watchParty";
+
+    import { serverUrl } from "../../lib/client";
 
     // Props
     export let videoSrc: string | null = null;
@@ -112,6 +117,79 @@
         }
     };
 
+    const normalizeLang = (raw?: string | null): string | null => {
+        if (!raw) return null;
+        const s = String(raw).toLowerCase().trim();
+        if (!s) return null;
+
+        if (s === "en" || s === "eng" || s === "english") return "en";
+        if (s === "ja" || s === "jpn" || s === "japanese") return "ja";
+        if (s === "es" || s === "spa" || s === "spanish") return "es";
+        if (s === "fr" || s === "fra" || s === "fre" || s === "french") return "fr";
+        if (s === "de" || s === "deu" || s === "ger" || s === "german") return "de";
+
+        if (/^[a-z]{2}$/.test(s)) return s;
+        if (/^[a-z]{3}$/.test(s)) return s;
+
+        const match2 = s.match(/\b[a-z]{2}\b/);
+        if (match2?.[0]) return match2[0];
+
+        const match3 = s.match(/\b[a-z]{3}\b/);
+        if (match3?.[0]) return match3[0];
+
+        return null;
+    };
+
+    const getPreferredSubtitleLang = (sess: any): string | null => {
+        const audioIndex = Number.isFinite(sess?.audioIndex)
+            ? Number(sess.audioIndex)
+            : 0;
+        const streams = Array.isArray(sess?.availableStreams)
+            ? sess.availableStreams
+            : [];
+        const audioStream = streams.find(
+            (s: any) => s?.type === "audio" && s?.index === audioIndex,
+        );
+        return normalizeLang(audioStream?.language || audioStream?.title);
+    };
+
+    const autoEnableDefaultSubtitles = async (sess: any) => {
+        const tracks = $subtitleTracks;
+        if (!tracks || tracks.length === 0) return;
+
+        const alreadySelected = tracks.find((t: any) => t?.selected);
+        if (alreadySelected && String(alreadySelected.id) !== "off") return;
+
+        const preferredLang = getPreferredSubtitleLang(sess);
+        const candidates = tracks.filter((t: any) => String(t?.id) !== "off");
+        if (candidates.length === 0) return;
+
+        const findByLang = (lang: string) =>
+            candidates.find((t: any) => normalizeLang(t?.lang) === lang);
+
+        const picked =
+            (preferredLang ? findByLang(preferredLang) : undefined) ||
+            findByLang("en");
+
+        if (!picked) return;
+        if (!videoElem) return;
+
+        subtitleTracks.update((all) =>
+            all.map((t: any) => ({
+                ...t,
+                selected: String(t?.id) === String(picked.id),
+            })),
+        );
+        currentSubtitleLabel.set(picked.label);
+        await Subtitles.handleSubtitleSelect(
+            picked,
+            videoElem,
+            $currentTime,
+            $playbackOffset,
+            () => cueLinePercent,
+        );
+    };
+
     const handleClose = () => {
         if (videoSrc) {
             router.navigate("home");
@@ -133,6 +211,103 @@
     let currentVideoSrc: string | null = null;
     let metadataCheckInterval: any;
     let reprobeAttempted = false;
+
+    const computeHasNextEpisode = (): boolean => {
+        if (!metaData || metaData.meta?.type !== "series") return false;
+        const videos: any[] = Array.isArray((metaData as any).meta?.videos)
+            ? ((metaData as any).meta.videos as any[])
+            : [];
+
+        if (videos.length === 0) return false;
+        if (season == null || episode == null) return true;
+
+        const idx = videos.findIndex(
+            (v) => v && v.season === season && v.episode === episode,
+        );
+        if (idx === -1) return true;
+        return idx < videos.length - 1;
+    };
+
+    $: hasNextEpisode = computeHasNextEpisode();
+
+    $: showNextEpisodeAllowed = $showNextEpisode && hasNextEpisode;
+
+    let torrentStatusInterval: ReturnType<typeof setInterval> | null = null;
+    let torrentStatusHash: string | null = null;
+
+    const stopTorrentStatusPolling = () => {
+        if (torrentStatusInterval) {
+            clearInterval(torrentStatusInterval);
+            torrentStatusInterval = null;
+        }
+        torrentStatusHash = null;
+    };
+
+    const startTorrentStatusPolling = (hash: string) => {
+        if (!hash) return;
+        if (torrentStatusInterval && torrentStatusHash === hash) return;
+
+        stopTorrentStatusPolling();
+        torrentStatusHash = hash;
+
+        const poll = async () => {
+            try {
+                const res = await fetch(`${serverUrl}/torrents/${hash}/status`);
+                if (!res.ok) return;
+                const data = await res.json();
+
+                const stage = String(data.stage || "");
+                const peers = typeof data.peers === "number" ? data.peers : null;
+                const piecesComplete =
+                    typeof data.piecesComplete === "number" ? data.piecesComplete : null;
+                const piecesTotal =
+                    typeof data.piecesTotal === "number" ? data.piecesTotal : null;
+                const progress =
+                    typeof data.progress === "number" ? data.progress : null;
+                const err = typeof data.error === "string" ? data.error : "";
+
+                if (err) {
+                    loadingStage.set("Torrent error");
+                    loadingDetails.set(err);
+                    loadingProgress.set(null);
+                    return;
+                }
+
+                if (stage === "metadata") {
+                    loadingStage.set("Torrent: fetching metadata");
+                    loadingDetails.set(peers != null ? `Peers: ${peers}` : "");
+                    loadingProgress.set(null);
+                    return;
+                }
+
+                if (stage === "downloading") {
+                    loadingStage.set("Torrent: downloading");
+                    const detailParts: string[] = [];
+                    if (peers != null) detailParts.push(`Peers: ${peers}`);
+                    if (piecesComplete != null && piecesTotal != null) {
+                        detailParts.push(`Pieces: ${piecesComplete}/${piecesTotal}`);
+                    }
+                    loadingDetails.set(detailParts.join(" • "));
+                    loadingProgress.set(progress);
+                    return;
+                }
+
+                if (stage === "ready") {
+                    // Once ready, HLS/transcode/buffering events will usually take over.
+                    if ($loading) {
+                        loadingStage.set("Torrent: ready (starting stream)");
+                        loadingDetails.set("");
+                    }
+                    loadingProgress.set(null);
+                }
+            } catch {
+                // ignore
+            }
+        };
+
+        void poll();
+        torrentStatusInterval = setInterval(poll, 1000);
+    };
 
     let playPauseFeedback: { type: "play" | "pause"; id: number } | null = null;
     let playPauseFeedbackTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -178,6 +353,10 @@
     onMount(() => {
         resetPlayerState();
         hasStarted = false;
+
+        loadingStage.set("Loading...");
+        loadingDetails.set("");
+        loadingProgress.set(null);
 
         seekBarStyle = getSeekBarStyleFromStorage();
 
@@ -256,6 +435,7 @@
 
     onDestroy(() => {
         clearInterval(metadataCheckInterval);
+        stopTorrentStatusPolling();
         if (playPauseFeedbackTimeout) clearTimeout(playPauseFeedbackTimeout);
         Session.cleanupSession(
             hls,
@@ -333,12 +513,19 @@
 
     const loadVideo = async (src: string) => {
         try {
+            loadingStage.set("Initializing playback");
+            loadingDetails.set("");
+            loadingProgress.set(null);
+
             const result = await Session.loadVideoSession(
                 src,
                 fileIdx,
                 startTime,
                 {
                     setLoading: loading.set,
+                    setLoadingStage: loadingStage.set,
+                    setLoadingDetails: loadingDetails.set,
+                    setLoadingProgress: loadingProgress.set,
                     setShowCanvas: showCanvas.set,
                     setIsPlaying: isPlaying.set,
                     setHasStarted: (value: boolean) => (hasStarted = value),
@@ -375,6 +562,12 @@
             sessionId = result.sessionId;
             sessionData.set(result.sessionData);
 
+            if (result.sessionData?.isTorrent && result.sessionData?.torrentInfoHash) {
+                startTorrentStatusPolling(result.sessionData.torrentInfoHash);
+            } else {
+                stopTorrentStatusPolling();
+            }
+
             await tick();
             if (!videoElem) return;
 
@@ -405,6 +598,76 @@
                 showSeekStyleModal.set(true);
                 pendingStartAfterSeekStyleModal = true;
             }
+
+            const bypassServer = Session.shouldBypassServerForHttpStream(
+                src,
+                videoElem,
+            );
+
+            if (bypassServer) {
+                loadingStage.set("Loading stream directly");
+                loadingDetails.set("Bypassing server transcoding");
+                loadingProgress.set(null);
+
+                if (hls) {
+                    try {
+                        hls.destroy();
+                    } catch {
+                        // ignore
+                    }
+                    hls = null;
+                }
+
+                // For direct playback we treat the video element time as the global timeline.
+                playbackOffset.set(0);
+                void autoEnableDefaultSubtitles(result.sessionData).catch(() => {
+                    // ignore
+                });
+                loading.set(true);
+
+                const onLoaded = () => {
+                    if (!videoElem) return;
+
+                    if (Number.isFinite(videoElem.duration) && videoElem.duration > 0) {
+                        duration.set(videoElem.duration);
+                    }
+
+                    if (startTime > 0) {
+                        try {
+                            videoElem.currentTime = startTime;
+                        } catch {
+                            // ignore
+                        }
+                    }
+
+                    loading.set(false);
+                    loadingStage.set("");
+                    loadingDetails.set("");
+                    showCanvas.set(false);
+
+                    if (!needsSeekStyleModal && autoPlay) {
+                        videoElem.play().catch(() => {
+                            // ignore
+                        });
+                    }
+                };
+
+                videoElem.addEventListener("loadedmetadata", onLoaded, {
+                    once: true,
+                });
+
+                videoElem.src = src;
+                videoElem.load();
+                return;
+            }
+
+            void autoEnableDefaultSubtitles(result.sessionData).catch(() => {
+                // ignore
+            });
+
+            loadingStage.set("Preparing stream");
+            loadingDetails.set("Starting HLS session...");
+            loadingProgress.set(null);
 
             hls = Session.initHLS(
                 videoElem,
@@ -454,11 +717,15 @@
                     errorMessage.set("Stream took too long to load");
                     errorDetails.set("Please try another stream.");
                 }
-            }, 30000);
+            }, 60000);
         } catch (err) {
             console.error(err);
         }
     };
+
+    $: if (!$loading) {
+        stopTorrentStatusPolling();
+    }
 
     let nextEpisodeAttemptId = 0;
 
@@ -630,9 +897,19 @@
             on:play={handlePlay}
             on:pause={handlePause}
             on:click={togglePlayWithFeedback}
-            on:waiting={() => loading.set(true)}
-            on:playing={() => loading.set(false)}
-            on:canplay={() => loading.set(false)}
+            on:waiting={() => {
+                loading.set(true);
+                loadingStage.set("Buffering");
+            }}
+            on:playing={() => {
+                loading.set(false);
+                loadingStage.set("");
+                loadingDetails.set("");
+                loadingProgress.set(null);
+            }}
+            on:canplay={() => {
+                loading.set(false);
+            }}
         />
     </div>
 
@@ -647,7 +924,14 @@
         <SeekFeedback type={$seekFeedback.type} id={$seekFeedback.id} />
     {/if}
 
-    <PlayerLoadingScreen loading={$loading} onClose={handleClose} {metaData} />
+    <PlayerLoadingScreen
+        loading={$loading}
+        onClose={handleClose}
+        {metaData}
+        stage={$loadingStage}
+        details={$loadingDetails}
+        progress={$loadingProgress}
+    />
 
     {#if !$loading}
         <div
@@ -679,14 +963,14 @@
         </div>
 
         <div
-            class="absolute left-1/2 -translate-x-1/2 bottom-[50px] z-50 flex flex-col gap-[10px] transition-all duration-300 ease-in-out transform {$controlsVisible
+            class="absolute left-1/2 -translate-x-1/2 bottom-12.5 z-50 flex flex-col gap-2.5 transition-all duration-300 ease-in-out transform {$controlsVisible
                 ? 'translate-y-0 opacity-100'
                 : 'translate-y-10 opacity-0 pointer-events-none'}"
             bind:this={controlsOverlayElem}
         >
             <PlayerOverlays
                 showSkipIntro={$showSkipIntro}
-                showNextEpisode={$showNextEpisode}
+                showNextEpisode={showNextEpisodeAllowed}
                 isWatchPartyMember={$watchParty.isActive && !$watchParty.isHost}
                 skipChapter={() =>
                     Chapters.skipChapter($currentChapter, (t) =>
@@ -731,6 +1015,7 @@
                 {sessionId}
                 {videoSrc}
                 {metaData}
+                {hasNextEpisode}
                 currentAudioLabel={$currentAudioLabel}
                 currentSubtitleLabel={$currentSubtitleLabel}
                 isWatchPartyMember={$watchParty.isActive && !$watchParty.isHost}

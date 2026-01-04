@@ -5,6 +5,9 @@ import type { Chapter, SeekFeedback } from "./types";
 // Playback state
 export const isPlaying = writable(false);
 export const loading = writable(true);
+export const loadingStage = writable("Loading...");
+export const loadingDetails = writable("");
+export const loadingProgress = writable<number | null>(null);
 export const showCanvas = writable(false);
 export const hasStarted = writable(false);
 
@@ -60,6 +63,9 @@ export const partyEndReason = writable<"host_left" | "party_deleted">("host_left
 export function resetPlayerState() {
     isPlaying.set(false);
     loading.set(true);
+    loadingStage.set("Loading...");
+    loadingDetails.set("");
+    loadingProgress.set(null);
     showCanvas.set(false);
     hasStarted.set(false);
     currentTime.set(0);
