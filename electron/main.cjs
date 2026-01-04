@@ -341,18 +341,43 @@ async function ensureFFmpegAvailable() {
 }
 
 function createWindow() {
+    const useTitleBarOverlay = process.platform === 'win32';
+
     mainWindow = new BrowserWindow({
         width: DEFAULT_WINDOW_WIDTH,
         height: DEFAULT_WINDOW_HEIGHT,
         minHeight: 800,
         minWidth: 1200,
         autoHideMenuBar: true,
+        frame: !useTitleBarOverlay,
+        backgroundColor: '#090909',
+        titleBarStyle: 'hidden',
+        titleBarOverlay: {
+            color: '#090909',
+            symbolColor: '#ffffff',
+            height: 32
+        },
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
             webviewTag: true,
             preload: path.join(__dirname, 'preload.cjs'),
         },
+    });
+
+    mainWindow.on('maximize', () => {
+        try {
+            mainWindow.webContents.send('WINDOW_MAXIMIZED_CHANGED', true);
+        } catch {
+            // ignore
+        }
+    });
+    mainWindow.on('unmaximize', () => {
+        try {
+            mainWindow.webContents.send('WINDOW_MAXIMIZED_CHANGED', false);
+        } catch {
+            // ignore
+        }
     });
 
     try {
@@ -419,6 +444,30 @@ function createWindow() {
     mainWindow.on('resize', applyDisplayZoom);
     screen.on('display-metrics-changed', applyDisplayZoom);
 }
+
+ipcMain.on('WINDOW_MINIMIZE', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.minimize();
+});
+
+ipcMain.on('WINDOW_TOGGLE_MAXIMIZE', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (mainWindow.isMaximized()) {
+        mainWindow.unmaximize();
+    } else {
+        mainWindow.maximize();
+    }
+});
+
+ipcMain.on('WINDOW_CLOSE', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.close();
+});
+
+ipcMain.handle('WINDOW_IS_MAXIMIZED', async () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return false;
+    return mainWindow.isMaximized();
+});
 
 function startGoServer() {
     const binPath = getDecoderPath();

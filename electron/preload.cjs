@@ -1,6 +1,8 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
+    platform: process.platform,
+    usesTitleBarOverlay: process.platform === 'win32',
     setActivity: (activity) => ipcRenderer.send('RPC_SET_ACTIVITY', activity),
     clearActivity: () => ipcRenderer.send('RPC_CLEAR_ACTIVITY'),
     enableRPC: () => ipcRenderer.send('RPC_ENABLE'),
@@ -11,5 +13,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     localLibrary: {
         pickFolder: () => ipcRenderer.invoke('LOCAL_LIBRARY_PICK_FOLDER'),
         scan: (roots) => ipcRenderer.invoke('LOCAL_LIBRARY_SCAN', roots),
+    },
+    windowControls: {
+        minimize: () => ipcRenderer.send('WINDOW_MINIMIZE'),
+        toggleMaximize: () => ipcRenderer.send('WINDOW_TOGGLE_MAXIMIZE'),
+        close: () => ipcRenderer.send('WINDOW_CLOSE'),
+        isMaximized: () => ipcRenderer.invoke('WINDOW_IS_MAXIMIZED'),
+        onMaximizedChanged: (callback) => {
+            const handler = (_event, value) => callback(value);
+            ipcRenderer.on('WINDOW_MAXIMIZED_CHANGED', handler);
+            return () => ipcRenderer.removeListener('WINDOW_MAXIMIZED_CHANGED', handler);
+        },
     },
 });
