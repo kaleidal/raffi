@@ -8,6 +8,8 @@
     import Lists from "./pages/lists/Lists.svelte";
     import { enableRPC, disableRPC } from "./lib/rpc";
 
+    import TitleBar from "./components/common/TitleBar.svelte";
+
     import LoadingSpinner from "./components/common/LoadingSpinner.svelte";
     import { currentUser, initAuth } from "./lib/stores/authStore";
 
@@ -20,6 +22,7 @@
     };
 
     let checkingAuth = true;
+    let showTitleBar = false;
 
     function handlePointerButtons(event: PointerEvent) {
         if (event.pointerType !== "mouse") return;
@@ -33,6 +36,8 @@
 
     onMount(() => {
         let disposed = false;
+
+        showTitleBar = Boolean((window as any)?.electronAPI?.usesTitleBarOverlay);
 
         try {
             const storedRpc = localStorage.getItem("discord_rpc_enabled");
@@ -90,14 +95,20 @@
     }
 </script>
 
-{#if checkingAuth}
-    <div
-        class="w-screen h-screen bg-[#090909] flex items-center justify-center"
-    >
-        <LoadingSpinner size="60px" />
+<div class="w-screen h-screen bg-[#090909] overflow-hidden flex flex-col">
+    {#if showTitleBar}
+        <TitleBar />
+    {/if}
+
+    <div class="relative flex-1 min-h-0 overflow-x-hidden overflow-y-auto">
+        {#if checkingAuth}
+            <div class="w-full h-full bg-[#090909] flex items-center justify-center">
+                <LoadingSpinner size="60px" />
+            </div>
+        {:else if !$currentUser && $router.page !== "login"}
+            <Login />
+        {:else}
+            <svelte:component this={pages[$router.page]} {...$router.params as any} />
+        {/if}
     </div>
-{:else if !$currentUser && $router.page !== "login"}
-    <Login />
-{:else}
-    <svelte:component this={pages[$router.page]} {...$router.params as any} />
-{/if}
+</div>

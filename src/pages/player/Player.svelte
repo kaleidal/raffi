@@ -882,12 +882,12 @@
 />
 
 <div
-    class="fixed inset-0 w-screen h-screen bg-black overflow-hidden group {$controlsVisible
+    class="absolute inset-0 w-full h-full bg-black overflow-hidden group {$controlsVisible
         ? 'cursor-default'
         : 'cursor-none'}"
     bind:this={playerContainer}
 >
-    <div class="w-full h-screen">
+    <div class="w-full h-full">
         <PlayerVideo
             bind:videoElem
             bind:canvasElem
