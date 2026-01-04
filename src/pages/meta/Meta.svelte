@@ -151,8 +151,8 @@
 
 {#if $loadedMeta && $metaData && $metaData.meta}
     <div class="bg-[#090909] flex-1" in:fade={{ duration: 300 }}>
-        <div class="w-[100vw] h-[100vh]">
-            <div class="h-[100vh] opacity-60 w-full">
+        <div class="w-full h-full">
+            <div class="h-full opacity-60 w-full">
                 <MetaBackground
                     background={$metaData.meta.background}
                     bind:backgroundFailed={$backgroundFailed}
@@ -160,7 +160,7 @@
             </div>
 
             <button
-                class="absolute top-[50px] left-[50px] z-50 bg-[#FFFFFF]/10 hover:bg-[#FFFFFF]/20 backdrop-blur-md p-4 rounded-full transition-colors duration-200 cursor-pointer"
+                class="absolute top-12.5 left-12.5 z-50 bg-[#FFFFFF]/10 hover:bg-[#FFFFFF]/20 backdrop-blur-md p-4 rounded-full transition-colors duration-200 cursor-pointer"
                 on:click={() => {
                     router.navigate("home");
                     StreamLogic.closePlayer();
@@ -185,10 +185,10 @@
             </button>
 
             <div
-                class="p-40 absolute top-0 left-0 h-screen w-screen flex gap-[50px] flex-row justify-between items-start"
+                class="p-40 absolute top-0 left-0 h-full w-full flex gap-12.5 flex-row justify-between items-start"
             >
                 <div
-                    class="w-[40vw] h-full flex gap-[50px] flex-col justify-between items-start"
+                    class="w-[40vw] h-full flex gap-12.5 flex-col justify-between items-start"
                 >
 
             <style>
@@ -213,18 +213,18 @@
                 }
             </style>
                     <div
-                        class="flex flex-col gap-[10px] justify-start items-start w-full"
+                        class="flex flex-col gap-2.5 justify-start items-start w-full"
                     >
                         {#if $metaData.meta.logo && !$logoFailed}
                             <img
                                 src={$metaData.meta.logo}
                                 alt="Logo"
-                                class="h-[250px] w-auto object-contain"
+                                class="h-62.5 w-auto object-contain"
                                 on:error={() => logoFailed.set(true)}
                             />
                         {:else}
                             <h1
-                                class="text-[#E1E1E1] text-[64px] font-poppins font-bold leading-tight max-w-[800px]"
+                                class="text-[#E1E1E1] text-[64px] font-poppins font-bold leading-tight max-w-200"
                             >
                                 {$metaData.meta.name}
                             </h1>
@@ -246,7 +246,7 @@
 
                         <div class="relative rounded-[50px] resume-button-shell">
                             <button
-                                class="bg-[#FFFFFF]/80 hover:bg-[#D3D3D3]/80 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-[20px] text-black font-poppins font-medium w-full transition-colors duration-200 relative z-10 resume-button"
+                                class="bg-[#FFFFFF]/80 hover:bg-[#D3D3D3]/80 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-5 text-black font-poppins font-medium w-full transition-colors duration-200 relative z-10 resume-button"
                                 on:click={() => {
                                     const nextEpIndex =
                                         $metaData.meta.videos.findIndex(
@@ -333,7 +333,7 @@
                             </button>
                             {#if isResumable}
                                 <div
-                                    class="absolute bottom-0 left-0 h-[6px] bg-[#676767] z-20 rounded-full overflow-hidden"
+                                    class="absolute bottom-0 left-0 h-1.5 bg-[#676767] z-20 rounded-full overflow-hidden"
                                     style="width: {(lastEpProgress.time /
                                         lastEpProgress.duration) *
                                         100}%"
@@ -350,7 +350,7 @@
 
                         <div class="relative rounded-[50px] resume-button-shell">
                             <button
-                                class="bg-[#FFFFFF]/80 hover:bg-[#D3D3D3]/80 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-[20px] text-black font-poppins font-medium w-full transition-colors duration-200 relative z-10 resume-button"
+                                class="bg-[#FFFFFF]/80 hover:bg-[#D3D3D3]/80 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-5 text-black font-poppins font-medium w-full transition-colors duration-200 relative z-10 resume-button"
                                 on:click={() =>
                                     StreamLogic.episodeClicked(
                                         { season: 0, episode: 0 },
@@ -381,7 +381,7 @@
                             </button>
                             {#if isMovieResumable}
                                 <div
-                                    class="absolute bottom-0 left-0 h-[6px] bg-[#676767] z-20 rounded-full overflow-hidden"
+                                    class="absolute bottom-0 left-0 h-1.5 bg-[#676767] z-20 rounded-full overflow-hidden"
                                     style="width: {(movieProgress.time /
                                         movieProgress.duration) *
                                         100}%"
@@ -392,7 +392,7 @@
                 </div>
 
                 <div
-                    class="flex flex-col gap-[20px] h-full justify-end items-end"
+                    class="flex flex-col gap-5 h-full justify-end items-end"
                 >
                     {#if $metaData.meta.type === "series"}
                         {@const watchedCount = Object.values(
@@ -403,14 +403,14 @@
                                 ? (watchedCount / $episodes) * 100
                                 : 0}
                         <div
-                            class="px-[60px] py-[40px] w-full bg-[#FFFFFF]/10 backdrop-blur-[16px] rounded-[64px] flex flex-col gap-[20px]"
+                            class="px-15 py-10 w-full bg-[#FFFFFF]/10 backdrop-blur-lg rounded-[64px] flex flex-col gap-5"
                         >
                             <span
                                 class="text-[#E1E1E1] text-[32px] font-poppins font-bold"
                                 >{watchedCount}/{$episodes} episodes watched</span
                             >
                             <div
-                                class="w-full h-[10px] bg-[#A3A3A3]/30 rounded-full overflow-hidden"
+                                class="w-full h-2.5 bg-[#A3A3A3]/30 rounded-full overflow-hidden"
                             >
                                 <div
                                     class="h-full bg-white rounded-full transition-all duration-300"
@@ -421,7 +421,7 @@
                     {/if}
 
                     <div
-                        class="px-[60px] py-[40px] w-full bg-[#FFFFFF]/10 backdrop-blur-[16px] rounded-[64px] flex flex-col gap-[20px] justify-center"
+                        class="px-15 py-10 w-full bg-[#FFFFFF]/10 backdrop-blur-lg rounded-[64px] flex flex-col gap-5 justify-center"
                     >
                         {#if $metaData.meta.type === "series"}
                             <span
@@ -431,14 +431,14 @@
                         {/if}
 
                         <div
-                            class="flex flex-row gap-[10px] items-center justify-between"
+                            class="flex flex-row gap-2.5 items-center justify-between"
                         >
                             <span
                                 class="text-[#E8E8E8]/80 text-[24px] font-poppins font-medium"
                                 >{$metaData.meta.year}</span
                             >
 
-                            <div class="flex flex-row gap-[10px] items-center">
+                            <div class="flex flex-row gap-2.5 items-center">
                                 <span
                                     class="text-[#E8E8E8]/80 text-[24px] font-poppins font-medium"
                                     >{$metaData.meta.imdbRating}</span
@@ -453,7 +453,7 @@
                                     <img
                                         src="imdb.png"
                                         alt="IMDB Logo"
-                                        class="h-[50px] w-auto object-contain"
+                                        class="h-12.5 w-auto object-contain"
                                     />
                                 </a>
                             </div>
@@ -466,7 +466,7 @@
 
             {#if $metaData.meta.type === "series"}
                 <div
-                    class="absolute bottom-0 left-0 w-full h-[150px] bg-gradient-to-t from-[#090909] to-transparent"
+                    class="absolute bottom-0 left-0 w-full h-37.5 bg-linear-to-t from-[#090909] to-transparent"
                 ></div>
 
                 <span
@@ -477,7 +477,7 @@
         </div>
 
         {#if $metaData.meta.type === "series"}
-            <div class="w-screen p-40">
+            <div class="w-full p-40">
                 <SeasonSelector
                     seasonsArray={$seasonsArray}
                     bind:currentSeason={$currentSeason}
@@ -549,7 +549,7 @@
     />
 
     {#if $playerVisible && $selectedStreamUrl}
-        <div class="w-screen h-screen z-100 fixed top-0 left-0">
+        <div class="w-full h-full z-100 fixed top-0 left-0">
             <Player
                 videoSrc={$selectedStreamUrl}
                 fileIdx={$selectedFileIdx}
@@ -581,7 +581,7 @@
         />
     {:else}
         <div
-            class="w-full h-screen flex items-center justify-center"
+            class="w-full h-full flex items-center justify-center"
             out:fade={{ duration: 200 }}
         >
             <LoadingSpinner size="60px" />

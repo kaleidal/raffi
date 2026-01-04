@@ -63,7 +63,7 @@
 </script>
 
 <div
-    class="bg-[#090909] h-screen w-screen flex items-center justify-center gap-[20px] p-[20px]"
+    class="bg-[#090909] h-full w-full flex items-center justify-center gap-[20px] p-[20px]"
 >
     <div
         class="bg-[#353535] flex-grow h-full rounded-[48px] p-[20px] px-[80px]"
