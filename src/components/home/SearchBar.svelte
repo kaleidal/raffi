@@ -5,17 +5,22 @@
     import { router } from "../../lib/stores/router";
     import Skeleton from "../common/Skeleton.svelte";
     import { fade } from "svelte/transition";
-    import TitleContextMenu from "./context_menus/TitleContextMenu.svelte";
-    import ListsPopup from "../meta/modals/ListsPopup.svelte";
-    import PlayModal from "./modals/PlayModal.svelte";
+	import TitleContextMenu from "./context_menus/TitleContextMenu.svelte";
+	import ListsPopup from "../meta/modals/ListsPopup.svelte";
+	import PlayModal from "./modals/PlayModal.svelte";
+	import { trackEvent } from "../../lib/analytics";
+
 
     const dispatch = createEventDispatcher();
 
     let searchQuery = "";
     let searchResults: any[] = [];
-    let searchTimeout: any;
-    let showSearchResults = false;
-    let loading = false;
+	let searchTimeout: any;
+	let showSearchResults = false;
+	let loading = false;
+	let lastSearchQueryLength = 0;
+	let lastSearchResultsCount = 0;
+
     export let absolute: boolean = true;
     export let onLogoClick: () => void = () => {};
 
@@ -29,32 +34,49 @@
     let showListsPopup = false;
     let showPlayModal = false;
 
-    function handleSearch(e: Event) {
-        const query = (e.target as HTMLInputElement).value;
-        searchQuery = query;
+	function handleSearch(e: Event) {
+		const query = (e.target as HTMLInputElement).value;
+		searchQuery = query;
 
-        clearTimeout(searchTimeout);
-        if (!query.trim()) {
-            searchResults = [];
-            showSearchResults = false;
-            loading = false;
-            return;
-        }
+		clearTimeout(searchTimeout);
+		if (!query.trim()) {
+			searchResults = [];
+			showSearchResults = false;
+			loading = false;
+			lastSearchQueryLength = 0;
+			lastSearchResultsCount = 0;
+			return;
+		}
 
-        loading = true;
-        showSearchResults = true;
+		loading = true;
+		showSearchResults = true;
 
-        searchTimeout = setTimeout(async () => {
-            try {
-                searchResults = await searchTitles(query);
-            } catch (e) {
-                console.error("Search failed", e);
-                searchResults = [];
-            } finally {
-                loading = false;
-            }
-        }, 500);
-    }
+		searchTimeout = setTimeout(async () => {
+			const trimmed = query.trim();
+			const queryLength = trimmed.length;
+			try {
+				searchResults = await searchTitles(query);
+				lastSearchQueryLength = queryLength;
+				lastSearchResultsCount = searchResults.length;
+				trackEvent("search_performed", {
+					query_length: queryLength,
+					results_count: searchResults.length,
+				});
+			} catch (e) {
+				console.error("Search failed", e);
+				searchResults = [];
+				lastSearchQueryLength = queryLength;
+				lastSearchResultsCount = 0;
+				trackEvent("search_failed", {
+					query_length: queryLength,
+					error_name: e instanceof Error ? e.name : "unknown",
+				});
+			} finally {
+				loading = false;
+			}
+		}, 500);
+	}
+
 
     function closeSearch() {
         // Delay closing to allow clicks on results or context menu
@@ -66,27 +88,62 @@
         }, 200);
     }
 
-    function navigateToMeta(imdbId: string, type: string, name: string) {
-        router.navigate("meta", { imdbId, type, name });
-    }
+	function navigateToMeta(
+		imdbId: string,
+		type: string,
+		name: string,
+		index: number,
+	) {
+		trackEvent("search_result_opened", {
+			query_length: lastSearchQueryLength,
+			results_count: lastSearchResultsCount,
+			result_index: index,
+			content_type: type,
+		});
+		router.navigate("meta", { imdbId, type, name });
+	}
 
-    function openAddons() {
-        dispatch("openAddons");
-    }
+	function openAddons() {
+		trackEvent("addons_opened", { source: "search_bar" });
+		dispatch("openAddons");
+	}
 
-    function handleContextMenu(
-        e: MouseEvent,
-        imdbId: string,
-        type: string,
-        title: string,
-    ) {
-        contextMenuX = e.clientX;
-        contextMenuY = e.clientY;
-        selectedImdbId = imdbId;
-        selectedType = type;
-        selectedTitle = title;
-        showContextMenu = true;
-    }
+	function openLists() {
+		trackEvent("lists_opened", { source: "search_bar" });
+		router.navigate("lists");
+	}
+
+	function openSettings() {
+		trackEvent("settings_opened", { source: "search_bar" });
+		dispatch("openSettings");
+	}
+
+	function openPlayModal() {
+		trackEvent("play_modal_opened", { source: "search_bar" });
+		showPlayModal = true;
+	}
+
+	function handleContextMenu(
+		e: MouseEvent,
+		imdbId: string,
+		type: string,
+		title: string,
+		index: number,
+	) {
+		contextMenuX = e.clientX;
+		contextMenuY = e.clientY;
+		selectedImdbId = imdbId;
+		selectedType = type;
+		selectedTitle = title;
+		showContextMenu = true;
+		trackEvent("search_result_context_menu", {
+			query_length: lastSearchQueryLength,
+			results_count: lastSearchResultsCount,
+			result_index: index,
+			content_type: type,
+		});
+	}
+
 
     async function handleAddToList() {
         showContextMenu = false;
@@ -223,7 +280,7 @@
                         </div>
                     {/each}
                 {:else}
-                    {#each searchResults as result}
+                    {#each searchResults as result, index}
                         <button
                             class="flex flex-row gap-4 items-center p-2 hover:bg-white/10 rounded-xl transition-colors cursor-pointer text-left"
                             on:click={() =>
@@ -231,6 +288,7 @@
                                     result["#IMDB_ID"],
                                     "movie",
                                     result["#TITLE"],
+                                    index,
                                 )}
                             on:contextmenu|preventDefault={(e) =>
                                 handleContextMenu(
@@ -238,8 +296,10 @@
                                     result["#IMDB_ID"],
                                     "movie", // Assuming movie for now, search results might not have type
                                     result["#TITLE"],
+                                    index,
                                 )}
                         >
+
                             <img
                                 src={result["#IMG_POSTER"]}
                                 alt={result["#TITLE"]}
@@ -286,8 +346,9 @@
         <button
             class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
             aria-label="addons"
-            on:click={() => showPlayModal = true}
+            on:click={openPlayModal}
         >
+
             <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M8.33337 8.33334C8.3332 7.74683 8.48778 7.17066 8.78151 6.66299C9.07524 6.15533 9.49772 5.73416 10.0063 5.442C10.5149 5.14985 11.0915 4.99705 11.678 4.99904C12.2645 5.00103 12.8401 5.15774 13.3467 5.45334L33.3417 17.1167C33.8463 17.4095 34.2652 17.8296 34.5566 18.335C34.848 18.8405 35.0016 19.4135 35.0021 19.9969C35.0026 20.5803 34.85 21.1536 34.5595 21.6596C34.269 22.1655 33.8508 22.5863 33.3467 22.88L13.3467 34.5467C12.8401 34.8423 12.2645 34.999 11.678 35.001C11.0915 35.003 10.5149 34.8502 10.0063 34.558C9.49772 34.2659 9.07524 33.8447 8.78151 33.337C8.48778 32.8294 8.3332 32.2532 8.33337 31.6667V8.33334Z" stroke="#C3C3C3" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
@@ -318,8 +379,9 @@
         <button
             class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
             aria-label="lists"
-            on:click={() => router.navigate("lists")}
+            on:click={openLists}
         >
+
             <svg
                 width="40"
                 height="40"
@@ -340,8 +402,9 @@
         <button
             class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
             aria-label="settings"
-            on:click={() => dispatch("openSettings")}
+            on:click={openSettings}
         >
+
             <svg
                 width="40"
                 height="40"

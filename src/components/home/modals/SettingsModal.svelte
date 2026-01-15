@@ -11,6 +11,13 @@
 	import { supabase } from "../../../lib/db/supabase";
 	import { currentUser } from "../../../lib/stores/authStore";
 	import { router } from "../../../lib/stores/router";
+	import {
+		getAnalyticsSettings,
+		isAnalyticsAvailable,
+		setAnalyticsSettings,
+		trackEvent,
+	} from "../../../lib/analytics";
+
 
 	export let showSettings = false;
 
@@ -28,6 +35,10 @@
 	let newPassword = "";
 	let message = "";
 	let error = "";
+	let analyticsEnabled = false;
+	let sessionReplayEnabled = false;
+	let analyticsAvailable = false;
+
 
 	let localLibrarySupported = false;
 	let localRoots: string[] = [];
@@ -51,7 +62,13 @@
 		const storedSeek = localStorage.getItem("seek_bar_style");
 		seekBarStyle = storedSeek || "raffi";
 
+		analyticsAvailable = isAnalyticsAvailable();
+		const analyticsSettings = getAnalyticsSettings();
+		analyticsEnabled = analyticsSettings.enabled;
+		sessionReplayEnabled = analyticsSettings.sessionReplay;
+
 		localLibrarySupported =
+
 			typeof window !== "undefined" &&
 			!!(window as any).electronAPI?.localLibrary;
 		if (localLibrarySupported) {
@@ -83,6 +100,31 @@
 		localStorage.setItem("seek_bar_style", seekBarStyle);
 	}
 
+	function toggleAnalytics() {
+		analyticsEnabled = !analyticsEnabled;
+		if (!analyticsEnabled) {
+			sessionReplayEnabled = false;
+		}
+		setAnalyticsSettings({
+			enabled: analyticsEnabled,
+			sessionReplay: sessionReplayEnabled,
+		});
+		trackEvent("analytics_toggled", { enabled: analyticsEnabled });
+	}
+
+	function toggleSessionReplay() {
+		if (!analyticsEnabled) return;
+		sessionReplayEnabled = !sessionReplayEnabled;
+		setAnalyticsSettings({
+			enabled: analyticsEnabled,
+			sessionReplay: sessionReplayEnabled,
+		});
+		trackEvent("session_replay_toggled", {
+			enabled: sessionReplayEnabled,
+		});
+	}
+
+
 	async function addLocalFolder() {
 		if (!localLibrarySupported) return;
 		localScanMessage = "";
@@ -91,31 +133,53 @@
 			if (!picked) return;
 			localRoots = Array.from(new Set([...(localRoots || []), picked]));
 			setLocalRoots(localRoots);
+			trackEvent("local_library_root_added", {
+				root_count: localRoots.length,
+			});
 		} catch (e) {
 			console.error("Failed to pick folder", e);
 			localScanMessage = "Failed to pick folder";
+			trackEvent("local_library_root_add_failed", {
+				error_name: e instanceof Error ? e.name : "unknown",
+			});
 		}
 	}
+
 
 	function removeLocalFolder(folder: string) {
 		localRoots = (localRoots || []).filter((p) => p !== folder);
 		setLocalRoots(localRoots);
+		trackEvent("local_library_root_removed", {
+			root_count: localRoots.length,
+		});
 	}
+
 
 	async function rescanLocalLibrary() {
 		if (!localLibrarySupported) return;
 		scanningLocal = true;
 		localScanMessage = "Scanning…";
+		trackEvent("local_library_scan_started", {
+			root_count: localRoots.length,
+		});
 		try {
 			const res = await scanAndIndex();
 			localScanMessage = res ? `Indexed ${res.entries} files` : "Not available";
+			trackEvent("local_library_scan_completed", {
+				entries: res?.entries ?? 0,
+				success: Boolean(res),
+			});
 		} catch (e) {
 			console.error("Local library scan failed", e);
 			localScanMessage = "Scan failed";
+			trackEvent("local_library_scan_failed", {
+				error_name: e instanceof Error ? e.name : "unknown",
+			});
 		} finally {
 			scanningLocal = false;
 		}
 	}
+
 
 	async function downloadData() {
 		try {
@@ -139,11 +203,16 @@
 			a.click();
 			document.body.removeChild(a);
 			URL.revokeObjectURL(url);
+			trackEvent("data_exported", { success: true });
 		} catch (e) {
 			console.error("Failed to download data", e);
 			error = "Failed to download data";
+			trackEvent("data_export_failed", {
+				error_name: e instanceof Error ? e.name : "unknown",
+			});
 		}
 	}
+
 
 	async function handleLogout() {
 		await supabase.auth.signOut();
@@ -325,7 +394,72 @@
 						</div>
 					</section>
 
+					<section class="rounded-[28px] bg-white/[0.04] p-6 flex flex-col gap-5">
+						<div>
+							<h3 class="text-white text-xl font-semibold">
+								Privacy & Analytics
+							</h3>
+							<p class="text-white/60 text-sm">
+								Help improve Raffi while keeping control of your data.
+							</p>
+						</div>
+						<div class="rounded-2xl bg-white/[0.08] p-4 flex flex-wrap items-center gap-4 justify-between">
+							<div>
+								<p class="text-white font-medium">
+									Share anonymous analytics
+								</p>
+								<p class="text-white/60 text-sm">
+									Tracks feature usage and stream types without collecting titles or URLs.
+								</p>
+							</div>
+							<button
+								class={`relative w-16 h-9 rounded-full border border-white/10 transition-colors duration-200 ${analyticsAvailable ? "cursor-pointer" : "cursor-not-allowed opacity-50"} ${analyticsEnabled ? "bg-white" : "bg-white/10"}`}
+								on:click={toggleAnalytics}
+								disabled={!analyticsAvailable}
+								aria-label="Toggle analytics"
+								role="switch"
+								aria-checked={analyticsEnabled}
+							>
+								<span
+									class={`absolute top-1 left-1 w-7 h-7 rounded-full text-[10px] font-semibold tracking-[0.2em] flex items-center justify-center transition-all duration-200 ${analyticsEnabled ? "translate-x-7 bg-black text-white/90" : "translate-x-0 bg-white/80 text-black"}`}
+								>
+									{analyticsEnabled ? "ON" : "OFF"}
+								</span>
+							</button>
+						</div>
+						<div class="rounded-2xl bg-white/[0.08] p-4 flex flex-wrap items-center gap-4 justify-between">
+							<div>
+								<p class="text-white font-medium">
+									Session replay
+								</p>
+								<p class="text-white/60 text-sm">
+									Records UI flows to debug issues. Text inputs are masked.
+								</p>
+							</div>
+							<button
+								class={`relative w-16 h-9 rounded-full border border-white/10 transition-colors duration-200 ${analyticsAvailable && analyticsEnabled ? "cursor-pointer" : "cursor-not-allowed opacity-50"} ${sessionReplayEnabled ? "bg-white" : "bg-white/10"}`}
+								on:click={toggleSessionReplay}
+								disabled={!analyticsAvailable || !analyticsEnabled}
+								aria-label="Toggle session replay"
+								role="switch"
+								aria-checked={sessionReplayEnabled}
+							>
+								<span
+									class={`absolute top-1 left-1 w-7 h-7 rounded-full text-[10px] font-semibold tracking-[0.2em] flex items-center justify-center transition-all duration-200 ${sessionReplayEnabled ? "translate-x-7 bg-black text-white/90" : "translate-x-0 bg-white/80 text-black"}`}
+								>
+									{sessionReplayEnabled ? "ON" : "OFF"}
+								</span>
+							</button>
+						</div>
+						{#if !analyticsAvailable}
+							<p class="text-white/50 text-sm">
+								Analytics is not configured for this build.
+							</p>
+						{/if}
+					</section>
+
 					{#if localLibrarySupported}
+
 						<section class="rounded-[28px] bg-white/[0.04] p-6 flex flex-col gap-5">
 							<div>
 								<h3 class="text-white text-xl font-semibold">Local Library</h3>
