@@ -1,6 +1,6 @@
 const { app, BrowserWindow, dialog, screen, ipcMain } = require('electron');
 const { spawn } = require('child_process');
-const {autoUpdater} = require('electron-updater');
+const { autoUpdater } = require('electron-updater');
 
 if (process.platform === 'win32') {
     app.setAppUserModelId('al.kaleid.raffi');
@@ -9,6 +9,19 @@ if (process.platform === 'win32') {
 const path = require('path');
 const express = require('express');
 const fs = require('fs');
+
+const logToFile = (message, error) => {
+    try {
+        const logDir = app.getPath('userData');
+        const logPath = path.join(logDir, 'raffi-main.log');
+        const time = new Date().toISOString();
+        const details = error ? `\n${error.stack || error.message || error}` : '';
+        fs.appendFileSync(logPath, `[${time}] ${message}${details}\n`);
+    } catch {
+        // ignore
+    }
+};
+
 
 function isDiscordIPCConnectError(err) {
     const msg = (err && (err.message || String(err))) || '';
@@ -29,17 +42,38 @@ function isDiscordIPCConnectError(err) {
 process.on('uncaughtException', (err) => {
     if (isDiscordIPCConnectError(err)) {
         console.log('Ignoring Discord IPC connect failure:', err?.message || err);
+        logToFile('Ignoring Discord IPC connect failure', err);
         return;
     }
+    logToFile('Uncaught exception in main process', err);
     throw err;
 });
 
 process.on('unhandledRejection', (reason) => {
     if (isDiscordIPCConnectError(reason)) {
         console.log('Ignoring Discord IPC rejection:', (reason && reason.message) || reason);
+        logToFile('Ignoring Discord IPC rejection', reason);
         return;
     }
+    logToFile('Unhandled rejection in main process', reason);
 });
+
+app.on('ready', () => {
+    logToFile('App ready');
+});
+
+app.on('window-all-closed', () => {
+    logToFile('All windows closed');
+});
+
+app.on('render-process-gone', (_event, details) => {
+    logToFile('Render process gone', details);
+});
+
+app.on('child-process-gone', (_event, details) => {
+    logToFile('Child process gone', details);
+});
+
 
 let mainWindow;
 let goServer;
@@ -400,16 +434,22 @@ function createWindow() {
         mainWindow.loadURL('http://localhost:5173');
     } else {
         autoUpdater.checkForUpdatesAndNotify();
-        
+
         const expressApp = express();
         const distPath = path.join(__dirname, '..', 'dist');
         expressApp.use(express.static(distPath));
 
         httpServer = expressApp.listen(11420, '127.0.0.1', () => {
             console.log(`Serving app on http://127.0.0.1:11420`);
+            logToFile('Serving app on http://127.0.0.1:11420');
             mainWindow.loadURL(`http://127.0.0.1:11420`);
         });
+
+        httpServer.on('error', (err) => {
+            logToFile('Failed to start express server', err);
+        });
     }
+
 
     mainWindow.setMenuBarVisibility(false);
 
@@ -478,11 +518,22 @@ ipcMain.handle('WINDOW_IS_MAXIMIZED', async () => {
 function startGoServer() {
     const binPath = getDecoderPath();
     console.log('Binary path:', binPath);
+    logToFile('Decoder binary path', binPath);
+
 
     goServer = spawn(binPath, [], { stdio: 'pipe' });
 
+    goServer.on('error', (err) => {
+        logToFile('Decoder spawn error', err);
+    });
+
+    goServer.on('exit', (code, signal) => {
+        logToFile(`Decoder exited with code ${code} signal ${signal}`);
+    });
+
     goServer.stdout.on('data', d => console.log('[go]', d.toString()));
     goServer.stderr.on('data', d => console.error('[go err]', d.toString()));
+
 }
 
 ipcMain.handle('SAVE_CLIP_DIALOG', async (_event, suggestedName) => {

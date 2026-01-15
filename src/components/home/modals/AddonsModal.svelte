@@ -98,10 +98,13 @@
                 body.style.top = `-${scrollY}px`;
                 body.style.width = "100%";
                 html.style.overflow = "hidden";
-                if (container) {
-                    container.dataset.prevOverflow = container.style.overflow || "";
-                    container.style.overflow = "hidden";
-                }
+            if (container) {
+                container.dataset.prevOverflowY = container.style.overflowY || "";
+                container.dataset.prevOverflowX = container.style.overflowX || "";
+                container.style.overflowY = "hidden";
+                container.style.overflowX = "hidden";
+            }
+
             }
             body.dataset.modalCount = String(count + 1);
             return;
@@ -121,8 +124,10 @@
             delete body.dataset.prevWidth;
             delete body.dataset.scrollY;
             if (container) {
-                container.style.overflow = container.dataset.prevOverflow || "";
-                delete container.dataset.prevOverflow;
+                container.style.overflowY = container.dataset.prevOverflowY || "";
+                container.style.overflowX = container.dataset.prevOverflowX || "";
+                delete container.dataset.prevOverflowY;
+                delete container.dataset.prevOverflowX;
             }
             window.scrollTo(0, scrollY);
         }
