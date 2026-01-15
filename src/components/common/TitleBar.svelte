@@ -6,7 +6,7 @@
 </script>
 
 <div
-    class="h-11 w-full flex items-center justify-between px-3 select-none text-white border-b border-white/10 bg-[#090909] focus:outline-none"
+    class="h-[32px] w-full flex items-center justify-between px-3 select-none text-white bg-[#090909] focus:outline-none"
     style="-webkit-app-region: drag"
     on:dblclick={() => handleDoubleClick()}
     on:keydown={(e) => {
@@ -22,6 +22,5 @@
         class="flex items-center gap-3 min-w-0"
         style="padding-right: env(titlebar-area-width, 140px)"
     >
-        <img src="/raffi.svg" alt="Raffi Logo" class="h-6 w-6 object-contain" />
     </div>
 </div>
