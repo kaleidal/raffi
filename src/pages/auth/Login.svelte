@@ -1,6 +1,9 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import { supabase } from "../../lib/db/supabase";
+    import { enableLocalMode } from "../../lib/stores/authStore";
+    import { router } from "../../lib/stores/router";
+    import { trackEvent } from "../../lib/analytics";
 
     let email = "";
     let password = "";
@@ -57,9 +60,15 @@
     onMount(async () => {
         const { data, error } = await supabase.auth.getSession();
         if (data.session) {
-            window.location.href = "/#/meta";
+            router.navigate("home");
         }
     });
+
+    function continueLocal() {
+        enableLocalMode();
+        trackEvent("local_mode_enabled");
+        router.navigate("home");
+    }
 </script>
 
 <div
@@ -125,5 +134,12 @@
                 </svg>
             </button>
         </div>
+
+        <button
+            class="text-black/70 text-[18px] font-poppins font-semibold underline underline-offset-4 hover:text-black mt-[40px]"
+            on:click={continueLocal}
+        >
+            continue locally
+        </button>
     </div>
 </div>

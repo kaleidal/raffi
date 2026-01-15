@@ -1,6 +1,6 @@
 <script lang="ts">
     import { fade } from "svelte/transition";
-    import { createEventDispatcher, onMount } from "svelte";
+    import { createEventDispatcher, onDestroy, onMount } from "svelte";
     import type { Addon } from "../../../lib/db/db";
     import type { ShowResponse } from "../../../lib/library/types/meta_types";
     import type { ProgressMap, ProgressItem } from "../../../pages/meta/types";
@@ -34,6 +34,7 @@
     let resolutionFilter: ResolutionFilter = "all";
     let excludeHDR = false;
     let hasTrackedOpen = false;
+    let bodyLocked = false;
 
     const getStreamCounts = () => {
         const localCount = streams.filter(
@@ -44,6 +45,67 @@
             local: localCount,
             addon: Math.max(0, streams.length - localCount),
         };
+    };
+
+    const toggleBodyScroll = (active: boolean) => {
+        if (typeof document === "undefined") return;
+        const body = document.body;
+        const html = document.documentElement;
+        const container = document.querySelector(
+            "[data-scroll-container]",
+        ) as HTMLElement | null;
+        const count = Number(body.dataset.modalCount || "0");
+        if (active) {
+            if (count === 0) {
+                const scrollY = window.scrollY;
+                body.dataset.scrollY = String(scrollY);
+                body.dataset.prevOverflow = body.style.overflow || "";
+                body.dataset.prevPosition = body.style.position || "";
+                body.dataset.prevTop = body.style.top || "";
+                body.dataset.prevWidth = body.style.width || "";
+                body.style.overflow = "hidden";
+                body.style.position = "fixed";
+                body.style.top = `-${scrollY}px`;
+                body.style.width = "100%";
+                html.style.overflow = "hidden";
+                if (container) {
+                    container.dataset.prevOverflow = container.style.overflow || "";
+                    container.style.overflow = "hidden";
+                }
+            }
+            body.dataset.modalCount = String(count + 1);
+            return;
+        }
+        const next = Math.max(0, count - 1);
+        body.dataset.modalCount = String(next);
+        if (next === 0) {
+            const scrollY = Number(body.dataset.scrollY || "0");
+            body.style.overflow = body.dataset.prevOverflow || "";
+            body.style.position = body.dataset.prevPosition || "";
+            body.style.top = body.dataset.prevTop || "";
+            body.style.width = body.dataset.prevWidth || "";
+            html.style.overflow = "";
+            delete body.dataset.prevOverflow;
+            delete body.dataset.prevPosition;
+            delete body.dataset.prevTop;
+            delete body.dataset.prevWidth;
+            delete body.dataset.scrollY;
+            if (container) {
+                container.style.overflow = container.dataset.prevOverflow || "";
+                delete container.dataset.prevOverflow;
+            }
+            window.scrollTo(0, scrollY);
+        }
+    };
+
+    const updateBodyLock = (active: boolean) => {
+        if (active && !bodyLocked) {
+            toggleBodyScroll(true);
+            bodyLocked = true;
+        } else if (!active && bodyLocked) {
+            toggleBodyScroll(false);
+            bodyLocked = false;
+        }
     };
 
     function resetFilters() {
@@ -414,6 +476,12 @@
         hasTrackedOpen = false;
     }
 
+    $: updateBodyLock(streamsPopupVisible);
+
+    onDestroy(() => {
+        updateBodyLock(false);
+    });
+
     $: enrichedStreams = streams.map((stream, index) => ({
         key:
             stream?.url ||
@@ -679,20 +747,21 @@
         episodeSeasonNumber &&
         episodeNumber;
 
-    $: console.log(streams)
 </script>
 
 {#if streamsPopupVisible}
     <div
         class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 sm:p-10 lg:p-20"
+        transition:fade={{ duration: 200 }}
         on:click|self={close}
         on:keydown={(e) => e.key === "Escape" && close()}
+        on:wheel|preventDefault|stopPropagation
         role="button"
         tabindex="0"
-        transition:fade={{ duration: 200 }}
     >
         <div
             class="bg-[#121212] w-full max-w-6xl max-h-full rounded-4xl p-6 sm:p-8 lg:p-10 flex flex-col gap-6 overflow-hidden relative"
+            on:wheel|stopPropagation
         >
             <button
                 class="absolute top-6 right-6 text-white/50 hover:text-white cursor-pointer"

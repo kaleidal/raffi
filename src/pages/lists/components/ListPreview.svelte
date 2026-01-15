@@ -256,14 +256,8 @@
                 </div>
             </div>
         </div>
-    {:else}
-        <!-- Empty State for Right Panel -->
-        <div
-            class="w-full h-full flex items-center justify-center text-white/20"
-        >
-            <p class="font-poppins text-xl">Select an item to view details</p>
-        </div>
     {/if}
+
 </div>
 
 <style>

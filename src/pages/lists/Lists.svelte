@@ -10,7 +10,7 @@
     import ListItemGrid from "./components/ListItemGrid.svelte";
 
     import { loadLists } from "./dataLoader";
-    import { loaded, showAddonsModal, showSettingsModal } from "./listsState";
+    import { loaded, lists, showAddonsModal, showSettingsModal } from "./listsState";
     import SettingsModal from "../../components/home/modals/SettingsModal.svelte";
 
     onMount(async () => {
@@ -32,63 +32,74 @@
     />
 
     {#if $loaded}
-        <div
-            class="flex flex-row gap-2.5 mt-12.5 items-start justify-center w-full max-w-screen h-[calc(100%-200px)] px-5 z-10 rounded-[20px]"
-            in:fade={{ duration: 300 }}
-        >
-            <ListSidebar>
-                <div slot="grid" let:listId>
-                    <ListItemGrid {listId} />
+        {#if $lists.length === 0}
+            <div class="flex-1 w-full flex items-center justify-center" in:fade={{ duration: 300 }}>
+                <div class="text-center">
+                    <h3 class="text-white text-2xl font-poppins font-semibold">No lists yet</h3>
+                    <p class="text-white/50 text-sm font-poppins mt-2">
+                        Create a list to organize what you want to watch.
+                    </p>
                 </div>
-            </ListSidebar>
-
-            <ListPreview />
-        </div>
-
-        <div class="w-full absolute top-0 left-0 overflow-hidden">
-            <svg
-                viewBox="0 0 1858 591"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
+            </div>
+        {:else}
+            <div
+                class="flex flex-row gap-2.5 mt-12.5 items-start justify-center w-full max-w-screen h-[calc(100%-200px)] px-5 z-10 rounded-[20px]"
+                in:fade={{ duration: 300 }}
             >
-                <g filter="url(#filter0_f_222_680)">
-                    <ellipse
-                        cx="929"
-                        cy="95.5"
-                        rx="529"
-                        ry="95.5"
-                        fill="#D9D9D9"
-                        fill-opacity="0.6"
-                    />
-                </g>
-                <defs>
-                    <filter
-                        id="filter0_f_222_680"
-                        x="0"
-                        y="-400"
-                        width="1858"
-                        height="991"
-                        filterUnits="userSpaceOnUse"
-                        color-interpolation-filters="sRGB"
-                    >
-                        <feFlood
-                            flood-opacity="0"
-                            result="BackgroundImageFix"
+                <ListSidebar>
+                    <div slot="grid" let:listId>
+                        <ListItemGrid {listId} />
+                    </div>
+                </ListSidebar>
+
+                <ListPreview />
+            </div>
+
+            <div class="w-full absolute top-0 left-0 overflow-hidden">
+                <svg
+                    viewBox="0 0 1858 591"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                >
+                    <g filter="url(#filter0_f_222_680)">
+                        <ellipse
+                            cx="929"
+                            cy="95.5"
+                            rx="529"
+                            ry="95.5"
+                            fill="#D9D9D9"
+                            fill-opacity="0.6"
                         />
-                        <feBlend
-                            mode="normal"
-                            in="SourceGraphic"
-                            in2="BackgroundImageFix"
-                            result="shape"
-                        />
-                        <feGaussianBlur
-                            stdDeviation="200"
-                            result="effect1_foregroundBlur_222_680"
-                        />
-                    </filter>
-                </defs>
-            </svg>
-        </div>
+                    </g>
+                    <defs>
+                        <filter
+                            id="filter0_f_222_680"
+                            x="0"
+                            y="-400"
+                            width="1858"
+                            height="991"
+                            filterUnits="userSpaceOnUse"
+                            color-interpolation-filters="sRGB"
+                        >
+                            <feFlood
+                                flood-opacity="0"
+                                result="BackgroundImageFix"
+                            />
+                            <feBlend
+                                mode="normal"
+                                in="SourceGraphic"
+                                in2="BackgroundImageFix"
+                                result="shape"
+                            />
+                            <feGaussianBlur
+                                stdDeviation="200"
+                                result="effect1_foregroundBlur_222_680"
+                            />
+                        </filter>
+                    </defs>
+                </svg>
+            </div>
+        {/if}
     {:else}
         <div
             class="w-full h-full flex items-center justify-center"

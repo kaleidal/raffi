@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { createEventDispatcher, onMount } from "svelte";
+	import { createEventDispatcher, onDestroy, onMount } from "svelte";
+
 	import { fade, scale } from "svelte/transition";
 	import { getLibrary, getListsWithItems } from "../../../lib/db/db";
 	import { enableRPC, disableRPC } from "../../../lib/rpc";
@@ -9,7 +10,13 @@
 		scanAndIndex,
 	} from "../../../lib/localLibrary/localLibrary";
 	import { supabase } from "../../../lib/db/supabase";
-	import { currentUser } from "../../../lib/stores/authStore";
+	import { clearLocalState, syncUserStateToLocal } from "../../../lib/db/db";
+	import {
+		currentUser,
+		disableLocalMode,
+		enableLocalMode,
+		localMode,
+	} from "../../../lib/stores/authStore";
 	import { router } from "../../../lib/stores/router";
 	import {
 		getAnalyticsSettings,
@@ -44,6 +51,8 @@
 	let localRoots: string[] = [];
 	let scanningLocal = false;
 	let localScanMessage = "";
+	let bodyLocked = false;
+
 
 	onMount(async () => {
 		try {
@@ -80,10 +89,72 @@
 		}
 	});
 
+	const toggleBodyScroll = (active: boolean) => {
+		if (typeof document === "undefined") return;
+		const body = document.body;
+		const html = document.documentElement;
+		const container = document.querySelector(
+			"[data-scroll-container]",
+		) as HTMLElement | null;
+		const count = Number(body.dataset.modalCount || "0");
+		if (active) {
+			if (count === 0) {
+				const scrollY = window.scrollY;
+				body.dataset.scrollY = String(scrollY);
+				body.dataset.prevOverflow = body.style.overflow || "";
+				body.dataset.prevPosition = body.style.position || "";
+				body.dataset.prevTop = body.style.top || "";
+				body.dataset.prevWidth = body.style.width || "";
+				body.style.overflow = "hidden";
+				body.style.position = "fixed";
+				body.style.top = `-${scrollY}px`;
+				body.style.width = "100%";
+				html.style.overflow = "hidden";
+				if (container) {
+					container.dataset.prevOverflow = container.style.overflow || "";
+					container.style.overflow = "hidden";
+				}
+			}
+			body.dataset.modalCount = String(count + 1);
+			return;
+		}
+		const next = Math.max(0, count - 1);
+		body.dataset.modalCount = String(next);
+		if (next === 0) {
+			const scrollY = Number(body.dataset.scrollY || "0");
+			body.style.overflow = body.dataset.prevOverflow || "";
+			body.style.position = body.dataset.prevPosition || "";
+			body.style.top = body.dataset.prevTop || "";
+			body.style.width = body.dataset.prevWidth || "";
+			html.style.overflow = "";
+			delete body.dataset.prevOverflow;
+			delete body.dataset.prevPosition;
+			delete body.dataset.prevTop;
+			delete body.dataset.prevWidth;
+			delete body.dataset.scrollY;
+			if (container) {
+				container.style.overflow = container.dataset.prevOverflow || "";
+				delete container.dataset.prevOverflow;
+			}
+			window.scrollTo(0, scrollY);
+		}
+	};
+
+	const updateBodyLock = (active: boolean) => {
+		if (active && !bodyLocked) {
+			toggleBodyScroll(true);
+			bodyLocked = true;
+		} else if (!active && bodyLocked) {
+			toggleBodyScroll(false);
+			bodyLocked = false;
+		}
+	};
+
 	function close() {
 		showSettings = false;
 		dispatch("close");
 	}
+
 
 	function toggleRpc() {
 		discordRpcEnabled = !discordRpcEnabled;
@@ -215,9 +286,39 @@
 
 
 	async function handleLogout() {
+		if ($localMode) {
+			disableLocalMode();
+			router.navigate("login");
+			return;
+		}
 		await supabase.auth.signOut();
 		router.navigate("login");
 	}
+
+	async function switchToLocalMode(keepData: boolean) {
+		if (!$currentUser) return;
+		message = "";
+		error = "";
+		try {
+			if (keepData) {
+				await syncUserStateToLocal($currentUser.id);
+			} else {
+				clearLocalState();
+			}
+			await supabase.auth.signOut();
+			enableLocalMode();
+			trackEvent("local_mode_switched", { keep_data: keepData });
+			message = "Switched to local mode.";
+			router.navigate("home");
+		} catch (e: any) {
+			console.error("Failed to switch to local mode", e);
+			error = "Failed to switch to local mode";
+			trackEvent("local_mode_switch_failed", {
+				error_name: e instanceof Error ? e.name : "unknown",
+			});
+		}
+	}
+
 
 	async function updateEmail() {
 		if (!newEmail) return;
@@ -250,7 +351,23 @@
 			error = e.message;
 		}
 	}
+
+	function goToLogin() {
+		if ($localMode) {
+			disableLocalMode();
+		}
+		trackEvent("login_requested", { source: "settings" });
+		router.navigate("login");
+		close();
+	}
+
+	$: updateBodyLock(showSettings);
+
+	onDestroy(() => {
+		updateBodyLock(false);
+	});
 </script>
+
 
 {#if showSettings}
 	<div
@@ -258,7 +375,8 @@
 		transition:fade={{ duration: 200 }}
 		on:click|self={close}
 		on:keydown={(e) => e.key === "Escape" && close()}
-		on:wheel|stopPropagation
+		on:wheel|preventDefault|stopPropagation
+
 		role="button"
 		tabindex="0"
 		style="padding: clamp(20px, 5vw, 150px);"
@@ -266,7 +384,9 @@
 		<div
 			class="bg-[#121212] w-full max-w-5xl max-h-[90vh] rounded-[32px] p-6 md:p-10 flex flex-col gap-8 relative overflow-hidden shadow-[0_40px_160px_rgba(0,0,0,0.55)]"
 			transition:scale={{ start: 0.95, duration: 200 }}
+			on:wheel|stopPropagation
 		>
+
 			<div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
 				<div>
 					<h2 class="text-white text-3xl font-poppins font-bold">
@@ -276,28 +396,39 @@
 						Personalize Raffi and keep your account tidy.
 					</p>
 				</div>
-				<button
-					on:click={close}
-					class="self-end text-white/50 hover:text-white cursor-pointer transition-colors"
-					aria-label="Close settings"
-				>
-					<svg
-						width="24"
-						height="24"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						><line x1="18" y1="6" x2="6" y2="18"></line><line
-							x1="6"
-							y1="6"
-							x2="18"
-							y2="18"
-						></line></svg
-				></button>
+				<div class="flex items-center gap-3 justify-end">
+					{#if $localMode}
+						<button
+							class="bg-white text-black px-4 py-2 rounded-2xl font-semibold hover:bg-white/90 transition-colors cursor-pointer"
+							on:click={goToLogin}
+						>
+							Log In
+						</button>
+					{/if}
+					<button
+						on:click={close}
+						class="text-white/50 hover:text-white cursor-pointer transition-colors"
+						aria-label="Close settings"
+					>
+						<svg
+							width="24"
+							height="24"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							><line x1="18" y1="6" x2="6" y2="18"></line><line
+								x1="6"
+								y1="6"
+								x2="18"
+								y2="18"
+							></line></svg>
+					</button>
+				</div>
 			</div>
+
 
 			<div class="flex-1 min-h-0 overflow-y-auto">
 				<div class="flex flex-col gap-6 min-h-0 pr-1 pb-1">
@@ -511,8 +642,10 @@
 						</section>
 					{/if}
 
-					<div class="grid gap-6 lg:grid-cols-[1fr,1.2fr]">
-						<section class="rounded-[28px] bg-white/[0.04] p-6 flex flex-col gap-5">
+					{#if !$localMode}
+						<div class="grid gap-6 lg:grid-cols-[1fr,1.2fr]">
+							<section class="rounded-[28px] bg-white/[0.04] p-6 flex flex-col gap-5">
+
 							<div>
 								<h3 class="text-white text-xl font-semibold">
 									Data & Backups
@@ -605,16 +738,45 @@
 									</div>
 								{/if}
 
+								{#if $currentUser && !$localMode}
+									<div class="rounded-2xl bg-white/[0.06] p-4 space-y-3">
+										<div>
+											<p class="text-white font-medium">Switch to local mode</p>
+											<p class="text-white/60 text-sm">
+												Use Raffi without syncing. Choose whether to copy your
+												current data into local storage.
+											</p>
+										</div>
+										<div class="flex flex-col gap-2 sm:flex-row">
+											<button
+												class="flex-1 bg-white text-black px-4 py-2 rounded-2xl font-semibold hover:bg-white/90 transition-colors cursor-pointer"
+												on:click={() => switchToLocalMode(true)}
+											>
+												Keep synced data
+											</button>
+											<button
+												class="flex-1 bg-white/10 text-white px-4 py-2 rounded-2xl font-semibold hover:bg-white/20 transition-colors cursor-pointer"
+												on:click={() => switchToLocalMode(false)}
+											>
+												Start fresh
+											</button>
+										</div>
+									</div>
+								{/if}
+
 								<button
 									class="w-full py-3 rounded-2xl bg-red-500/10 text-red-300 font-semibold hover:bg-red-500/20 transition-colors cursor-pointer"
 									on:click={handleLogout}
 								>
 									Log Out
 								</button>
+
 							</div>
 						</section>
 					</div>
+					{/if}
 				</div>
+
 			</div>
 		</div>
 	</div>
