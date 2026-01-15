@@ -1,5 +1,6 @@
 <script lang="ts">
-    import { createEventDispatcher } from "svelte";
+    import { createEventDispatcher, onDestroy } from "svelte";
+
     import { fade, scale } from "svelte/transition";
     import { router } from "../../../lib/stores/router";
     import { getCachedMetaData } from "../../../lib/library/metaCache";
@@ -8,6 +9,8 @@
     export let onClose: () => void;
 
     let mode: "select" | "join" | "preview" | "magnet" = "select";
+    let bodyLocked = false;
+
     let partyCode = "";
     let magnetLink = "";
     let partyDetails: any = null;
@@ -16,7 +19,79 @@
 
     let fileInput: HTMLInputElement;
 
+    const toggleBodyScroll = (active: boolean) => {
+        if (typeof document === "undefined") return;
+        const body = document.body;
+        const html = document.documentElement;
+        const container = document.querySelector(
+            "[data-scroll-container]",
+        ) as HTMLElement | null;
+        const count = Number(body.dataset.modalCount || "0");
+        if (active) {
+            if (count === 0) {
+                const scrollY = window.scrollY;
+                body.dataset.scrollY = String(scrollY);
+                body.dataset.prevOverflow = body.style.overflow || "";
+                body.dataset.prevPosition = body.style.position || "";
+                body.dataset.prevTop = body.style.top || "";
+                body.dataset.prevWidth = body.style.width || "";
+                body.style.overflow = "hidden";
+                body.style.position = "fixed";
+                body.style.top = `-${scrollY}px`;
+                body.style.width = "100%";
+                html.style.overflow = "hidden";
+                if (container) {
+                    container.dataset.prevOverflow = container.style.overflow || "";
+                    container.style.overflow = "hidden";
+                }
+            }
+            body.dataset.modalCount = String(count + 1);
+            return;
+        }
+        const next = Math.max(0, count - 1);
+        body.dataset.modalCount = String(next);
+        if (next === 0) {
+            const scrollY = Number(body.dataset.scrollY || "0");
+            body.style.overflow = body.dataset.prevOverflow || "";
+            body.style.position = body.dataset.prevPosition || "";
+            body.style.top = body.dataset.prevTop || "";
+            body.style.width = body.dataset.prevWidth || "";
+            html.style.overflow = "";
+            delete body.dataset.prevOverflow;
+            delete body.dataset.prevPosition;
+            delete body.dataset.prevTop;
+            delete body.dataset.prevWidth;
+            delete body.dataset.scrollY;
+            if (container) {
+                container.style.overflow = container.dataset.prevOverflow || "";
+                delete container.dataset.prevOverflow;
+            }
+            window.scrollTo(0, scrollY);
+        }
+    };
+
+    const updateBodyLock = (active: boolean) => {
+        if (active && !bodyLocked) {
+            toggleBodyScroll(true);
+            bodyLocked = true;
+        } else if (!active && bodyLocked) {
+            toggleBodyScroll(false);
+            bodyLocked = false;
+        }
+    };
+
+    updateBodyLock(true);
+
+    onDestroy(() => {
+        updateBodyLock(false);
+    });
+
+    const closeModal = () => {
+        onClose();
+    };
+
     function onFileSelected(e: Event) {
+
         const target = e.target as HTMLInputElement;
         if (target.files && target.files.length > 0) {
             const file = target.files[0] as any;
@@ -126,15 +201,16 @@
     }
 </script>
 
-<div
-    class="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center"
-    transition:fade={{ duration: 200 }}
-    on:click|self={onClose}
-    on:keydown={(e) => e.key === "Escape" && onClose()}
-    role="button"
-    tabindex="0"
-    style="padding: clamp(20px, 5vw, 150px);"
->
+    <div
+        class="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center"
+        transition:fade={{ duration: 200 }}
+        on:click|self={closeModal}
+        on:keydown={(e) => e.key === "Escape" && closeModal()}
+        on:wheel|preventDefault|stopPropagation
+        role="button"
+        tabindex="0"
+    >
+
     <input
         type="file"
         id="local-file-input"
@@ -149,9 +225,11 @@
         class="bg-[#121212] w-full max-w-lg rounded-[32px] p-6 md:p-8 flex flex-col gap-6 relative overflow-hidden shadow-[0_40px_160px_rgba(0,0,0,0.55)] cursor-default"
         transition:scale={{ start: 0.95, duration: 200 }}
         on:click|stopPropagation
+        on:wheel|stopPropagation
         role="dialog"
         tabindex="-1"
     >
+
         <!-- Header -->
         <div class="flex flex-row items-center justify-between shrink-0">
             <div>

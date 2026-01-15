@@ -11,7 +11,7 @@
     import TitleBar from "./components/common/TitleBar.svelte";
 
     import LoadingSpinner from "./components/common/LoadingSpinner.svelte";
-    import { currentUser, initAuth } from "./lib/stores/authStore";
+    import { currentUser, initAuth, localMode } from "./lib/stores/authStore";
     import { initAnalytics, setAnalyticsUser, trackEvent, trackPageView } from "./lib/analytics";
 
     const pages = {
@@ -63,7 +63,7 @@
 
             checkingAuth = false;
 
-            if (!$currentUser && $router.page !== "login") {
+            if (!$currentUser && !$localMode && $router.page !== "login") {
                 router.navigate("login");
             }
         };
@@ -103,9 +103,9 @@
     });
 
     $: if (!checkingAuth) {
-        if (!$currentUser && $router.page !== "login") {
+        if (!$currentUser && !$localMode && $router.page !== "login") {
             router.navigate("login");
-        } else if ($currentUser && $router.page === "login") {
+        } else if (($currentUser || $localMode) && $router.page === "login") {
             router.navigate("home");
         }
     }
@@ -119,7 +119,7 @@
         <TitleBar />
     {/if}
 
-    <div class="relative flex-1 min-h-0 overflow-x-hidden overflow-y-auto">
+    <div class="relative flex-1 min-h-0 overflow-x-hidden overflow-y-auto" data-scroll-container>
         <div
             class="w-full h-full"
             style={`transform: scale(${displayZoom}); transform-origin: top left; width: calc(100% / ${displayZoom}); height: calc(100% / ${displayZoom});`}
@@ -128,11 +128,12 @@
                 <div class="w-full h-full bg-[#090909] flex items-center justify-center">
                     <LoadingSpinner size="60px" />
                 </div>
-            {:else if !$currentUser && $router.page !== "login"}
-                <Login />
-            {:else}
-                <svelte:component this={pages[$router.page]} {...$router.params as any} />
-            {/if}
+        {:else if !$currentUser && !$localMode && $router.page !== "login"}
+            <Login />
+        {:else}
+            <svelte:component this={pages[$router.page]} {...$router.params as any} />
+        {/if}
+
         </div>
     </div>
 </div>

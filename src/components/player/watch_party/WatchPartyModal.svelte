@@ -7,7 +7,8 @@
     } from "../../../lib/stores/watchPartyStore";
     import { fade, scale } from "svelte/transition";
     import { supabase } from "../../../lib/db/supabase";
-    import { onMount } from "svelte";
+    import { onDestroy, onMount } from "svelte";
+
     import { trackEvent } from "../../../lib/analytics";
 
 
@@ -28,6 +29,68 @@
     let loading = false;
     let error = "";
     let showCopied = false;
+    let bodyLocked = false;
+
+    const toggleBodyScroll = (active: boolean) => {
+        if (typeof document === "undefined") return;
+        const body = document.body;
+        const html = document.documentElement;
+        const container = document.querySelector(
+            "[data-scroll-container]",
+        ) as HTMLElement | null;
+        const count = Number(body.dataset.modalCount || "0");
+        if (active) {
+            if (count === 0) {
+                const scrollY = window.scrollY;
+                body.dataset.scrollY = String(scrollY);
+                body.dataset.prevOverflow = body.style.overflow || "";
+                body.dataset.prevPosition = body.style.position || "";
+                body.dataset.prevTop = body.style.top || "";
+                body.dataset.prevWidth = body.style.width || "";
+                body.style.overflow = "hidden";
+                body.style.position = "fixed";
+                body.style.top = `-${scrollY}px`;
+                body.style.width = "100%";
+                html.style.overflow = "hidden";
+                if (container) {
+                    container.dataset.prevOverflow = container.style.overflow || "";
+                    container.style.overflow = "hidden";
+                }
+            }
+            body.dataset.modalCount = String(count + 1);
+            return;
+        }
+        const next = Math.max(0, count - 1);
+        body.dataset.modalCount = String(next);
+        if (next === 0) {
+            const scrollY = Number(body.dataset.scrollY || "0");
+            body.style.overflow = body.dataset.prevOverflow || "";
+            body.style.position = body.dataset.prevPosition || "";
+            body.style.top = body.dataset.prevTop || "";
+            body.style.width = body.dataset.prevWidth || "";
+            html.style.overflow = "";
+            delete body.dataset.prevOverflow;
+            delete body.dataset.prevPosition;
+            delete body.dataset.prevTop;
+            delete body.dataset.prevWidth;
+            delete body.dataset.scrollY;
+            if (container) {
+                container.style.overflow = container.dataset.prevOverflow || "";
+                delete container.dataset.prevOverflow;
+            }
+            window.scrollTo(0, scrollY);
+        }
+    };
+
+    const updateBodyLock = (active: boolean) => {
+        if (active && !bodyLocked) {
+            toggleBodyScroll(true);
+            bodyLocked = true;
+        } else if (!active && bodyLocked) {
+            toggleBodyScroll(false);
+            bodyLocked = false;
+        }
+    };
 
     const getStreamSourceType = (src: string) => {
         if (!src) return "unknown";
@@ -43,10 +106,16 @@
     let selectedFile: File | null = null;
 
     onMount(() => {
+        updateBodyLock(true);
         if (initialPartyCode && autoJoin) {
             handlePreviewParty();
         }
     });
+
+    onDestroy(() => {
+        updateBodyLock(false);
+    });
+
 
     async function handleCreateParty() {
         if (!imdbId || !streamSource) {
@@ -208,20 +277,18 @@
 <div
     class="fixed inset-0 z-[300] flex items-center justify-center bg-black/90 backdrop-blur-sm"
     transition:fade={{ duration: 200 }}
+    on:click|self={onClose}
+    on:keydown={(e) => e.key === "Escape" && onClose()}
+    on:wheel|preventDefault|stopPropagation
     role="button"
     tabindex="0"
-    onclick={onClose}
-    onkeydown={(e) => e.key === "Escape" && onClose()}
 >
-    <div
-        class="bg-[#121212] rounded-2xl w-full max-w-lg shadow-2xl"
-        transition:scale={{ duration: 200, start: 0.95 }}
-        onclick={(e) => e.stopPropagation()}
-        onkeydown={(e) => e.stopPropagation()}
-        role="dialog"
-        tabindex="-1"
-    >
-        <!-- Header -->
+        <div
+            class="bg-[#121212] w-full max-w-2xl max-h-[90vh] rounded-3xl overflow-hidden shadow-[0_40px_160px_rgba(0,0,0,0.55)]"
+            on:wheel|stopPropagation
+        >
+            <!-- Header -->
+
         <div
             class="flex items-center justify-between p-6 border-b border-white/10"
         >
@@ -230,7 +297,7 @@
             </h2>
             <button
                 class="p-2 text-[#878787] hover:text-white rounded-lg transition-colors cursor-pointer"
-                onclick={onClose}
+                on:click={onClose}
                 aria-label="Close"
             >
                 <svg
@@ -294,7 +361,7 @@
                         >
                         <button
                             class="flex items-center gap-2 px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium text-white transition-colors cursor-pointer"
-                            onclick={() =>
+                            on:click={() =>
                                 copyPartyId($watchParty.partyId || "")}
                         >
                             {#if showCopied}
@@ -387,7 +454,7 @@
 
                 <button
                     class="w-full py-3 px-4 bg-red-500/10 text-red-400 font-bold rounded-xl hover:bg-red-500/20 transition-colors cursor-pointer"
-                    onclick={handleLeaveParty}
+                    on:click={handleLeaveParty}
                 >
                     Leave Party
                 </button>
@@ -400,7 +467,7 @@
                     'create'
                         ? 'text-white'
                         : 'text-[#878787] hover:text-white cursor-pointer'}"
-                    onclick={() => {
+                    on:click={() => {
                         activeTab = "create";
                         error = "";
                     }}
@@ -417,7 +484,7 @@
                     'join'
                         ? 'text-white'
                         : 'text-[#878787] hover:text-white cursor-pointer'}"
-                    onclick={() => {
+                    on:click={() => {
                         activeTab = "join";
                         error = "";
                         createdPartyId = "";
@@ -493,7 +560,7 @@
                                     >
                                     <button
                                         class="flex items-center gap-2 px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium text-white transition-colors cursor-pointer"
-                                        onclick={() =>
+                                        on:click={() =>
                                             copyPartyId(createdPartyId)}
                                     >
                                         {#if showCopied}
@@ -575,7 +642,7 @@
 
                             <button
                                 class="w-full py-3 px-4 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition-colors cursor-pointer"
-                                onclick={onClose}
+                                on:click={onClose}
                             >
                                 Start Watching
                             </button>
@@ -627,7 +694,7 @@
 
                             <button
                                 class="w-full py-3 px-4 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                                onclick={handleCreateParty}
+                                on:click={handleCreateParty}
                                 disabled={loading}
                             >
                                 {loading ? "Creating..." : "Create Party"}
@@ -645,13 +712,13 @@
                                     bind:value={partyIdInput}
                                     placeholder="Enter code..."
                                     class="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-primary-500 transition-colors font-mono text-center text-lg tracking-widest uppercase"
-                                    onkeydown={(e) => e.key === "Enter" && handlePreviewParty()}
+                                    on:keydown={(e) => e.key === "Enter" && handlePreviewParty()}
                                 />
                             </div>
 
                             <button
                                 class="w-full py-3 bg-white text-black rounded-xl font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                                onclick={handlePreviewParty}
+                                on:click={handlePreviewParty}
                                 disabled={loading || !partyIdInput.trim()}
                             >
                                 {#if loading}
@@ -678,7 +745,7 @@
                                             <p class="text-white/40 text-xs">Currently Watching</p>
                                         </div>
                                     </div>
-                                    
+
                                     <div class="pl-13">
                                         <p class="text-white/80 text-sm break-all">
                                             {partyPreview?.stream_source}
@@ -686,16 +753,17 @@
                                     </div>
                                 </div>
 
+
                                 <div class="flex gap-3">
                                     <button
                                         class="flex-1 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-medium transition-colors"
-                                        onclick={() => joinStep = "input"}
+                                        on:click={() => joinStep = "input"}
                                     >
                                         Back
                                     </button>
                                     <button
                                         class="flex-1 py-3 bg-white text-black rounded-xl font-bold transition-colors"
-                                        onclick={handleContinueToJoin}
+                                        on:click={handleContinueToJoin}
                                     >
                                         Join
                                     </button>
@@ -710,7 +778,7 @@
                                     <input
                                         type="file"
                                         class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                                        onchange={handleFileChange}
+                                        on:change={handleFileChange}
                                         accept="video/*,.mkv,.mp4,.avi,.mov"
                                     />
                                     <div class="flex flex-col items-center gap-3 pointer-events-none">
@@ -731,13 +799,13 @@
                                 <div class="flex gap-3">
                                     <button
                                         class="flex-1 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-medium transition-colors"
-                                        onclick={() => joinStep = "preview"}
+                                        on:click={() => joinStep = "preview"}
                                     >
                                         Back
                                     </button>
                                     <button
                                         class="flex-1 py-3 bg-white text-black rounded-xl font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                        onclick={handleFinalJoin}
+                                        on:click={handleFinalJoin}
                                         disabled={!selectedFile || loading}
                                     >
                                         {#if loading}

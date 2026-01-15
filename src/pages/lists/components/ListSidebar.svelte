@@ -151,16 +151,7 @@
             </div>
         {/each}
 
-        {#if $lists.length === 0}
-            <div
-                class="flex flex-col items-center justify-center h-[400px] text-white/50"
-            >
-                <p class="text-xl font-poppins">No lists found</p>
-                <p class="text-sm font-poppins mt-2">
-                    Create a list to get started
-                </p>
-            </div>
-        {/if}
+
     </div>
 </div>
 
