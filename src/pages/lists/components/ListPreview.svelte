@@ -4,6 +4,8 @@
     import { handleRemoveFromList } from "../listActions";
     import { router } from "../../../lib/stores/router";
     import ExpandingButton from "../../../components/common/ExpandingButton.svelte";
+    import { trackEvent } from "../../../lib/analytics";
+
 
     let playerIframe: HTMLIFrameElement;
 
@@ -164,12 +166,16 @@
                     <button
                         class="bg-white text-black px-[50px] h-fit py-[20px] rounded-full font-poppins font-bold text-[20px] hover:bg-white/90 transition-colors flex items-center gap-3 cursor-pointer z-10"
                         on:click={() => {
+                            trackEvent("list_item_watch_clicked", {
+                                content_type: $selectedItem?.type ?? null,
+                            });
                             router.navigate("meta", {
                                 imdbId: $selectedItem.imdb_id,
                                 type: $selectedItem.type,
                             });
                         }}
                     >
+
                         <svg
                             width="28"
                             height="28"

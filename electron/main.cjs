@@ -431,7 +431,13 @@ function createWindow() {
             MAX_ZOOM,
             Math.max(MIN_ZOOM, dpiZoom * widthZoom),
         );
-        mainWindow.webContents.setZoomFactor(zoom);
+        mainWindow.webContents.setZoomFactor(1);
+        try {
+            mainWindow.webContents.send('DISPLAY_ZOOM', zoom);
+        } catch (e) {
+            console.warn('Failed to send display zoom', e);
+        }
+
     };
 
     mainWindow.webContents.on('did-finish-load', () => {
