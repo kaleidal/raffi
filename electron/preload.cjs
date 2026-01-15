@@ -25,4 +25,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
             return () => ipcRenderer.removeListener('WINDOW_MAXIMIZED_CHANGED', handler);
         },
     },
+    onDisplayZoom: (callback) => {
+        const handler = (_event, value) => callback(value);
+        ipcRenderer.on('DISPLAY_ZOOM', handler);
+        return () => ipcRenderer.removeListener('DISPLAY_ZOOM', handler);
+    },
 });
+

@@ -4,6 +4,8 @@
     import type { Addon } from "../../../lib/db/db";
     import { serverUrl } from "../../../lib/client";
     import LoadingSpinner from "../../common/LoadingSpinner.svelte";
+    import { trackEvent } from "../../../lib/analytics";
+
 
     export let showAddonsModal = false;
 
@@ -14,6 +16,9 @@
     let loadingCommunity = false;
     let communitySearch = "";
     let communityResourceFilter: "all" | "stream" | "subtitles" = "all";
+    let hasTrackedOpen = false;
+    let communitySearchTimeout: any;
+
 
     const COMMUNITY_ENDPOINTS = [
         `${serverUrl}/community-addons`,
@@ -57,8 +62,12 @@
         loadingAddons = true;
         try {
             addonsList = await getAddons();
+            trackEvent("addons_loaded", { installed_count: addonsList.length });
         } catch (e) {
             console.error("Failed to load addons", e);
+            trackEvent("addons_load_failed", {
+                error_name: e instanceof Error ? e.name : "unknown",
+            });
         } finally {
             loadingAddons = false;
         }
@@ -97,13 +106,21 @@
             communityAddons = Array.from(deduped.values()).filter((addon: any) =>
                 hasSupportedResource(addon?.manifest),
             );
+            trackEvent("community_addons_loaded", {
+                count: communityAddons.length,
+                endpoints: COMMUNITY_ENDPOINTS.length,
+            });
         } catch (e) {
             console.error("Failed to load community addons", e);
             communityAddons = [];
+            trackEvent("community_addons_load_failed", {
+                error_name: e instanceof Error ? e.name : "unknown",
+            });
         } finally {
             loadingCommunity = false;
         }
     }
+
 
     async function handleAddAddon() {
         if (!newAddonUrl) return;
@@ -115,6 +132,7 @@
                 newAddonUrl = newAddonUrl.replace("stremio://", "https://");
             } else {
                 alert("Invalid URL");
+                trackEvent("addon_custom_invalid_url");
                 return;
             }
         }
@@ -127,6 +145,7 @@
         const manifest = await response.json();
         if (!manifest) {
             alert("Invalid manifest");
+            trackEvent("addon_custom_invalid_manifest");
             return;
         }
 
@@ -139,9 +158,16 @@
             });
             newAddonUrl = "";
             await loadAddons();
+            trackEvent("addon_custom_added", {
+                has_stream: supportsResource(manifest, "stream"),
+                has_subtitles: supportsResource(manifest, "subtitles"),
+            });
         } catch (e) {
             console.error("Failed to add addon", e);
             alert("Failed to add addon");
+            trackEvent("addon_custom_add_failed", {
+                error_name: e instanceof Error ? e.name : "unknown",
+            });
         }
     }
 
@@ -156,11 +182,20 @@
                 addon_id: isUuid(manifestId) ? manifestId : crypto.randomUUID(),
             });
             await loadAddons();
+            trackEvent("addon_community_installed", {
+                has_stream: supportsResource(addon?.manifest, "stream"),
+                has_subtitles: supportsResource(addon?.manifest, "subtitles"),
+                configurable: Boolean(addon?.manifest?.behaviorHints?.configurable),
+            });
         } catch (e) {
             console.error("Failed to install community addon", e);
             alert("Failed to install addon");
+            trackEvent("addon_community_install_failed", {
+                error_name: e instanceof Error ? e.name : "unknown",
+            });
         }
     }
+
 
     const buildConfigureUrl = (url: string | undefined) => {
         if (!url) return null;
@@ -176,6 +211,7 @@
     function handleConfigure(url: string | undefined) {
         const target = buildConfigureUrl(url);
         if (!target) return;
+        trackEvent("addon_configure_opened");
         window.open(target, "_blank", "noopener,noreferrer");
     }
 
@@ -184,15 +220,50 @@
         try {
             await removeAddon(url);
             await loadAddons();
+            trackEvent("addon_removed");
         } catch (e) {
             console.error("Failed to remove addon", e);
+            trackEvent("addon_remove_failed", {
+                error_name: e instanceof Error ? e.name : "unknown",
+            });
         }
+    }
+
+    function handleCommunitySearchInput(event: Event) {
+        const value = (event.target as HTMLInputElement).value;
+        communitySearch = value;
+        if (communitySearchTimeout) clearTimeout(communitySearchTimeout);
+        communitySearchTimeout = setTimeout(() => {
+            const queryLength = value.trim().length;
+            trackEvent("community_addon_search", { query_length: queryLength });
+        }, 500);
+    }
+
+    function setCommunityFilter(next: "all" | "stream" | "subtitles") {
+        if (communityResourceFilter === next) return;
+        communityResourceFilter = next;
+        trackEvent("community_addon_filter_changed", { filter: next });
+    }
+
+    function closeModal() {
+        trackEvent("addons_modal_closed");
+        showAddonsModal = false;
     }
 
     $: if (showAddonsModal) {
         loadAddons();
         loadCommunityAddons();
     }
+
+    $: if (showAddonsModal && !hasTrackedOpen) {
+        hasTrackedOpen = true;
+        trackEvent("addons_modal_opened");
+    }
+
+    $: if (!showAddonsModal && hasTrackedOpen) {
+        hasTrackedOpen = false;
+    }
+
 
     $: installedTransportUrls = new Set(
         addonsList.map((addon) => normalizeTransportUrl(addon.transport_url)),
@@ -224,12 +295,13 @@
     <div
         class="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex"
         transition:fade={{ duration: 200 }}
-        on:click|self={() => (showAddonsModal = false)}
-        on:keydown={(e) => e.key === "Escape" && (showAddonsModal = false)}
+        on:click|self={closeModal}
+        on:keydown={(e) => e.key === "Escape" && closeModal()}
         role="button"
         tabindex="0"
         style="padding: clamp(20px, 5vw, 150px);"
     >
+
         <div
             class="bg-[#121212] w-full h-full rounded-[32px] p-6 md:p-10 flex flex-col gap-6 relative overflow-hidden shadow-[0_40px_160px_rgba(0,0,0,0.55)]"
             transition:scale={{ start: 0.95, duration: 200 }}
@@ -245,9 +317,10 @@
                 </div>
                 <button
                     class="self-end text-white/50 hover:text-white cursor-pointer"
-                    on:click={() => (showAddonsModal = false)}
+                    on:click={closeModal}
                     aria-label="Close modal"
                 >
+
                     <svg
                         width="24"
                         height="24"
@@ -286,8 +359,10 @@
                                 type="text"
                                 placeholder="Search community addons"
                                 class="w-full bg-white/5 rounded-xl px-4 py-3 text-white outline-none focus:border-white/30"
+                                on:input={handleCommunitySearchInput}
                                 bind:value={communitySearch}
                             />
+
                         </div>
 
                         <div class="flex flex-wrap gap-2">
@@ -297,7 +372,8 @@
                                         ? "bg-white text-black"
                                         : "bg-white/10 text-white/70 hover:text-white"
                                 }`}
-                                on:click={() => (communityResourceFilter = "all")}
+                                on:click={() => setCommunityFilter("all")}
+
                             >
                                 All
                             </button>
@@ -307,7 +383,8 @@
                                         ? "bg-white text-black"
                                         : "bg-white/10 text-white/70 hover:text-white"
                                 }`}
-                                on:click={() => (communityResourceFilter = "stream")}
+                                on:click={() => setCommunityFilter("stream")}
+
                             >
                                 Streams
                             </button>
@@ -317,7 +394,8 @@
                                         ? "bg-white text-black"
                                         : "bg-white/10 text-white/70 hover:text-white"
                                 }`}
-                                on:click={() => (communityResourceFilter = "subtitles")}
+                                on:click={() => setCommunityFilter("subtitles")}
+
                             >
                                 Subtitles
                             </button>

@@ -83,7 +83,7 @@
 </script>
 
 <div
-    class="w-screen h-[80vh] relative overflow-hidden"
+    class="w-full relative overflow-hidden aspect-21/9"
     bind:this={container}
 >
     <div

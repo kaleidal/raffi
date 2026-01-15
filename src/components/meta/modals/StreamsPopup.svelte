@@ -5,6 +5,7 @@
     import type { ShowResponse } from "../../../lib/library/types/meta_types";
     import type { ProgressMap, ProgressItem } from "../../../pages/meta/types";
     import LoadingSpinner from "../../common/LoadingSpinner.svelte";
+    import { trackEvent } from "../../../lib/analytics";
 
     export let streamsPopupVisible = false;
     export let addons: Addon[] = [];
@@ -32,13 +33,60 @@
 
     let resolutionFilter: ResolutionFilter = "all";
     let excludeHDR = false;
+    let hasTrackedOpen = false;
+
+    const getStreamCounts = () => {
+        const localCount = streams.filter(
+            (stream) => stream?.raffiSource === "local",
+        ).length;
+        return {
+            total: streams.length,
+            local: localCount,
+            addon: Math.max(0, streams.length - localCount),
+        };
+    };
 
     function resetFilters() {
         resolutionFilter = "all";
         excludeHDR = false;
+        trackEvent("stream_filters_reset", getStreamCounts());
+    }
+
+    function setResolutionFilter(value: ResolutionFilter) {
+        if (resolutionFilter === value) return;
+        resolutionFilter = value;
+        trackEvent("stream_filter_resolution", {
+            value,
+            exclude_hdr: excludeHDR,
+            ...getStreamCounts(),
+        });
+    }
+
+    function toggleExcludeHDR() {
+        excludeHDR = !excludeHDR;
+        trackEvent("stream_filter_hdr", {
+            excluded: excludeHDR,
+            resolution_filter: resolutionFilter,
+            ...getStreamCounts(),
+        });
+    }
+
+    function selectAddon(addon: Addon) {
+        if (selectedAddon === addon.transport_url) return;
+        selectedAddon = addon.transport_url;
+        trackEvent("stream_addon_selected", {
+            addon_name: addon?.manifest?.name ?? "Unknown",
+            ...getStreamCounts(),
+        });
     }
 
     function close() {
+        trackEvent("stream_list_closed", {
+            filters_active: filtersActive,
+            resolution_filter: resolutionFilter,
+            exclude_hdr: excludeHDR,
+            ...getStreamCounts(),
+        });
         dispatch("close");
     }
 
@@ -352,6 +400,19 @@
                 resource === "stream",
         );
     });
+
+    $: if (streamsPopupVisible && !hasTrackedOpen) {
+        hasTrackedOpen = true;
+        trackEvent("stream_list_opened", {
+            ...getStreamCounts(),
+            resolution_filter: resolutionFilter,
+            exclude_hdr: excludeHDR,
+        });
+    }
+
+    $: if (!streamsPopupVisible && hasTrackedOpen) {
+        hasTrackedOpen = false;
+    }
 
     $: enrichedStreams = streams.map((stream, index) => ({
         key:
@@ -767,8 +828,7 @@
                                     addon.transport_url
                                         ? 'bg-white text-black shadow-lg shadow-white/10'
                                         : 'bg-white/10 text-white/70 hover:bg-white/20'}"
-                                    on:click={() =>
-                                        (selectedAddon = addon.transport_url)}
+                                    on:click={() => selectAddon(addon)}
                                 >
                                     {addon.manifest.name}
                                 </button>
@@ -792,7 +852,7 @@
                                             ? 'bg-white text-black shadow shadow-white/40'
                                             : 'bg-white/10 text-white/70 hover:bg-white/20 cursor-pointer'}"
                                         on:click={() =>
-                                            (resolutionFilter = option.value)}
+                                            setResolutionFilter(option.value)}
                                     >
                                         {option.label}
                                     </button>
@@ -808,7 +868,7 @@
                                 class="px-3 py-1.5 rounded-full text-[11px] font-semibold tracking-wide uppercase transition-colors duration-200 cursor-pointer {excludeHDR
                                     ? 'bg-[#FFDD57] text-black'
                                     : 'bg-white/10 text-white/70 hover:bg-white/20'}"
-                                on:click={() => (excludeHDR = !excludeHDR)}
+                                on:click={toggleExcludeHDR}
                             >
                                 {excludeHDR ? "Excluded" : "Include"}
                             </button>

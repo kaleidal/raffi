@@ -8,6 +8,8 @@
     import { fade, scale } from "svelte/transition";
     import { supabase } from "../../../lib/db/supabase";
     import { onMount } from "svelte";
+    import { trackEvent } from "../../../lib/analytics";
+
 
     export let onClose: () => void;
     export let onPartyCreated: (partyId: string) => void = () => {};
@@ -27,7 +29,15 @@
     let error = "";
     let showCopied = false;
 
+    const getStreamSourceType = (src: string) => {
+        if (!src) return "unknown";
+        if (src.startsWith("magnet:")) return "torrent";
+        if (!src.startsWith("http://") && !src.startsWith("https://")) return "local";
+        return "direct";
+    };
+
     // Join Flow State
+
     let joinStep: "input" | "preview" | "select-file" = "input";
     let partyPreview: any = null;
     let selectedFile: File | null = null;
@@ -47,6 +57,8 @@
         loading = true;
         error = "";
 
+        const sourceType = getStreamSourceType(streamSource);
+
         try {
             const partyId = await createParty(
                 imdbId,
@@ -57,13 +69,23 @@
             );
             createdPartyId = partyId;
             onPartyCreated(partyId);
+            trackEvent("watch_party_created", {
+                source_type: sourceType,
+                is_local: sourceType === "local",
+                is_torrent: sourceType === "torrent",
+            });
         } catch (err: any) {
             console.error("Failed to create party:", err);
             error = err.message || "Failed to create watch party";
+            trackEvent("watch_party_create_failed", {
+                source_type: sourceType,
+                error_name: err instanceof Error ? err.name : "unknown",
+            });
         } finally {
             loading = false;
         }
     }
+
 
     async function handlePreviewParty() {
         if (!partyIdInput.trim()) {
@@ -86,14 +108,24 @@
 
             partyPreview = data;
             joinStep = "preview";
+            const sourceType = getStreamSourceType(data?.stream_source || "");
+            trackEvent("watch_party_preview_loaded", {
+                source_type: sourceType,
+                is_local: sourceType === "local",
+                is_torrent: sourceType === "torrent",
+            });
         } catch (err: any) {
             console.error("Failed to preview party:", err);
             error = err.message || "Failed to find watch party";
             joinStep = "input";
+            trackEvent("watch_party_preview_failed", {
+                error_name: err instanceof Error ? err.name : "unknown",
+            });
         } finally {
             loading = false;
         }
     }
+
 
     function handleContinueToJoin() {
         if (!partyPreview) return;
@@ -116,7 +148,7 @@
 
         try {
             await joinParty(partyIdInput.trim());
-            
+
             if (selectedFile) {
                 // Create a file object that matches what the player expects
                 // The player expects a file object with a path property for Electron
@@ -128,9 +160,19 @@
 
             onPartyCreated(partyIdInput.trim());
             onClose();
+            const sourceType = getStreamSourceType(partyPreview?.stream_source || "");
+            trackEvent("watch_party_joined", {
+                source_type: sourceType,
+                is_local: sourceType === "local",
+                is_torrent: sourceType === "torrent",
+                used_local_file: Boolean(selectedFile),
+            });
         } catch (err: any) {
             console.error("Failed to join party:", err);
             error = err.message || "Failed to join watch party";
+            trackEvent("watch_party_join_failed", {
+                error_name: err instanceof Error ? err.name : "unknown",
+            });
         } finally {
             loading = false;
         }
@@ -138,6 +180,7 @@
 
     async function handleLeaveParty() {
         await leaveWatchParty();
+        trackEvent("watch_party_left");
         onClose();
     }
 
@@ -146,6 +189,7 @@
 
         navigator.clipboard.writeText(id);
         showCopied = true;
+        trackEvent("watch_party_id_copied");
         setTimeout(() => {
             showCopied = false;
         }, 2000);
@@ -155,8 +199,10 @@
         const input = event.target as HTMLInputElement;
         if (input.files && input.files.length > 0) {
             selectedFile = input.files[0];
+            trackEvent("watch_party_local_file_selected");
         }
     }
+
 </script>
 
 <div

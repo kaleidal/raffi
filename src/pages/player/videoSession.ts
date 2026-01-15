@@ -7,6 +7,7 @@ import {
     serverUrl,
 } from "../../lib/client";
 import type { SessionData, Track } from "./types";
+import { trackEvent } from "../../lib/analytics";
 
 export function isTimeBuffered(
     elem: HTMLVideoElement,
@@ -230,6 +231,17 @@ export async function loadVideoSession(
         return { sessionId, sessionData };
     } catch (err) {
         console.error("Error loading video:", err);
+        const sourceType = src.startsWith("magnet:")
+            ? "torrent"
+            : src.startsWith("http://") || src.startsWith("https://")
+                ? "direct"
+                : "local";
+        trackEvent("stream_load_failed", {
+            source_type: sourceType,
+            is_torrent: sourceType === "torrent",
+            is_local: sourceType === "local",
+            error_name: err instanceof Error ? err.name : "unknown",
+        });
         setErrorMessage("Failed to initialize playback");
         setErrorDetails(err instanceof Error ? err.message : String(err));
         setShowError(true);

@@ -11,6 +11,7 @@
     import PlayerWatchParty from "./components/PlayerWatchParty.svelte";
     import type { ShowResponse } from "../../lib/library/types/meta_types";
     import { watchParty } from "../../lib/stores/watchPartyStore";
+    import { trackEvent } from "../../lib/analytics";
 
     import {
         isPlaying,
@@ -190,7 +191,85 @@
         );
     };
 
+    const getPlaybackSourceType = (src: string | null, sess: any) => {
+        if (!src) return "unknown";
+        if (sess?.isTorrent || src.startsWith("magnet:")) return "torrent";
+        if (!src.startsWith("http://") && !src.startsWith("https://")) return "local";
+        return "direct";
+    };
+
+    const getPlaybackAnalyticsProps = () => {
+        const sourceType = getPlaybackSourceType(currentVideoSrc, $sessionData);
+        const isTorrent = sourceType === "torrent";
+        const isLocal = sourceType === "local";
+        const progressPercent =
+            $duration > 0 ? Math.round(($currentTime / $duration) * 100) : null;
+
+        return {
+            source_type: sourceType,
+            is_torrent: isTorrent,
+            is_local: isLocal,
+            content_type: metaData?.meta?.type ?? null,
+            season: season ?? null,
+            episode: episode ?? null,
+            watch_party: $watchParty.isActive,
+            progress_percent: progressPercent,
+            elapsed_seconds: Math.round($currentTime),
+        };
+    };
+
+    const trackPlaybackClosed = () => {
+        if (playbackClosedTracked) return;
+        if (!currentVideoSrc) return;
+        playbackClosedTracked = true;
+        trackEvent("playback_closed", getPlaybackAnalyticsProps());
+    };
+
+    const getTrackAnalyticsProps = (detail: any, kind: "audio" | "subtitles") => ({
+        kind,
+        language: detail?.lang ?? null,
+        group: detail?.group ?? null,
+        format: detail?.format ?? null,
+        is_local: Boolean(detail?.isLocal),
+        is_addon: Boolean(detail?.isAddon),
+        is_off: detail?.id === "off",
+    });
+
+    const handleToggleFullscreen = () => {
+        const entering = typeof document !== "undefined"
+            ? !(document as any).fullscreenElement
+            : null;
+        trackEvent("player_fullscreen_toggled", {
+            entering,
+            ...getPlaybackAnalyticsProps(),
+        });
+        controlsManager?.toggleFullscreen?.();
+    };
+
+    const handleToggleObjectFit = () => {
+        trackEvent("player_object_fit_toggled", {
+            ...getPlaybackAnalyticsProps(),
+        });
+        controlsManager?.toggleObjectFit?.($objectFit, objectFit.set);
+    };
+
+    const openAudioSelection = () => {
+        trackEvent("audio_selector_opened", getPlaybackAnalyticsProps());
+        showAudioSelection.set(true);
+    };
+
+    const openSubtitleSelection = () => {
+        trackEvent("subtitle_selector_opened", getPlaybackAnalyticsProps());
+        showSubtitleSelection.set(true);
+    };
+
+    const openWatchPartyModal = () => {
+        trackEvent("watch_party_modal_opened", getPlaybackAnalyticsProps());
+        showWatchPartyModal.set(true);
+    };
+
     const handleClose = () => {
+        trackPlaybackClosed();
         if (videoSrc) {
             router.navigate("home");
         } else {
@@ -210,6 +289,11 @@
     let sessionId: string;
     let currentVideoSrc: string | null = null;
     let metadataCheckInterval: any;
+    let playbackStartTracked = false;
+    let playbackClosedTracked = false;
+    let bufferingActive = false;
+    let bufferingStartedAt = 0;
+    let errorModalOpen = false;
     let reprobeAttempted = false;
 
     const computeHasNextEpisode = (): boolean => {
@@ -434,6 +518,7 @@
     });
 
     onDestroy(() => {
+        trackPlaybackClosed();
         clearInterval(metadataCheckInterval);
         stopTorrentStatusPolling();
         if (playPauseFeedbackTimeout) clearTimeout(playPauseFeedbackTimeout);
@@ -470,6 +555,10 @@
     const handlePlay = () => {
         isPlaying.set(true);
         hasStarted = true;
+        if (!playbackStartTracked) {
+            trackEvent("playback_started", getPlaybackAnalyticsProps());
+            playbackStartTracked = true;
+        }
         Discord.updateDiscordActivity(
             metaData,
             season,
@@ -496,6 +585,23 @@
         if ($watchParty.isHost) {
             WatchParty.updatePlaybackState($currentTime, false);
         }
+    };
+
+    const handleBufferStart = () => {
+        if (bufferingActive) return;
+        bufferingActive = true;
+        bufferingStartedAt = Date.now();
+        trackEvent("playback_buffering_started", getPlaybackAnalyticsProps());
+    };
+
+    const handleBufferEnd = () => {
+        if (!bufferingActive) return;
+        bufferingActive = false;
+        const durationMs = Date.now() - bufferingStartedAt;
+        trackEvent("playback_buffering_ended", {
+            buffer_duration_ms: durationMs,
+            ...getPlaybackAnalyticsProps(),
+        });
     };
 
     const reloadSession = () => {
@@ -727,6 +833,18 @@
         stopTorrentStatusPolling();
     }
 
+    $: if ($showError && !errorModalOpen) {
+        errorModalOpen = true;
+        trackEvent("player_error_shown", {
+            message: $errorMessage || null,
+            ...getPlaybackAnalyticsProps(),
+        });
+    }
+
+    $: if (!$showError && errorModalOpen) {
+        errorModalOpen = false;
+    }
+
     let nextEpisodeAttemptId = 0;
 
     const showActionLoading = (actionLabel: string, err: unknown) => {
@@ -736,7 +854,41 @@
         errorDetails.set(err instanceof Error ? err.message : String(err));
     };
 
+    const handleSkipIntro = () => {
+        trackEvent("skip_intro_clicked", getPlaybackAnalyticsProps());
+        Chapters.skipChapter($currentChapter, (t) =>
+            Session.performSeek(
+                t,
+                $duration,
+                $playbackOffset,
+                videoElem,
+                () => Session.captureFrame(videoElem, canvasElem),
+                () =>
+                    Discord.updateDiscordActivity(
+                        metaData,
+                        season,
+                        episode,
+                        $duration,
+                        $currentTime,
+                        $isPlaying,
+                    ),
+                $watchParty.isHost,
+                false,
+                $isPlaying,
+                WatchParty.updatePlaybackState,
+                {
+                    setPendingSeek: pendingSeek.set,
+                    setCurrentTime: currentTime.set,
+                    setShowCanvas: showCanvas.set,
+                    setIgnoreNextSeek: () => {},
+                },
+            ),
+        );
+    };
+
     const handleNextEpisodeClick = () => {
+        trackEvent("next_episode_clicked", getPlaybackAnalyticsProps());
+
         // Immediately show loading overlay so the action can't be triggered twice.
         nextEpisodeAttemptId += 1;
         const attemptId = nextEpisodeAttemptId;
@@ -795,6 +947,8 @@
     $: if (videoSrc && videoSrc !== currentVideoSrc) {
         currentVideoSrc = videoSrc;
         hasStarted = false;
+        playbackStartTracked = false;
+        playbackClosedTracked = false;
         Session.cleanupSession(
             hls,
             sessionId,
@@ -900,12 +1054,14 @@
             on:waiting={() => {
                 loading.set(true);
                 loadingStage.set("Buffering");
+                handleBufferStart();
             }}
             on:playing={() => {
                 loading.set(false);
                 loadingStage.set("");
                 loadingDetails.set("");
                 loadingProgress.set(null);
+                handleBufferEnd();
             }}
             on:canplay={() => {
                 loading.set(false);
@@ -968,41 +1124,14 @@
                 : 'translate-y-10 opacity-0 pointer-events-none'}"
             bind:this={controlsOverlayElem}
         >
-            <PlayerOverlays
-                showSkipIntro={$showSkipIntro}
-                showNextEpisode={showNextEpisodeAllowed}
-                isWatchPartyMember={$watchParty.isActive && !$watchParty.isHost}
-                skipChapter={() =>
-                    Chapters.skipChapter($currentChapter, (t) =>
-                        Session.performSeek(
-                            t,
-                            $duration,
-                            $playbackOffset,
-                            videoElem,
-                            () => Session.captureFrame(videoElem, canvasElem),
-                            () =>
-                                Discord.updateDiscordActivity(
-                                    metaData,
-                                    season,
-                                    episode,
-                                    $duration,
-                                    $currentTime,
-                                    $isPlaying,
-                                ),
-                            $watchParty.isHost,
-                            false,
-                            $isPlaying,
-                            WatchParty.updatePlaybackState,
-                            {
-                                setPendingSeek: pendingSeek.set,
-                                setCurrentTime: currentTime.set,
-                                setShowCanvas: showCanvas.set,
-                                setIgnoreNextSeek: () => {},
-                            },
-                        ),
-                    )}
-                nextEpisode={handleNextEpisodeClick}
-            />
+                <PlayerOverlays
+                    showSkipIntro={$showSkipIntro}
+                    showNextEpisode={showNextEpisodeAllowed}
+                    isWatchPartyMember={$watchParty.isActive && !$watchParty.isHost}
+                    skipChapter={handleSkipIntro}
+                    nextEpisode={handleNextEpisodeClick}
+                />
+
             <PlayerControls
                 isPlaying={$isPlaying}
                 duration={$duration}
@@ -1053,17 +1182,20 @@
                     )}
                 onVolumeChange={(e) =>
                     controlsManager.onVolumeChange(e, volume.set)}
-                toggleFullscreen={controlsManager.toggleFullscreen}
+                toggleFullscreen={handleToggleFullscreen}
                 objectFit={$objectFit}
-                toggleObjectFit={() =>
-                    controlsManager.toggleObjectFit($objectFit, objectFit.set)}
+                toggleObjectFit={handleToggleObjectFit}
                 onNextEpisode={handleNextEpisodeClick}
-                on:audioClick={() => showAudioSelection.set(true)}
-                on:subtitleClick={() => showSubtitleSelection.set(true)}
-                on:watchPartyClick={() => showWatchPartyModal.set(true)}
+                on:audioClick={openAudioSelection}
+                on:subtitleClick={openSubtitleSelection}
+                on:watchPartyClick={openWatchPartyModal}
                 on:clipPanelOpenChange={(e) => {
                     clipPanelOpen = !!e.detail?.open;
                     controlsManager?.setPinned?.(clipPanelOpen, controlsVisible.set);
+                    trackEvent("clip_panel_toggled", {
+                        open: clipPanelOpen,
+                        ...getPlaybackAnalyticsProps(),
+                    });
                 }}
             />
         </div>
@@ -1087,7 +1219,11 @@
         {fileIdx}
         onSeekStyleChange={handleSeekStyleChange}
         onSeekStyleAcknowledge={handleSeekStyleAcknowledge}
-        onAudioSelect={(detail) =>
+        onAudioSelect={(detail) => {
+            trackEvent("audio_track_selected", {
+                ...getPlaybackAnalyticsProps(),
+                ...getTrackAnalyticsProps(detail, "audio"),
+            });
             Session.handleAudioSelect(
                 detail,
                 $audioTracks,
@@ -1140,8 +1276,13 @@
                     setAudioTracks: audioTracks.set,
                     setCurrentAudioLabel: currentAudioLabel.set,
                 },
-            )}
+            );
+        }}
         onSubtitleSelect={(detail) => {
+            trackEvent("subtitle_selected", {
+                ...getPlaybackAnalyticsProps(),
+                ...getTrackAnalyticsProps(detail, "subtitles"),
+            });
             subtitleTracks.update((tracks) =>
                 tracks.map((t) => ({
                     ...t,
@@ -1158,6 +1299,10 @@
             );
         }}
         onSubtitleDelayChange={({ seconds }) => {
+            trackEvent("subtitle_delay_changed", {
+                ...getPlaybackAnalyticsProps(),
+                delay_seconds: seconds,
+            });
             // Delay is stored in Subtitles module; re-apply current subtitle to rebuild cues.
             const selected = $subtitleTracks.find((t) => t.selected);
             if (selected && selected.id !== "off") {
@@ -1171,6 +1316,10 @@
             }
         }}
         onAddLocalSubtitle={(track) => {
+            trackEvent("subtitle_local_added", {
+                ...getPlaybackAnalyticsProps(),
+                format: track?.format ?? null,
+            });
             subtitleTracks.update((tracks) => {
                 const next = tracks
                     .filter((t) => !(t.isLocal && String(t.id).startsWith("local:")))
@@ -1187,12 +1336,14 @@
             );
         }}
         onErrorRetry={() => {
+            trackEvent("player_error_retry", getPlaybackAnalyticsProps());
             showError.set(false);
             errorMessage.set("");
             errorDetails.set("");
             if (videoSrc) loadVideo(videoSrc);
         }}
         onErrorBack={() => {
+            trackEvent("player_error_back", getPlaybackAnalyticsProps());
             showError.set(false);
             handleClose();
         }}

@@ -3,11 +3,14 @@ import { getCachedMetaData } from "../../lib/library/metaCache";
 import { lists, listItemsMap, selectedItem, selectedListId, loadingItem, playerState } from "./listsState";
 import { get } from "svelte/store";
 import type { List, ExtendedListItem } from "./types";
+import { trackEvent } from "../../lib/analytics";
+
 
 export async function loadLists() {
     try {
         const listsWithItems = await getListsWithItems();
         lists.set(listsWithItems as List[]);
+        trackEvent("lists_loaded", { list_count: listsWithItems.length });
 
         // Load metadata for all items
         for (const list of listsWithItems) {
@@ -29,6 +32,9 @@ export async function loadLists() {
         }
     } catch (e) {
         console.error("Failed to load lists", e);
+        trackEvent("lists_load_failed", {
+            error_name: e instanceof Error ? e.name : "unknown",
+        });
     }
 }
 
@@ -79,11 +85,11 @@ export async function loadListItems(listId: string, items?: any[]) {
         });
 
         const metas = await Promise.all(metaPromises);
+        const resolved = metas.filter((m): m is NonNullable<typeof m> => !!m);
 
         listItemsMap.update(map => ({
             ...map,
-            [listId]: metas
-                .filter((m): m is NonNullable<typeof m> => !!m)
+            [listId]: resolved
                 .map((m) => ({
                     ...m,
                     poster: m.db_item.poster || m.poster,
@@ -91,8 +97,15 @@ export async function loadListItems(listId: string, items?: any[]) {
                 }))
                 .sort((a, b) => a.position - b.position)
         }));
+
+        trackEvent("list_items_loaded", {
+            item_count: resolved.length,
+        });
     } catch (e) {
         console.error("Failed to load list items", e);
+        trackEvent("list_items_load_failed", {
+            error_name: e instanceof Error ? e.name : "unknown",
+        });
     }
 }
 
@@ -103,6 +116,11 @@ export async function selectItem(item: ExtendedListItem, listId: string) {
     selectedListId.set(listId);
 
     playerState.update(s => ({ ...s, isPaused: false, isMuted: true }));
+
+    trackEvent("list_item_selected", {
+        content_type: item.type,
+        is_partial: Boolean(item._partial),
+    });
 
     if (item._partial) {
         loadingItem.set(item.imdb_id);
@@ -140,6 +158,9 @@ export async function selectItem(item: ExtendedListItem, listId: string) {
         } catch (e) {
             console.error("Failed to fetch full meta for selected item", e);
             selectedItem.set(item);
+            trackEvent("list_item_select_failed", {
+                error_name: e instanceof Error ? e.name : "unknown",
+            });
         } finally {
             loadingItem.set(null);
         }
@@ -147,3 +168,4 @@ export async function selectItem(item: ExtendedListItem, listId: string) {
         selectedItem.set(item);
     }
 }
+

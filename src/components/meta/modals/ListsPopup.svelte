@@ -10,6 +10,8 @@
     } from "../../../lib/db/db";
     import { supabase } from "../../../lib/db/supabase";
     import LoadingSpinner from "../../common/LoadingSpinner.svelte";
+    import { trackEvent } from "../../../lib/analytics";
+
 
     export let visible = false;
     export let imdbId: string;
@@ -30,14 +32,21 @@
             await createList(newListName);
             newListName = "";
             await loadLists();
+            trackEvent("list_created", { list_count: lists.length });
         } catch (e) {
             console.error("Failed to create list", e);
+            trackEvent("list_create_failed", {
+                error_name: e instanceof Error ? e.name : "unknown",
+            });
         } finally {
             creatingList = false;
         }
     }
 
     function close() {
+        trackEvent("list_modal_closed", {
+            list_count: lists.length,
+        });
         dispatch("close");
     }
 
@@ -52,8 +61,15 @@
                 .eq("imdb_id", imdbId);
 
             memberOf = new Set(items?.map((i) => i.list_id) || []);
+            trackEvent("list_modal_loaded", {
+                list_count: lists.length,
+                member_count: memberOf.size,
+            });
         } catch (e) {
             console.error("Failed to load lists", e);
+            trackEvent("list_modal_load_failed", {
+                error_name: e instanceof Error ? e.name : "unknown",
+            });
         } finally {
             loading = false;
         }
@@ -65,15 +81,21 @@
                 await removeFromList(listId, imdbId);
                 memberOf.delete(listId);
                 memberOf = memberOf;
+                trackEvent("list_item_removed", { list_count: lists.length });
             } else {
                 await addToList(listId, imdbId, 0, type);
                 memberOf.add(listId);
                 memberOf = memberOf;
+                trackEvent("list_item_added", { list_count: lists.length });
             }
         } catch (e) {
             console.error("Failed to toggle list", e);
+            trackEvent("list_item_toggle_failed", {
+                error_name: e instanceof Error ? e.name : "unknown",
+            });
         }
     }
+
 
     $: if (visible) {
         loadLists();

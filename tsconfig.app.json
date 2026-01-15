@@ -21,9 +21,14 @@
     "moduleResolution": "bundler",
     "composite": true
   },
+  "files": [
+    "src/lib/analytics.ts"
+  ],
   "include": [
     "src/**/*.ts",
     "src/**/*.js",
-    "src/**/*.svelte"
+    "src/**/*.svelte",
+    "src/lib/analytics.ts"
   ]
+
 }

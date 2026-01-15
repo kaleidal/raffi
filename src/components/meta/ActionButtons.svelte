@@ -1,18 +1,36 @@
 <script lang="ts">
     import ListsPopup from "./modals/ListsPopup.svelte";
     import TrailerModal from "./modals/TrailerModal.svelte";
+    import { trackEvent } from "../../lib/analytics";
+
 
     export let metaData: any;
 
     let listsPopupVisible = false;
     let trailerVisible = false;
+
+    const openLists = () => {
+        listsPopupVisible = true;
+        trackEvent("list_modal_opened", {
+            content_type: metaData?.meta?.type ?? null,
+        });
+    };
+
+    const openTrailer = () => {
+        trailerVisible = true;
+        trackEvent("trailer_opened", {
+            has_trailer: Boolean(metaData?.meta?.trailers?.length),
+        });
+    };
+
 </script>
 
 <div class="flex flex-row gap-[20px] justify-between w-full">
     <button
         class="px-[50px] py-[20px] flex flex-grow flex-row gap-[20px] items-center cursor-pointer hover:bg-[#D3D3D3]/10 transition-all duration-200 bg-[#FFFFFF]/10 backdrop-blur-[16px] rounded-[64px] justify-center"
-        on:click={() => (listsPopupVisible = true)}
+        on:click={openLists}
     >
+
         <svg
             width="30"
             height="30"
@@ -43,8 +61,9 @@
 
     <button
         class="px-[50px] py-[20px] flex flex-row gap-[20px] items-center cursor-pointer hover:bg-[#D3D3D3]/10 transition-all duration-200 bg-[#FFFFFF]/10 backdrop-blur-[16px] rounded-[64px] justify-center"
-        on:click={() => (trailerVisible = true)}
+        on:click={openTrailer}
     >
+
         <svg
             width="30"
             height="30"

@@ -3,11 +3,17 @@ import { listItemsMap, dragState } from "./listsState";
 import { loadListItems } from "./dataLoader";
 import { get } from "svelte/store";
 import type { ExtendedListItem } from "./types";
+import { trackEvent } from "../../lib/analytics";
+
 
 export function handleDragStart(event: DragEvent, item: ExtendedListItem, listId: string) {
     dragState.set({
         draggedItem: item,
         draggedFromListId: listId,
+    });
+
+    trackEvent("list_item_drag_started", {
+        content_type: item.type,
     });
 
     if (event.dataTransfer) {
@@ -48,6 +54,11 @@ export async function handleDrop(
 
     if (oldIndex === -1 || newIndex === -1) return;
 
+    trackEvent("list_item_reordered", {
+        from_index: oldIndex,
+        to_index: newIndex,
+    });
+
     // Reorder array locally
     const newItems = [...items];
     newItems.splice(oldIndex, 1);
@@ -66,6 +77,9 @@ export async function handleDrop(
         await Promise.all(updates);
     } catch (e) {
         console.error("Failed to update item positions", e);
+        trackEvent("list_item_reorder_failed", {
+            error_name: e instanceof Error ? e.name : "unknown",
+        });
         await loadListItems(targetListId); // Revert on error
     }
 
@@ -74,3 +88,4 @@ export async function handleDrop(
         draggedFromListId: null,
     });
 }
+
