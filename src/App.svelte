@@ -8,7 +8,6 @@
     import Lists from "./pages/lists/Lists.svelte";
     import { enableRPC, disableRPC } from "./lib/rpc";
 
-    import TitleBar from "./components/common/TitleBar.svelte";
 
     import LoadingSpinner from "./components/common/LoadingSpinner.svelte";
     import { currentUser, initAuth, localMode } from "./lib/stores/authStore";
@@ -116,7 +115,10 @@
 
 <div class="w-screen h-screen bg-[#090909] overflow-hidden flex flex-col">
     {#if showTitleBar}
-        <TitleBar />
+        <div
+            class="fixed top-0 left-0 right-0 h-[32px] z-[1000]"
+            style="-webkit-app-region: drag"
+        ></div>
     {/if}
 
     <div class="relative flex-1 min-h-0 overflow-x-hidden overflow-y-auto" data-scroll-container>
@@ -125,15 +127,12 @@
             style={`transform: scale(${displayZoom}); transform-origin: top left; width: calc(100% / ${displayZoom}); height: calc(100% / ${displayZoom});`}
         >
             {#if checkingAuth}
-                <div class="w-full h-full bg-[#090909] flex items-center justify-center">
-                    <LoadingSpinner size="60px" />
-                </div>
-        {:else if !$currentUser && !$localMode && $router.page !== "login"}
-            <Login />
-        {:else}
-            <svelte:component this={pages[$router.page]} {...$router.params as any} />
-        {/if}
-
+               
+            {:else if !$currentUser && !$localMode && $router.page !== "login"}
+                <Login />
+            {:else}
+                <svelte:component this={pages[$router.page]} {...$router.params as any} />
+            {/if}
         </div>
     </div>
 </div>
