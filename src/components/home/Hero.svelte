@@ -92,9 +92,10 @@
         <img
             src={showcasedTitle.logo ?? ""}
             alt="Logo"
-            class="w-[600px] h-fit"
+            class="w-[600px] h-auto max-h-[220px] object-contain"
             on:error={() => dispatch("logoError")}
         />
+
 
         <div class="flex flex-row gap-[10px] items-center">
             <button

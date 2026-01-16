@@ -151,8 +151,8 @@
 
 {#if $loadedMeta && $metaData && $metaData.meta}
     <div class="bg-[#090909] flex-1" in:fade={{ duration: 300 }}>
-        <div class="w-full h-full">
-            <div class="h-full opacity-60 w-full">
+        <div class="relative min-h-screen w-full overflow-hidden">
+            <div class="absolute inset-0 opacity-60">
                 <MetaBackground
                     background={$metaData.meta.background}
                     bind:backgroundFailed={$backgroundFailed}
@@ -470,7 +470,7 @@
                 ></div>
 
                 <span
-                    class="absolute bottom-10 left-1/2 transform -translate-x-1/2 text-[#E1E1E1]/60 text-[16px] font-poppins font-medium"
+                    class="absolute bottom-20 left-1/2 transform -translate-x-1/2 text-[#E1E1E1]/60 text-[16px] font-poppins font-medium"
                     >scroll down to view episodes</span
                 >
             {/if}
