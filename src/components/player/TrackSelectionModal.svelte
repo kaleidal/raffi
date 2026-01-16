@@ -4,6 +4,21 @@
 
     import * as Subtitles from "../../pages/player/subtitles";
 
+    const portal = (node: HTMLElement) => {
+        if (typeof document === "undefined") {
+            return { destroy() {} };
+        }
+        document.body.appendChild(node);
+        return {
+            destroy() {
+                if (node.parentNode) {
+                    node.parentNode.removeChild(node);
+                }
+            },
+        };
+    };
+
+
     export let title: string;
     export let kind: "audio" | "subtitles" = title === "Subtitles" ? "subtitles" : "audio";
     export let tracks: {
@@ -144,6 +159,7 @@
 </script>
 
 <div
+    use:portal
     class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm cursor-default"
     transition:fade={{ duration: 200 }}
     on:click={close}
