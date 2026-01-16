@@ -258,6 +258,9 @@
             <div
                 class="bg-[#121212] w-full max-w-lg max-h-[80vh] rounded-[32px] p-6 md:p-8 flex flex-col gap-5 shadow-[0_40px_160px_rgba(0,0,0,0.55)]"
                 on:click|stopPropagation
+                on:keydown|stopPropagation
+                role="dialog"
+                tabindex="-1"
             >
                 <div class="flex items-start justify-between gap-4">
                     <div>

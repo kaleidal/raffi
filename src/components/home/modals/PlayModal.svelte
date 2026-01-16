@@ -224,15 +224,16 @@
         on:change={onFileSelected}
     />
 
-    <!-- svelte-ignore a11y-click-events-have-key-events -->
     <div
         class="bg-[#121212] w-full max-w-lg rounded-[32px] p-6 md:p-8 flex flex-col gap-6 relative overflow-hidden shadow-[0_40px_160px_rgba(0,0,0,0.55)] cursor-default"
         transition:scale={{ start: 0.95, duration: 200 }}
         on:click|stopPropagation
+        on:keydown|stopPropagation
         on:wheel|stopPropagation
         role="dialog"
         tabindex="-1"
     >
+
 
         <!-- Header -->
         <div class="flex flex-row items-center justify-between shrink-0">
