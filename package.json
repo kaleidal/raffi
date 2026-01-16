@@ -81,9 +81,6 @@
         }
       ]
     },
-    "nsis": {
-      "differentialPackage": false
-    },
     "fileAssociations": [
       {
         "ext": "mp4",
