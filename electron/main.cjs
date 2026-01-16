@@ -2,9 +2,7 @@ const { app, BrowserWindow, dialog, screen, ipcMain } = require('electron');
 const { spawn } = require('child_process');
 const { autoUpdater } = require('electron-updater');
 
-if (process.platform === 'win32') {
-    app.setAppUserModelId('al.kaleid.raffi');
-}
+const pendingAppUserModelId = process.platform === 'win32' ? 'al.kaleid.raffi' : null;
 
 const path = require('path');
 const express = require('express');
@@ -415,7 +413,7 @@ function createWindow() {
         backgroundColor: '#090909',
         titleBarStyle: 'hidden',
         titleBarOverlay: {
-            color: '#090909',
+            color: '#00000000',
             symbolColor: '#ffffff',
             height: 32
         },
@@ -633,6 +631,9 @@ ipcMain.handle('LOCAL_LIBRARY_SCAN', async (_event, roots) => {
 
 app.whenReady().then(async () => {
     logToFile('App whenReady start');
+    if (pendingAppUserModelId) {
+        app.setAppUserModelId(pendingAppUserModelId);
+    }
 
     if (process.platform === 'win32' || process.platform === 'linux') {
         const argv = process.argv;
