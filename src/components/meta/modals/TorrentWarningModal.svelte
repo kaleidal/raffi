@@ -2,6 +2,21 @@
     import { createEventDispatcher } from "svelte";
     import { fade, scale } from "svelte/transition";
 
+    const portal = (node: HTMLElement) => {
+        if (typeof document === "undefined") {
+            return { destroy() {} };
+        }
+        document.body.appendChild(node);
+        return {
+            destroy() {
+                if (node.parentNode) {
+                    node.parentNode.removeChild(node);
+                }
+            },
+        };
+    };
+
+
     const dispatch = createEventDispatcher();
 
     function confirm() {
@@ -14,6 +29,7 @@
 </script>
 
 <div
+    use:portal
     class="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm"
     transition:fade={{ duration: 200 }}
 >

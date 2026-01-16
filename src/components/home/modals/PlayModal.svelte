@@ -5,8 +5,24 @@
     import { router } from "../../../lib/stores/router";
     import { getCachedMetaData } from "../../../lib/library/metaCache";
     import { supabase } from "../../../lib/db/supabase";
+    import { localMode } from "../../../lib/stores/authStore";
+
+    const portal = (node: HTMLElement) => {
+        if (typeof document === "undefined") {
+            return { destroy() {} };
+        }
+        document.body.appendChild(node);
+        return {
+            destroy() {
+                if (node.parentNode) {
+                    node.parentNode.removeChild(node);
+                }
+            },
+        };
+    };
 
     export let onClose: () => void;
+
 
     let mode: "select" | "join" | "preview" | "magnet" = "select";
     let bodyLocked = false;
@@ -206,6 +222,7 @@
 </script>
 
     <div
+        use:portal
         class="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center"
         transition:fade={{ duration: 200 }}
         on:click|self={closeModal}
@@ -299,23 +316,26 @@
                         </div>
                     </button>
 
-                    <button
-                        class="bg-white/5 hover:bg-white/10 text-white p-4 rounded-2xl flex items-center gap-4 transition-colors text-left group cursor-pointer"
-                        on:click={() => mode = "join"}
-                    >
-                        <div class="bg-white/10 p-3 rounded-full group-hover:bg-white/20 transition-colors">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                                <circle cx="9" cy="7" r="4"></circle>
-                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                            </svg>
-                        </div>
-                        <div class="flex flex-col gap-1">
-                            <span class="font-bold text-lg">Join Watch Party</span>
-                            <span class="text-[#878787] text-sm">Enter a code to join friends</span>
-                        </div>
-                    </button>
+                    {#if !$localMode}
+                        <button
+                            class="bg-white/5 hover:bg-white/10 text-white p-4 rounded-2xl flex items-center gap-4 transition-colors text-left group cursor-pointer"
+                            on:click={() => mode = "join"}
+                        >
+                            <div class="bg-white/10 p-3 rounded-full group-hover:bg-white/20 transition-colors">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                    <circle cx="9" cy="7" r="4"></circle>
+                                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                                </svg>
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <span class="font-bold text-lg">Join Watch Party</span>
+                                <span class="text-[#878787] text-sm">Enter a code to join friends</span>
+                            </div>
+                        </button>
+                    {/if}
+
                 </div>
 
             {:else if mode === "magnet"}
@@ -351,8 +371,9 @@
                     </div>
                 </div>
 
-            {:else if mode === "join"}
+            {:else if mode === "join" && !$localMode}
                 <div class="flex flex-col gap-4">
+
                     <div>
                         <label for="party-code" class="block text-sm font-medium text-[#878787] mb-2">Party Code</label>
                         <input

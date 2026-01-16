@@ -1,6 +1,21 @@
 <script lang="ts">
     import { fade, scale } from "svelte/transition";
 
+    const portal = (node: HTMLElement) => {
+        if (typeof document === "undefined") {
+            return { destroy() {} };
+        }
+        document.body.appendChild(node);
+        return {
+            destroy() {
+                if (node.parentNode) {
+                    node.parentNode.removeChild(node);
+                }
+            },
+        };
+    };
+
+
     export let reason: "host_left" | "party_deleted";
     export let onContinue: () => void;
     export let onLeave: () => void;
@@ -13,6 +28,7 @@
 </script>
 
 <div
+    use:portal
     class="fixed inset-0 z-[300] flex items-center justify-center bg-black/90 backdrop-blur-sm"
     transition:fade={{ duration: 200 }}
 >

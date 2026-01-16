@@ -150,7 +150,7 @@
 </script>
 
 {#if $loadedMeta && $metaData && $metaData.meta}
-    <div class="bg-[#090909] flex-1" in:fade={{ duration: 300 }}>
+    <div class="bg-[#090909] flex-1 relative" in:fade={{ duration: 300 }}>
         <div class="relative min-h-screen w-full overflow-hidden">
             <div class="absolute inset-0 opacity-60">
                 <MetaBackground
@@ -498,28 +498,6 @@
         {/if}
     </div>
 
-    {#if $showEpisodeContextMenu}
-        <EpisodeContextMenu
-            x={$contextMenuPos.x}
-            y={$contextMenuPos.y}
-            on:close={() => showEpisodeContextMenu.set(false)}
-            on:watch={() => {
-                if ($contextEpisode)
-                    StreamLogic.episodeClicked($contextEpisode, imdbID);
-            }}
-            on:markWatched={() =>
-                ProgressLogic.handleContextMarkWatched(imdbID)}
-            on:markUnwatched={() =>
-                ProgressLogic.handleContextMarkUnwatched(imdbID)}
-            on:resetProgress={() =>
-                ProgressLogic.handleContextResetProgress(imdbID)}
-            on:markSeasonWatched={() =>
-                ProgressLogic.handleContextMarkSeasonWatched(imdbID)}
-            on:markSeasonUnwatched={() =>
-                ProgressLogic.handleContextMarkSeasonUnwatched(imdbID)}
-        />
-    {/if}
-
     {#if unsupportedReason}
         <UnsupportedTitleModal
             title="Unsupported Title"
@@ -547,6 +525,28 @@
             StreamLogic.handleTorrentWarningConfirm($progressMap)}
         onTorrentCancel={StreamLogic.handleTorrentWarningCancel}
     />
+
+    {#if $showEpisodeContextMenu}
+        <EpisodeContextMenu
+            x={$contextMenuPos.x}
+            y={$contextMenuPos.y}
+            on:close={() => showEpisodeContextMenu.set(false)}
+            on:watch={() => {
+                if ($contextEpisode)
+                    StreamLogic.episodeClicked($contextEpisode, imdbID);
+            }}
+            on:markWatched={() =>
+                ProgressLogic.handleContextMarkWatched(imdbID)}
+            on:markUnwatched={() =>
+                ProgressLogic.handleContextMarkUnwatched(imdbID)}
+            on:resetProgress={() =>
+                ProgressLogic.handleContextResetProgress(imdbID)}
+            on:markSeasonWatched={() =>
+                ProgressLogic.handleContextMarkSeasonWatched(imdbID)}
+            on:markSeasonUnwatched={() =>
+                ProgressLogic.handleContextMarkSeasonUnwatched(imdbID)}
+        />
+    {/if}
 
     {#if $playerVisible && $selectedStreamUrl}
         <div class="w-full h-full z-100 fixed top-0 left-0">

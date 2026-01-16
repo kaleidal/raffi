@@ -26,6 +26,20 @@
 		trackEvent,
 	} from "../../../lib/analytics";
 
+	const portal = (node: HTMLElement) => {
+		if (typeof document === "undefined") {
+			return { destroy() {} };
+		}
+		document.body.appendChild(node);
+		return {
+			destroy() {
+				if (node.parentNode) {
+					node.parentNode.removeChild(node);
+				}
+			},
+		};
+	};
+
 
 	export let showSettings = false;
 
@@ -381,6 +395,7 @@
 
 {#if showSettings}
 	<div
+		use:portal
 		class="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center"
 		transition:fade={{ duration: 200 }}
 		on:click|self={close}

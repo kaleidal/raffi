@@ -4,6 +4,7 @@ import {
     progressMap, selectedEpisode, metaData, showEpisodeContextMenu,
     contextMenuPos, contextEpisode
 } from "./metaState";
+
 import type { ProgressMap, ProgressItem } from "./types";
 
 let lastUpdate = 0;
@@ -99,10 +100,41 @@ export const handleProgress = async (time: number, duration: number, imdbID: str
 };
 
 export const handleEpisodeContextMenu = (e: MouseEvent, episode: any) => {
-    contextMenuPos.set({ x: e.clientX, y: e.clientY });
+    const target = e.currentTarget as HTMLElement | null;
+    const container = document.querySelector(
+        "[data-scroll-container]",
+    ) as HTMLElement | null;
+    if (target && container) {
+        const menuWidth = 200;
+        const menuHeight = 260;
+        const minX = 16;
+        const maxX = window.innerWidth - menuWidth - 16;
+        const minY = 16;
+        const maxY = window.innerHeight - menuHeight - 16;
+        const desiredX = e.clientX + 8;
+        const desiredY = e.clientY;
+        const fitsRight = desiredX <= maxX;
+
+        if (!fitsRight) {
+            const leftOffset = Math.max(minX, e.clientX - menuWidth - 8);
+            contextMenuPos.set({
+                x: leftOffset,
+                y: Math.max(minY, Math.min(desiredY, maxY)),
+            });
+        } else {
+            contextMenuPos.set({
+                x: Math.max(minX, Math.min(desiredX, maxX)),
+                y: Math.max(minY, Math.min(desiredY, maxY)),
+            });
+        }
+    } else {
+        contextMenuPos.set({ x: e.clientX, y: e.clientY });
+    }
+
     contextEpisode.set(episode);
     showEpisodeContextMenu.set(true);
 };
+
 
 export const handleContextMarkWatched = async (imdbID: string) => {
     const episode = get(contextEpisode);

@@ -32,12 +32,15 @@ export const addons = writable<Addon[]>([]);
 
 // UI State
 export const streamsPopupVisible = writable<boolean>(false);
+
 export const playerVisible = writable<boolean>(false);
 export const showTorrentWarning = writable<boolean>(false);
 export const pendingTorrentStream = writable<Stream | null>(null);
 export const showEpisodeContextMenu = writable<boolean>(false);
 export const contextMenuPos = writable<{ x: number; y: number }>({ x: 0, y: 0 });
+
 export const contextEpisode = writable<any>(null);
+
 
 // Reset function
 export function resetMetaState() {
@@ -61,6 +64,7 @@ export function resetMetaState() {
     selectedAddon.set("");
     addons.set([]);
     streamsPopupVisible.set(false);
+
     playerVisible.set(false);
     showTorrentWarning.set(false);
     pendingTorrentStream.set(null);

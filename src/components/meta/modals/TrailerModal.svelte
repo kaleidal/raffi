@@ -2,6 +2,21 @@
     import { fade, scale } from "svelte/transition";
     import { createEventDispatcher } from "svelte";
 
+    const portal = (node: HTMLElement) => {
+        if (typeof document === "undefined") {
+            return { destroy() {} };
+        }
+        document.body.appendChild(node);
+        return {
+            destroy() {
+                if (node.parentNode) {
+                    node.parentNode.removeChild(node);
+                }
+            },
+        };
+    };
+
+
     export let visible = false;
     export let ytId: string;
 
@@ -17,6 +32,7 @@
     <!-- svelte-ignore a11y-click-events-have-key-events -->
     <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div
+        use:portal
         class="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm"
         transition:fade={{ duration: 200 }}
         on:click|self={close}

@@ -1,6 +1,20 @@
 <script lang="ts">
     import type { ShowResponse } from "../../../lib/library/types/meta_types";
 
+    const portal = (node: HTMLElement) => {
+        if (typeof document === "undefined") {
+            return { destroy() {} };
+        }
+        document.body.appendChild(node);
+        return {
+            destroy() {
+                if (node.parentNode) {
+                    node.parentNode.removeChild(node);
+                }
+            },
+        };
+    };
+
     export let loading: boolean;
     export let onClose: () => void;
     export let metaData: ShowResponse | null;
@@ -12,6 +26,7 @@
 
 {#if loading}
     <div
+        use:portal
         class="fixed inset-0 z-50 backdrop-blur-md flex items-center justify-center flex-col gap-8"
     >
         {#if metaData}
