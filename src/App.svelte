@@ -127,7 +127,9 @@
             style={`transform: scale(${displayZoom}); transform-origin: top left; width: calc(100% / ${displayZoom}); height: calc(100% / ${displayZoom});`}
         >
             {#if checkingAuth}
-               
+                <div class="w-full h-full bg-[#090909] flex items-center justify-center">
+                    <LoadingSpinner size="60px" />
+                </div>
             {:else if !$currentUser && !$localMode && $router.page !== "login"}
                 <Login />
             {:else}
