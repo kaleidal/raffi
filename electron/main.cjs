@@ -487,11 +487,38 @@ function createWindow() {
         mainWindow.loadURL('http://localhost:5173');
     } else {
         if (autoUpdater) {
-            autoUpdater.checkForUpdatesAndNotify();
+            autoUpdater.autoInstallOnAppQuit = false;
+
+            autoUpdater.on('error', (err) => {
+                logToFile('autoUpdater error', err);
+            });
+
+            autoUpdater.on('update-available', (info) => {
+                logToFile('Update available', info);
+            });
+
+            autoUpdater.on('update-not-available', (info) => {
+                logToFile('Update not available', info);
+            });
+
+            autoUpdater.on('update-downloaded', (info) => {
+                logToFile('Update downloaded, quitting to install', info);
+                cleanup();
+                setTimeout(() => {
+                    try {
+                        autoUpdater.quitAndInstall(false, true);
+                    } catch (err) {
+                        logToFile('Failed to quit and install update', err);
+                    }
+                }, 500);
+            });
+
+            autoUpdater.checkForUpdates().catch((err) => {
+                logToFile('checkForUpdates failed', err);
+            });
         } else {
             logToFile('autoUpdater not available');
         }
-
 
         const expressApp = express();
         const distPath = path.join(__dirname, '..', 'dist');
