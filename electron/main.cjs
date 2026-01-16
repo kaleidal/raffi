@@ -1,12 +1,44 @@
 const { app, BrowserWindow, dialog, screen, ipcMain } = require('electron');
 const { spawn } = require('child_process');
-const { autoUpdater } = require('electron-updater');
+const path = require('path');
+const fs = require('fs');
+
+const getFallbackLogPath = () => {
+    const baseDir =
+        process.env.APPDATA ||
+        process.env.LOCALAPPDATA ||
+        process.env.TEMP ||
+        process.cwd();
+    const logDir = path.join(baseDir, 'Raffi');
+    try {
+        fs.mkdirSync(logDir, { recursive: true });
+    } catch {
+        // ignore
+    }
+    return path.join(logDir, 'raffi-main.log');
+};
+
+const logFallback = (message, error) => {
+    try {
+        const logPath = getFallbackLogPath();
+        const time = new Date().toISOString();
+        const details = error ? `\n${error.stack || error.message || error}` : '';
+        fs.appendFileSync(logPath, `[${time}] ${message}${details}\n`);
+    } catch {
+        // ignore
+    }
+};
+
+let autoUpdater = null;
+try {
+    ({ autoUpdater } = require('electron-updater'));
+} catch (err) {
+    logFallback('Failed to load electron-updater', err);
+}
 
 const pendingAppUserModelId = process.platform === 'win32' ? 'al.kaleid.raffi' : null;
 
-const path = require('path');
 const express = require('express');
-const fs = require('fs');
 
 const getLogPath = () => {
     try {
@@ -19,14 +51,7 @@ const getLogPath = () => {
         // ignore
     }
 
-    const baseDir = process.env.APPDATA || process.env.LOCALAPPDATA || process.cwd();
-    const logDir = path.join(baseDir, 'Raffi');
-    try {
-        fs.mkdirSync(logDir, { recursive: true });
-    } catch {
-        // ignore
-    }
-    return path.join(logDir, 'raffi-main.log');
+    return getFallbackLogPath();
 };
 
 const logToFile = (message, error) => {
@@ -35,12 +60,14 @@ const logToFile = (message, error) => {
         const time = new Date().toISOString();
         const details = error ? `\n${error.stack || error.message || error}` : '';
         fs.appendFileSync(logPath, `[${time}] ${message}${details}\n`);
-    } catch {
-        // ignore
+    } catch (err) {
+        logFallback('Failed to write main log', err);
     }
 };
 
+logFallback('Main process booting');
 logToFile('Main process booting');
+
 
 
 function isDiscordIPCConnectError(err) {
@@ -459,7 +486,12 @@ function createWindow() {
     if (isDev) {
         mainWindow.loadURL('http://localhost:5173');
     } else {
-        autoUpdater.checkForUpdatesAndNotify();
+        if (autoUpdater) {
+            autoUpdater.checkForUpdatesAndNotify();
+        } else {
+            logToFile('autoUpdater not available');
+        }
+
 
         const expressApp = express();
         const distPath = path.join(__dirname, '..', 'dist');
