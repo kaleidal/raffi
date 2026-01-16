@@ -6,6 +6,7 @@
     import type { ProgressMap, ProgressItem } from "../../../pages/meta/types";
     import LoadingSpinner from "../../common/LoadingSpinner.svelte";
     import { trackEvent } from "../../../lib/analytics";
+    import { lockScroll, unlockScroll } from "../../../lib/modalScrollLock";
 
     export let streamsPopupVisible = false;
     export let addons: Addon[] = [];
@@ -18,6 +19,20 @@
     export let progressSignature: string | number | null = null;
 
     const dispatch = createEventDispatcher();
+
+    export const portal = (node: HTMLElement) => {
+        if (typeof document === "undefined") {
+            return { destroy() {} };
+        }
+        document.body.appendChild(node);
+        return {
+            destroy() {
+                if (node.parentNode) {
+                    node.parentNode.removeChild(node);
+                }
+            },
+        };
+    };
 
     const RESOLUTION_FILTERS = [
         { label: "All", value: "all" },
@@ -47,67 +62,12 @@
         };
     };
 
-    const toggleBodyScroll = (active: boolean) => {
-        if (typeof document === "undefined") return;
-        const body = document.body;
-        const html = document.documentElement;
-        const container = document.querySelector(
-            "[data-scroll-container]",
-        ) as HTMLElement | null;
-        const count = Number(body.dataset.modalCount || "0");
-        if (active) {
-            if (count === 0) {
-                const scrollY = window.scrollY;
-                body.dataset.scrollY = String(scrollY);
-                body.dataset.prevOverflow = body.style.overflow || "";
-                body.dataset.prevPosition = body.style.position || "";
-                body.dataset.prevTop = body.style.top || "";
-                body.dataset.prevWidth = body.style.width || "";
-                body.style.overflow = "hidden";
-                body.style.position = "fixed";
-                body.style.top = `-${scrollY}px`;
-                body.style.width = "100%";
-                html.style.overflow = "hidden";
-                if (container) {
-                    container.dataset.prevOverflowY = container.style.overflowY || "";
-                    container.dataset.prevOverflowX = container.style.overflowX || "";
-                    container.style.overflowY = "hidden";
-                    container.style.overflowX = "hidden";
-                }
-            }
-            body.dataset.modalCount = String(count + 1);
-            return;
-        }
-        const next = Math.max(0, count - 1);
-        body.dataset.modalCount = String(next);
-        if (next === 0) {
-            const scrollY = Number(body.dataset.scrollY || "0");
-            body.style.overflow = body.dataset.prevOverflow || "";
-            body.style.position = body.dataset.prevPosition || "";
-            body.style.top = body.dataset.prevTop || "";
-            body.style.width = body.dataset.prevWidth || "";
-            html.style.overflow = "";
-            delete body.dataset.prevOverflow;
-            delete body.dataset.prevPosition;
-            delete body.dataset.prevTop;
-            delete body.dataset.prevWidth;
-            delete body.dataset.scrollY;
-            if (container) {
-                container.style.overflowY = container.dataset.prevOverflowY || "";
-                container.style.overflowX = container.dataset.prevOverflowX || "";
-                delete container.dataset.prevOverflowY;
-                delete container.dataset.prevOverflowX;
-            }
-            window.scrollTo(0, scrollY);
-        }
-    };
-
     const updateBodyLock = (active: boolean) => {
         if (active && !bodyLocked) {
-            toggleBodyScroll(true);
+            lockScroll();
             bodyLocked = true;
         } else if (!active && bodyLocked) {
-            toggleBodyScroll(false);
+            unlockScroll();
             bodyLocked = false;
         }
     };
@@ -480,7 +440,8 @@
         hasTrackedOpen = false;
     }
 
-    $: updateBodyLock(streamsPopupVisible);
+     $: updateBodyLock(streamsPopupVisible);
+
 
     onDestroy(() => {
         updateBodyLock(false);
@@ -753,8 +714,11 @@
 
 </script>
 
+<svelte:body class:overflow-hidden={streamsPopupVisible} />
+
 {#if streamsPopupVisible}
     <div
+        use:portal
         class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 sm:p-10 lg:p-20"
         transition:fade={{ duration: 200 }}
         on:click|self={close}

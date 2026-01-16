@@ -11,6 +11,7 @@
     import PlayerWatchParty from "./components/PlayerWatchParty.svelte";
     import type { ShowResponse } from "../../lib/library/types/meta_types";
     import { watchParty } from "../../lib/stores/watchPartyStore";
+    import { localMode } from "../../lib/stores/authStore";
     import { trackEvent } from "../../lib/analytics";
 
     import {
@@ -264,6 +265,10 @@
     };
 
     const openWatchPartyModal = () => {
+        if ($localMode) {
+            showWatchPartyModal.set(false);
+            return;
+        }
         trackEvent("watch_party_modal_opened", getPlaybackAnalyticsProps());
         showWatchPartyModal.set(true);
     };
@@ -444,7 +449,7 @@
 
         seekBarStyle = getSeekBarStyleFromStorage();
 
-        if (joinPartyId && autoJoin) {
+        if (joinPartyId && autoJoin && !$localMode) {
             showWatchPartyModal.set(true);
         }
 
@@ -892,6 +897,7 @@
         // Immediately show loading overlay so the action can't be triggered twice.
         nextEpisodeAttemptId += 1;
         const attemptId = nextEpisodeAttemptId;
+        currentVideoSrc = videoSrc;
         const beforeSrc = currentVideoSrc;
         loading.set(true);
 
@@ -1124,13 +1130,14 @@
                 : 'translate-y-10 opacity-0 pointer-events-none'}"
             bind:this={controlsOverlayElem}
         >
-                <PlayerOverlays
-                    showSkipIntro={$showSkipIntro}
-                    showNextEpisode={showNextEpisodeAllowed}
-                    isWatchPartyMember={$watchParty.isActive && !$watchParty.isHost}
-                    skipChapter={handleSkipIntro}
-                    nextEpisode={handleNextEpisodeClick}
-                />
+        <PlayerOverlays
+            showSkipIntro={$showSkipIntro}
+            showNextEpisode={showNextEpisodeAllowed}
+            isWatchPartyMember={!$localMode && $watchParty.isActive && !$watchParty.isHost}
+            skipChapter={handleSkipIntro}
+            nextEpisode={handleNextEpisodeClick}
+        />
+
 
             <PlayerControls
                 isPlaying={$isPlaying}
@@ -1147,7 +1154,7 @@
                 {hasNextEpisode}
                 currentAudioLabel={$currentAudioLabel}
                 currentSubtitleLabel={$currentSubtitleLabel}
-                isWatchPartyMember={$watchParty.isActive && !$watchParty.isHost}
+                isWatchPartyMember={!$localMode && $watchParty.isActive && !$watchParty.isHost}
                 togglePlay={togglePlayWithFeedback}
                 onSeekInput={(e) =>
                     controlsManager.onSeekInput(e, $duration, pendingSeek.set)}
@@ -1188,7 +1195,13 @@
                 onNextEpisode={handleNextEpisodeClick}
                 on:audioClick={openAudioSelection}
                 on:subtitleClick={openSubtitleSelection}
-                on:watchPartyClick={openWatchPartyModal}
+                on:watchPartyClick={() => {
+                    if (!$localMode) {
+                        openWatchPartyModal();
+                    } else {
+                        showWatchPartyModal.set(false);
+                    }
+                }}
                 on:clipPanelOpenChange={(e) => {
                     clipPanelOpen = !!e.detail?.open;
                     controlsManager?.setPinned?.(clipPanelOpen, controlsVisible.set);
@@ -1205,7 +1218,7 @@
         showAudioSelection={$showAudioSelection}
         showSubtitleSelection={$showSubtitleSelection}
         showError={$showError}
-        showWatchPartyModal={$showWatchPartyModal}
+        showWatchPartyModal={$showWatchPartyModal && !$localMode}
         showSeekStyleModal={$showSeekStyleModal}
         audioTracks={$audioTracks}
         subtitleTracks={$subtitleTracks}
