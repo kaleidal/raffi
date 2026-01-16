@@ -506,7 +506,6 @@ function createWindow() {
 
         if (autoUpdater) {
             autoUpdater.autoInstallOnAppQuit = false;
-            autoUpdater.disableDifferentialDownload = true; // this little guy causes so many issues
 
             autoUpdater.on('error', (err) => {
                 logToFile('autoUpdater error', err);
