@@ -22,6 +22,8 @@ const logToFile = (message, error) => {
     }
 };
 
+logToFile('Main process booting');
+
 
 function isDiscordIPCConnectError(err) {
     const msg = (err && (err.message || String(err))) || '';
@@ -188,6 +190,8 @@ const DEFAULT_WINDOW_HEIGHT = 1000;
 const isDev = !app.isPackaged;
 
 const gotTheLock = app.requestSingleInstanceLock();
+logToFile(`Single instance lock: ${gotTheLock ? 'acquired' : 'denied'}`);
+
 
 app.on('open-file', (event, path) => {
     event.preventDefault();
@@ -200,8 +204,10 @@ app.on('open-file', (event, path) => {
 });
 
 if (!gotTheLock) {
+    logToFile('Another instance is running; quitting');
     app.quit();
 } else {
+
     app.on('second-instance', (event, commandLine, workingDirectory) => {
         // Someone tried to run a second instance, we should focus our window.
         if (mainWindow) {
