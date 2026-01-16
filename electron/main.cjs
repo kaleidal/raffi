@@ -382,6 +382,8 @@ async function ensureFFmpegAvailable() {
 
 function createWindow() {
     const useTitleBarOverlay = process.platform === 'win32';
+    logToFile('Creating main window');
+
 
     mainWindow = new BrowserWindow({
         width: DEFAULT_WINDOW_WIDTH,
@@ -495,7 +497,32 @@ function createWindow() {
     });
     mainWindow.on('resize', applyDisplayZoom);
     screen.on('display-metrics-changed', applyDisplayZoom);
+
+    mainWindow.on('ready-to-show', () => {
+        logToFile('Main window ready-to-show');
+    });
+
+    mainWindow.on('show', () => {
+        logToFile('Main window shown');
+    });
+
+    mainWindow.on('close', () => {
+        logToFile('Main window close requested');
+    });
+
+    mainWindow.on('closed', () => {
+        logToFile('Main window closed');
+    });
+
+    mainWindow.webContents.on('did-fail-load', (_event, code, desc, url) => {
+        logToFile(`Main window failed to load (${code}) ${desc}`, url);
+    });
+
+    mainWindow.webContents.on('render-process-gone', (_event, details) => {
+        logToFile('Renderer process gone', details);
+    });
 }
+
 
 ipcMain.on('WINDOW_MINIMIZE', () => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -585,6 +612,8 @@ ipcMain.handle('LOCAL_LIBRARY_SCAN', async (_event, roots) => {
 });
 
 app.whenReady().then(async () => {
+    logToFile('App whenReady start');
+
     if (process.platform === 'win32' || process.platform === 'linux') {
         const argv = process.argv;
         console.log('Command line args:', argv);
@@ -602,11 +631,15 @@ app.whenReady().then(async () => {
         }
     }
 
+    logToFile('Checking ffmpeg availability');
     const ffmpegReady = await ensureFFmpegAvailable();
+
     if (!ffmpegReady) {
+        logToFile('FFmpeg missing; quitting');
         app.quit();
         return;
     }
+
 
     startGoServer();
     createWindow();
@@ -634,11 +667,13 @@ app.on('will-quit', cleanup);
 app.on('quit', cleanup);
 
 app.on('window-all-closed', () => {
+    logToFile('All windows closed');
     cleanup();
     if (process.platform !== 'darwin') {
         app.quit();
     }
 });
+
 
 process.on('SIGINT', () => {
     cleanup();
