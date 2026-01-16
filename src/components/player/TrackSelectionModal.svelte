@@ -159,9 +159,10 @@
         transition:scale={{ duration: 200, start: 0.9 }}
         on:click|stopPropagation
         on:keydown|stopPropagation
-        role="button"
+        role="dialog"
         tabindex="-1"
     >
+
         <div class="flex items-center justify-between">
             <h2 class="text-2xl font-poppins font-bold text-white">{title}</h2>
             <button
