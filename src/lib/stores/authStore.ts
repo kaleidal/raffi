@@ -3,8 +3,23 @@ import type { User } from '@supabase/supabase-js';
 import { ensureDefaultAddonsForUser, ensureDefaultAddonsForLocal, syncLocalStateToUser, hasLocalState } from '../db/db';
 import { writable, get } from 'svelte/store';
 
+export type UpdateStatus = {
+    available: boolean;
+    downloaded: boolean;
+    version: string | null;
+    notes: string;
+    releaseDate: string | null;
+};
+
 export const currentUser = writable<User | null>(null);
 export const localMode = writable(false);
+export const updateStatus = writable<UpdateStatus>({
+    available: false,
+    downloaded: false,
+    version: null,
+    notes: "",
+    releaseDate: null,
+});
 
 const LOCAL_MODE_KEY = 'local_mode_enabled';
 
