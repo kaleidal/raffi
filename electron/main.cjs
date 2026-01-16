@@ -10,10 +10,30 @@ const path = require('path');
 const express = require('express');
 const fs = require('fs');
 
+const getLogPath = () => {
+    try {
+        if (app && app.isReady()) {
+            const logDir = app.getPath('userData');
+            fs.mkdirSync(logDir, { recursive: true });
+            return path.join(logDir, 'raffi-main.log');
+        }
+    } catch {
+        // ignore
+    }
+
+    const baseDir = process.env.APPDATA || process.env.LOCALAPPDATA || process.cwd();
+    const logDir = path.join(baseDir, 'Raffi');
+    try {
+        fs.mkdirSync(logDir, { recursive: true });
+    } catch {
+        // ignore
+    }
+    return path.join(logDir, 'raffi-main.log');
+};
+
 const logToFile = (message, error) => {
     try {
-        const logDir = app.getPath('userData');
-        const logPath = path.join(logDir, 'raffi-main.log');
+        const logPath = getLogPath();
         const time = new Date().toISOString();
         const details = error ? `\n${error.stack || error.message || error}` : '';
         fs.appendFileSync(logPath, `[${time}] ${message}${details}\n`);
