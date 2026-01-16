@@ -126,6 +126,8 @@ let mainWindow;
 let goServer;
 let httpServer;
 let fileToOpen = null;
+let pendingUpdateInfo = null;
+
 
 const LOCAL_MEDIA_EXTS = new Set([
     '.mp4',
@@ -486,8 +488,25 @@ function createWindow() {
     if (isDev) {
         mainWindow.loadURL('http://localhost:5173');
     } else {
+        const serializeUpdateInfo = (info) => {
+            if (!info) return null;
+            const rawNotes = info.releaseNotes;
+            let notes = '';
+            if (typeof rawNotes === 'string') {
+                notes = rawNotes;
+            } else if (Array.isArray(rawNotes)) {
+                notes = rawNotes.map((note) => note?.note || note?.notes || '').join('\n');
+            }
+            return {
+                version: info.version || info.releaseName || null,
+                releaseDate: info.releaseDate || null,
+                notes,
+            };
+        };
+
         if (autoUpdater) {
             autoUpdater.autoInstallOnAppQuit = false;
+            autoUpdater.disableDifferentialDownload = true; // this little guy causes so many issues
 
             autoUpdater.on('error', (err) => {
                 logToFile('autoUpdater error', err);
@@ -495,6 +514,10 @@ function createWindow() {
 
             autoUpdater.on('update-available', (info) => {
                 logToFile('Update available', info);
+                const payload = serializeUpdateInfo(info);
+                if (payload && mainWindow && !mainWindow.isDestroyed()) {
+                    mainWindow.webContents.send('UPDATE_AVAILABLE', payload);
+                }
             });
 
             autoUpdater.on('update-not-available', (info) => {
@@ -502,15 +525,12 @@ function createWindow() {
             });
 
             autoUpdater.on('update-downloaded', (info) => {
-                logToFile('Update downloaded, quitting to install', info);
-                cleanup();
-                setTimeout(() => {
-                    try {
-                        autoUpdater.quitAndInstall(false, true);
-                    } catch (err) {
-                        logToFile('Failed to quit and install update', err);
-                    }
-                }, 500);
+                logToFile('Update downloaded', info);
+                const payload = serializeUpdateInfo(info);
+                pendingUpdateInfo = payload;
+                if (payload && mainWindow && !mainWindow.isDestroyed()) {
+                    mainWindow.webContents.send('UPDATE_DOWNLOADED', payload);
+                }
             });
 
             autoUpdater.checkForUpdates().catch((err) => {
@@ -624,6 +644,21 @@ ipcMain.handle('WINDOW_IS_MAXIMIZED', async () => {
     if (!mainWindow || mainWindow.isDestroyed()) return false;
     return mainWindow.isMaximized();
 });
+
+ipcMain.handle('UPDATE_INSTALL', async () => {
+    if (!autoUpdater) return { ok: false, reason: 'autoUpdater unavailable' };
+    logToFile('Update install requested');
+    cleanup();
+    setTimeout(() => {
+        try {
+            autoUpdater.quitAndInstall(false, true);
+        } catch (err) {
+            logToFile('Failed to quit and install update', err);
+        }
+    }, 500);
+    return { ok: true };
+});
+
 
 function startGoServer() {
     const binPath = getDecoderPath();

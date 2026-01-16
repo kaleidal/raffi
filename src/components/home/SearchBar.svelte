@@ -9,6 +9,7 @@
 	import ListsPopup from "../meta/modals/ListsPopup.svelte";
 	import PlayModal from "./modals/PlayModal.svelte";
 	import { trackEvent } from "../../lib/analytics";
+	import { updateStatus } from "../../lib/stores/authStore";
 
 
     const dispatch = createEventDispatcher();
@@ -20,6 +21,8 @@
 	let loading = false;
 	let lastSearchQueryLength = 0;
 	let lastSearchResultsCount = 0;
+	let commandHint = "";
+
 
     export let absolute: boolean = true;
     export let onLogoClick: () => void = () => {};
@@ -34,9 +37,39 @@
     let showListsPopup = false;
     let showPlayModal = false;
 
+	const runCommand = (rawCommand: string) => {
+		const normalized = rawCommand.trim().toLowerCase();
+		if (!normalized) return false;
+
+		switch (normalized) {
+			case "/test_update":
+			case "/test-update":
+				window.dispatchEvent(new CustomEvent("raffi-test-update"));
+				commandHint = "Triggered test update.";
+				return true;
+			default:
+				commandHint = `Unknown command: ${normalized}`;
+				return false;
+		}
+	};
+
+	const handleCommandEnter = () => {
+		const trimmed = searchQuery.trim();
+		if (!trimmed.startsWith("/")) return false;
+		const handled = runCommand(trimmed);
+		searchQuery = "";
+		searchResults = [];
+		showSearchResults = false;
+		loading = false;
+		lastSearchQueryLength = 0;
+		lastSearchResultsCount = 0;
+		return handled;
+	};
+
 	function handleSearch(e: Event) {
 		const query = (e.target as HTMLInputElement).value;
 		searchQuery = query;
+		commandHint = "";
 
 		clearTimeout(searchTimeout);
 		if (!query.trim()) {
@@ -45,6 +78,12 @@
 			loading = false;
 			lastSearchQueryLength = 0;
 			lastSearchResultsCount = 0;
+			return;
+		}
+
+		if (query.trim().startsWith("/")) {
+			showSearchResults = false;
+			loading = false;
 			return;
 		}
 
@@ -76,6 +115,15 @@
 			}
 		}, 500);
 	}
+
+	const handleSearchKeydown = (event: KeyboardEvent) => {
+		if (event.key !== "Enter") return;
+		if (searchQuery.trim().startsWith("/")) {
+			event.preventDefault();
+			handleCommandEnter();
+		}
+	};
+
 
 
     function closeSearch() {
@@ -250,19 +298,29 @@
                 placeholder="search for anything"
                 class="bg-[#000000]/50 text-[#D4D4D4] text-center py-[20px] px-[70px] w-fit text-[28px] font-poppins font-normal outline-none focus:outline-none focus:ring-0"
                 on:input={handleSearch}
+                on:keydown={handleSearchKeydown}
                 on:focus={() => {
                     if (searchQuery) showSearchResults = true;
                 }}
                 on:blur={closeSearch}
                 value={searchQuery}
             />
+
         </div>
 
-        {#if showSearchResults && (searchResults.length > 0 || loading)}
+        {#if commandHint}
+            <div
+                class="absolute top-[90px] left-0 w-full bg-[#181818]/90 backdrop-blur-xl rounded-[24px] p-4 text-white/70 text-sm z-100"
+                transition:fade={{ duration: 200 }}
+            >
+                {commandHint}
+            </div>
+        {:else if showSearchResults && (searchResults.length > 0 || loading)}
             <div
                 class="absolute top-[90px] left-0 w-full bg-[#181818]/90 backdrop-blur-xl rounded-[24px] p-4 flex flex-col gap-2 max-h-[400px] overflow-y-auto z-100"
                 transition:fade={{ duration: 200 }}
             >
+
                 {#if loading}
                     {#each Array(3) as _}
                         <div
@@ -400,7 +458,7 @@
         </button>
 
         <button
-            class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
+            class="relative bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
             aria-label="settings"
             on:click={openSettings}
         >
@@ -420,6 +478,12 @@
                     stroke-linejoin="round"
                 />
             </svg>
+            {#if $updateStatus.available}
+                <span class="absolute top-3 right-3 flex h-2.5 w-2.5">
+                    <span class="absolute inline-flex h-full w-full rounded-full bg-[#FF3B30]/60 animate-ping"></span>
+                    <span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#FF3B30]"></span>
+                </span>
+            {/if}
         </button>
     </div>
 </div>

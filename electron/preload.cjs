@@ -30,5 +30,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.on('DISPLAY_ZOOM', handler);
         return () => ipcRenderer.removeListener('DISPLAY_ZOOM', handler);
     },
+    onUpdateAvailable: (callback) => {
+        const handler = (_event, value) => callback(value);
+        ipcRenderer.on('UPDATE_AVAILABLE', handler);
+        return () => ipcRenderer.removeListener('UPDATE_AVAILABLE', handler);
+    },
+    onUpdateDownloaded: (callback) => {
+        const handler = (_event, value) => callback(value);
+        ipcRenderer.on('UPDATE_DOWNLOADED', handler);
+        return () => ipcRenderer.removeListener('UPDATE_DOWNLOADED', handler);
+    },
+    installUpdate: () => ipcRenderer.invoke('UPDATE_INSTALL'),
 });
 

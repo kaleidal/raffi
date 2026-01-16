@@ -16,6 +16,7 @@
 		disableLocalMode,
 		enableLocalMode,
 		localMode,
+		updateStatus,
 	} from "../../../lib/stores/authStore";
 	import { router } from "../../../lib/stores/router";
 	import {
@@ -45,6 +46,7 @@
 	let analyticsEnabled = false;
 	let sessionReplayEnabled = false;
 	let analyticsAvailable = false;
+	let showUpdateNotes = false;
 
 
 	let localLibrarySupported = false;
@@ -365,6 +367,10 @@
 		close();
 	}
 
+	function installUpdate() {
+		(window as any).electronAPI?.installUpdate?.();
+	}
+
 	$: updateBodyLock(showSettings);
 
 	onDestroy(() => {
@@ -433,8 +439,46 @@
 				</div>
 			</div>
 
+			{#if $updateStatus.available}
+				<section class="rounded-[28px] bg-white/[0.04] p-6 flex flex-col gap-4">
+					<div class="flex flex-col gap-1">
+						<h3 class="text-white text-xl font-semibold">Update available</h3>
+						<p class="text-white/60 text-sm">
+							{#if $updateStatus.version}
+								Version {$updateStatus.version} is ready to install.
+							{:else}
+								A new version is ready to install.
+							{/if}
+						</p>
+					</div>
+					<div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+						{#if $updateStatus.downloaded}
+							<button
+								class="bg-white text-black px-4 py-2 rounded-2xl font-semibold hover:bg-white/90 transition-colors cursor-pointer"
+								on:click={installUpdate}
+							>
+								Restart to update
+							</button>
+						{:else}
+							<span class="text-white/50 text-sm">Downloading update…</span>
+						{/if}
+						<button
+							class="text-white/70 text-sm underline underline-offset-4 hover:text-white"
+							on:click={() => (showUpdateNotes = !showUpdateNotes)}
+						>
+							{showUpdateNotes ? "Hide changes" : "View changes"}
+						</button>
+					</div>
+					{#if showUpdateNotes}
+						<div class="rounded-2xl bg-white/[0.06] p-4 text-white/70 text-sm whitespace-pre-wrap max-h-[200px] overflow-y-auto">
+							{$updateStatus.notes || "Release notes unavailable."}
+						</div>
+					{/if}
+				</section>
+			{/if}
 
 			<div class="flex-1 min-h-0 overflow-y-auto">
+
 				<div class="flex flex-col gap-6 min-h-0 pr-1 pb-1">
 					<section class="rounded-[28px] bg-white/[0.04] p-6 flex flex-col gap-5">
 						<div>
