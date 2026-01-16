@@ -7,6 +7,20 @@
 
     const dispatch = createEventDispatcher();
 
+    export const portal = (node: HTMLElement) => {
+        if (typeof document === "undefined") {
+            return { destroy() {} };
+        }
+        document.body.appendChild(node);
+        return {
+            destroy() {
+                if (node.parentNode) {
+                    node.parentNode.removeChild(node);
+                }
+            },
+        };
+    };
+
     function close() {
         dispatch("close");
     }
@@ -47,8 +61,9 @@
 </script>
 
 <div
-    class="fixed z-[100] context-menu bg-[#181818] rounded-xl py-2 min-w-[200px] flex flex-col"
-    style="top: {y}px; left: {x}px;"
+    use:portal
+    class="fixed z-[300] context-menu bg-[#181818] rounded-xl py-2 min-w-[200px] flex flex-col"
+    style={`top: ${y}px; left: ${x}px;`}
     transition:fade={{ duration: 100 }}
     on:contextmenu|preventDefault
     role="menu"

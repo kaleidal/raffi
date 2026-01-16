@@ -12,6 +12,20 @@
     import LoadingSpinner from "../../common/LoadingSpinner.svelte";
     import { trackEvent } from "../../../lib/analytics";
 
+    const portal = (node: HTMLElement) => {
+        if (typeof document === "undefined") {
+            return { destroy() {} };
+        }
+        document.body.appendChild(node);
+        return {
+            destroy() {
+                if (node.parentNode) {
+                    node.parentNode.removeChild(node);
+                }
+            },
+        };
+    };
+
 
     export let visible = false;
     export let imdbId: string;
@@ -104,6 +118,7 @@
 
 {#if visible}
     <div
+        use:portal
         class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-20"
         on:click|self={close}
         on:keydown={(e) => e.key === "Escape" && close()}

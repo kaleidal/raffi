@@ -117,7 +117,11 @@
         }
 
         const init = async () => {
-            await initAuth();
+            try {
+                await initAuth();
+            } catch (err) {
+                console.error("Auth initialization failed", err);
+            }
             if (disposed) return;
 
             checkingAuth = false;

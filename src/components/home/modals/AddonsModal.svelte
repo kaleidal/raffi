@@ -8,6 +8,20 @@
     import LoadingSpinner from "../../common/LoadingSpinner.svelte";
     import { trackEvent } from "../../../lib/analytics";
 
+    const portal = (node: HTMLElement) => {
+        if (typeof document === "undefined") {
+            return { destroy() {} };
+        }
+        document.body.appendChild(node);
+        return {
+            destroy() {
+                if (node.parentNode) {
+                    node.parentNode.removeChild(node);
+                }
+            },
+        };
+    };
+
 
     export let showAddonsModal = false;
 
@@ -369,6 +383,7 @@
 
 {#if showAddonsModal}
     <div
+        use:portal
         class="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex"
         transition:fade={{ duration: 200 }}
         on:click|self={closeModal}

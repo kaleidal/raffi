@@ -4,6 +4,7 @@ import {
     selectedAddon, metaData, playerVisible, selectedStreamUrl,
     selectedStream, selectedFileIdx, showTorrentWarning, pendingTorrentStream
 } from "./metaState";
+
 import type { Stream } from "./types";
 import { getLocalStreamsFor } from "../../lib/localLibrary/localLibrary";
 import { trackEvent } from "../../lib/analytics";
@@ -53,6 +54,7 @@ export const fetchStreams = async (
     if (!silent) {
         streamsPopupVisible.set(true);
     }
+
 
     if (setActive) {
         selectedEpisode.set(episode);
@@ -187,3 +189,4 @@ export const closeStreamsPopup = () => {
     streamsPopupVisible.set(false);
     streams.set([]);
 };
+
