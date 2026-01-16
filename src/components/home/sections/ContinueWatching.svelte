@@ -208,7 +208,7 @@
 />
 
 {#if continueWatchingMeta.length > 0}
-    <div class="w-full h-fit flex flex-col gap-4 relative group">
+    <div class="w-full h-fit flex flex-col gap-4 relative group overflow-visible">
         <div class="flex flex-row gap-[10px] items-center w-full">
             <svg
                 width="50"
@@ -279,9 +279,9 @@
             {/if}
 
             <div
-                class="flex gap-[20px] w-full pb-4 transition-all duration-300 {isExpanded
+                class="flex gap-[20px] w-full pb-6 pt-3 transition-all duration-300 {isExpanded
                     ? 'flex-wrap'
-                    : 'flex-row overflow-x-auto no-scrollbar scroll-smooth'}"
+                    : 'flex-row overflow-x-auto overflow-y-visible no-scrollbar scroll-smooth'}"
                 bind:this={scrollContainer}
                 on:scroll={updateScrollButtons}
             >
@@ -297,7 +297,8 @@
                             movieProgress.time > 0}
 
                         <button
-                            class="w-[var(--cw-card-w)] h-fit rounded-[16px] hover:opacity-80 transition-all duration-200 ease-out cursor-pointer overflow-clip relative flex-shrink-0"
+                            class="w-[var(--cw-card-w)] h-fit rounded-[16px] hover:opacity-90 transition-all duration-200 ease-out cursor-pointer overflow-clip relative flex-shrink-0 hover:-translate-y-1.5 hover:shadow-[0_14px_30px_rgba(0,0,0,0.35)]"
+
                             on:click={() =>
                                 navigateToMeta(
                                     title.meta.imdb_id,

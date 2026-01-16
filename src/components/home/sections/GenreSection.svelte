@@ -72,7 +72,7 @@
     on:close={() => (showListsPopup = false)}
 />
 
-<div class="w-full h-fit flex flex-col gap-4 relative group">
+<div class="w-full h-fit flex flex-col gap-4 relative group overflow-visible">
     <h2 class="text-[#E0E0E6] text-[48px] font-poppins font-semibold">
         {genre}
     </h2>
@@ -103,14 +103,15 @@
             </button>
         {/if}
 
-        <div
-            bind:this={scrollContainer}
-            on:scroll={checkScroll}
-            class="flex flex-row gap-[20px] overflow-x-scroll no-scrollbar scroll-smooth"
-        >
+    <div
+        bind:this={scrollContainer}
+        on:scroll={checkScroll}
+        class="flex flex-row gap-[20px] overflow-x-scroll overflow-y-visible pt-3 pb-6 no-scrollbar scroll-smooth"
+    >
             {#each titles as title}
                 <button
-                    class="w-[200px] aspect-[2/3] h-fit rounded-[16px] hover:opacity-80 transition-all duration-200 ease-out cursor-pointer overflow-clip relative flex-shrink-0"
+                    class="w-[200px] aspect-[2/3] h-fit rounded-[16px] hover:opacity-90 transition-all duration-200 ease-out cursor-pointer overflow-clip relative flex-shrink-0 hover:-translate-y-1.5 hover:shadow-[0_14px_30px_rgba(0,0,0,0.35)]"
+
                     on:click={() => {
                         router.navigate("meta", {
                             imdbId: title.imdb_id,

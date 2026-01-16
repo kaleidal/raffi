@@ -80,7 +80,7 @@
 />
 
 {#if popularMeta.length > 0}
-    <div class="w-full h-fit flex flex-col gap-4 relative group">
+    <div class="w-full h-fit flex flex-col gap-4 relative group overflow-visible">
         <div class="flex flex-row gap-[10px] items-center">
             <svg
                 width="50"
@@ -103,7 +103,7 @@
             </h1>
         </div>
 
-        <div class="relative">
+        <div class="relative overflow-visible">
             {#if showLeftButton}
                 <button
                     class="absolute h-full left-[-25px] top-1/2 -translate-y-1/2 z-20 bg-black/50 hover:bg-black/80 backdrop-blur-md text-white p-3 transition-all duration-200 cursor-pointer"
@@ -126,13 +126,14 @@
             {/if}
 
             <div
-                class="flex flex-row gap-[20px] overflow-x-auto w-full pb-4 no-scrollbar scroll-smooth"
+                class="flex flex-row gap-[20px] overflow-x-auto overflow-y-visible w-full pb-6 pt-3 no-scrollbar scroll-smooth"
                 bind:this={scrollContainer}
                 on:scroll={updateScrollButtons}
             >
                 {#each popularMeta as title}
                     <button
-                        class="w-[200px] h-fit rounded-[16px] hover:opacity-80 transition-all duration-200 ease-out cursor-pointer overflow-clip relative flex-shrink-0"
+                        class="w-[200px] h-fit rounded-[16px] hover:opacity-90 transition-all duration-200 ease-out cursor-pointer overflow-clip relative flex-shrink-0 hover:-translate-y-1.5 hover:shadow-[0_14px_30px_rgba(0,0,0,0.35)]"
+
                         on:click={() =>
                             navigateToMeta(title.imdb_id, title.type)}
                         on:contextmenu={(e) =>

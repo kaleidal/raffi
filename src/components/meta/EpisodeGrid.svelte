@@ -34,24 +34,25 @@
         {@const isWatched = epProgress && epProgress.watched}
 
         <button
-            class="bg-[#121212] rounded-[20px] overflow-hidden cursor-pointer hover:opacity-80 transition-opacity duration-200 relative {isWatched
+            class="group bg-[#121212] rounded-[20px] overflow-hidden cursor-pointer transition-all duration-200 ease-out relative hover:-translate-y-1.5 hover:shadow-[0_14px_30px_rgba(0,0,0,0.35)] hover:bg-[#171717] {isWatched
                 ? 'opacity-60'
-                : ''}"
+                : 'hover:opacity-95'}"
+
             on:click={() => handleEpisodeClick(episode)}
             on:contextmenu|preventDefault={(e) =>
                 dispatch("episodeContextMenu", { event: e, episode })}
         >
             <div
-                class="w-full h-[150px] bg-gradient-to-t from-[#090909] to-transparent absolute bottom-0 left-0"
+                class="w-full h-[150px] bg-gradient-to-t from-[#090909] to-transparent absolute bottom-0 left-0 z-10"
             ></div>
 
             {#if episode.thumbnail && !failedImages.has(epKey)}
                 <img
                     src={episode.thumbnail}
                     alt="Episode Thumbnail"
-                    class="w-full h-full object-cover aspect-video {isWatched
+                    class="w-full h-full object-cover aspect-video transition-transform duration-200 relative z-0 {isWatched
                         ? 'grayscale'
-                        : ''}"
+                        : 'group-hover:scale-[1.02]'}"
                     on:error={() => handleImageError(epKey)}
                 />
             {:else}
