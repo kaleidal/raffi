@@ -13,17 +13,26 @@
     let isPaused = false;
     let isMuted = true;
     let wasPlayingBeforeHidden = false;
+    let canControlTrailer = false;
+    let trailerSrc = "";
+
 
     $: if (showcasedTitle) {
         isMuted = true;
+        canControlTrailer = false;
+        const trailerId = showcasedTitle.trailerStreams?.at(-1)?.ytId;
+        trailerSrc = trailerId
+            ? `https://www.youtube-nocookie.com/embed/${trailerId}?controls=0&modestbranding=1&rel=0&autoplay=1&mute=1&loop=1&playlist=${trailerId}&showinfo=0&iv_load_policy=3&disablekb=1&enablejsapi=1&origin=${window.location.origin}`
+            : "";
     }
+
 
     onMount(() => {
         const observer = new IntersectionObserver(
             (entries) => {
                 entries.forEach((entry) => {
                     if (!entry.isIntersecting) {
-                        if (!isPaused) {
+                        if (!isPaused && canControlTrailer) {
                             wasPlayingBeforeHidden = true;
                             playerIframe?.contentWindow?.postMessage(
                                 JSON.stringify({
@@ -35,7 +44,7 @@
                             );
                         }
                     } else {
-                        if (wasPlayingBeforeHidden) {
+                        if (wasPlayingBeforeHidden && canControlTrailer) {
                             playerIframe?.contentWindow?.postMessage(
                                 JSON.stringify({
                                     event: "command",
@@ -57,8 +66,23 @@
         return () => observer.disconnect();
     });
 
+    const handleTrailerMessage = (event: MessageEvent) => {
+        if (event.source !== playerIframe?.contentWindow) return;
+        if (typeof event.data !== "string") return;
+        if (!event.data.startsWith("{")) return;
+        try {
+            const payload = JSON.parse(event.data);
+            if (payload?.event === "onReady") {
+                canControlTrailer = true;
+            }
+        } catch {
+            // ignore
+        }
+    };
+
+
     function togglePlay() {
-        if (!playerIframe) return;
+        if (!playerIframe || !canControlTrailer) return;
         const command = isPaused ? "playVideo" : "pauseVideo";
         playerIframe.contentWindow?.postMessage(
             JSON.stringify({ event: "command", func: command, args: [] }),
@@ -68,7 +92,7 @@
     }
 
     function toggleMute() {
-        if (!playerIframe) return;
+        if (!playerIframe || !canControlTrailer) return;
         const command = isMuted ? "unMute" : "mute";
         playerIframe.contentWindow?.postMessage(
             JSON.stringify({ event: "command", func: command, args: [] }),
@@ -77,9 +101,16 @@
         isMuted = !isMuted;
     }
 
+
     function navigateToMeta(imdbId: string, type: string) {
         router.navigate("meta", { imdbId, type });
     }
+
+    onMount(() => {
+        window.addEventListener("message", handleTrailerMessage);
+        return () => window.removeEventListener("message", handleTrailerMessage);
+    });
+
 </script>
 
 <div
@@ -226,14 +257,16 @@
     <div
         class="absolute inset-0 w-full h-full scale-[1.35] pointer-events-none"
     >
-        <iframe
-            bind:this={playerIframe}
-            frameborder="0"
-            referrerpolicy="strict-origin-when-cross-origin"
-            src={`https://www.youtube-nocookie.com/embed/${showcasedTitle.trailerStreams!.at(-1)!.ytId}?controls=0&modestbranding=1&rel=0&autoplay=1&mute=1&loop=1&playlist=${showcasedTitle.trailerStreams!.at(-1)!.ytId}&showinfo=0&iv_load_policy=3&disablekb=1&enablejsapi=1&origin=${window.location.origin}`}
-            class="w-full h-full object-cover"
-            title="Trailer"
-        ></iframe>
+        {#if trailerSrc}
+            <iframe
+                bind:this={playerIframe}
+                frameborder="0"
+                referrerpolicy="strict-origin-when-cross-origin"
+                src={trailerSrc}
+                class="w-full h-full object-cover"
+                title="Trailer"
+            ></iframe>
+        {/if}
     </div>
     <div
         class="absolute inset-0 bg-gradient-to-t from-[#090909] via-transparent to-transparent"

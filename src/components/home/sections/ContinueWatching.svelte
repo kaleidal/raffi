@@ -173,7 +173,9 @@
                 updateScrollButtons();
                 recomputeCardWidth();
             });
-            ro.observe(scrollContainer);
+            if (scrollContainer) {
+                ro.observe(scrollContainer);
+            }
         }
 
         window.addEventListener("resize", updateScrollButtons);
