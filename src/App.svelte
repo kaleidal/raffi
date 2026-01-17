@@ -30,6 +30,13 @@
     let updateTestArmed = false;
     let updateTestTimeout: ReturnType<typeof setTimeout> | null = null;
 
+    const formatUpdateNotes = (notes: string) => {
+        const trimmed = notes?.trim();
+        if (!trimmed) return "";
+        if (/<[a-z][\s\S]*>/i.test(trimmed)) return trimmed;
+        return trimmed.replace(/\n/g, "<br />");
+    };
+
     const UPDATE_REMIND_DELAY = 30 * 60 * 1000;
     const UPDATE_TEST_ARM_DELAY = 1500;
 
@@ -299,7 +306,7 @@
                 </div>
 
                 <div class="rounded-2xl bg-white/[0.04] p-4 text-white/70 text-sm whitespace-pre-wrap overflow-y-auto max-h-[40vh]">
-                    {$updateStatus.notes || "Release notes unavailable."}
+                    {@html formatUpdateNotes($updateStatus.notes || "Release notes unavailable.")}
                 </div>
 
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
