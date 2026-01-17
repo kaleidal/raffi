@@ -486,7 +486,7 @@ function createWindow() {
     // Dev: load Vite dev server
     // Prod: serve built dist via Express on localhost (doing this all because of youtube iframe)
     if (isDev) {
-        mainWindow.loadURL('http://localhost:5173');
+        mainWindow.loadURL('http://localhost:5174');
     } else {
         const serializeUpdateInfo = (info) => {
             if (!info) return null;

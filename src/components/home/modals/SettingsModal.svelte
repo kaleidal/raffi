@@ -62,6 +62,13 @@
 	let analyticsAvailable = false;
 	let showUpdateNotes = false;
 
+	const formatUpdateNotes = (notes: string) => {
+		const trimmed = notes?.trim();
+		if (!trimmed) return "";
+		if (/<[a-z][\s\S]*>/i.test(trimmed)) return trimmed;
+		return trimmed.replace(/\n/g, "<br />");
+	};
+
 
 	let localLibrarySupported = false;
 	let localRoots: string[] = [];
@@ -486,7 +493,7 @@
 					</div>
 					{#if showUpdateNotes}
 						<div class="rounded-2xl bg-white/[0.06] p-4 text-white/70 text-sm whitespace-pre-wrap max-h-[200px] overflow-y-auto">
-							{$updateStatus.notes || "Release notes unavailable."}
+							{@html formatUpdateNotes($updateStatus.notes || "Release notes unavailable.")}
 						</div>
 					{/if}
 				</section>

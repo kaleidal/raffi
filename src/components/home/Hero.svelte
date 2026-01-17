@@ -19,10 +19,14 @@
 
     $: if (showcasedTitle) {
         isMuted = true;
+        isPaused = false;
+        wasPlayingBeforeHidden = false;
         canControlTrailer = false;
         const trailerId = showcasedTitle.trailerStreams?.at(-1)?.ytId;
+        const origin = typeof window !== "undefined" ? window.location.origin : "";
+        const originParam = origin && origin !== "null" ? `&origin=${encodeURIComponent(origin)}` : "";
         trailerSrc = trailerId
-            ? `https://www.youtube-nocookie.com/embed/${trailerId}?controls=0&modestbranding=1&rel=0&autoplay=1&mute=1&loop=1&playlist=${trailerId}&showinfo=0&iv_load_policy=3&disablekb=1&enablejsapi=1&origin=${window.location.origin}`
+            ? `https://www.youtube-nocookie.com/embed/${trailerId}?controls=0&modestbranding=1&rel=0&autoplay=1&mute=1&loop=1&playlist=${trailerId}&showinfo=0&iv_load_policy=3&disablekb=1&enablejsapi=1${originParam}`
             : "";
     }
 
@@ -66,17 +70,44 @@
         return () => observer.disconnect();
     });
 
+    const sendTrailerCommand = (func: string, args: unknown[] = []) => {
+        if (!playerIframe?.contentWindow) return;
+        playerIframe.contentWindow.postMessage(
+            JSON.stringify({ event: "command", func, args }),
+            "*",
+        );
+    };
+
+    const initTrailerBridge = () => {
+        if (!playerIframe?.contentWindow) return;
+        playerIframe.contentWindow.postMessage(
+            JSON.stringify({ event: "listening", id: "hero-trailer" }),
+            "*",
+        );
+        canControlTrailer = true;
+        sendTrailerCommand("mute");
+        isMuted = true;
+    };
+
     const handleTrailerMessage = (event: MessageEvent) => {
         if (event.source !== playerIframe?.contentWindow) return;
-        if (typeof event.data !== "string") return;
-        if (!event.data.startsWith("{")) return;
-        try {
-            const payload = JSON.parse(event.data);
-            if (payload?.event === "onReady") {
-                canControlTrailer = true;
+        const payload =
+            typeof event.data === "string"
+                ? event.data.startsWith("{")
+                    ? JSON.parse(event.data)
+                    : null
+                : event.data;
+        if (!payload) return;
+        if (payload?.event === "onReady") {
+            initTrailerBridge();
+        }
+        if (payload?.event === "onStateChange") {
+            const state = payload?.info?.playerState;
+            if (state === 1) {
+                isPaused = false;
+            } else if (state === 2) {
+                isPaused = true;
             }
-        } catch {
-            // ignore
         }
     };
 
@@ -84,20 +115,14 @@
     function togglePlay() {
         if (!playerIframe || !canControlTrailer) return;
         const command = isPaused ? "playVideo" : "pauseVideo";
-        playerIframe.contentWindow?.postMessage(
-            JSON.stringify({ event: "command", func: command, args: [] }),
-            "*",
-        );
+        sendTrailerCommand(command);
         isPaused = !isPaused;
     }
 
     function toggleMute() {
         if (!playerIframe || !canControlTrailer) return;
         const command = isMuted ? "unMute" : "mute";
-        playerIframe.contentWindow?.postMessage(
-            JSON.stringify({ event: "command", func: command, args: [] }),
-            "*",
-        );
+        sendTrailerCommand(command);
         isMuted = !isMuted;
     }
 
@@ -110,6 +135,12 @@
         window.addEventListener("message", handleTrailerMessage);
         return () => window.removeEventListener("message", handleTrailerMessage);
     });
+
+    const handleTrailerLoad = () => {
+        if (!canControlTrailer) {
+            initTrailerBridge();
+        }
+    };
 
 </script>
 
@@ -265,6 +296,7 @@
                 src={trailerSrc}
                 class="w-full h-full object-cover"
                 title="Trailer"
+                on:load={handleTrailerLoad}
             ></iframe>
         {/if}
     </div>

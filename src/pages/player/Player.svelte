@@ -400,6 +400,7 @@
 
     let playPauseFeedback: { type: "play" | "pause"; id: number } | null = null;
     let playPauseFeedbackTimeout: ReturnType<typeof setTimeout> | null = null;
+    let loadTimeout: ReturnType<typeof setTimeout> | null = null;
 
     const triggerPlayPauseFeedback = (type: "play" | "pause") => {
         if (playPauseFeedbackTimeout) clearTimeout(playPauseFeedbackTimeout);
@@ -527,6 +528,7 @@
         clearInterval(metadataCheckInterval);
         stopTorrentStatusPolling();
         if (playPauseFeedbackTimeout) clearTimeout(playPauseFeedbackTimeout);
+        if (loadTimeout) clearTimeout(loadTimeout);
         Session.cleanupSession(
             hls,
             sessionId,
@@ -821,7 +823,10 @@
                 },
             );
 
-            setTimeout(() => {
+            if (loadTimeout) {
+                clearTimeout(loadTimeout);
+            }
+            loadTimeout = setTimeout(() => {
                 if ($loading && !$hasStartedStore && !$isPlaying) {
                     loading.set(false);
                     showError.set(true);

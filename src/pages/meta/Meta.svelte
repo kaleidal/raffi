@@ -58,14 +58,45 @@
     let streamsModalKey = "initial";
     let unsupportedReason: string | null = null;
 
+    let useOverlayScrollHint = true;
+    let viewportAspect = 16 / 9;
+    let backgroundAspect: number | null = null;
+    let lastBackgroundSrc = "";
+
+    const updateViewportAspect = () => {
+        if (typeof window === "undefined") return;
+        viewportAspect = window.innerWidth / window.innerHeight;
+        useOverlayScrollHint =
+            backgroundAspect != null && backgroundAspect <= viewportAspect;
+    };
+
+    const loadBackgroundAspect = (src: string) => {
+        if (!src || src === lastBackgroundSrc) return;
+        lastBackgroundSrc = src;
+        const img = new Image();
+        img.onload = () => {
+            if (!img.naturalWidth || !img.naturalHeight) return;
+            backgroundAspect = img.naturalWidth / img.naturalHeight;
+            updateViewportAspect();
+        };
+        img.onerror = () => {
+            backgroundAspect = null;
+            useOverlayScrollHint = false;
+        };
+        img.src = src;
+    };
+
     onMount(async () => {
         resetMetaState();
         await DataLoader.loadAddons();
+        updateViewportAspect();
+        window.addEventListener("resize", updateViewportAspect);
     });
 
     onDestroy(() => {
         document.body.style.overflow = "";
         resetMetaState();
+        window.removeEventListener("resize", updateViewportAspect);
     });
 
     $: if (imdbID) {
@@ -88,6 +119,14 @@
             unsupportedReason = "No episodes found for this series.";
         } else {
             unsupportedReason = null;
+        }
+
+        const background = $metaData.meta?.background;
+        if (background) {
+            loadBackgroundAspect(background);
+        } else {
+            backgroundAspect = null;
+            useOverlayScrollHint = false;
         }
     }
 
@@ -185,10 +224,12 @@
             </button>
 
             <div
-                class="p-40 absolute top-0 left-0 h-full w-full flex gap-12.5 flex-row justify-between items-start"
+                class="p-40 relative z-10 w-full flex gap-12.5 flex-row justify-between items-stretch"
+                style="height: max(640px, calc(100vh - 20rem));"
             >
                 <div
-                    class="w-[40vw] h-full flex gap-12.5 flex-col justify-between items-start"
+                    class="w-[40vw] flex gap-12.5 flex-col justify-between items-start"
+                    style="height: max(640px, calc(100vh - 20rem));"
                 >
 
             <style>
@@ -392,7 +433,8 @@
                 </div>
 
                 <div
-                    class="flex flex-col gap-5 h-full justify-end items-end"
+                    class="flex flex-col gap-5 justify-end items-end self-stretch"
+                    style="height: max(640px, calc(100vh - 20rem));"
                 >
                     {#if $metaData.meta.type === "series"}
                         {@const watchedCount = Object.values(
@@ -468,15 +510,25 @@
                 <div
                     class="absolute bottom-0 left-0 w-full h-37.5 bg-linear-to-t from-[#090909] to-transparent"
                 ></div>
-
-                <span
-                    class="absolute bottom-20 left-1/2 transform -translate-x-1/2 text-[#E1E1E1]/60 text-[16px] font-poppins font-medium"
-                    >scroll down to view episodes</span
-                >
+                {#if useOverlayScrollHint}
+                    <span
+                        class="absolute left-1/2 -translate-x-1/2 text-[#E1E1E1]/60 text-[16px] font-poppins font-medium pointer-events-none"
+                        style="bottom: clamp(20px, 5vh, 72px);"
+                        >scroll down to view episodes</span
+                    >
+                {/if}
             {/if}
         </div>
 
         {#if $metaData.meta.type === "series"}
+            {#if !useOverlayScrollHint}
+                <div
+                    class="w-full flex justify-center text-[#E1E1E1]/60 text-[16px] font-poppins font-medium"
+                    style="margin-top: clamp(8px, 2vh, 16px); margin-bottom: clamp(12px, 3vh, 24px);"
+                >
+                    scroll down to view episodes
+                </div>
+            {/if}
             <div class="w-full p-40">
                 <SeasonSelector
                     seasonsArray={$seasonsArray}
