@@ -11,7 +11,8 @@
     import ListsPopup from "../../meta/modals/ListsPopup.svelte";
 
     import { onMount } from "svelte";
-
+    import { Play, ChevronDown, ChevronLeft, ChevronRight } from "lucide-svelte";
+ 
     export let continueWatchingMeta: (ShowResponse & { libraryItem: any })[] =
         [];
 
@@ -212,21 +213,7 @@
 {#if continueWatchingMeta.length > 0}
     <div class="w-full h-fit flex flex-col gap-4 relative group overflow-visible">
         <div class="flex flex-row gap-[10px] items-center w-full">
-            <svg
-                width="50"
-                height="50"
-                viewBox="0 0 50 50"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-            >
-                <path
-                    d="M12.5 6.25L41.6667 25L12.5 43.75V6.25Z"
-                    stroke="#E0E0E6"
-                    stroke-width="4"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                />
-            </svg>
+            <Play size={50} strokeWidth={3} color="#E0E0E6" />
 
             <h1 class="font-poppins text-[#E0E0E6] font-medium text-[48px]">
                 Jump back into it
@@ -237,24 +224,9 @@
                 on:click={() => (isExpanded = !isExpanded)}
                 aria-label={isExpanded ? "Collapse" : "Expand"}
             >
-                <svg
-                    width="32"
-                    height="32"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                    class="transition-transform duration-300 {isExpanded
-                        ? 'rotate-180'
-                        : ''}"
-                >
-                    <path
-                        d="M6 9L12 15L18 9"
-                        stroke="#E0E0E6"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                    />
-                </svg>
+                <div class="transition-transform duration-300 {isExpanded ? 'rotate-180' : ''}">
+                    <ChevronDown size={32} strokeWidth={2} color="#E0E0E6" />
+                </div>
             </button>
         </div>
 
@@ -266,17 +238,7 @@
                     aria-label="Scroll left"
                     transition:fade={{ duration: 200 }}
                 >
-                    <svg
-                        width="24"
-                        height="24"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        ><polyline points="15 18 9 12 15 6"></polyline></svg
-                    >
+                    <ChevronLeft size={24} strokeWidth={2} />
                 </button>
             {/if}
 
@@ -339,17 +301,7 @@
                     aria-label="Scroll right"
                     transition:fade={{ duration: 200 }}
                 >
-                    <svg
-                        width="24"
-                        height="24"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        ><polyline points="9 18 15 12 9 6"></polyline></svg
-                    >
+                    <ChevronRight size={24} strokeWidth={2} />
                 </button>
             {/if}
         </div>

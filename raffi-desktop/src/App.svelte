@@ -10,6 +10,7 @@
     import { enableRPC, disableRPC } from "./lib/rpc";
 
 
+    import { X } from "lucide-svelte";
     import LoadingSpinner from "./components/common/LoadingSpinner.svelte";
     import { currentUser, initAuth, localMode, updateStatus } from "./lib/stores/authStore";
     import { initAnalytics, setAnalyticsUser, trackEvent, trackPageView } from "./lib/analytics";
@@ -289,19 +290,7 @@
                         on:click={handleUpdateLater}
                         aria-label="Close update dialog"
                     >
-                        <svg
-                            width="24"
-                            height="24"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                        >
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
+                        <X size={24} strokeWidth={2} />
                     </button>
                 </div>
 

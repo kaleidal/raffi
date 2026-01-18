@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { ArrowRight } from "lucide-svelte";
     import { onMount } from "svelte";
     import { supabase } from "../../lib/db/supabase";
     import { enableLocalMode } from "../../lib/stores/authStore";
@@ -117,21 +118,7 @@
                 aria-label="login"
                 on:click={login}
             >
-                <svg
-                    width="49"
-                    height="49"
-                    viewBox="0 0 49 49"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                >
-                    <path
-                        d="M10.208 24.5H38.7913M38.7913 24.5L24.4997 10.2083M38.7913 24.5L24.4997 38.7916"
-                        stroke="black"
-                        stroke-width="4"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                    />
-                </svg>
+                <ArrowRight size={49} strokeWidth={2.5} color="black" />
             </button>
         </div>
 

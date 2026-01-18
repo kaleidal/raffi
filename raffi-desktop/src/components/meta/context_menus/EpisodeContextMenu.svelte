@@ -1,6 +1,7 @@
 <script lang="ts">
     import { createEventDispatcher, onMount } from "svelte";
     import { fade } from "svelte/transition";
+    import { Play, Check, CircleX, CheckCircle, Ban, Trash } from "lucide-svelte";
 
     export let x: number;
     export let y: number;
@@ -73,56 +74,21 @@
         class="text-left px-4 py-2 text-white/80 hover:text-white hover:bg-white/10 transition-colors font-poppins text-sm flex flex-row gap-2 items-center cursor-pointer"
         on:click={handleWatch}
     >
-        <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            ><polygon points="5 3 19 12 5 21 5 3"></polygon></svg
-        >
+        <Play size={16} strokeWidth={2} />
         Watch
     </button>
     <button
         class="text-left px-4 py-2 text-white/80 hover:text-white hover:bg-white/10 transition-colors font-poppins text-sm flex flex-row gap-2 items-center cursor-pointer"
         on:click={handleMarkWatched}
     >
-        <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            ><polyline points="20 6 9 17 4 12"></polyline></svg
-        >
+        <Check size={16} strokeWidth={2} />
         Mark as Watched
     </button>
     <button
         class="text-left px-4 py-2 text-white/80 hover:text-white hover:bg-white/10 transition-colors font-poppins text-sm flex flex-row gap-2 items-center cursor-pointer"
         on:click={handleMarkUnwatched}
     >
-        <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            ><circle cx="12" cy="12" r="10"></circle><line
-                x1="15"
-                y1="9"
-                x2="9"
-                y2="15"
-            ></line><line x1="9" y1="9" x2="15" y2="15"></line></svg
-        >
+        <CircleX size={16} strokeWidth={2} />
         Mark as Unwatched
     </button>
     <button
@@ -132,19 +98,7 @@
             close();
         }}
     >
-        <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            ><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline
-                points="22 4 12 14.01 9 11.01"
-            ></polyline></svg
-        >
+        <CheckCircle size={16} strokeWidth={2} />
         Mark Season as Watched
     </button>
     <button
@@ -154,22 +108,7 @@
             close();
         }}
     >
-        <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            ><circle cx="12" cy="12" r="10"></circle><line
-                x1="4.93"
-                y1="4.93"
-                x2="19.07"
-                y2="19.07"
-            ></line></svg
-        >
+        <Ban size={16} strokeWidth={2} />
         Mark Season as Unwatched
     </button>
     <div class="h-[1px] bg-white/10 my-1"></div>
@@ -177,19 +116,7 @@
         class="text-left px-4 py-2 text-[#FF4444] hover:bg-[#FF4444]/10 transition-colors font-poppins text-sm flex flex-row gap-2 items-center cursor-pointer"
         on:click={handleResetProgress}
     >
-        <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            ><path
-                d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-            ></path></svg
-        >
+        <Trash size={16} strokeWidth={2} />
         Reset Progress
     </button>
 </div>

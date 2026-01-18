@@ -5,7 +5,8 @@
     import TitleContextMenu from "../context_menus/TitleContextMenu.svelte";
     import ListsPopup from "../../meta/modals/ListsPopup.svelte";
     import { onMount } from "svelte";
-
+    import { ChevronLeft, ChevronRight } from "lucide-svelte";
+ 
     export let genre: string;
     export let titles: PopularTitleMeta[];
 
@@ -85,21 +86,7 @@
                 aria-label="Scroll left"
                 transition:fade={{ duration: 200 }}
             >
-                <svg
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                >
-                    <path
-                        d="M15 18L9 12L15 6"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                    />
-                </svg>
+                <ChevronLeft size={24} strokeWidth={2} />
             </button>
         {/if}
 
@@ -137,21 +124,7 @@
                 aria-label="Scroll right"
                 transition:fade={{ duration: 200 }}
             >
-                <svg
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                >
-                    <path
-                        d="M9 18L15 12L9 6"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                    />
-                </svg>
+                <ChevronRight size={24} strokeWidth={2} />
             </button>
         {/if}
     </div>

@@ -1,6 +1,7 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte";
     import type { ShowResponse } from "../../lib/library/types/meta_types";
+    import { FileVideo, Eye } from "lucide-svelte";
 
     export let metaData: ShowResponse;
     export let currentSeason: number;
@@ -59,29 +60,9 @@
                 <div
                     class="w-full aspect-video bg-[#1a1a1a] flex items-start justify-center pt-[30px]"
                 >
-                    <svg
-                        width="40"
-                        height="40"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        xmlns="http://www.w3.org/2000/svg"
-                        class="opacity-20"
-                    >
-                        <path
-                            d="M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z"
-                            stroke="white"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                        />
-                        <path
-                            d="M10 8L16 12L10 16V8Z"
-                            stroke="white"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                        />
-                    </svg>
+                    <div class="opacity-20">
+                        <FileVideo size={40} strokeWidth={2} color="white" />
+                    </div>
                 </div>
             {/if}
 
@@ -89,20 +70,7 @@
                 <div
                     class="absolute top-2 right-2 bg-black/50 p-1 rounded-full"
                 >
-                    <svg
-                        width="20"
-                        height="20"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="white"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                    >
-                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"
-                        ></path>
-                        <circle cx="12" cy="12" r="3"></circle>
-                    </svg>
+                    <Eye size={20} strokeWidth={2} color="white" />
                 </div>
             {/if}
 

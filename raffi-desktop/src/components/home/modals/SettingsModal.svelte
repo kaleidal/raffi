@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { createEventDispatcher, onDestroy, onMount } from "svelte";
-
-	import { fade, scale } from "svelte/transition";
+    import { createEventDispatcher, onDestroy, onMount } from "svelte";
+    import { X } from "lucide-svelte";
+    import { fade, scale } from "svelte/transition";
 	import { getLibrary, getListsWithItems } from "../../../lib/db/db";
 	import { enableRPC, disableRPC } from "../../../lib/rpc";
 	import {
@@ -442,21 +442,7 @@
 						class="text-white/50 hover:text-white cursor-pointer transition-colors"
 						aria-label="Close settings"
 					>
-						<svg
-							width="24"
-							height="24"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							><line x1="18" y1="6" x2="6" y2="18"></line><line
-								x1="6"
-								y1="6"
-								x2="18"
-								y2="18"
-							></line></svg>
+						<X size={24} strokeWidth={2} />
 					</button>
 				</div>
 			</div>
