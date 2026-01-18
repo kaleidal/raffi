@@ -1,6 +1,7 @@
 <script lang="ts">
     import { onDestroy, onMount } from "svelte";
     import { fade } from "svelte/transition";
+    import { ChevronLeft, Play } from "lucide-svelte";
     import { router } from "../../lib/stores/router";
     import Player from "../player/Player.svelte";
 
@@ -206,21 +207,7 @@
                 }}
                 aria-label="Back to Home"
             >
-                <svg
-                    width="30"
-                    height="30"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                >
-                    <path
-                        d="M15 19L8 12L15 5"
-                        stroke="white"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                    />
-                </svg>
+                <ChevronLeft size={30} strokeWidth={2} color="white" />
             </button>
 
             <div
@@ -330,20 +317,9 @@
                                     }
                                 }}
                             >
-                                <svg
-                                    class="resume-button__icon"
-                                    viewBox="0 0 92 92"
-                                    fill="none"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                >
-                                    <path
-                                        d="M23 11.5L76.6667 46L23 80.5V11.5Z"
-                                        stroke="black"
-                                        stroke-width="10"
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                    />
-                                </svg>
+                                <div class="resume-button__icon flex items-center justify-center">
+                                    <Play size={48} strokeWidth={2} color="black" fill="black" />
+                                </div>
 
                                 <span class="resume-button__label">
                                     {#if isResumable}
@@ -398,20 +374,9 @@
                                         imdbID,
                                     )}
                             >
-                                <svg
-                                    class="resume-button__icon"
-                                    viewBox="0 0 92 92"
-                                    fill="none"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                >
-                                    <path
-                                        d="M23 11.5L76.6667 46L23 80.5V11.5Z"
-                                        stroke="black"
-                                        stroke-width="10"
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                    />
-                                </svg>
+                                <div class="resume-button__icon flex items-center justify-center">
+                                    <Play size={48} strokeWidth={2} color="black" fill="black" />
+                                </div>
                                 <span class="resume-button__label">
                                     {#if isMovieResumable}
                                         Resume
