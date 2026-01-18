@@ -1,0 +1,142 @@
+{
+  "name": "raffi",
+  "private": true,
+  "version": "0.4.3",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "description": "A modern video player",
+  "author": {
+    "name": "Kaleidal",
+    "email": "hello@kaleid.al"
+  },
+  "homepage": "https://raffi.al",
+  "scripts": {
+    "dev": "vite",
+    "electron:dev": "npm run server:build && cross-env NODE_ENV=development concurrently \"npm run dev\" \"wait-on http://localhost:5173 && cross-env ELECTRON_DISABLE_SANDBOX=1 electron .\"",
+    "electron:dev:only": "cross-env ELECTRON_DISABLE_SANDBOX=1 electron .",
+    "build": "vite build",
+    "server:build": "node build_binary.cjs",
+    "dist": "npm run server:build && npm run build && electron-builder"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^6.2.1",
+    "@tsconfig/svelte": "^5.0.5",
+    "@types/node": "^24.10.1",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^39.2.4",
+    "electron-builder": "^26.0.12",
+    "png-to-ico": "^3.0.1",
+    "svelte": "^5.43.5",
+    "svelte-check": "^4.3.3",
+    "typescript": "~5.9.3",
+    "vite": "^7.2.2",
+    "wait-on": "^9.0.3"
+  },
+  "build": {
+    "appId": "al.kaleid.raffi",
+    "productName": "Raffi",
+    "directories": {
+      "buildResources": "build",
+      "output": "release"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "kaleidal",
+      "repo": "raffi"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "electron/decoder-*"
+    ],
+    "linux": {
+      "target": [
+        "deb",
+        "AppImage",
+        "rpm"
+      ],
+      "icon": "build/icons",
+      "category": "Video",
+      "extraResources": [
+        {
+          "from": "electron/decoder-x86_64-unknown-linux-gnu",
+          "to": "decoder-x86_64-unknown-linux-gnu"
+        }
+      ]
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "build/icons/icon.icns",
+      "category": "public.app-category.video",
+      "extraResources": [
+        {
+          "from": "electron/decoder-aarch64-apple-darwin",
+          "to": "decoder-aarch64-apple-darwin"
+        },
+        {
+          "from": "electron/decoder-x86_64-apple-darwin",
+          "to": "decoder-x86_64-apple-darwin"
+        }
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "msi"
+      ],
+      "icon": "build/icons/icon.ico",
+      "extraResources": [
+        {
+          "from": "electron/decoder-windows-amd64.exe",
+          "to": "decoder-windows-amd64.exe"
+        }
+      ]
+    },
+    "fileAssociations": [
+      {
+        "ext": "mp4",
+        "name": "Video File",
+        "role": "Viewer"
+      },
+      {
+        "ext": "mkv",
+        "name": "Video File",
+        "role": "Viewer"
+      },
+      {
+        "ext": "avi",
+        "name": "Video File",
+        "role": "Viewer"
+      },
+      {
+        "ext": "webm",
+        "name": "Video File",
+        "role": "Viewer"
+      },
+      {
+        "ext": "mov",
+        "name": "Video File",
+        "role": "Viewer"
+      }
+    ]
+  },
+  "dependencies": {
+    "@ryuziii/discord-rpc": "^1.0.1-rc.1",
+    "@supabase/supabase-js": "^2.83.0",
+    "@tailwindcss/vite": "^4.1.17",
+    "electron-updater": "^6.6.2",
+    "eventemitter3": "^5.0.1",
+    "express": "^5.1.0",
+    "hls.js": "^1.6.14",
+    "posthog-js": "^1.321.2",
+    "tailwindcss": "^4.1.17"
+  }
+}
