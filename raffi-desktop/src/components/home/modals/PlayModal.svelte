@@ -1,6 +1,6 @@
 <script lang="ts">
     import { createEventDispatcher, onDestroy } from "svelte";
-
+    import { X, FileVideo, Magnet, Users, Film } from "lucide-svelte";
     import { fade, scale } from "svelte/transition";
     import { router } from "../../../lib/stores/router";
     import { getCachedMetaData } from "../../../lib/library/metaCache";
@@ -272,11 +272,7 @@
                 on:click={onClose}
                 aria-label="Close"
             >
-                <svg width="32" height="32" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect width="40" height="40" rx="12"fill-opacity="0.1"/>
-                    <path d="M13 13L27 27" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M27 13L13 27" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
+                <X size={32} strokeWidth={2} />
             </button>
         </div>
 
@@ -289,10 +285,7 @@
                         class="bg-white/5 hover:bg-white/10 text-white p-4 rounded-2xl flex items-center gap-4 transition-colors text-left group cursor-pointer"
                     >
                         <div class="bg-white/10 p-3 rounded-full group-hover:bg-white/20 transition-colors">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
-                                <polyline points="13 2 13 9 20 9"></polyline>
-                            </svg>
+                            <FileVideo size={24} strokeWidth={2} />
                         </div>
                         <div class="flex flex-col gap-1">
                             <span class="font-bold text-lg">Local File</span>
@@ -305,10 +298,7 @@
                         on:click={() => mode = "magnet"}
                     >
                         <div class="bg-white/10 p-3 rounded-full group-hover:bg-white/20 transition-colors">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-                            </svg>
+                            <Magnet size={24} strokeWidth={2} />
                         </div>
                         <div class="flex flex-col gap-1">
                             <span class="font-bold text-lg">Play Magnet Link</span>
@@ -322,12 +312,7 @@
                             on:click={() => mode = "join"}
                         >
                             <div class="bg-white/10 p-3 rounded-full group-hover:bg-white/20 transition-colors">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                                    <circle cx="9" cy="7" r="4"></circle>
-                                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                                </svg>
+                                <Users size={24} strokeWidth={2} />
                             </div>
                             <div class="flex flex-col gap-1">
                                 <span class="font-bold text-lg">Join Watch Party</span>
@@ -428,16 +413,7 @@
                         />
                     {:else}
                         <div class="w-[120px] h-[180px] bg-white/5 rounded-lg flex items-center justify-center border border-white/10">
-                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#878787" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
-                                <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect>
-                                <line x1="7" y1="2" x2="7" y2="22"></line>
-                                <line x1="17" y1="2" x2="17" y2="22"></line>
-                                <line x1="2" y1="12" x2="22" y2="12"></line>
-                                <line x1="2" y1="7" x2="7" y2="7"></line>
-                                <line x1="2" y1="17" x2="7" y2="17"></line>
-                                <line x1="17" y1="17" x2="22" y2="17"></line>
-                                <line x1="17" y1="7" x2="22" y2="7"></line>
-                            </svg>
+                            <Film size={48} strokeWidth={1} color="#878787" />
                         </div>
                     {/if}
 
