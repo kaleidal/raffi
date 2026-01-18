@@ -1,0 +1,13 @@
+{
+  "name": "torrent-streamer",
+  "version": "1.0.0",
+  "description": "On-device torrent streaming for React Native",
+  "main": "index.js",
+  "author": "Raffi",
+  "license": "MIT",
+  "homepage": "https://github.com/raffi/torrent-streamer",
+  "peerDependencies": {
+    "react": "*",
+    "react-native": "*"
+  }
+}

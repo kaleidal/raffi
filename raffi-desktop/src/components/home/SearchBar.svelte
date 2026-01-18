@@ -23,10 +23,6 @@
 	let lastSearchQueryLength = 0;
 	let lastSearchResultsCount = 0;
 	let commandHint = "";
-	let hoverLink = false;
-	let hoverAddons = false;
-	let hoverLists = false;
-	let hoverSettings = false;
 
 
     export let absolute: boolean = true;
@@ -398,40 +394,32 @@
             class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
             aria-label="addons"
             onclick={openPlayModal}
-            onmouseenter={() => hoverLink = true}
-            onmouseleave={() => hoverLink = false}
         >
-            <Link size={40} strokeWidth={2} color="#C3C3C3" animate={hoverLink} />
+            <Link size={40} strokeWidth={2} color="#C3C3C3" />
         </button>
 
         <button
             class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
             aria-label="addons"
             onclick={openAddons}
-            onmouseenter={() => hoverAddons = true}
-            onmouseleave={() => hoverAddons = false}
         >
-            <Blocks size={40} strokeWidth={2} color="#C3C3C3" animate={hoverAddons} />
+            <Blocks size={40} strokeWidth={2} color="#C3C3C3" />
         </button>
 
         <button
             class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
             aria-label="lists"
             onclick={openLists}
-            onmouseenter={() => hoverLists = true}
-            onmouseleave={() => hoverLists = false}
         >
-            <Library size={40} strokeWidth={2} color="#C3C3C3" animate={hoverLists} />
+            <Library size={40} strokeWidth={2} color="#C3C3C3" />
         </button>
 
         <button
             class="relative bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
             aria-label="settings"
             onclick={openSettings}
-            onmouseenter={() => hoverSettings = true}
-            onmouseleave={() => hoverSettings = false}
         >
-            <Settings size={40} strokeWidth={2} color="#C3C3C3" animate={hoverSettings} />
+            <Settings size={40} strokeWidth={2} color="#C3C3C3" />
             {#if $updateStatus.available}
                 <span class="absolute top-3 right-3 flex h-2.5 w-2.5">
                     <span class="absolute inline-flex h-full w-full rounded-full bg-[#FF3B30]/60 animate-ping"></span>
