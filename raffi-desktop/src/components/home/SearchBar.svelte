@@ -23,6 +23,10 @@
 	let lastSearchQueryLength = 0;
 	let lastSearchResultsCount = 0;
 	let commandHint = "";
+	let hoverLink = false;
+	let hoverAddons = false;
+	let hoverLists = false;
+	let hoverSettings = false;
 
 
     export let absolute: boolean = true;
@@ -264,7 +268,7 @@
 >
     <button
         class="cursor-pointer hover:opacity-80 transition-opacity"
-        on:click={() => {
+        onclick={() => {
             router.navigate("home");
             onLogoClick();
         }}
@@ -284,12 +288,12 @@
                 type="text"
                 placeholder="search for anything"
                 class="bg-[#000000]/50 text-[#D4D4D4] text-center py-[20px] px-[70px] w-fit text-[28px] font-poppins font-normal outline-none focus:outline-none focus:ring-0"
-                on:input={handleSearch}
-                on:keydown={handleSearchKeydown}
-                on:focus={() => {
+                oninput={handleSearch}
+                onkeydown={handleSearchKeydown}
+                onfocus={() => {
                     if (searchQuery) showSearchResults = true;
                 }}
-                on:blur={closeSearch}
+                onblur={closeSearch}
                 value={searchQuery}
             />
 
@@ -328,21 +332,23 @@
                     {#each searchResults as result, index}
                         <button
                             class="flex flex-row gap-4 items-center p-2 hover:bg-white/10 rounded-xl transition-colors cursor-pointer text-left"
-                            on:click={() =>
+                            onclick={() =>
                                 navigateToMeta(
                                     result["#IMDB_ID"],
                                     "movie",
                                     result["#TITLE"],
                                     index,
                                 )}
-                            on:contextmenu|preventDefault={(e) =>
+                            oncontextmenu={(e) => {
+                                e.preventDefault();
                                 handleContextMenu(
                                     e,
                                     result["#IMDB_ID"],
                                     "movie", // Assuming movie for now, search results might not have type
                                     result["#TITLE"],
                                     index,
-                                )}
+                                );
+                            }}
                         >
 
                             <img
@@ -370,8 +376,8 @@
         <TitleContextMenu
             x={contextMenuX}
             y={contextMenuY}
-            on:close={() => (showContextMenu = false)}
-            on:addToList={handleAddToList}
+            onclose={() => (showContextMenu = false)}
+            onaddToList={handleAddToList}
         />
     {/if}
 
@@ -384,40 +390,48 @@
         bind:visible={showListsPopup}
         imdbId={selectedImdbId}
         type={selectedType}
-        on:close={() => (showListsPopup = false)}
+        onclose={() => (showListsPopup = false)}
     />
 
     <div class="flex flex-row gap-[10px]">
         <button
             class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
             aria-label="addons"
-            on:click={openPlayModal}
+            onclick={openPlayModal}
+            onmouseenter={() => hoverLink = true}
+            onmouseleave={() => hoverLink = false}
         >
-            <Link size={40} strokeWidth={2} color="#C3C3C3" />
+            <Link size={40} strokeWidth={2} color="#C3C3C3" animate={hoverLink} />
         </button>
 
         <button
             class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
             aria-label="addons"
-            on:click={openAddons}
+            onclick={openAddons}
+            onmouseenter={() => hoverAddons = true}
+            onmouseleave={() => hoverAddons = false}
         >
-            <Blocks size={40} strokeWidth={2} color="#C3C3C3" />
+            <Blocks size={40} strokeWidth={2} color="#C3C3C3" animate={hoverAddons} />
         </button>
 
         <button
             class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
             aria-label="lists"
-            on:click={openLists}
+            onclick={openLists}
+            onmouseenter={() => hoverLists = true}
+            onmouseleave={() => hoverLists = false}
         >
-            <Library size={40} strokeWidth={2} color="#C3C3C3" />
+            <Library size={40} strokeWidth={2} color="#C3C3C3" animate={hoverLists} />
         </button>
 
         <button
             class="relative bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
             aria-label="settings"
-            on:click={openSettings}
+            onclick={openSettings}
+            onmouseenter={() => hoverSettings = true}
+            onmouseleave={() => hoverSettings = false}
         >
-            <Settings size={40} strokeWidth={2} color="#C3C3C3" />
+            <Settings size={40} strokeWidth={2} color="#C3C3C3" animate={hoverSettings} />
             {#if $updateStatus.available}
                 <span class="absolute top-3 right-3 flex h-2.5 w-2.5">
                     <span class="absolute inline-flex h-full w-full rounded-full bg-[#FF3B30]/60 animate-ping"></span>
