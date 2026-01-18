@@ -1,0 +1,26 @@
+<svg width="1920" height="1000" viewBox="0 0 1920 1000" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g filter="url(#filter0_fn_312_305)">
+<path d="M1227 177C1227 417.244 1093.5 592.5 429 643.5C185.5 906 -731 417.244 -731 177C-731 -63.2439 -292.687 -258 248 -258C788.687 -258 1227 -63.2439 1227 177Z" fill="#D9D9D9" fill-opacity="0.8"/>
+</g>
+<foreignObject x="-931" y="-821" width="3480" height="2590"><div xmlns="http://www.w3.org/1999/xhtml" style="backdrop-filter:blur(100px);clip-path:url(#bgblur_0_312_305_clip_path);height:100%;width:100%"></div></foreignObject><ellipse data-figma-bg-blur-radius="200" cx="809" cy="474" rx="1540" ry="1095" fill="#D9D9D9" fill-opacity="0.01"/>
+<defs>
+<filter id="filter0_fn_312_305" x="-1131" y="-658" width="2758" height="1776.85" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+<feGaussianBlur stdDeviation="200" result="effect1_foregroundBlur_312_305"/>
+<feTurbulence type="fractalNoise" baseFrequency="0.5 0.5" stitchTiles="stitch" numOctaves="3" result="noise" seed="8392" />
+<feColorMatrix in="noise" type="luminanceToAlpha" result="alphaNoise" />
+<feComponentTransfer in="alphaNoise" result="coloredNoise1">
+<feFuncA type="discrete" tableValues="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 1 1 1 1 1 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 "/>
+</feComponentTransfer>
+<feComposite operator="in" in2="effect1_foregroundBlur_312_305" in="coloredNoise1" result="noise1Clipped" />
+<feFlood flood-color="#FFFFFF" result="color1Flood" />
+<feComposite operator="in" in2="noise1Clipped" in="color1Flood" result="color1" />
+<feMerge result="effect2_noise_312_305">
+<feMergeNode in="effect1_foregroundBlur_312_305" />
+<feMergeNode in="color1" />
+</feMerge>
+</filter>
+<clipPath id="bgblur_0_312_305_clip_path" transform="translate(931 821)"><ellipse cx="809" cy="474" rx="1540" ry="1095"/>
+</clipPath></defs>
+</svg>
