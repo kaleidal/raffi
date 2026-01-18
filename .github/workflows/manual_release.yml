@@ -21,9 +21,6 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
@@ -32,6 +29,10 @@ jobs:
       - name: Install MinGW (Windows)
         if: matrix.os == 'blacksmith-4vcpu-windows-2025'
         run: choco install mingw
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+        working-directory: raffi-desktop
 
       - name: Build and publish
         env:
