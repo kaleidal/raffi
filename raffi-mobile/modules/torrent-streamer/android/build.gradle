@@ -1,0 +1,38 @@
+apply plugin: 'com.android.library'
+
+android {
+    compileSdkVersion 36
+    namespace 'al.kaleid.raffimobile.torrent'
+    
+    defaultConfig {
+        minSdkVersion 24
+        targetSdkVersion 36
+    }
+    
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    
+    packagingOptions {
+        // libtorrent4j ships native libs; avoid duplicates
+        pickFirst '**/libtorrent4j.so'
+    }
+}
+
+repositories {
+    mavenCentral()
+    google()
+}
+
+dependencies {
+    implementation 'com.facebook.react:react-native:+'
+    
+    // libtorrent4j - direct libtorrent binding for Android/Java
+    implementation 'org.libtorrent4j:libtorrent4j:2.1.0-31'
+    implementation 'org.libtorrent4j:libtorrent4j-android-arm64:2.1.0-31'
+    implementation 'org.libtorrent4j:libtorrent4j-android-arm:2.1.0-31'
+    
+    // NanoHTTPD for local HTTP server
+    implementation 'org.nanohttpd:nanohttpd:2.3.1'
+}
