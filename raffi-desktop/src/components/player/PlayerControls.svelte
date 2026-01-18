@@ -6,6 +6,7 @@
     import { createEventDispatcher } from "svelte";
     import ClipPanel from "./ClipPanel.svelte";
     import { formatTime } from "../../lib/time";
+    import { CirclePause, CirclePlay, Maximize, ZoomIn, ZoomOut, AudioWaveform, Subtitles, Users, SkipForward, Download, Scissors } from "lucide-svelte";
 
     export let isPlaying = false;
     export let duration = 0;
@@ -185,21 +186,7 @@
                     toggleFullscreen();
                 }}
             >
-                <svg
-                    width="22"
-                    height="24"
-                    viewBox="0 0 20 20"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                >
-                    <path
-                        d="M6.66667 2.5H4.16667C3.72464 2.5 3.30072 2.67559 2.98816 2.98816C2.67559 3.30072 2.5 3.72464 2.5 4.16667V6.66667M17.5 6.66667V4.16667C17.5 3.72464 17.3244 3.30072 17.0118 2.98816C16.6993 2.67559 16.2754 2.5 15.8333 2.5H13.3333M2.5 13.3333V15.8333C2.5 16.2754 2.67559 16.6993 2.98816 17.0118C3.30072 17.3244 3.72464 17.5 4.16667 17.5H6.66667M13.3333 17.5H15.8333C16.2754 17.5 16.6993 17.3244 17.0118 17.0118C17.3244 16.6993 17.5 16.2754 17.5 15.8333V13.3333"
-                        stroke="#E9E9E9"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                    />
-                </svg>
+                <Maximize size={22} color="#E9E9E9" strokeWidth={2} />
             </ExpandingButton>
 
             <ExpandingButton
@@ -207,37 +194,9 @@
                 onClick={toggleObjectFit}
             >
                 {#if objectFit === "contain"}
-                    <svg
-                        width="20"
-                        height="20"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        xmlns="http://www.w3.org/2000/svg"
-                    >
-                        <path
-                            d="M15 3H21M21 3V9M21 3L14 10M9 21H3M3 21V15M3 21L10 14"
-                            stroke="#E9E9E9"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                        />
-                    </svg>
+                    <ZoomIn size={20} color="#E9E9E9" strokeWidth={2} />
                 {:else}
-                    <svg
-                        width="20"
-                        height="20"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        xmlns="http://www.w3.org/2000/svg"
-                    >
-                        <path
-                            d="M4 14L10 20M10 20H4M10 20V14M20 10L14 4M14 4H20M14 4V10"
-                            stroke="#E9E9E9"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                        />
-                    </svg>
+                    <ZoomOut size={20} color="#E9E9E9" strokeWidth={2} />
                 {/if}
             </ExpandingButton>
 
@@ -246,21 +205,7 @@
                     label={currentAudioLabel || "Audio"}
                     onClick={() => dispatch("audioClick")}
                 >
-                    <svg
-                        width="20"
-                        height="20"
-                        viewBox="0 0 20 20"
-                        fill="none"
-                        xmlns="http://www.w3.org/2000/svg"
-                    >
-                        <path
-                            d="M1.6665 8.33333V10.8333M4.99984 5V14.1667M8.33317 2.5V17.5M11.6665 6.66667V12.5M14.9998 4.16667V15M18.3332 8.33333V10.8333"
-                            stroke="#E9E9E9"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                        />
-                    </svg>
+                    <AudioWaveform size={20} color="#E9E9E9" strokeWidth={2} />
                 </ExpandingButton>
             {/if}
 
@@ -268,21 +213,7 @@
                 label={currentSubtitleLabel || "Subtitles: Off"}
                 onClick={() => dispatch("subtitleClick")}
             >
-                <svg
-                    width="20"
-                    height="20"
-                    viewBox="0 0 20 20"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                >
-                    <path
-                        d="M5.83333 12.5H9.16667M12.5 12.5H14.1667M5.83333 9.16666H7.5M10.8333 9.16666H14.1667M4.16667 4.16666H15.8333C16.7538 4.16666 17.5 4.91285 17.5 5.83332V14.1667C17.5 15.0871 16.7538 15.8333 15.8333 15.8333H4.16667C3.24619 15.8333 2.5 15.0871 2.5 14.1667V5.83332C2.5 4.91285 3.24619 4.16666 4.16667 4.16666Z"
-                        stroke="#E9E9E9"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                    />
-                </svg>
+                <Subtitles size={20} color="#E9E9E9" strokeWidth={2} />
             </ExpandingButton>
 
             {#if metaData}
@@ -290,41 +221,13 @@
                     label={"Watch Party"}
                     onClick={() => dispatch("watchPartyClick")}
                 >
-                    <svg
-                        width="19"
-                        height="17"
-                        viewBox="0 0 19 17"
-                        fill="none"
-                        xmlns="http://www.w3.org/2000/svg"
-                    >
-                        <path
-                            d="M12.6667 16V14.3333C12.6667 13.4493 12.3155 12.6014 11.6904 11.9763C11.0652 11.3512 10.2174 11 9.33333 11H4.33333C3.44928 11 2.60143 11.3512 1.97631 11.9763C1.35119 12.6014 1 13.4493 1 14.3333V16M12.6667 1.10667C13.3815 1.29197 14.0145 1.70939 14.4664 2.29339C14.9183 2.87738 15.1635 3.59491 15.1635 4.33333C15.1635 5.07176 14.9183 5.78928 14.4664 6.37328C14.0145 6.95728 13.3815 7.37469 12.6667 7.56M17.6667 16V14.3333C17.6661 13.5948 17.4203 12.8773 16.9678 12.2936C16.5153 11.7099 15.8818 11.293 15.1667 11.1083M10.1667 4.33333C10.1667 6.17428 8.67428 7.66667 6.83333 7.66667C4.99238 7.66667 3.5 6.17428 3.5 4.33333C3.5 2.49238 4.99238 1 6.83333 1C8.67428 1 10.1667 2.49238 10.1667 4.33333Z"
-                            stroke="#E9E9E9"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                        />
-                    </svg>
+                    <Users size={20} color="#E9E9E9" strokeWidth={2} />
                 </ExpandingButton>
             {/if}
 
             {#if metaData?.meta.type === "series" && onNextEpisode && !isWatchPartyMember && hasNextEpisode}
                 <ExpandingButton label={"Next Episode"} onClick={onNextEpisode}>
-                    <svg
-                        width="20"
-                        height="20"
-                        viewBox="0 0 20 20"
-                        fill="none"
-                        xmlns="http://www.w3.org/2000/svg"
-                    >
-                        <path
-                            d="M17.5 3.33333V16.6667M5.02417 3.57083C4.77126 3.41908 4.48261 3.33717 4.18769 3.33345C3.89278 3.32972 3.60216 3.40433 3.3455 3.54965C3.08884 3.69497 2.87534 3.90579 2.7268 4.16059C2.57826 4.4154 2.5 4.70506 2.5 5V15C2.5 15.2949 2.57826 15.5846 2.7268 15.8394C2.87534 16.0942 3.08884 16.305 3.3455 16.4503C3.60216 16.5957 3.89278 16.6703 4.18769 16.6665C4.48261 16.6628 4.77126 16.5809 5.02417 16.4292L13.355 11.4308C13.6023 11.2831 13.8071 11.0737 13.9494 10.8232C14.0917 10.5727 14.1666 10.2896 14.1668 10.0015C14.1671 9.71345 14.0927 9.43022 13.9508 9.17947C13.809 8.92872 13.6045 8.71902 13.3575 8.57083L5.02417 3.57083Z"
-                            stroke="#E9E9E9"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                        />
-                    </svg>
+                    <SkipForward size={20} color="#E9E9E9" strokeWidth={2} />
                 </ExpandingButton>
             {/if}
 
@@ -335,21 +238,7 @@
                     window.open(videoSrc!!);
                 }}
             >
-                <svg
-                    width="22"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                >
-                    <path
-                        d="M12 15V3M12 15L7 10M12 15L17 10M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15"
-                        stroke="#E9E9E9"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                    />
-                </svg>
+                <Download size={22} color="#E9E9E9" strokeWidth={2} />
             </ExpandingButton>
             {/if}
 
@@ -358,10 +247,7 @@
                     label={"Clip"}
                     onClick={() => setClipPanelOpen(!showClipPanel)}
                 >
-                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M6.76667 6.76667L10 10M16.6667 3.33333L6.76667 13.2333M12.3333 12.3333L16.6667 16.6667M7.5 5C7.5 6.38071 6.38071 7.5 5 7.5C3.61929 7.5 2.5 6.38071 2.5 5C2.5 3.61929 3.61929 2.5 5 2.5C6.38071 2.5 7.5 3.61929 7.5 5ZM7.5 15C7.5 16.3807 6.38071 17.5 5 17.5C3.61929 17.5 2.5 16.3807 2.5 15C2.5 13.6193 3.61929 12.5 5 12.5C6.38071 12.5 7.5 13.6193 7.5 15Z" stroke="#E9E9E9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-
+                    <Scissors size={20} color="#E9E9E9" strokeWidth={2} />
                 </ExpandingButton>
             {/if}
 

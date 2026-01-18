@@ -7,6 +7,7 @@
     import LoadingSpinner from "../../common/LoadingSpinner.svelte";
     import { trackEvent } from "../../../lib/analytics";
     import { lockScroll, unlockScroll } from "../../../lib/modalScrollLock";
+    import { X, Link2 } from "lucide-svelte";
 
     export let streamsPopupVisible = false;
     export let addons: Addon[] = [];
@@ -736,22 +737,7 @@
                 on:click={close}
                 aria-label="Close streams"
             >
-                <svg
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    ><line x1="18" y1="6" x2="6" y2="18"></line><line
-                        x1="6"
-                        y1="6"
-                        x2="18"
-                        y2="18"
-                    ></line></svg
-                >
+                <X size={24} color="currentColor" strokeWidth={2} />
             </button>
 
             <div class="flex flex-col lg:flex-row gap-8 flex-1 min-h-0">
@@ -1021,19 +1007,7 @@
 
                                                 {#if item.meta.isP2P && item.meta.peerCount != null}
                                                     <span class="flex items-center gap-2 text-xs text-white/70">
-                                                        <svg
-                                                            width="14"
-                                                            height="14"
-                                                            viewBox="0 0 24 24"
-                                                            fill="none"
-                                                            stroke="currentColor"
-                                                            stroke-width="2"
-                                                            stroke-linecap="round"
-                                                            stroke-linejoin="round"
-                                                        >
-                                                            <circle cx="12" cy="12" r="3" />
-                                                            <path d="M19.4 15a1 1 0 0 0 .6-1.1 7 7 0 0 0-1.3-3.1 1 1 0 0 0-1-.4l-1.9.3a1 1 0 0 1-.9-.3l-.9-.9a1 1 0 0 1-.3-.9l.3-1.9a1 1 0 0 0-.4-1A7 7 0 0 0 10.1 4 1 1 0 0 0 9 4.6l-.8 1.8a1 1 0 0 1-.8.6L5.6 7a1 1 0 0 0-1 .4 7 7 0 0 0-1.3 3.1 1 1 0 0 0 .6 1.1l1.8.8a1 1 0 0 1 .6.8l.2 2a1 1 0 0 0 .3.7l1.4 1.4a1 1 0 0 0 .7.3l2-.2a1 1 0 0 1 .8.6l.8 1.8a1 1 0 0 0 1.1.6 7 7 0 0 0 3.1-1.3 1 1 0 0 0 .4-1l-.3-1.9a1 1 0 0 1 .3-.9l.9-.9a1 1 0 0 1 .9-.3z" />
-                                                        </svg>
+                                                        <Link2 size={14} color="currentColor" strokeWidth={2} />
                                                         <span>{item.meta.peerCount} peers online</span>
                                                     </span>
                                                 {/if}

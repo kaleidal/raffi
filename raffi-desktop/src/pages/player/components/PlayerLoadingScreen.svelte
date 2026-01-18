@@ -1,5 +1,6 @@
 <script lang="ts">
     import type { ShowResponse } from "../../../lib/library/types/meta_types";
+    import { ChevronLeft } from "lucide-svelte";
 
     const portal = (node: HTMLElement) => {
         if (typeof document === "undefined") {
@@ -61,21 +62,7 @@
                 on:click={onClose}
                 aria-label="Close player"
             >
-                <svg
-                    width="30"
-                    height="30"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                >
-                    <path
-                        d="M15 19L8 12L15 5"
-                        stroke="white"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                    />
-                </svg>
+                <ChevronLeft size={30} color="white" strokeWidth={2} />
             </button>
         </div>
     </div>
