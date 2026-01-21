@@ -1,7 +1,7 @@
 {
   "name": "raffi",
   "private": true,
-  "version": "0.4.3",
+  "version": "0.4.4",
   "type": "module",
   "main": "electron/main.cjs",
   "description": "A modern video player",
@@ -52,7 +52,7 @@
     ],
     "asar": true,
     "asarUnpack": [
-      "electron/decoder-*"
+      "node_modules/**/*"
     ],
     "linux": {
       "target": [
