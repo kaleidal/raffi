@@ -266,13 +266,18 @@ if (!gotTheLock) {
 
 function getDecoderPath() {
   const platform = process.platform;
+  const arch = process.arch;
 
   if (isDev) {
     // dev: binaries live in electron/
     if (platform === "win32") {
       return path.join(__dirname, "decoder-windows-amd64.exe");
     } else if (platform === "darwin") {
-      return path.join(__dirname, "decoder-macos-amd64");
+      // build_binary.cjs creates decoder-aarch64-apple-darwin or decoder-x86_64-apple-darwin
+      const macBinary = arch === "arm64" 
+        ? "decoder-aarch64-apple-darwin" 
+        : "decoder-x86_64-apple-darwin";
+      return path.join(__dirname, macBinary);
     } else {
       return path.join(__dirname, "decoder-x86_64-unknown-linux-gnu");
     }
@@ -281,7 +286,10 @@ function getDecoderPath() {
     if (platform === "win32") {
       return path.join(process.resourcesPath, "decoder-windows-amd64.exe");
     } else if (platform === "darwin") {
-      return path.join(process.resourcesPath, "decoder-macos-amd64");
+      const macBinary = arch === "arm64" 
+        ? "decoder-aarch64-apple-darwin" 
+        : "decoder-x86_64-apple-darwin";
+      return path.join(process.resourcesPath, macBinary);
     } else {
       return path.join(
         process.resourcesPath,
@@ -289,6 +297,62 @@ function getDecoderPath() {
       );
     }
   }
+}
+
+async function ensureDecoderExecutable(binPath) {
+  // On Linux/Mac, ensure the decoder binary has executable permissions
+  if (process.platform !== "win32") {
+    try {
+      await fs.promises.chmod(binPath, 0o755);
+      logToFile(`Set executable permissions on ${binPath}`);
+    } catch (err) {
+      // EROFS (read-only filesystem) is expected when running from AppImage
+      // EPERM (permission denied) is expected when installed via RPM/deb (root-owned files)
+      // In both cases, the binary should already have executable permissions from packaging
+      if (err.code === "EROFS" || err.code === "EPERM") {
+        logToFile(`Skipping chmod (${err.code}): ${binPath}`);
+      } else {
+        logToFile(`Failed to set executable permissions on ${binPath}`, err);
+        throw err;
+      }
+    }
+  }
+}
+
+async function waitForDecoderReady(maxRetries = 30, retryDelayMs = 500) {
+  // Wait for the decoder server to be ready by polling the health endpoint
+  const serverUrl = "http://127.0.0.1:6969";
+  
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      const http = require("http");
+      await new Promise((resolve, reject) => {
+        const req = http.get(`${serverUrl}/`, (res) => {
+          if (res.statusCode) {
+            resolve();
+          } else {
+            reject(new Error(`Unexpected status code: ${res.statusCode}`));
+          }
+        });
+        req.on("error", reject);
+        req.setTimeout(1000, () => {
+          req.destroy();
+          reject(new Error("Timeout"));
+        });
+      });
+      
+      logToFile(`Decoder server ready after ${i + 1} attempts`);
+      return true;
+    } catch (err) {
+      if (i === maxRetries - 1) {
+        logToFile(`Decoder server not ready after ${maxRetries} attempts`, err);
+        return false;
+      }
+      await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+    }
+  }
+  
+  return false;
 }
 
 function commandExists(command) {
@@ -304,6 +368,21 @@ function hasFFmpeg() {
   return new Promise((resolve) => {
     const probe = spawn("ffmpeg", ["-version"]);
     probe.on("close", (code) => resolve(code === 0));
+    probe.on("error", () => resolve(false));
+  });
+}
+
+function hasLibx264() {
+  return new Promise((resolve) => {
+    const probe = spawn("ffmpeg", ["-encoders"]);
+    let output = "";
+    probe.stdout.on("data", (data) => {
+      output += data.toString();
+    });
+    probe.on("close", (code) => {
+      // Check if libx264 is in the encoders list
+      resolve(code === 0 && output.includes("libx264"));
+    });
     probe.on("error", () => resolve(false));
   });
 }
@@ -410,52 +489,103 @@ function getManualInstallMessage() {
   return 'FFmpeg is required to start the local decoder. Install it with your package manager (for example: "sudo apt install ffmpeg") or from https://ffmpeg.org, then restart Raffi.';
 }
 
+function getLibx264InstallMessage() {
+  if (process.platform === "win32") {
+    return 'FFmpeg is installed but missing the libx264 encoder. Please reinstall FFmpeg with x264 support from https://ffmpeg.org or via "winget install FFmpeg.FFmpeg", then restart Raffi.';
+  }
+  if (process.platform === "darwin") {
+    return 'FFmpeg is installed but missing the libx264 encoder. Reinstall via Homebrew ("brew reinstall ffmpeg") to get x264 support, then restart Raffi.';
+  }
+  // Linux - provide distro-specific instructions
+  return `FFmpeg is installed but missing the libx264 encoder (needed for video transcoding).
+
+For Fedora/RHEL: Enable RPM Fusion and run "sudo dnf install ffmpeg x264"
+For Ubuntu/Debian: Run "sudo apt install ffmpeg libavcodec-extra"
+For Arch: Run "sudo pacman -S ffmpeg x264"
+
+After installing, restart Raffi.`;
+}
+
 async function ensureFFmpegAvailable() {
-  if (await hasFFmpeg()) {
-    return true;
+  const ffmpegInstalled = await hasFFmpeg();
+  
+  if (!ffmpegInstalled) {
+    const installed = await tryAutoInstallFFmpeg();
+    if (!installed || !(await hasFFmpeg())) {
+      await dialog.showMessageBox({
+        type: "error",
+        buttons: ["Quit"],
+        title: "FFmpeg Required",
+        message: "FFmpeg was not found on this system.",
+        detail: getManualInstallMessage(),
+      });
+      return false;
+    }
   }
 
-  const installed = await tryAutoInstallFFmpeg();
-  if (installed && (await hasFFmpeg())) {
-    return true;
+  // Check for libx264 encoder
+  if (!(await hasLibx264())) {
+    await dialog.showMessageBox({
+      type: "error",
+      buttons: ["Quit"],
+      title: "libx264 Encoder Required",
+      message: "FFmpeg is missing the libx264 encoder.",
+      detail: getLibx264InstallMessage(),
+    });
+    return false;
   }
 
-  await dialog.showMessageBox({
-    type: "error",
-    buttons: ["Quit"],
-    title: "FFmpeg Required",
-    message: "FFmpeg was not found on this system.",
-    detail: getManualInstallMessage(),
-  });
-
-  return false;
+  return true;
 }
 
 function createWindow() {
-  const useTitleBarOverlay = process.platform === "win32";
+  const isWindows = process.platform === "win32";
+  const isMac = process.platform === "darwin";
+  const isLinux = process.platform === "linux";
   logToFile("Creating main window");
 
-  mainWindow = new BrowserWindow({
+  // Window frame configuration per platform:
+  // - Windows: uses titleBarOverlay for custom controls
+  // - macOS: uses hidden titleBarStyle for traffic lights
+  // - Linux: uses standard frame (hidden titleBarStyle causes issues on many DEs)
+  const windowOptions = {
     width: DEFAULT_WINDOW_WIDTH,
     height: DEFAULT_WINDOW_HEIGHT,
     minHeight: 800,
     minWidth: 1200,
     autoHideMenuBar: true,
-    frame: !useTitleBarOverlay,
     backgroundColor: "#090909",
-    titleBarStyle: "hidden",
-    titleBarOverlay: {
-      color: "#00000000",
-      symbolColor: "#ffffff",
-      height: 32,
-    },
+    show: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       webviewTag: true,
       preload: path.join(__dirname, "preload.cjs"),
     },
-  });
+  };
+
+  if (isWindows) {
+    windowOptions.frame = false;
+    windowOptions.titleBarStyle = "hidden";
+    windowOptions.titleBarOverlay = {
+      color: "#00000000",
+      symbolColor: "#ffffff",
+      height: 32,
+    };
+  } else if (isMac) {
+    windowOptions.frame = true;
+    windowOptions.titleBarStyle = "hidden";
+    windowOptions.titleBarOverlay = {
+      color: "#00000000",
+      symbolColor: "#ffffff",
+      height: 32,
+    };
+  } else {
+    // Linux: use standard frame to avoid compatibility issues
+    windowOptions.frame = true;
+  }
+
+  mainWindow = new BrowserWindow(windowOptions);
 
   mainWindow.on("maximize", () => {
     try {
@@ -657,23 +787,49 @@ ipcMain.handle("UPDATE_INSTALL", async () => {
   return { ok: true };
 });
 
-function startGoServer() {
+async function startGoServer() {
   const binPath = getDecoderPath();
   console.log("Binary path:", binPath);
   logToFile("Decoder binary path", binPath);
 
+  // Check if binary exists
+  if (!fs.existsSync(binPath)) {
+    const err = `Decoder binary not found at ${binPath}`;
+    logToFile(err);
+    console.error(err);
+    throw new Error(err);
+  }
+
+  // Ensure executable permissions on Linux/Mac
+  await ensureDecoderExecutable(binPath);
+
+  logToFile("Spawning decoder process");
+  
   goServer = spawn(binPath, [], { stdio: "pipe" });
+
+  logToFile(`Decoder process spawned, pid: ${goServer.pid}`);
 
   goServer.on("error", (err) => {
     logToFile("Decoder spawn error", err);
+    console.error("Decoder spawn error:", err);
   });
 
   goServer.on("exit", (code, signal) => {
     logToFile(`Decoder exited with code ${code} signal ${signal}`);
+    console.log(`Decoder exited with code ${code} signal ${signal}`);
   });
 
-  goServer.stdout.on("data", (d) => console.log("[go]", d.toString()));
-  goServer.stderr.on("data", (d) => console.error("[go err]", d.toString()));
+  goServer.stdout.on("data", (d) => {
+    const msg = d.toString();
+    console.log("[go]", msg);
+    logToFile("[go stdout]", msg);
+  });
+  
+  goServer.stderr.on("data", (d) => {
+    const msg = d.toString();
+    console.error("[go err]", msg);
+    logToFile("[go stderr]", msg);
+  });
 }
 
 ipcMain.handle("SAVE_CLIP_DIALOG", async (_event, suggestedName) => {
@@ -753,7 +909,31 @@ app.whenReady().then(async () => {
     return;
   }
 
-  startGoServer();
+  logToFile("Starting decoder server");
+  try {
+    await startGoServer();
+  } catch (err) {
+    logToFile("Failed to start decoder server", err);
+    dialog.showErrorBoxSync(
+      "Decoder Error",
+      `Failed to start decoder server: ${err.message}\n\nCheck logs at ${getLogPath()}`
+    );
+    app.quit();
+    return;
+  }
+
+  logToFile("Waiting for decoder server to be ready");
+  const decoderReady = await waitForDecoderReady();
+  
+  if (!decoderReady) {
+    logToFile("Decoder server failed to start, but creating window anyway");
+    console.error("WARNING: Decoder server not responding, app may not work properly");
+    // Don't block the window from opening - just show a warning
+    createWindow();
+    return;
+  }
+
+  logToFile("Decoder server ready, creating window");
   createWindow();
 });
 
