@@ -27,6 +27,7 @@ interface LibraryState {
   ) => Promise<void>;
   hideItem: (imdbId: string) => Promise<void>;
   removeItem: (imdbId: string) => Promise<void>;
+  clearLibrary: () => Promise<void>;
 }
 
 export const useLibraryStore = create<LibraryState>((set, get) => ({
@@ -144,6 +145,20 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       }));
     } catch (e: any) {
       console.error('Failed to remove item:', e);
+    }
+  },
+
+  clearLibrary: async () => {
+    try {
+      const { items } = get();
+      // Remove all items one by one
+      for (const item of items) {
+        await forgetProgress(item.imdb_id);
+      }
+      set({ items: [] });
+    } catch (e: any) {
+      console.error('Failed to clear library:', e);
+      throw e;
     }
   },
 }));

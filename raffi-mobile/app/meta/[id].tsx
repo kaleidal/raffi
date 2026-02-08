@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   FlatList,
   Image,
@@ -22,10 +23,11 @@ import WebView from 'react-native-webview';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { BorderRadius, Colors, Spacing, Typography } from '@/constants/theme';
 import { fetchStreams, getCachedMetaData } from '@/lib/api';
-import { getLibraryItem } from '@/lib/db';
+import { addToList, getLibraryItem, getLists } from '@/lib/db';
 import { useAddonsStore } from '@/lib/stores/addonsStore';
+import { useDownloadsStore } from '@/lib/stores/downloadsStore';
 import { useLibraryStore } from '@/lib/stores/libraryStore';
-import type { Addon, Episode, LibraryItem, ShowResponse, Stream } from '@/lib/types';
+import type { Addon, Episode, LibraryItem, List, ShowResponse, Stream } from '@/lib/types';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -281,6 +283,7 @@ export default function MetaScreen() {
 
   const { selectedAddon, addons } = useAddonsStore();
   const { getItemProgress } = useLibraryStore();
+  const { addDownload, getDownload } = useDownloadsStore();
 
   const insets = useSafeAreaInsets();
 
@@ -303,6 +306,12 @@ export default function MetaScreen() {
   const [streamsByAddon, setStreamsByAddon] = useState<Record<string, Stream[]>>({});
   const [loadingStreams, setLoadingStreams] = useState(false);
   const [selectedEpisode, setSelectedEpisode] = useState<Episode | null>(null);
+
+  // Add to list modal
+  const [showListModal, setShowListModal] = useState(false);
+  const [userLists, setUserLists] = useState<List[]>([]);
+  const [loadingLists, setLoadingLists] = useState(false);
+  const [addingToList, setAddingToList] = useState<string | null>(null);
 
   // Trailer (must be declared before any early returns to keep hook order stable)
   const trailerId = useMemo(() => {
@@ -387,6 +396,37 @@ export default function MetaScreen() {
     [getItemProgress, id]
   );
 
+  // Sort streams: debrid first, then by resolution, then by peer count
+  const sortStreams = useCallback((streams: Stream[]): Stream[] => {
+    return [...streams].sort((a, b) => {
+      const aTitle = ((a as any).title || '').toLowerCase();
+      const bTitle = ((b as any).title || '').toLowerCase();
+      
+      // Debrid streams first (RD, AD, PM)
+      const aDebrid = /\[rd\+?\]|\[ad\]|\[pm\]|real-?debrid|alldebrid|premiumize/i.test(aTitle);
+      const bDebrid = /\[rd\+?\]|\[ad\]|\[pm\]|real-?debrid|alldebrid|premiumize/i.test(bTitle);
+      if (aDebrid && !bDebrid) return -1;
+      if (!aDebrid && bDebrid) return 1;
+      
+      // Then by resolution
+      const getResScore = (title: string): number => {
+        if (/2160p|4k/i.test(title)) return 4;
+        if (/1080p/i.test(title)) return 3;
+        if (/720p/i.test(title)) return 2;
+        if (/480p/i.test(title)) return 1;
+        return 0;
+      };
+      const aRes = getResScore(aTitle);
+      const bRes = getResScore(bTitle);
+      if (aRes !== bRes) return bRes - aRes;
+      
+      // Then by peer count for P2P
+      const aPeers = parseInt((aTitle.match(/(\d+)\s*(?:peers?|seeders?)/i) || [])[1] || '0');
+      const bPeers = parseInt((bTitle.match(/(\d+)\s*(?:peers?|seeders?)/i) || [])[1] || '0');
+      return bPeers - aPeers;
+    });
+  }, []);
+
   const fetchStreamsForAddon = useCallback(
     async (addonUrl: string, streamType: 'movie' | 'series', episode?: Episode | null) => {
       if (!addonUrl) return;
@@ -397,7 +437,9 @@ export default function MetaScreen() {
             ? await fetchStreams(addonUrl, 'movie', id)
             : await fetchStreams(addonUrl, 'series', id, episode?.season, episode?.episode);
 
-        setStreamsByAddon((prev) => ({ ...prev, [addonUrl]: list }));
+        // Sort streams by quality and debrid availability
+        const sortedList = sortStreams(list);
+        setStreamsByAddon((prev) => ({ ...prev, [addonUrl]: sortedList }));
       } catch (e) {
         console.error('Failed to fetch streams:', e);
         setStreamsByAddon((prev) => ({ ...prev, [addonUrl]: [] }));
@@ -405,7 +447,7 @@ export default function MetaScreen() {
         setLoadingStreams(false);
       }
     },
-    [id]
+    [id, sortStreams]
   );
 
   useEffect(() => {
@@ -578,9 +620,21 @@ export default function MetaScreen() {
       videoSrc = `magnet:?xt=urn:btih:${stream.infoHash}`;
     }
 
+    // Validate video source - check for null values in URL
     if (!videoSrc) {
       console.warn('No video source');
       return;
+    }
+    
+    // Check if URL contains null segments (bad stream data)
+    if (videoSrc.includes('/null/') || videoSrc.includes('/null.') || videoSrc.endsWith('/null')) {
+      console.warn('Invalid video URL contains null segments:', videoSrc);
+      // Try to use infoHash as fallback if available
+      if (stream.infoHash) {
+        videoSrc = `magnet:?xt=urn:btih:${stream.infoHash}`;
+      } else {
+        return;
+      }
     }
 
     const resumeTime = await resolveResumeTimeSeconds(selectedEpisode);
@@ -600,6 +654,95 @@ export default function MetaScreen() {
       },
     });
   };
+
+  // Handle download stream (only for HTTP streams, not torrents)
+  const handleDownloadStream = useCallback((stream: Stream) => {
+    // Only support direct HTTP downloads (debrid streams)
+    if (!stream.url || stream.url.startsWith('magnet:') || stream.infoHash) {
+      // Show alert for torrent streams
+      Alert.alert(
+        'Download Not Available',
+        'Direct downloads are only available for debrid streams (Real-Debrid, AllDebrid, Premiumize). Torrent streams cannot be downloaded for offline playback.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    // Check for invalid URLs
+    if (stream.url.includes('/null/') || stream.url.includes('/null.')) {
+      Alert.alert('Error', 'This stream has an invalid URL and cannot be downloaded.');
+      return;
+    }
+
+    const downloadId = selectedEpisode
+      ? `${id}:${selectedEpisode.season}:${selectedEpisode.episode}`
+      : id;
+
+    // Check if already downloading/downloaded
+    const existingDownload = getDownload(downloadId);
+    if (existingDownload) {
+      Alert.alert(
+        'Already Downloaded',
+        existingDownload.status === 'completed'
+          ? 'This content has already been downloaded. Check your Downloads tab.'
+          : 'This download is already in progress.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    addDownload({
+      id: downloadId,
+      imdbId: id,
+      type: (meta?.meta?.type || 'movie') as 'movie' | 'series',
+      title: meta?.meta?.name || 'Unknown',
+      poster: meta?.meta?.poster ?? undefined,
+      season: selectedEpisode?.season,
+      episode: selectedEpisode?.episode,
+      episodeTitle: selectedEpisode?.name,
+      streamUrl: stream.url,
+    });
+
+    Alert.alert(
+      'Download Started',
+      'Your download has been added to the queue. Check the Downloads tab for progress.',
+      [{ text: 'OK' }]
+    );
+  }, [id, meta, selectedEpisode, addDownload, getDownload]);
+
+  // Handle opening add to list modal
+  const handleOpenListModal = useCallback(async () => {
+    setShowListModal(true);
+    setLoadingLists(true);
+    try {
+      const lists = await getLists();
+      setUserLists(lists);
+    } catch (e) {
+      console.error('Failed to load lists:', e);
+      Alert.alert('Error', 'Failed to load your lists');
+    }
+    setLoadingLists(false);
+  }, []);
+
+  // Handle adding to a specific list
+  const handleAddToList = useCallback(async (list: List) => {
+    if (!meta?.meta) return;
+    
+    setAddingToList(list.list_id);
+    try {
+      await addToList(
+        list.list_id,
+        id,
+        meta.meta.type,
+        meta.meta.poster ?? undefined
+      );
+      setShowListModal(false);
+      Alert.alert('Added', `Added to "${list.name}"`);
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to add to list');
+    }
+    setAddingToList(null);
+  }, [id, meta]);
 
   if (loading) {
     return <LoadingSpinner fullScreen />;
@@ -749,23 +892,32 @@ export default function MetaScreen() {
             <Text style={styles.genres}>{(data.genres || data.genre)?.slice(0, 3).join(' • ')}</Text>
           )}
 
-          {/* Play Button (for movies) */}
-          {!isSeries && (
-            <TouchableOpacity style={styles.playButton} onPress={() => handlePlayMovie()}>
-              <Ionicons name="play" size={24} color="#000" />
-              <Text style={styles.playButtonText}>{resumeMovieSeconds > 0 ? 'Resume' : 'Play'}</Text>
-            </TouchableOpacity>
-          )}
+          {/* Action Buttons Row */}
+          <View style={styles.actionButtonsRow}>
+            {/* Play Button (for movies) */}
+            {!isSeries && (
+              <TouchableOpacity style={styles.playButton} onPress={() => handlePlayMovie()}>
+                <Ionicons name="play" size={24} color="#000" />
+                <Text style={styles.playButtonText}>{resumeMovieSeconds > 0 ? 'Resume' : 'Play'}</Text>
+              </TouchableOpacity>
+            )}
 
-          {/* Resume Button (for series) */}
-          {isSeries && resumeEpisode && (
-            <TouchableOpacity style={styles.playButton} onPress={() => handlePlayEpisode(resumeEpisode)}>
-              <Ionicons name="play" size={24} color="#000" />
-              <Text style={styles.playButtonText}>
-                Resume S{resumeEpisode.season} • E{resumeEpisode.episode}
-              </Text>
+            {/* Resume Button (for series) */}
+            {isSeries && resumeEpisode && (
+              <TouchableOpacity style={styles.playButton} onPress={() => handlePlayEpisode(resumeEpisode)}>
+                <Ionicons name="play" size={24} color="#000" />
+                <Text style={styles.playButtonText}>
+                  Resume S{resumeEpisode.season} • E{resumeEpisode.episode}
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Add to List Button */}
+            <TouchableOpacity style={styles.addToListButton} onPress={handleOpenListModal}>
+              <Ionicons name="add" size={24} color={Colors.text} />
+              <Text style={styles.addToListButtonText}>My List</Text>
             </TouchableOpacity>
-          )}
+          </View>
         </View>
 
         {/* Description */}
@@ -1012,29 +1164,43 @@ export default function MetaScreen() {
                         )}
                       </View>
 
-                      {/* Feature badges row */}
-                      {streamMeta.featureBadges.length > 0 && (
-                        <View style={styles.streamFeatureBadges}>
-                          {streamMeta.featureBadges.map((badge) => (
-                            <View
-                              key={badge.label}
-                              style={[
-                                styles.streamFeatureBadge,
-                                badge.variant === 'muted' && styles.streamFeatureBadgeMuted,
-                              ]}
-                            >
-                              <Text
+                      {/* Feature badges + Download button row */}
+                      <View style={styles.streamCardFooter}>
+                        {streamMeta.featureBadges.length > 0 && (
+                          <View style={styles.streamFeatureBadges}>
+                            {streamMeta.featureBadges.map((badge) => (
+                              <View
+                                key={badge.label}
                                 style={[
-                                  styles.streamFeatureBadgeText,
-                                  badge.variant === 'muted' && styles.streamFeatureBadgeTextMuted,
+                                  styles.streamFeatureBadge,
+                                  badge.variant === 'muted' && styles.streamFeatureBadgeMuted,
                                 ]}
                               >
-                                {badge.label}
-                              </Text>
-                            </View>
-                          ))}
-                        </View>
-                      )}
+                                <Text
+                                  style={[
+                                    styles.streamFeatureBadgeText,
+                                    badge.variant === 'muted' && styles.streamFeatureBadgeTextMuted,
+                                  ]}
+                                >
+                                  {badge.label}
+                                </Text>
+                              </View>
+                            ))}
+                          </View>
+                        )}
+                        {/* Download button - only for debrid/HTTP streams */}
+                        {item.url && !item.url.startsWith('magnet:') && !item.infoHash && (
+                          <TouchableOpacity
+                            style={styles.downloadButton}
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              handleDownloadStream(item);
+                            }}
+                          >
+                            <Ionicons name="download-outline" size={18} color={Colors.text} />
+                          </TouchableOpacity>
+                        )}
+                      </View>
                     </TouchableOpacity>
                   );
                 }}
@@ -1048,6 +1214,72 @@ export default function MetaScreen() {
               />
             )}
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Add to List Modal */}
+      <Modal
+        visible={showListModal}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowListModal(false)}
+      >
+        <View style={styles.listModalOverlay}>
+          <View style={styles.listModalContent}>
+            <View style={styles.listModalHeader}>
+              <Text style={styles.listModalTitle}>Add to List</Text>
+              <TouchableOpacity
+                style={styles.listModalCloseButton}
+                onPress={() => setShowListModal(false)}
+              >
+                <Ionicons name="close" size={24} color={Colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {loadingLists ? (
+              <View style={styles.listModalLoading}>
+                <ActivityIndicator size="large" color={Colors.primary} />
+              </View>
+            ) : userLists.length === 0 ? (
+              <View style={styles.listModalEmpty}>
+                <Ionicons name="list-outline" size={48} color={Colors.textMuted} />
+                <Text style={styles.listModalEmptyText}>No lists yet</Text>
+                <Text style={styles.listModalEmptySubtext}>
+                  Create a list from the My Lists screen
+                </Text>
+                <TouchableOpacity
+                  style={styles.listModalCreateButton}
+                  onPress={() => {
+                    setShowListModal(false);
+                    router.push('/lists');
+                  }}
+                >
+                  <Text style={styles.listModalCreateButtonText}>Go to My Lists</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <ScrollView style={styles.listModalScroll}>
+                {userLists.map((list) => (
+                  <TouchableOpacity
+                    key={list.list_id}
+                    style={styles.listModalItem}
+                    onPress={() => handleAddToList(list)}
+                    disabled={addingToList === list.list_id}
+                  >
+                    <View style={styles.listModalItemIcon}>
+                      <Ionicons name="list" size={20} color={Colors.text} />
+                    </View>
+                    <Text style={styles.listModalItemText}>{list.name}</Text>
+                    {addingToList === list.list_id ? (
+                      <ActivityIndicator size="small" color={Colors.primary} />
+                    ) : (
+                      <Ionicons name="add-circle-outline" size={24} color={Colors.textSecondary} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
           </View>
         </View>
       </Modal>
@@ -1142,6 +1374,12 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginBottom: Spacing.lg,
   },
+  actionButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    marginTop: Spacing.sm,
+  },
   playButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1151,13 +1389,28 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
     paddingHorizontal: Spacing.xxl,
     borderRadius: BorderRadius.full,
-    alignSelf: 'flex-start',
-    marginTop: Spacing.sm,
   },
   playButtonText: {
     fontSize: Typography.sizes.lg,
     fontWeight: Typography.weights.bold,
     color: '#000',
+  },
+  addToListButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.xl,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  addToListButtonText: {
+    fontSize: Typography.sizes.md,
+    fontWeight: Typography.weights.semibold,
+    color: Colors.text,
   },
   section: {
     paddingHorizontal: Spacing.lg,
@@ -1487,6 +1740,20 @@ const styles = StyleSheet.create({
   streamFeatureBadgeTextMuted: {
     color: 'rgba(255,255,255,0.5)',
   },
+  streamCardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  downloadButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: Spacing.md,
+  },
   // Keep old stream styles for compatibility
   streamItem: {
     flexDirection: 'row',
@@ -1536,5 +1803,99 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.xs,
     color: Colors.text,
     fontWeight: Typography.weights.semibold,
+  },
+  // Add to List Modal styles
+  listModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.xl,
+  },
+  listModalContent: {
+    backgroundColor: Colors.backgroundSecondary,
+    borderRadius: BorderRadius.xl,
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '70%',
+  },
+  listModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.xl,
+    paddingBottom: Spacing.lg,
+  },
+  listModalTitle: {
+    fontSize: Typography.sizes.xxl,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+  },
+  listModalCloseButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  listModalLoading: {
+    padding: Spacing.xxxl,
+    alignItems: 'center',
+  },
+  listModalEmpty: {
+    padding: Spacing.xxl,
+    alignItems: 'center',
+  },
+  listModalEmptyText: {
+    fontSize: Typography.sizes.lg,
+    fontWeight: Typography.weights.semibold,
+    color: Colors.text,
+    marginTop: Spacing.md,
+  },
+  listModalEmptySubtext: {
+    fontSize: Typography.sizes.sm,
+    color: Colors.textSecondary,
+    marginTop: Spacing.sm,
+    textAlign: 'center',
+  },
+  listModalCreateButton: {
+    marginTop: Spacing.xl,
+    backgroundColor: Colors.primary,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.xl,
+    borderRadius: BorderRadius.full,
+  },
+  listModalCreateButtonText: {
+    fontSize: Typography.sizes.md,
+    fontWeight: Typography.weights.bold,
+    color: Colors.background,
+  },
+  listModalScroll: {
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.xl,
+  },
+  listModalItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  listModalItemIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: Spacing.md,
+  },
+  listModalItemText: {
+    flex: 1,
+    fontSize: Typography.sizes.md,
+    fontWeight: Typography.weights.medium,
+    color: Colors.text,
   },
 });
