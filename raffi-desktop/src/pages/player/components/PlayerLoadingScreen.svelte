@@ -29,7 +29,7 @@
 {#if loading}
     <div
         use:portal
-        class="fixed inset-0 z-50 backdrop-blur-md flex items-center justify-center flex-col gap-8"
+        class="fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex items-center justify-center flex-col gap-8"
     >
         {#if metaData}
             <div class="relative z-10 flex flex-col items-center gap-8">

@@ -17,6 +17,8 @@ type Metadata struct {
 		Index     int    `json:"index"`
 		CodecName string `json:"codec_name"`
 		CodecType string `json:"codec_type"`
+		PixFmt    string `json:"pix_fmt"`
+		Profile   string `json:"profile"`
 		Tags      struct {
 			Language string `json:"language"`
 			Title    string `json:"title"`
@@ -67,14 +69,13 @@ func ProbeDuration(ctx context.Context, source string) (*Metadata, string, error
 
 	videoCodec := "libx264"
 	for _, st := range data.Streams {
-		if st.CodecName == "h264" {
+		if st.CodecType != "video" {
+			continue
+		}
+		if st.CodecName == "h264" && st.Profile != "High 10" && st.Profile != "High 4:2:2" && st.Profile != "High 4:4:4 Predictive" {
 			videoCodec = "h264"
-			break
 		}
-		if st.CodecName == "hevc" {
-			videoCodec = "hevc"
-			break
-		}
+		break
 	}
 
 	return &data, videoCodec, nil
