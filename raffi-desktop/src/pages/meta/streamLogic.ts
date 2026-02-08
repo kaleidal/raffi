@@ -1,13 +1,15 @@
 import { get } from "svelte/store";
 import {
     loadingStreams, streams, streamsPopupVisible, selectedEpisode,
-    selectedAddon, metaData, playerVisible, selectedStreamUrl,
+    selectedAddon, metaData, selectedStreamUrl,
     selectedStream, selectedFileIdx, showTorrentWarning, pendingTorrentStream
 } from "./metaState";
+import { router } from "../../lib/stores/router";
 
 import type { Stream } from "./types";
 import { getLocalStreamsFor } from "../../lib/localLibrary/localLibrary";
 import { trackEvent } from "../../lib/analytics";
+import * as ProgressLogic from "./progressLogic";
 
 const getStreamAnalyticsProps = (stream: Stream) => {
     const isTorrent = Boolean(
@@ -116,25 +118,46 @@ export const episodeClicked = async (episode: any, imdbID: string) => {
     await fetchStreams(episode, false, true, imdbID);
 };
 
-export const playStream = (stream: Stream, progressMap: any) => {
+export const playStream = (stream: Stream, progressMap: any, options?: { replace?: boolean }) => {
     let url = stream.url;
+    const fileIdx = stream.infoHash ? (stream.fileIdx ?? null) : null;
 
     if (stream.infoHash) {
         url = `magnet:?xt=urn:btih:${stream.infoHash}`;
-        selectedFileIdx.set(stream.fileIdx ?? null);
-    } else {
-        selectedFileIdx.set(null);
     }
 
     if (url) {
         selectedStream.set(stream);
         selectedStreamUrl.set(url);
+        selectedFileIdx.set(fileIdx);
 
-        // Start time logic is handled in Meta.svelte or passed to Player
-        // We just set the state here
+        const data = get(metaData);
+        const episode = get(selectedEpisode);
+        let startTime = 0;
 
-        playerVisible.set(true);
+        if (data?.meta?.type === "movie") {
+            const prog = ProgressLogic.getProgress(progressMap);
+            if (prog && !prog.watched) {
+                startTime = prog.time || 0;
+            }
+        } else if (episode) {
+            const key = `${episode.season}:${episode.episode}`;
+            const prog = ProgressLogic.getProgress(progressMap, key);
+            if (prog && !prog.watched) {
+                startTime = prog.time || 0;
+            }
+        }
+
         streamsPopupVisible.set(false);
+
+        router.navigate("player", {
+            videoSrc: url,
+            fileIdx,
+            metaData: data,
+            startTime,
+            season: episode?.season ?? null,
+            episode: episode?.episode ?? null,
+        }, { replace: options?.replace });
     } else {
         console.warn("Stream has no URL", stream);
     }
@@ -181,8 +204,8 @@ export const handleTorrentWarningCancel = () => {
 
 
 export const closePlayer = () => {
-    playerVisible.set(false);
     selectedStreamUrl.set(null);
+    router.back();
 };
 
 export const closeStreamsPopup = () => {

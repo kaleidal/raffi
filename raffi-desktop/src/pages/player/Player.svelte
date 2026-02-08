@@ -1,5 +1,6 @@
 <script lang="ts">
     import { onDestroy, onMount, tick } from "svelte";
+    import { get } from "svelte/store";
     import { router } from "../../lib/stores/router";
     import PlayerControls from "../../components/player/PlayerControls.svelte";
     import PlayerOverlays from "../../components/player/PlayerOverlays.svelte";
@@ -14,6 +15,9 @@
     import { localMode } from "../../lib/stores/authStore";
     import { trackEvent } from "../../lib/analytics";
     import { ChevronLeft } from "lucide-svelte";
+    import * as NavigationLogic from "../meta/navigationLogic";
+    import * as ProgressLogic from "../meta/progressLogic";
+    import { progressMap as metaProgressMap } from "../meta/metaState";
 
     import {
         isPlaying,
@@ -68,14 +72,33 @@
     export let metaData: ShowResponse | null = null;
     export let autoPlay: boolean = true;
     export let onClose: () => void = () => {};
-    export let onNextEpisode: () => void = () => {};
+    export let onNextEpisode: (() => void) | null = null;
     export let hasStarted = false;
-    export let onProgress: (time: number, duration: number) => void = () => {};
+    export let onProgress: ((time: number, duration: number) => void) | null = null;
     export let startTime: number = 0;
     export let season: number | null = null;
     export let episode: number | null = null;
     export let joinPartyId: string | null = null;
     export let autoJoin: boolean = false;
+
+    const imdbID = metaData?.meta?.imdb_id || null;
+
+    const handleProgressInternal = (time: number, dur: number) => {
+        if (onProgress) {
+            onProgress(time, dur);
+        } else if (imdbID) {
+            ProgressLogic.handleProgress(time, dur, imdbID, hasStarted);
+        }
+    };
+
+    const handleNextEpisodeInternal = () => {
+        if (onNextEpisode) {
+            return onNextEpisode();
+        }
+        if (imdbID) {
+            return NavigationLogic.handleNextEpisode(imdbID, get(metaProgressMap));
+        }
+    };
 
     type SeekBarStyle = "raffi" | "normal";
     const SEEK_BAR_STYLE_KEY = "seek_bar_style";
@@ -276,14 +299,8 @@
 
     const handleClose = () => {
         trackPlaybackClosed();
-        if (videoSrc) {
+        if (!router.back()) {
             router.navigate("home");
-        } else {
-            if (onClose && onClose !== (() => {})) {
-                onClose();
-            } else {
-                router.back();
-            }
         }
     };
 
@@ -545,7 +562,7 @@
         if (!videoElem) return;
         const time = $playbackOffset + videoElem.currentTime;
         currentTime.set(time);
-        onProgress(time, $duration);
+        handleProgressInternal(time, $duration);
 
         if (!$seekGuard) {
             const result = Chapters.checkChapters(
@@ -908,11 +925,11 @@
         loading.set(true);
 
         if ($duration > 0 && $duration - $currentTime <= 600) {
-            onProgress($duration, $duration);
+            handleProgressInternal($duration, $duration);
         }
 
         try {
-            const res = (onNextEpisode as unknown as (() => unknown))?.();
+            const res = (handleNextEpisodeInternal as unknown as (() => unknown))?.();
             if (res && typeof (res as any).then === "function") {
                 (res as Promise<unknown>).catch((err) => {
                     if (attemptId !== nextEpisodeAttemptId) return;
@@ -1048,7 +1065,7 @@
 />
 
 <div
-    class="absolute inset-0 w-full h-full bg-black overflow-hidden group {$controlsVisible
+    class="fixed inset-0 w-full h-full bg-black overflow-hidden group z-100 {$controlsVisible
         ? 'cursor-default'
         : 'cursor-none'}"
     bind:this={playerContainer}
@@ -1280,6 +1297,8 @@
                 {
                     setAudioTracks: audioTracks.set,
                     setCurrentAudioLabel: currentAudioLabel.set,
+                    setLoading: loading.set,
+                    setLoadingStage: loadingStage.set,
                 },
             );
         }}

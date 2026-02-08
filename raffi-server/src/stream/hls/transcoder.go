@@ -48,15 +48,15 @@ func DefaultTranscoder(
 	switch codec {
 	case "h264":
 		videoCodec = "copy"
-	case "hevc":
-		videoCodec = "copy"
-		videoArgs = append(videoArgs, "-tag:v", "hvc1")
-	case "libx264":
-		videoCodec = "libx264"
-		videoArgs = append(videoArgs, "-preset", "veryfast")
 	default:
 		videoCodec = "libx264"
-		videoArgs = append(videoArgs, "-preset", "veryfast")
+		videoArgs = append(videoArgs,
+			"-preset", "veryfast",
+			"-crf", "23",
+			"-pix_fmt", "yuv420p",
+			"-profile:v", "main",
+			"-level:v", "4.1",
+		)
 	}
 
 	args := []string{
@@ -97,8 +97,7 @@ func DefaultTranscoder(
 			"-ac", "2",
 			"-ar", "48000",
 			"-b:a", "160k",
-			"-af", "aresample=async=1,loudnorm=I=-16:TP=-1.5:LRA=11",
-			"-ac", "2", "-af", "pan=stereo|FL=FC+0.30*FL+0.30*BL|FR=FC+0.30*FR+0.30*BR",
+			"-af", "aresample=async=1,pan=stereo|FL=FC+0.30*FL+0.30*BL|FR=FC+0.30*FR+0.30*BR,loudnorm=I=-16:TP=-1.5:LRA=11",
 		}...)
 	}
 

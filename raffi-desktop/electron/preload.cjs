@@ -41,5 +41,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
         return () => ipcRenderer.removeListener('UPDATE_DOWNLOADED', handler);
     },
     installUpdate: () => ipcRenderer.invoke('UPDATE_INSTALL'),
+    toggleFullscreen: () => ipcRenderer.send('WINDOW_TOGGLE_FULLSCREEN'),
+    isFullscreen: () => ipcRenderer.invoke('WINDOW_IS_FULLSCREEN'),
+    onFullscreenChanged: (callback) => {
+        const handler = (_event, value) => callback(value);
+        ipcRenderer.on('WINDOW_FULLSCREEN_CHANGED', handler);
+        return () => ipcRenderer.removeListener('WINDOW_FULLSCREEN_CHANGED', handler);
+    },
 });
 

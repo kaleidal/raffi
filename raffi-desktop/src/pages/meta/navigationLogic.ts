@@ -1,9 +1,10 @@
 import { get } from "svelte/store";
 import {
     metaData, selectedEpisode, currentSeason, selectedStream,
-    streamsPopupVisible, playerVisible, selectedStreamUrl, showTorrentWarning,
-    pendingTorrentStream
+    selectedStreamUrl, showTorrentWarning,
+    pendingTorrentStream, progressMap as progressMapStore
 } from "./metaState";
+import { router } from "../../lib/stores/router";
 import { fetchStreams, playStream } from "./streamLogic";
 
 export const handleNextEpisode = async (imdbID: string, progressMap: any) => {
@@ -65,20 +66,21 @@ export const handleNextEpisode = async (imdbID: string, progressMap: any) => {
             if (isTorrent && !localStorage.getItem("torrentWarningShown")) {
                 pendingTorrentStream.set(match);
                 showTorrentWarning.set(true);
-                playerVisible.set(false);
+                selectedStreamUrl.set(null);
                 selectedEpisode.set(nextEp);
+                router.back();
             } else {
                 selectedEpisode.set(nextEp);
-                playStream(match, progressMap);
+                playStream(match, progressMap, { replace: true });
             }
         } else {
-            streamsPopupVisible.set(true);
-            playerVisible.set(false);
             selectedStreamUrl.set(null);
             selectedEpisode.set(nextEp);
+            router.back();
         }
     } else {
         console.log("No next episode found");
-        playerVisible.set(false);
+        selectedStreamUrl.set(null);
+        router.back();
     }
 };

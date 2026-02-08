@@ -224,7 +224,7 @@ async function scanLibraryRoots(roots) {
   return out;
 }
 
-const MIN_ZOOM = 0.75;
+const MIN_ZOOM = 0.65;
 const MAX_ZOOM = 1.0;
 const WIDTH_THRESHOLD = 1600;
 
@@ -602,6 +602,21 @@ function createWindow() {
     }
   });
 
+  mainWindow.on("enter-full-screen", () => {
+    try {
+      mainWindow.webContents.send("WINDOW_FULLSCREEN_CHANGED", true);
+    } catch {
+      // ignore
+    }
+  });
+  mainWindow.on("leave-full-screen", () => {
+    try {
+      mainWindow.webContents.send("WINDOW_FULLSCREEN_CHANGED", false);
+    } catch {
+      // ignore
+    }
+  });
+
   try {
     const primary = screen.getPrimaryDisplay();
     const workArea = primary?.workAreaSize;
@@ -704,11 +719,49 @@ function createWindow() {
     const primary = screen.getPrimaryDisplay();
     const scaleFactor = primary?.scaleFactor || 1;
     const dpiZoom = 1 / scaleFactor;
-    const widthZoom = width < WIDTH_THRESHOLD ? width / WIDTH_THRESHOLD : 1;
-    const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, dpiZoom * widthZoom));
+
+    // Smart zoom algorithm: Find optimal zoom for poster grid layouts
+    // Poster widths are typically 180-200px, with gaps of ~20px
+    // We want to fit as many full posters as possible without awkward gaps
+    const posterWidth = 200; // Base poster width
+    const posterGap = 20; // Gap between posters
+    const effectiveWidth = width / dpiZoom;
+
+    let bestZoom = dpiZoom;
+    let bestWaste = Infinity;
+
+    // Try different zoom levels to find the one with minimal wasted space
+    const zoomSteps = 100;
+    for (let i = 0; i <= zoomSteps; i++) {
+      const testZoom = MIN_ZOOM + (MAX_ZOOM - MIN_ZOOM) * (i / zoomSteps);
+      const scaledWidth = effectiveWidth / testZoom;
+      
+      // Calculate how many posters fit at this zoom level
+      const postersPerRow = Math.floor((scaledWidth + posterGap) / (posterWidth + posterGap));
+      if (postersPerRow < 3) continue; // Need at least 3 posters per row
+      
+      // Calculate wasted space (gap on the right)
+      const usedWidth = postersPerRow * posterWidth + (postersPerRow - 1) * posterGap;
+      const wastedSpace = scaledWidth - usedWidth;
+      const wasteRatio = wastedSpace / scaledWidth;
+      
+      // Prefer zoom levels with less waste (< 15% waste is good)
+      if (wasteRatio < bestWaste) {
+        bestWaste = wasteRatio;
+        bestZoom = testZoom * dpiZoom;
+      }
+      
+      // If we found a near-perfect fit, use it
+      if (wasteRatio < 0.05) break;
+    }
+
+    // Apply additional width-based scaling for very narrow windows
+    const widthZoom = effectiveWidth < WIDTH_THRESHOLD ? effectiveWidth / WIDTH_THRESHOLD : 1;
+    const finalZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, bestZoom * widthZoom));
+
     mainWindow.webContents.setZoomFactor(1);
     try {
-      mainWindow.webContents.send("DISPLAY_ZOOM", zoom);
+      mainWindow.webContents.send("DISPLAY_ZOOM", finalZoom);
     } catch (e) {
       console.warn("Failed to send display zoom", e);
     }
@@ -771,6 +824,16 @@ ipcMain.on("WINDOW_CLOSE", () => {
 ipcMain.handle("WINDOW_IS_MAXIMIZED", async () => {
   if (!mainWindow || mainWindow.isDestroyed()) return false;
   return mainWindow.isMaximized();
+});
+
+ipcMain.on("WINDOW_TOGGLE_FULLSCREEN", () => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.setFullScreen(!mainWindow.isFullScreen());
+});
+
+ipcMain.handle("WINDOW_IS_FULLSCREEN", async () => {
+  if (!mainWindow || mainWindow.isDestroyed()) return false;
+  return mainWindow.isFullScreen();
 });
 
 ipcMain.handle("UPDATE_INSTALL", async () => {

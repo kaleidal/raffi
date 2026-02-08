@@ -297,9 +297,35 @@ export function initHLS(
     if (Hls.isSupported()) {
         hls = new Hls({
             lowLatencyMode: false,
-            maxBufferLength: 60,
-            maxMaxBufferLength: 120,
+            maxBufferLength: 50,
+            maxMaxBufferLength: 80,
             backBufferLength: 30,
+            maxBufferHole: 0,
+            maxFragLookUpTolerance: 0,
+            enableWorker: true,
+            appendErrorMaxRetry: 20,
+            manifestLoadingTimeOut: 30000,
+            manifestLoadingMaxRetry: 10,
+            manifestLoadingMaxRetryTimeout: 30000,
+            levelLoadingTimeOut: 30000,
+            levelLoadingMaxRetry: 10,
+            levelLoadingMaxRetryTimeout: 30000,
+            fragLoadPolicy: {
+                default: {
+                    maxTimeToFirstByteMs: 10000,
+                    maxLoadTimeMs: 120000,
+                    timeoutRetry: {
+                        maxNumRetry: 20,
+                        retryDelayMs: 0,
+                        maxRetryDelayMs: 15,
+                    },
+                    errorRetry: {
+                        maxNumRetry: 6,
+                        retryDelayMs: 1000,
+                        maxRetryDelayMs: 8000,
+                    },
+                },
+            },
         });
 
         const onInitialParsed = () => {
@@ -354,20 +380,42 @@ export function initHLS(
 
         hls.on(Hls.Events.MANIFEST_PARSED, onInitialParsed);
 
+        let networkRetries = 0;
+        let mediaRetries = 0;
+        const MAX_NETWORK_RETRIES = 5;
+        const MAX_MEDIA_RETRIES = 3;
+
         hls.on(Hls.Events.ERROR, (_, data) => {
             console.error("HLS ERROR", data);
             if (data.fatal) {
                 switch (data.type) {
                     case Hls.ErrorTypes.NETWORK_ERROR:
-                        console.log("fatal network error encountered, try to recover");
-                        hls?.startLoad();
+                        networkRetries++;
+                        if (networkRetries <= MAX_NETWORK_RETRIES) {
+                            console.log(`fatal network error, retry ${networkRetries}/${MAX_NETWORK_RETRIES}`);
+                            hls?.startLoad();
+                        } else {
+                            hls?.destroy();
+                            setErrorMessage("Network error");
+                            setErrorDetails("Failed to load stream after multiple retries. Please try again or select another stream.");
+                            setShowError(true);
+                            setLoading(false);
+                        }
                         break;
                     case Hls.ErrorTypes.MEDIA_ERROR:
-                        console.log("fatal media error encountered, try to recover");
-                        hls?.recoverMediaError();
+                        mediaRetries++;
+                        if (mediaRetries <= MAX_MEDIA_RETRIES) {
+                            console.log(`fatal media error, retry ${mediaRetries}/${MAX_MEDIA_RETRIES}`);
+                            hls?.recoverMediaError();
+                        } else {
+                            hls?.destroy();
+                            setErrorMessage("Media error");
+                            setErrorDetails("Failed to decode stream. Please try another stream.");
+                            setShowError(true);
+                            setLoading(false);
+                        }
                         break;
                     default:
-                        // cannot recover
                         hls?.destroy();
                         setErrorMessage("Failed to load stream");
                         setErrorDetails(data.details || "");
@@ -587,9 +635,11 @@ export async function handleAudioSelect(
     setStates: {
         setAudioTracks: (tracks: Track[]) => void;
         setCurrentAudioLabel: (label: string) => void;
+        setLoading?: (loading: boolean) => void;
+        setLoadingStage?: (stage: string) => void;
     }
 ) {
-    const { setAudioTracks, setCurrentAudioLabel } = setStates;
+    const { setAudioTracks, setCurrentAudioLabel, setLoading, setLoadingStage } = setStates;
 
     if (track.selected) return;
 
@@ -601,6 +651,9 @@ export async function handleAudioSelect(
     setCurrentAudioLabel(track.label);
 
     try {
+        if (setLoading) setLoading(true);
+        if (setLoadingStage) setLoadingStage("Switching audio track");
+
         await fetch(`${serverUrl}/sessions/${sessionId}/audio`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -614,5 +667,7 @@ export async function handleAudioSelect(
         initHLSFn(sessionId, time);
     } catch (err) {
         console.error("Failed to switch audio:", err);
+        if (setLoading) setLoading(false);
+        if (setLoadingStage) setLoadingStage("");
     }
 }

@@ -107,10 +107,15 @@ export function createControlsManager(
     }
 
     async function toggleFullscreen() {
-        if (!document.fullscreenElement) {
-            await playerContainer?.requestFullscreen?.();
+        const api = (window as any).electronAPI;
+        if (api?.toggleFullscreen) {
+            api.toggleFullscreen();
         } else {
-            await document.exitFullscreen();
+            if (!document.fullscreenElement) {
+                await playerContainer?.requestFullscreen?.();
+            } else {
+                await document.exitFullscreen();
+            }
         }
     }
 

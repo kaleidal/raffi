@@ -3,7 +3,6 @@
     import { fade } from "svelte/transition";
     import { ChevronLeft, Play } from "lucide-svelte";
     import { router } from "../../lib/stores/router";
-    import Player from "../player/Player.svelte";
 
     import SeasonSelector from "../../components/meta/SeasonSelector.svelte";
     import EpisodeGrid from "../../components/meta/EpisodeGrid.svelte";
@@ -27,12 +26,9 @@
         selectedEpisode,
         streams,
         loadingStreams,
-        selectedStreamUrl,
-        selectedFileIdx,
         selectedAddon,
         addons,
         streamsPopupVisible,
-        playerVisible,
         showTorrentWarning,
         showEpisodeContextMenu,
         contextMenuPos,
@@ -43,7 +39,6 @@
     import * as DataLoader from "./dataLoader";
     import * as StreamLogic from "./streamLogic";
     import * as ProgressLogic from "./progressLogic";
-    import * as NavigationLogic from "./navigationLogic";
     import ActionButtons from "../../components/meta/ActionButtons.svelte";
     import MetaInfo from "./components/MetaInfo.svelte";
     import UnsupportedTitleModal from "../../components/meta/modals/UnsupportedTitleModal.svelte";
@@ -54,8 +49,6 @@
     $: expectedName = $router.params.name || "";
 
     // Local state for player start
-    let playerHasStarted = false;
-    let startTime = 0;
     let streamsModalKey = "initial";
     let unsupportedReason: string | null = null;
 
@@ -96,7 +89,10 @@
 
     onDestroy(() => {
         document.body.style.overflow = "";
-        resetMetaState();
+        const scrollContainer = document.querySelector("[data-scroll-container]");
+        if (scrollContainer instanceof HTMLElement) {
+            scrollContainer.style.overflow = "";
+        }
         window.removeEventListener("resize", updateViewportAspect);
     });
 
@@ -132,34 +128,23 @@
     }
 
     $: {
-        if ($playerVisible || $streamsPopupVisible || unsupportedReason) {
+        if ($streamsPopupVisible || unsupportedReason) {
             document.body.style.overflow = "hidden";
+            const scrollContainer = document.querySelector("[data-scroll-container]");
+            if (scrollContainer instanceof HTMLElement) {
+                scrollContainer.style.overflow = "hidden";
+            }
         } else {
             document.body.style.overflow = "";
+            const scrollContainer = document.querySelector("[data-scroll-container]");
+            if (scrollContainer instanceof HTMLElement) {
+                scrollContainer.style.overflow = "";
+            }
         }
     }
 
     $: if ($selectedAddon && $selectedEpisode && $streamsPopupVisible) {
         StreamLogic.fetchStreams($selectedEpisode, false, false, imdbID);
-    }
-
-    $: if ($playerVisible && $selectedStreamUrl) {
-        if ($metaData?.meta?.type === "movie") {
-            const prog = ProgressLogic.getProgress($progressMap);
-            if (prog && !prog.watched) {
-                startTime = prog.time || 0;
-            } else {
-                startTime = 0;
-            }
-        } else if ($selectedEpisode) {
-            const key = `${$selectedEpisode.season}:${$selectedEpisode.episode}`;
-            const prog = ProgressLogic.getProgress($progressMap, key);
-            if (prog && !prog.watched) {
-                startTime = prog.time;
-            } else {
-                startTime = 0;
-            }
-        }
     }
 
     $: if ($progressMap) {
@@ -191,7 +176,7 @@
 
 {#if $loadedMeta && $metaData && $metaData.meta}
     <div class="bg-[#090909] flex-1 relative" in:fade={{ duration: 300 }}>
-        <div class="relative min-h-screen w-full overflow-hidden">
+        <div class="relative min-h-screen w-full overflow-visible">
             <div class="absolute inset-0 opacity-60">
                 <MetaBackground
                     background={$metaData.meta.background}
@@ -212,11 +197,11 @@
 
             <div
                 class="p-40 relative z-10 w-full flex gap-12.5 flex-row justify-between items-stretch"
-                style="height: max(640px, calc(100vh - 20rem));"
+                style="min-height: max(640px, calc(100vh - 20rem));"
             >
                 <div
                     class="w-[40vw] flex gap-12.5 flex-col justify-between items-start"
-                    style="height: max(640px, calc(100vh - 20rem));"
+                    style="min-height: max(640px, calc(100vh - 20rem));"
                 >
 
             <style>
@@ -399,7 +384,7 @@
 
                 <div
                     class="flex flex-col gap-5 justify-end items-end self-stretch"
-                    style="height: max(640px, calc(100vh - 20rem));"
+                    style="min-height: max(640px, calc(100vh - 20rem));"
                 >
                     {#if $metaData.meta.type === "series"}
                         {@const watchedCount = Object.values(
@@ -563,30 +548,6 @@
             on:markSeasonUnwatched={() =>
                 ProgressLogic.handleContextMarkSeasonUnwatched(imdbID)}
         />
-    {/if}
-
-    {#if $playerVisible && $selectedStreamUrl}
-        <div class="w-full h-full z-100 fixed top-0 left-0">
-            <Player
-                videoSrc={$selectedStreamUrl}
-                fileIdx={$selectedFileIdx}
-                metaData={$metaData}
-                {startTime}
-                onClose={StreamLogic.closePlayer}
-                onNextEpisode={() =>
-                    NavigationLogic.handleNextEpisode(imdbID, $progressMap)}
-                onProgress={(t, d) =>
-                    ProgressLogic.handleProgress(
-                        t,
-                        d,
-                        imdbID,
-                        playerHasStarted,
-                    )}
-                season={$selectedEpisode?.season}
-                episode={$selectedEpisode?.episode}
-                bind:hasStarted={playerHasStarted}
-            />
-        </div>
     {/if}
 {:else}
     {#if unsupportedReason}
