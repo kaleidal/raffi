@@ -53,7 +53,8 @@
           }
         }
       ],
-      "./plugins/withTorrentStreamer.js"
+      "./plugins/withTorrentStreamer.js",
+      "expo-pip"
     ],
     "experiments": {
       "typedRoutes": true,
