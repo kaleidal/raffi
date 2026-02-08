@@ -71,7 +71,15 @@ export async function initAuth() {
     initialized = true;
 
     const storedLocalMode = readLocalMode();
-    localMode.set(storedLocalMode);
+    // Enable local mode by default if not explicitly set
+    const shouldUseLocalMode = storedLocalMode !== false && localStorage.getItem(LOCAL_MODE_KEY) === null 
+        ? true 
+        : storedLocalMode;
+    
+    localMode.set(shouldUseLocalMode);
+    if (shouldUseLocalMode) {
+        persistLocalMode(true);
+    }
 
     const { data: { session } } = await supabase.auth.getSession();
     userCache = session?.user ?? null;
@@ -83,7 +91,7 @@ export async function initAuth() {
         }
         disableLocalMode();
         await seedDefaultsIfNeeded(userCache);
-    } else if (storedLocalMode) {
+    } else if (shouldUseLocalMode) {
         await ensureDefaultAddonsForLocal();
     }
 

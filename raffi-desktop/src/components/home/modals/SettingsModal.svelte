@@ -61,6 +61,10 @@
 	let sessionReplayEnabled = false;
 	let analyticsAvailable = false;
 	let showUpdateNotes = false;
+	let loginEmail = "";
+	let loginPassword = "";
+	let loginMessage = "";
+	let loginError = "";
 
 	const formatUpdateNotes = (notes: string) => {
 		const trimmed = notes?.trim();
@@ -312,16 +316,6 @@
 	}
 
 
-	async function handleLogout() {
-		if ($localMode) {
-			disableLocalMode();
-			router.navigate("login");
-			return;
-		}
-		await supabase.auth.signOut();
-		router.navigate("login");
-	}
-
 	async function switchToLocalMode(keepData: boolean) {
 		if (!$currentUser) return;
 		message = "";
@@ -379,13 +373,64 @@
 		}
 	}
 
-	function goToLogin() {
-		if ($localMode) {
-			disableLocalMode();
+	async function handleLogin() {
+		if (!loginEmail || !loginPassword) {
+			loginError = "Please fill in all fields";
+			loginMessage = "";
+			return;
 		}
-		trackEvent("login_requested", { source: "settings" });
-		router.navigate("login");
-		close();
+		loginError = "";
+		loginMessage = "";
+
+		const { data, error: err } = await supabase.auth.signInWithPassword({
+			email: loginEmail,
+			password: loginPassword,
+		});
+
+		if (err) {
+			console.error(err);
+			loginError = err.message;
+			trackEvent("login_failed", { error_name: err.name });
+			return;
+		}
+
+		loginMessage = "Signed in successfully!";
+		loginEmail = "";
+		loginPassword = "";
+		trackEvent("login_success", { source: "settings" });
+		
+		// Close the modal and navigate to home after a brief delay
+		setTimeout(() => {
+			close();
+			router.navigate("home");
+		}, 1000);
+	}
+
+	async function handleRegister() {
+		if (!loginEmail || !loginPassword) {
+			loginError = "Please fill in all fields";
+			loginMessage = "";
+			return;
+		}
+		loginError = "";
+		loginMessage = "";
+
+		const { data, error: err } = await supabase.auth.signUp({
+			email: loginEmail,
+			password: loginPassword,
+		});
+
+		if (err) {
+			console.error(err);
+			loginError = err.message;
+			trackEvent("register_failed", { error_name: err.name });
+			return;
+		}
+
+		loginMessage = "Check your email for the confirmation link!";
+		loginEmail = "";
+		loginPassword = "";
+		trackEvent("register_success", { source: "settings" });
 	}
 
 	function installUpdate() {
@@ -429,14 +474,6 @@
 					</p>
 				</div>
 				<div class="flex items-center gap-3 justify-end">
-					{#if $localMode}
-						<button
-							class="bg-white text-black px-4 py-2 rounded-2xl font-semibold hover:bg-white/90 transition-colors cursor-pointer"
-							on:click={goToLogin}
-						>
-							Log In
-						</button>
-					{/if}
 					<button
 						on:click={close}
 						class="text-white/50 hover:text-white cursor-pointer transition-colors"
@@ -488,6 +525,62 @@
 			<div class="flex-1 min-h-0 overflow-y-auto">
 
 				<div class="flex flex-col gap-6 min-h-0 pr-1 pb-1">
+					{#if $localMode}
+						<section class="rounded-[28px] bg-white/[0.04] p-6 flex flex-col gap-5">
+							<div>
+								<h3 class="text-white text-xl font-semibold">Sign In</h3>
+								<p class="text-white/60 text-sm">
+									Sign in to sync your library and lists across devices.
+								</p>
+							</div>
+							<div class="rounded-2xl bg-white/[0.08] p-5 space-y-4">
+								<div class="space-y-2">
+									<input
+										type="email"
+										placeholder="Email"
+										bind:value={loginEmail}
+										class="w-full bg-black/30 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/30 outline-none focus:border-white/40 transition-colors"
+									/>
+									<input
+										type="password"
+										placeholder="Password"
+										bind:value={loginPassword}
+										on:keydown={(e) => e.key === "Enter" && handleLogin()}
+										class="w-full bg-black/30 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/30 outline-none focus:border-white/40 transition-colors"
+									/>
+								</div>
+
+								{#if loginMessage}
+									<div class="p-3 rounded-2xl bg-green-500/10 border border-green-500/20 text-green-300 text-sm">
+										{loginMessage}
+									</div>
+								{/if}
+								{#if loginError}
+									<div class="p-3 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-300 text-sm">
+										{loginError}
+									</div>
+								{/if}
+
+								<div class="flex flex-col gap-2 sm:flex-row">
+									<button
+										class="flex-1 bg-white text-black px-6 py-3 rounded-2xl font-semibold hover:bg-white/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+										on:click={handleLogin}
+										disabled={!loginEmail || !loginPassword}
+									>
+										Sign In
+									</button>
+									<button
+										class="flex-1 bg-white/10 text-white px-6 py-3 rounded-2xl font-semibold hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+										on:click={handleRegister}
+										disabled={!loginEmail || !loginPassword}
+									>
+										Register
+									</button>
+								</div>
+							</div>
+						</section>
+					{/if}
+
 					<section class="rounded-[28px] bg-white/[0.04] p-6 flex flex-col gap-5">
 						<div>
 							<h3 class="text-white text-xl font-semibold">
@@ -826,10 +919,9 @@
 								{#if $currentUser && !$localMode}
 									<div class="rounded-2xl bg-white/[0.06] p-4 space-y-3">
 										<div>
-											<p class="text-white font-medium">Switch to local mode</p>
+											<p class="text-white font-medium">Log out</p>
 											<p class="text-white/60 text-sm">
-												Use Raffi without syncing. Choose whether to copy your
-												current data into local storage.
+												Sign out and switch to local mode. Choose whether to keep your synced data locally.
 											</p>
 										</div>
 										<div class="flex flex-col gap-2 sm:flex-row">
@@ -848,13 +940,6 @@
 										</div>
 									</div>
 								{/if}
-
-								<button
-									class="w-full py-3 rounded-2xl bg-red-500/10 text-red-300 font-semibold hover:bg-red-500/20 transition-colors cursor-pointer"
-									on:click={handleLogout}
-								>
-									Log Out
-								</button>
 
 							</div>
 						</section>

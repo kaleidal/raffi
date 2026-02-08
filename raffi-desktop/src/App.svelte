@@ -1,6 +1,5 @@
 <script lang="ts">
     import Meta from "./pages/meta/Meta.svelte";
-    import Login from "./pages/auth/Login.svelte";
     import Home from "./pages/Home.svelte";
     import Player from "./pages/player/Player.svelte";
     import { router } from "./lib/stores/router";
@@ -17,7 +16,6 @@
 
     const pages = {
         home: Home,
-        login: Login,
         meta: Meta,
         player: Player,
         lists: Lists,
@@ -133,10 +131,6 @@
             if (disposed) return;
 
             checkingAuth = false;
-
-            if (!$currentUser && !$localMode && $router.page !== "login") {
-                router.navigate("login");
-            }
         };
 
         init();
@@ -222,14 +216,6 @@
         };
     });
 
-    $: if (!checkingAuth) {
-        if (!$currentUser && !$localMode && $router.page !== "login") {
-            router.navigate("login");
-        } else if (($currentUser || $localMode) && $router.page === "login") {
-            router.navigate("home");
-        }
-    }
-
     $: trackPageView($router.page);
     $: setAnalyticsUser($currentUser);
 </script>
@@ -251,8 +237,6 @@
                 <div class="w-full h-full bg-[#090909] flex items-center justify-center">
                     <LoadingSpinner size="60px" />
                 </div>
-            {:else if !$currentUser && !$localMode && $router.page !== "login"}
-                <Login />
             {:else}
                 <svelte:component this={pages[$router.page]} {...$router.params as any} />
             {/if}
