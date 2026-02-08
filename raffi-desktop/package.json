@@ -19,18 +19,18 @@
     "dist": "npm run server:build && npm run build && electron-builder"
   },
   "devDependencies": {
-    "@sveltejs/vite-plugin-svelte": "^6.2.1",
-    "@tsconfig/svelte": "^5.0.5",
-    "@types/node": "^24.10.1",
+    "@sveltejs/vite-plugin-svelte": "^6.2.4",
+    "@tsconfig/svelte": "^5.0.7",
+    "@types/node": "^25.2.2",
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
-    "electron": "^39.2.4",
-    "electron-builder": "^26.0.12",
+    "electron": "^40.2.1",
+    "electron-builder": "^26.7.0",
     "png-to-ico": "^3.0.1",
-    "svelte": "^5.43.5",
-    "svelte-check": "^4.3.3",
+    "svelte": "^5.50.0",
+    "svelte-check": "^4.3.6",
     "typescript": "~5.9.3",
-    "vite": "^7.2.2",
+    "vite": "^7.3.1",
     "wait-on": "^9.0.3"
   },
   "build": {
@@ -76,6 +76,7 @@
       ],
       "icon": "build/icons/icon.icns",
       "category": "public.app-category.video",
+      "identity": null,
       "extraResources": [
         {
           "from": "electron/decoder-aarch64-apple-darwin",
@@ -130,14 +131,19 @@
   },
   "dependencies": {
     "@ryuziii/discord-rpc": "^1.0.1-rc.1",
-    "@supabase/supabase-js": "^2.83.0",
-    "@tailwindcss/vite": "^4.1.17",
-    "electron-updater": "^6.6.2",
-    "eventemitter3": "^5.0.1",
-    "express": "^5.1.0",
-    "hls.js": "^1.6.14",
-    "lucide-svelte": "^0.562.0",
-    "posthog-js": "^1.321.2",
-    "tailwindcss": "^4.1.17"
-  }
+    "@supabase/supabase-js": "^2.95.3",
+    "@tailwindcss/vite": "^4.1.18",
+    "electron-updater": "^6.7.3",
+    "eventemitter3": "^5.0.4",
+    "express": "^5.2.1",
+    "hls.js": "^1.6.15",
+    "lucide-svelte": "^0.563.0",
+    "posthog-js": "^1.342.1",
+    "tailwindcss": "^4.1.18"
+  },
+  "trustedDependencies": [
+    "core-js",
+    "electron",
+    "protobufjs"
+  ]
 }

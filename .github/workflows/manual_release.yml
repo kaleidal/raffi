@@ -37,5 +37,6 @@ jobs:
       - name: Build and publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false
         run: bun run dist -- --publish always
         working-directory: raffi-desktop
