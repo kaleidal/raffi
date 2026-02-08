@@ -384,6 +384,12 @@
             <div class="mt-3">
                 <div
                     class="clip-range relative w-full h-[10px]"
+                    role="slider"
+                    tabindex="0"
+                    aria-label="Clip range selector"
+                    aria-valuenow={clipStart}
+                    aria-valuemin={0}
+                    aria-valuemax={duration}
                     on:pointerdown={onBarPointerDown}
                     on:pointermove={onBarPointerMove}
                     on:pointerup={onBarPointerUp}
