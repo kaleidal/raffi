@@ -71,7 +71,6 @@
     export let fileIdx: number | null = null;
     export let metaData: ShowResponse | null = null;
     export let autoPlay: boolean = true;
-    export let onClose: () => void = () => {};
     export let onNextEpisode: (() => void) | null = null;
     export let hasStarted = false;
     export let onProgress: ((time: number, duration: number) => void) | null = null;

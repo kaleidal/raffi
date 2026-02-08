@@ -720,12 +720,20 @@ function createWindow() {
     const scaleFactor = primary?.scaleFactor || 1;
     const dpiZoom = 1 / scaleFactor;
 
-    // Smart zoom algorithm: Find optimal zoom for poster grid layouts
+    const effectiveWidth = width / dpiZoom;
+
+    // For large screens (>= 1600px effective width), don't apply poster-grid optimization
+    // Just use DPI scaling only
+    if (effectiveWidth >= WIDTH_THRESHOLD) {
+      mainWindow.webContents.send("display-zoom", dpiZoom);
+      return;
+    }
+
+    // Smart zoom algorithm for smaller screens: Find optimal zoom for poster grid layouts
     // Poster widths are typically 180-200px, with gaps of ~20px
     // We want to fit as many full posters as possible without awkward gaps
     const posterWidth = 200; // Base poster width
     const posterGap = 20; // Gap between posters
-    const effectiveWidth = width / dpiZoom;
 
     let bestZoom = dpiZoom;
     let bestWaste = Infinity;
