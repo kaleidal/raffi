@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors, Spacing, Typography } from '@/constants/theme';
-import { getPopularTitles } from '@/lib/api';
+import { getPopularTitles, getFeaturedTitles, getNewReleases, getTitlesByGenre } from '@/lib/api';
 import { useAddonsStore } from '@/lib/stores/addonsStore';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useLibraryStore } from '@/lib/stores/libraryStore';
@@ -23,6 +23,14 @@ import ContentRow from '@/components/home/ContentRow';
 import ContinueWatching from '@/components/home/ContinueWatching';
 import Hero from '@/components/home/Hero';
 
+// Content row configuration for variety
+interface ContentSection {
+  id: string;
+  title: string;
+  data: PopularTitleMeta[];
+  size?: 'small' | 'medium' | 'large';
+}
+
 export default function HomeScreen() {
   const { user } = useAuthStore();
   const { items: libraryItems, fetchLibrary, loading: libraryLoading } = useLibraryStore();
@@ -31,36 +39,151 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [featuredTitle, setFeaturedTitle] = useState<PopularTitleMeta | null>(null);
-  const [popularMovies, setPopularMovies] = useState<PopularTitleMeta[]>([]);
-  const [popularSeries, setPopularSeries] = useState<PopularTitleMeta[]>([]);
-  const [topRated, setTopRated] = useState<PopularTitleMeta[]>([]);
+  
+  // Content sections
+  const [sections, setSections] = useState<ContentSection[]>([]);
 
   const loadContent = async () => {
     try {
-      const [movies, series] = await Promise.all([
-        getPopularTitles('movie'),
-        getPopularTitles('series'),
+      const currentYear = new Date().getFullYear();
+      
+      // Fetch multiple content types in parallel
+      const [
+        popularMovies,
+        popularSeries,
+        newMovies,
+        newSeries,
+        actionMovies,
+        sciFiMovies,
+        thrillerMovies,
+        comedySeries,
+        dramaSeries,
+      ] = await Promise.all([
+        getPopularTitles('movie').catch(() => []),
+        getPopularTitles('series').catch(() => []),
+        getNewReleases('movie', currentYear).catch(() => []),
+        getNewReleases('series', currentYear).catch(() => []),
+        getTitlesByGenre('movie', 'Action').catch(() => []),
+        getTitlesByGenre('movie', 'Sci-Fi').catch(() => []),
+        getTitlesByGenre('movie', 'Thriller').catch(() => []),
+        getTitlesByGenre('series', 'Comedy').catch(() => []),
+        getTitlesByGenre('series', 'Drama').catch(() => []),
       ]);
 
-      setPopularMovies(movies.slice(0, 20));
-      setPopularSeries(series.slice(0, 20));
+      // Build content sections
+      const contentSections: ContentSection[] = [];
 
-      // Combine and sort by rating for top rated
-      const combined = [...movies, ...series]
-        .filter((item) => item.imdbRating)
+      // Continue watching will be handled separately above these rows
+
+      // New Releases (Mix of movies and series from current year)
+      const newReleases = [...newMovies.slice(0, 10), ...newSeries.slice(0, 10)]
+        .filter(item => item.poster)
+        .sort(() => Math.random() - 0.5)
+        .slice(0, 15);
+      if (newReleases.length > 0) {
+        contentSections.push({
+          id: 'new-releases',
+          title: `New in ${currentYear}`,
+          data: newReleases,
+          size: 'medium',
+        });
+      }
+
+      // Popular Movies
+      if (popularMovies.length > 0) {
+        contentSections.push({
+          id: 'popular-movies',
+          title: 'Popular Movies',
+          data: popularMovies.slice(0, 20),
+          size: 'medium',
+        });
+      }
+
+      // Popular TV Shows
+      if (popularSeries.length > 0) {
+        contentSections.push({
+          id: 'popular-series',
+          title: 'Popular TV Shows',
+          data: popularSeries.slice(0, 20),
+          size: 'medium',
+        });
+      }
+
+      // Action Movies
+      if (actionMovies.length > 0) {
+        contentSections.push({
+          id: 'action-movies',
+          title: 'Action Movies',
+          data: actionMovies.slice(0, 20),
+          size: 'medium',
+        });
+      }
+
+      // Sci-Fi Movies
+      if (sciFiMovies.length > 0) {
+        contentSections.push({
+          id: 'scifi-movies',
+          title: 'Sci-Fi Movies',
+          data: sciFiMovies.slice(0, 20),
+          size: 'medium',
+        });
+      }
+
+      // Thriller Movies
+      if (thrillerMovies.length > 0) {
+        contentSections.push({
+          id: 'thriller-movies',
+          title: 'Thrillers',
+          data: thrillerMovies.slice(0, 20),
+          size: 'medium',
+        });
+      }
+
+      // Comedy Series
+      if (comedySeries.length > 0) {
+        contentSections.push({
+          id: 'comedy-series',
+          title: 'Comedy Shows',
+          data: comedySeries.slice(0, 20),
+          size: 'medium',
+        });
+      }
+
+      // Drama Series
+      if (dramaSeries.length > 0) {
+        contentSections.push({
+          id: 'drama-series',
+          title: 'Drama Series',
+          data: dramaSeries.slice(0, 20),
+          size: 'medium',
+        });
+      }
+
+      // Top Rated (Mix sorted by rating)
+      const topRated = [...popularMovies, ...popularSeries]
+        .filter((item) => item.imdbRating && item.poster)
         .sort((a, b) => parseFloat(b.imdbRating || '0') - parseFloat(a.imdbRating || '0'))
         .slice(0, 20);
-      setTopRated(combined);
+      if (topRated.length > 0) {
+        contentSections.push({
+          id: 'top-rated',
+          title: 'Top Rated',
+          data: topRated,
+          size: 'medium',
+        });
+      }
 
-      // Pick a random featured title with good imagery
-      const withBackgrounds = [...movies, ...series].filter(
-        (item) => item.background && item.logo && parseInt(item.year || '0') >= 2015
+      setSections(contentSections);
+
+      // Pick a featured title for hero (recent with good imagery)
+      const heroPool = [...newMovies, ...newSeries, ...popularMovies, ...popularSeries].filter(
+        (item) => item.background && item.logo && parseInt(item.year || '0') >= 2020
       );
-      if (withBackgrounds.length > 0) {
-        const randomIndex = Math.floor(Math.random() * Math.min(10, withBackgrounds.length));
-        setFeaturedTitle(withBackgrounds[randomIndex]);
-      } else if (movies.length > 0) {
-        setFeaturedTitle(movies[0]);
+      if (heroPool.length > 0) {
+        const randomIndex = Math.floor(Math.random() * Math.min(15, heroPool.length));
+        setFeaturedTitle(heroPool[randomIndex]);
+      } else if (popularMovies.length > 0) {
+        setFeaturedTitle(popularMovies[0]);
       }
     } catch (error) {
       console.error('Failed to load content:', error);
@@ -84,14 +207,18 @@ export default function HomeScreen() {
   }, [user]);
 
   const refreshFeatured = useCallback(() => {
-    const all = [...popularMovies, ...popularSeries].filter(
-      (item) => item.background && parseInt(item.year || '0') >= 2015
+    if (sections.length === 0) return;
+    
+    // Get all items with good hero imagery
+    const allItems = sections.flatMap(s => s.data).filter(
+      (item) => item.background && parseInt(item.year || '0') >= 2018
     );
-    if (all.length > 0) {
-      const randomIndex = Math.floor(Math.random() * all.length);
-      setFeaturedTitle(all[randomIndex]);
+    
+    if (allItems.length > 0) {
+      const randomIndex = Math.floor(Math.random() * allItems.length);
+      setFeaturedTitle(allItems[randomIndex]);
     }
-  }, [popularMovies, popularSeries]);
+  }, [sections]);
 
   if (loading) {
     return <LoadingSpinner fullScreen message="Loading..." />;
@@ -137,14 +264,15 @@ export default function HomeScreen() {
           <ContinueWatching items={libraryItems} />
         )}
 
-        {/* Popular Movies */}
-        <ContentRow title="Popular Movies" items={popularMovies} size="medium" />
-
-        {/* Popular Series */}
-        <ContentRow title="Popular TV Shows" items={popularSeries} size="medium" />
-
-        {/* Top Rated */}
-        <ContentRow title="Top Rated" items={topRated} size="medium" />
+        {/* Dynamic Content Sections */}
+        {sections.map((section) => (
+          <ContentRow
+            key={section.id}
+            title={section.title}
+            items={section.data}
+            size={section.size || 'medium'}
+          />
+        ))}
 
         {/* Spacing at bottom for tab bar */}
         <View style={{ height: 100 }} />

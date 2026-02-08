@@ -2,8 +2,19 @@ import { create } from 'zustand';
 import { addAddon, getAddons, removeAddon } from '../db';
 import type { Addon } from '../types';
 
-// Default addons
-const DEFAULT_ADDONS = [
+// Helper to check if addon has stream resource
+function addonHasStreamResource(addon: any): boolean {
+  const resources = addon?.manifest?.resources;
+  if (!Array.isArray(resources)) return false;
+  return resources.some(
+    (resource: any) =>
+      resource === 'stream' ||
+      (resource && typeof resource === 'object' && resource.name === 'stream')
+  );
+}
+
+// Default addons - only include addons with stream capability
+const DEFAULT_ADDONS: Addon[] = [
   {
     transport_url: 'https://torrentio.strem.fun',
     addon_id: 'torrentio',
@@ -11,9 +22,13 @@ const DEFAULT_ADDONS = [
       id: 'torrentio',
       name: 'Torrentio',
       description: 'Torrent streams from popular sources',
+      version: '1.0.0',
+      types: ['movie', 'series'],
+      catalogs: [],
+      resources: ['stream'],
     },
     flags: {},
-  },
+  } as Addon,
 ];
 
 interface AddonsState {
@@ -39,18 +54,20 @@ export const useAddonsStore = create<AddonsState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const addons = await getAddons();
-      const addonUrl =
-        addons.length > 0
-          ? addons[0].transport_url
-          : DEFAULT_ADDONS[0].transport_url;
+      const allAddons = addons.length > 0 ? addons : DEFAULT_ADDONS;
+      
+      // Find first addon with stream resource capability
+      const streamAddon = allAddons.find(addonHasStreamResource);
+      const selectedUrl = streamAddon?.transport_url ?? allAddons[0]?.transport_url ?? null;
+      
       set({
-        addons: addons.length > 0 ? addons : (DEFAULT_ADDONS as any),
-        selectedAddon: addonUrl,
+        addons: allAddons,
+        selectedAddon: selectedUrl,
         loading: false,
       });
     } catch (e: any) {
       set({
-        addons: DEFAULT_ADDONS as any,
+        addons: DEFAULT_ADDONS,
         selectedAddon: DEFAULT_ADDONS[0].transport_url,
         error: e.message,
         loading: false,

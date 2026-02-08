@@ -85,7 +85,10 @@ export default function SearchScreen() {
   };
 
   const handleResultPress = (item: any) => {
-    const type = item['#IMDB_ID']?.startsWith('tt') ? 'movie' : 'movie';
+    // IMDB IDs starting with 'tt' can be either movie or series
+    // The search API doesn't provide type info, so we let the meta page detect it
+    // by trying movie first, then series if that fails
+    const type = 'movie'; // Meta page will auto-detect if it's actually a series
     router.push({
       pathname: '/meta/[id]',
       params: {

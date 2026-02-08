@@ -41,7 +41,7 @@ export default function ProfileScreen() {
         <View style={styles.menuSection}>
           <Text style={styles.menuTitle}>Settings</Text>
 
-          <TouchableOpacity style={styles.menuItem}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/settings' as any)}>
             <View style={styles.menuIcon}>
               <Ionicons name="cog-outline" size={22} color={Colors.text} />
             </View>
