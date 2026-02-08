@@ -21,11 +21,53 @@ export const getMetaData = async (imdbId: string, type: string): Promise<ShowRes
  * Get popular titles by type (movie or series)
  */
 export const getPopularTitles = async (type: string): Promise<PopularTitleMeta[]> => {
-  const popularUrl = `${CINEMETA_BASE}/catalog/${type}/popular.json`;
+  const popularUrl = `${CINEMETA_BASE}/catalog/${type}/top.json`;
 
   const response = await fetch(popularUrl);
   if (!response.ok) {
     throw new Error(`Failed to fetch popular titles for type: ${type}`);
+  }
+
+  return (await response.json()).metas;
+};
+
+/**
+ * Get featured/top rated titles by type
+ */
+export const getFeaturedTitles = async (type: string): Promise<PopularTitleMeta[]> => {
+  const url = `${CINEMETA_BASE}/catalog/${type}/imdbRating.json`;
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch featured titles for type: ${type}`);
+  }
+
+  return (await response.json()).metas;
+};
+
+/**
+ * Get new releases by year
+ */
+export const getNewReleases = async (type: string, year: number = new Date().getFullYear()): Promise<PopularTitleMeta[]> => {
+  const url = `${CINEMETA_BASE}/catalog/${type}/year/genre=${year}.json`;
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch new releases for ${year}`);
+  }
+
+  return (await response.json()).metas;
+};
+
+/**
+ * Get titles by genre
+ */
+export const getTitlesByGenre = async (type: string, genre: string): Promise<PopularTitleMeta[]> => {
+  const url = `${CINEMETA_BASE}/catalog/${type}/top/genre=${encodeURIComponent(genre)}.json`;
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch ${genre} titles`);
   }
 
   return (await response.json()).metas;

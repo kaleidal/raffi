@@ -1,4 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Brightness from 'expo-brightness';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { useVideoPlayer, VideoView } from 'expo-video';
@@ -12,13 +14,18 @@ import {
     StyleSheet,
     Text,
     TouchableOpacity,
-    View
+    View,
+    PanResponder,
+    GestureResponderEvent,
+    AppState,
 } from 'react-native';
 import Animated, {
     runOnJS,
     useAnimatedStyle,
     useSharedValue,
     withTiming,
+    withSequence,
+    withSpring,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -27,7 +34,33 @@ import { getLibraryItem } from '@/lib/db';
 import { useLibraryStore } from '@/lib/stores/libraryStore';
 import TorrentStreamer, { StreamSession } from '@/lib/torrent/TorrentStreamer';
 
+// Try to import PiP module (Android only, requires development build)
+let ExpoPip: any = null;
+let isPipModuleAvailable = false;
+try {
+  ExpoPip = require('expo-pip');
+  // Check if the module is actually functional (not just importable)
+  isPipModuleAvailable = typeof ExpoPip?.isPipSupported === 'function';
+} catch (e) {
+  // PiP not available in Expo Go
+  isPipModuleAvailable = false;
+}
+
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+// Double tap detection helper
+const DOUBLE_TAP_DELAY = 300;
+const SEEK_AMOUNT = 10; // seconds
+
+// Skip intro constants - typical TV intro durations
+const INTRO_START_TIME = 0; // Intro usually starts at beginning
+const INTRO_END_TIME = 90; // Most intros are under 90 seconds
+const INTRO_SKIP_TO = 90; // Skip to 90 seconds
+
+// Settings keys
+const SETTINGS_KEYS = {
+  AUTO_SKIP_INTRO: 'settings_auto_skip_intro',
+};
 
 export default function PlayerScreen() {
   const {
@@ -40,6 +73,11 @@ export default function PlayerScreen() {
     episode,
     fileIdx,
     startTime: startTimeParam,
+    // New params for next episode support
+    nextEpisodeSrc,
+    nextEpisodeTitle,
+    nextEpisodeSeason,
+    nextEpisodeNumber,
   } = useLocalSearchParams<{
     videoSrc: string;
     title?: string;
@@ -50,6 +88,10 @@ export default function PlayerScreen() {
     episode?: string;
     fileIdx?: string;
     startTime?: string;
+    nextEpisodeSrc?: string;
+    nextEpisodeTitle?: string;
+    nextEpisodeSeason?: string;
+    nextEpisodeNumber?: string;
   }>();
 
   const insets = useSafeAreaInsets();
@@ -65,23 +107,158 @@ export default function PlayerScreen() {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isSeeking, setIsSeeking] = useState(false);
+  const [seekPreviewTime, setSeekPreviewTime] = useState<number | null>(null);
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
   const [torrentSession, setTorrentSession] = useState<StreamSession | null>(null);
-  const torrentSessionRef = useRef<StreamSession | null>(null); // Ref for cleanup
+  const torrentSessionRef = useRef<StreamSession | null>(null);
   const [torrentStatus, setTorrentStatus] = useState<string>('');
   const [isLocked, setIsLocked] = useState(false);
+  const [buffering, setBuffering] = useState(false);
+  const playerRef = useRef<any>(null);
+  
+  // Double-tap seek state
+  const [seekFeedback, setSeekFeedback] = useState<{ side: 'left' | 'right'; amount: number } | null>(null);
+  const lastTapRef = useRef<{ time: number; x: number } | null>(null);
+  const seekFeedbackTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const consecutiveSeekAmount = useRef(0);
+  
+  // Next episode state
+  const [showNextEpisode, setShowNextEpisode] = useState(false);
+  const nextEpisodeCountdown = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Skip intro state
+  const [showSkipIntro, setShowSkipIntro] = useState(false);
+  const [autoSkipEnabled, setAutoSkipEnabled] = useState(false);
+  const didAutoSkip = useRef(false);
+
+  // PiP state
+  const [isPipSupported, setIsPipSupported] = useState(false);
+  const [isInPipMode, setIsInPipMode] = useState(false);
+
+  // Volume/Brightness gesture state
+  const [brightness, setBrightness] = useState(0.5);
+  const [volume, setVolume] = useState(1);
+  const [showVolumeIndicator, setShowVolumeIndicator] = useState(false);
+  const [showBrightnessIndicator, setShowBrightnessIndicator] = useState(false);
+  const volumeIndicatorTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const brightnessIndicatorTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initialBrightness = useRef(0.5);
+  const initialVolume = useRef(1);
+  const gestureStartY = useRef(0);
+  const gestureStartValue = useRef(0);
+  const activeGesture = useRef<'brightness' | 'volume' | 'seek' | null>(null);
+
+  // Playback speed state
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const PLAYBACK_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsView, setSettingsView] = useState<'root' | 'subtitles' | 'audio'>('root');
+  const [settingsView, setSettingsView] = useState<'root' | 'subtitles' | 'audio' | 'speed'>('root');
   const [availableSubtitleTracks, setAvailableSubtitleTracks] = useState<any[]>([]);
   const [availableAudioTracks, setAvailableAudioTracks] = useState<any[]>([]);
   const [selectedSubtitleLabel, setSelectedSubtitleLabel] = useState<string>('Off');
   const [selectedAudioLabel, setSelectedAudioLabel] = useState<string>('Default');
 
   const controlsOpacity = useSharedValue(1);
+  const seekFeedbackOpacity = useSharedValue(0);
+  const seekFeedbackScale = useSharedValue(1);
+  const skipIntroOpacity = useSharedValue(0);
   const hideControlsTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const progressSaveInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastSavedTime = useRef(0);
+  const progressBarRef = useRef<View>(null);
+  const progressBarWidth = useRef(0);
+
+  // Check PiP support and initialize brightness on mount
+  useEffect(() => {
+    const checkPipSupport = async () => {
+      if (Platform.OS === 'android' && isPipModuleAvailable && ExpoPip) {
+        try {
+          const supported = await ExpoPip.isPipSupported();
+          setIsPipSupported(supported);
+        } catch (e) {
+          // PiP requires a development build, not Expo Go
+          console.log('PiP requires development build');
+          setIsPipSupported(false);
+        }
+      }
+    };
+    checkPipSupport();
+
+    // Initialize brightness
+    const initBrightness = async () => {
+      try {
+        const currentBrightness = await Brightness.getBrightnessAsync();
+        setBrightness(currentBrightness);
+        initialBrightness.current = currentBrightness;
+      } catch (e) {
+        // ignore
+      }
+    };
+    initBrightness();
+
+    // Load auto-skip setting
+    const loadAutoSkipSetting = async () => {
+      try {
+        const value = await AsyncStorage.getItem(SETTINGS_KEYS.AUTO_SKIP_INTRO);
+        setAutoSkipEnabled(value === 'true');
+      } catch (e) {
+        // ignore
+      }
+    };
+    loadAutoSkipSetting();
+
+    // Cleanup: restore brightness on unmount
+    return () => {
+      Brightness.setBrightnessAsync(initialBrightness.current).catch(() => {});
+    };
+  }, []);
+
+  // Handle app state changes for PiP
+  useEffect(() => {
+    if (!isPipSupported || !isPipModuleAvailable || !ExpoPip) return;
+
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'background' && isPlaying && playbackUrl) {
+        // Automatically enter PiP when going to background while playing
+        enterPipMode();
+      }
+    });
+
+    // Listen for PiP mode changes
+    let pipListener: any = null;
+    try {
+      pipListener = ExpoPip.addListener?.('pipModeChanged', (event: { isInPipMode: boolean }) => {
+        setIsInPipMode(event.isInPipMode);
+        if (!event.isInPipMode) {
+          // Exited PiP, ensure landscape
+          ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+        }
+      });
+    } catch (e) {
+      // Listener not available
+    }
+
+    return () => {
+      subscription.remove();
+      pipListener?.remove?.();
+    };
+  }, [isPipSupported, isPlaying, playbackUrl]);
+
+  // Enter PiP mode
+  const enterPipMode = useCallback(async () => {
+    if (!isPipSupported || !isPipModuleAvailable || !ExpoPip) return;
+    
+    try {
+      await ExpoPip.enterPipMode({
+        width: 16,
+        height: 9,
+      });
+      setIsInPipMode(true);
+    } catch (e) {
+      console.log('Failed to enter PiP:', e);
+    }
+  }, [isPipSupported]);
 
   // Determine the playback URL
   useEffect(() => {
@@ -105,7 +282,6 @@ export default function PlayerScreen() {
           setLoading(true);
           setTorrentStatus('Initializing torrent client...');
           
-          // Check if native module is available
           if (!TorrentStreamer.isAvailable()) {
             setError(
               Platform.OS === 'ios'
@@ -116,14 +292,13 @@ export default function PlayerScreen() {
             return;
           }
           
-          // Start torrent stream
           const session = await TorrentStreamer.startStream(
             videoSrc,
             fileIdx ? parseInt(fileIdx) : undefined
           );
           
           setTorrentSession(session);
-          torrentSessionRef.current = session; // Keep ref for cleanup
+          torrentSessionRef.current = session;
           
           if (session.status === 'error') {
             setError(session.error || 'Failed to start torrent stream');
@@ -131,17 +306,14 @@ export default function PlayerScreen() {
             return;
           }
           
-          // Subscribe to session updates
           const unsubscribe = TorrentStreamer.subscribe(session.id, (updatedSession) => {
             setTorrentSession(updatedSession);
-            console.log('Torrent session update:', updatedSession.status, updatedSession.bufferProgress, updatedSession.streamUrl);
             
             if (updatedSession.status === 'downloading_metadata') {
               setTorrentStatus('Fetching torrent metadata...');
             } else if (updatedSession.status === 'buffering') {
               setTorrentStatus(`Buffering: ${updatedSession.bufferProgress.toFixed(1)}%`);
             } else if (updatedSession.status === 'ready') {
-              console.log('Stream ready! Setting playback URL:', updatedSession.streamUrl);
               setPlaybackUrl(updatedSession.streamUrl);
               setTorrentStatus('');
               setLoading(false);
@@ -151,14 +323,12 @@ export default function PlayerScreen() {
             }
           });
 
-          // Ensure we unsubscribe on unmount
           return () => {
             unsubscribe?.();
           };
-          
         }
 
-        // For local files, try to play directly
+        // For local files
         setPlaybackUrl(videoSrc);
         setLoading(false);
       } catch (e: any) {
@@ -176,23 +346,26 @@ export default function PlayerScreen() {
       }
     })();
 
-    // Cleanup torrent session + subscription on unmount
     return () => {
       cleanupSubscription?.();
       if (torrentSessionRef.current) {
-        console.log('Stopping torrent stream:', torrentSessionRef.current.id);
         TorrentStreamer.stopStream(torrentSessionRef.current.id);
         torrentSessionRef.current = null;
       }
     };
   }, [videoSrc, fileIdx, startTimeParam]);
 
-  // Create video player - only use non-empty URL
-  // When playbackUrl is null/empty, use a placeholder that won't trigger an error
   const player = useVideoPlayer(playbackUrl || null, (player) => {
     player.loop = false;
-    // Initial seek is performed on readyToPlay for reliability.
   });
+
+  // Keep playerRef in sync
+  useEffect(() => {
+    playerRef.current = player;
+    return () => {
+      playerRef.current = null;
+    };
+  }, [player]);
 
   // Subscribe to player events
   useEffect(() => {
@@ -202,9 +375,9 @@ export default function PlayerScreen() {
       const status = payload.status;
       if (status === 'readyToPlay') {
         setLoading(false);
+        setBuffering(false);
         setDuration(player.duration);
 
-        // Robust initial seek (expo-video may ignore currentTime set too early)
         if (!didInitialSeek.current) {
           const startSeconds = Number(startTimeParam || '0');
           if (Number.isFinite(startSeconds) && startSeconds > 0) {
@@ -220,12 +393,10 @@ export default function PlayerScreen() {
 
         player.play();
       } else if (status === 'loading') {
-        // Only show loading if we actually have a URL to load
         if (playbackUrl) {
-          setLoading(true);
+          setBuffering(true);
         }
       } else if (status === 'error') {
-        // Only show error if we have a URL - empty/null URL errors are expected
         if (playbackUrl) {
           console.error('Video player error for URL:', playbackUrl);
           setError('Failed to play video');
@@ -236,11 +407,10 @@ export default function PlayerScreen() {
 
     const playingSubscription = player.addListener('playingChange', (payload) => {
       setIsPlaying(payload.isPlaying);
+      setBuffering(false);
     });
 
     const sourceLoadSubscription = player.addListener('sourceLoad', (payload: any) => {
-      // Keep local state in sync with expo-video track discovery.
-      // These properties do not automatically update React state.
       const subtitles = payload?.availableSubtitleTracks ?? player.availableSubtitleTracks ?? [];
       const audio = payload?.availableAudioTracks ?? player.availableAudioTracks ?? [];
       setAvailableSubtitleTracks(subtitles);
@@ -259,19 +429,49 @@ export default function PlayerScreen() {
     };
   }, [player]);
 
-  // Update current time periodically
+  // Check for skip intro and next episode triggers
   useEffect(() => {
-    if (!player) return;
+    if (!player || !duration) return;
 
     const interval = setInterval(() => {
       if (!isSeeking && player.currentTime !== undefined) {
-        setCurrentTime(player.currentTime);
+        const time = player.currentTime;
+        setCurrentTime(time);
         setDuration(player.duration || 0);
+        
+        // Skip intro logic (only for series)
+        if (type === 'series' && duration > 300) { // Only for episodes longer than 5 min
+          const startTime = Number(startTimeParam || '0');
+          const isNewEpisode = startTime < 30; // Starting from near beginning
+          
+          if (isNewEpisode && !didAutoSkip.current) {
+            // Show skip intro button in first 90 seconds (if not resuming)
+            if (time >= 5 && time < INTRO_END_TIME) {
+              if (!showSkipIntro) {
+                setShowSkipIntro(true);
+                skipIntroOpacity.value = withTiming(1, { duration: 300 });
+              }
+              
+              // Auto-skip if enabled
+              if (autoSkipEnabled && time >= 10 && time < 15) {
+                handleSkipIntro();
+              }
+            } else if (time >= INTRO_END_TIME && showSkipIntro) {
+              skipIntroOpacity.value = withTiming(0, { duration: 300 });
+              setTimeout(() => setShowSkipIntro(false), 300);
+            }
+          }
+        }
+        
+        // Check for next episode trigger (90% watched)
+        if (duration > 0 && time / duration > 0.9 && nextEpisodeSrc && !showNextEpisode) {
+          setShowNextEpisode(true);
+        }
       }
-    }, 500);
+    }, 250);
 
     return () => clearInterval(interval);
-  }, [player, isSeeking]);
+  }, [player, isSeeking, duration, nextEpisodeSrc, showNextEpisode, type, startTimeParam, autoSkipEnabled, showSkipIntro]);
 
   // Lock to landscape on mount
   useEffect(() => {
@@ -281,6 +481,9 @@ export default function PlayerScreen() {
     return () => {
       ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
       StatusBar.setHidden(false);
+      if (nextEpisodeCountdown.current) {
+        clearTimeout(nextEpisodeCountdown.current);
+      }
     };
   }, []);
 
@@ -288,7 +491,6 @@ export default function PlayerScreen() {
   useEffect(() => {
     if (!imdbId || !type) return;
 
-    // Seed series progress base once (prevents overwriting other episodes)
     if (type === 'series' && seriesProgressRef.current == null) {
       (async () => {
         const storeExisting = getItemProgress(imdbId)?.progress;
@@ -308,13 +510,12 @@ export default function PlayerScreen() {
         lastSavedTime.current = currentTime;
         saveProgress();
       }
-    }, 10000); // Save every 10 seconds
+    }, 10000);
 
     return () => {
       if (progressSaveInterval.current) {
         clearInterval(progressSaveInterval.current);
       }
-      // Save on unmount
       saveProgress();
     };
   }, [imdbId, type, currentTime, duration]);
@@ -345,6 +546,22 @@ export default function PlayerScreen() {
     }
   };
 
+  // Skip intro handler
+  const handleSkipIntro = useCallback(() => {
+    if (!player || !duration) return;
+    
+    didAutoSkip.current = true;
+    const skipTo = Math.min(INTRO_SKIP_TO, duration - 60); // Don't skip past 1 min before end
+    player.currentTime = skipTo;
+    setCurrentTime(skipTo);
+    
+    // Hide skip button
+    skipIntroOpacity.value = withTiming(0, { duration: 200 });
+    setTimeout(() => setShowSkipIntro(false), 200);
+    
+    showControls();
+  }, [player, duration]);
+
   // Controls visibility
   const showControls = useCallback(() => {
     setControlsVisible(true);
@@ -354,13 +571,13 @@ export default function PlayerScreen() {
       clearTimeout(hideControlsTimeout.current);
     }
 
-    if (isPlaying) {
+    if (isPlaying && !settingsOpen) {
       hideControlsTimeout.current = setTimeout(() => {
         controlsOpacity.value = withTiming(0, { duration: 200 });
         runOnJS(setControlsVisible)(false);
       }, 4000);
     }
-  }, [isPlaying]);
+  }, [isPlaying, settingsOpen]);
 
   const toggleControls = useCallback(() => {
     if (hideControlsTimeout.current) {
@@ -375,18 +592,21 @@ export default function PlayerScreen() {
       setControlsVisible(true);
       controlsOpacity.value = withTiming(1, { duration: 150 });
       
-      // Auto-hide after 4 seconds if playing
-      if (isPlaying) {
+      if (isPlaying && !settingsOpen) {
         hideControlsTimeout.current = setTimeout(() => {
           controlsOpacity.value = withTiming(0, { duration: 200 });
           runOnJS(setControlsVisible)(false);
         }, 4000);
       }
     }
-  }, [controlsVisible, isPlaying]);
+  }, [controlsVisible, isPlaying, settingsOpen]);
 
   const controlsStyle = useAnimatedStyle(() => ({
     opacity: controlsOpacity.value,
+  }));
+
+  const skipIntroStyle = useAnimatedStyle(() => ({
+    opacity: skipIntroOpacity.value,
   }));
 
   // Player controls
@@ -400,21 +620,96 @@ export default function PlayerScreen() {
     showControls();
   };
 
-  const seekForward = () => {
+  const seekTo = useCallback((time: number) => {
     if (!player) return;
-    const newTime = Math.min(currentTime + 10, duration);
-    player.currentTime = newTime;
-    setCurrentTime(newTime);
-    showControls();
-  };
+    const clampedTime = Math.max(0, Math.min(time, duration));
+    player.currentTime = clampedTime;
+    setCurrentTime(clampedTime);
+  }, [player, duration]);
 
-  const seekBackward = () => {
+  const seekForward = useCallback((amount: number = SEEK_AMOUNT) => {
     if (!player) return;
-    const newTime = Math.max(currentTime - 10, 0);
+    const newTime = Math.min(currentTime + amount, duration);
     player.currentTime = newTime;
     setCurrentTime(newTime);
     showControls();
-  };
+  }, [player, currentTime, duration, showControls]);
+
+  const seekBackward = useCallback((amount: number = SEEK_AMOUNT) => {
+    if (!player) return;
+    const newTime = Math.max(currentTime - amount, 0);
+    player.currentTime = newTime;
+    setCurrentTime(newTime);
+    showControls();
+  }, [player, currentTime, showControls]);
+
+  // Double-tap seek handler
+  const handleDoubleTapSeek = useCallback((side: 'left' | 'right') => {
+    if (seekFeedbackTimeout.current) {
+      clearTimeout(seekFeedbackTimeout.current);
+    }
+    
+    // Accumulate seek amount for consecutive taps
+    consecutiveSeekAmount.current += SEEK_AMOUNT;
+    const totalSeek = consecutiveSeekAmount.current;
+    
+    if (side === 'right') {
+      seekForward(SEEK_AMOUNT);
+    } else {
+      seekBackward(SEEK_AMOUNT);
+    }
+    
+    setSeekFeedback({ side, amount: totalSeek });
+    
+    // Animate feedback
+    seekFeedbackOpacity.value = withTiming(1, { duration: 100 });
+    seekFeedbackScale.value = withSequence(
+      withSpring(1.2, { damping: 10 }),
+      withSpring(1, { damping: 10 })
+    );
+    
+    // Hide feedback after delay
+    seekFeedbackTimeout.current = setTimeout(() => {
+      seekFeedbackOpacity.value = withTiming(0, { duration: 200 });
+      consecutiveSeekAmount.current = 0;
+      setSeekFeedback(null);
+    }, 800);
+  }, [seekForward, seekBackward]);
+
+  // Tap handler for double-tap detection
+  const handleTap = useCallback((event: GestureResponderEvent) => {
+    if (isLocked) return;
+    
+    const { locationX } = event.nativeEvent;
+    const screenWidth = Dimensions.get('window').width;
+    const now = Date.now();
+    
+    // Check for double tap
+    if (
+      lastTapRef.current &&
+      now - lastTapRef.current.time < DOUBLE_TAP_DELAY &&
+      Math.abs(locationX - lastTapRef.current.x) < 100
+    ) {
+      // Double tap detected
+      const side = locationX < screenWidth / 2 ? 'left' : 'right';
+      handleDoubleTapSeek(side);
+      lastTapRef.current = null;
+    } else {
+      // Single tap - toggle controls after delay if no second tap
+      lastTapRef.current = { time: now, x: locationX };
+      setTimeout(() => {
+        if (lastTapRef.current && now === lastTapRef.current.time) {
+          toggleControls();
+          lastTapRef.current = null;
+        }
+      }, DOUBLE_TAP_DELAY);
+    }
+  }, [isLocked, handleDoubleTapSeek, toggleControls]);
+
+  const seekFeedbackStyle = useAnimatedStyle(() => ({
+    opacity: seekFeedbackOpacity.value,
+    transform: [{ scale: seekFeedbackScale.value }],
+  }));
 
   const handleClose = async () => {
     await saveProgress();
@@ -426,12 +721,6 @@ export default function PlayerScreen() {
 
   const toggleLock = () => {
     setIsLocked(!isLocked);
-    showControls();
-  };
-
-  const handleSubtitles = () => {
-    setSettingsView('subtitles');
-    setSettingsOpen(true);
     showControls();
   };
 
@@ -472,7 +761,6 @@ export default function PlayerScreen() {
   };
 
   const handleFullscreen = async () => {
-    // Toggle between landscape orientations
     const current = await ScreenOrientation.getOrientationAsync();
     if (current === ScreenOrientation.Orientation.LANDSCAPE_LEFT) {
       await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE_RIGHT);
@@ -481,6 +769,189 @@ export default function PlayerScreen() {
     }
     showControls();
   };
+
+  // Progress bar seeking
+  const handleProgressBarPress = useCallback((event: GestureResponderEvent) => {
+    if (!progressBarRef.current || !duration) return;
+    
+    const { locationX } = event.nativeEvent;
+    const percent = Math.max(0, Math.min(1, locationX / progressBarWidth.current));
+    const newTime = percent * duration;
+    seekTo(newTime);
+    showControls();
+  }, [duration, seekTo, showControls]);
+
+  const handleProgressBarLayout = useCallback((event: any) => {
+    progressBarWidth.current = event.nativeEvent.layout.width;
+  }, []);
+
+  // Progress bar pan responder for scrubbing
+  const progressPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (event) => {
+        setIsSeeking(true);
+        const { locationX } = event.nativeEvent;
+        const percent = Math.max(0, Math.min(1, locationX / progressBarWidth.current));
+        setSeekPreviewTime(percent * duration);
+      },
+      onPanResponderMove: (event) => {
+        const { locationX } = event.nativeEvent;
+        const percent = Math.max(0, Math.min(1, locationX / progressBarWidth.current));
+        setSeekPreviewTime(percent * duration);
+      },
+      onPanResponderRelease: (event) => {
+        const { locationX } = event.nativeEvent;
+        const percent = Math.max(0, Math.min(1, locationX / progressBarWidth.current));
+        const newTime = percent * duration;
+        seekTo(newTime);
+        setIsSeeking(false);
+        setSeekPreviewTime(null);
+        showControls();
+      },
+      onPanResponderTerminate: () => {
+        setIsSeeking(false);
+        setSeekPreviewTime(null);
+      },
+    })
+  ).current;
+
+  // Volume/Brightness gesture handlers
+  const handleVerticalGestureStart = useCallback((event: GestureResponderEvent, side: 'left' | 'right') => {
+    if (isLocked) return;
+    
+    const { pageY } = event.nativeEvent;
+    gestureStartY.current = pageY;
+    
+    if (side === 'left') {
+      activeGesture.current = 'brightness';
+      gestureStartValue.current = brightness;
+    } else {
+      activeGesture.current = 'volume';
+      gestureStartValue.current = volume;
+    }
+  }, [isLocked, brightness, volume]);
+
+  const handleVerticalGestureMove = useCallback(async (event: GestureResponderEvent) => {
+    if (isLocked || !activeGesture.current) return;
+    
+    const { pageY } = event.nativeEvent;
+    const deltaY = gestureStartY.current - pageY;
+    const screenHeight = Dimensions.get('window').height;
+    const sensitivity = 1.5; // Adjust for sensitivity
+    const change = (deltaY / screenHeight) * sensitivity;
+    
+    if (activeGesture.current === 'brightness') {
+      const newBrightness = Math.max(0.01, Math.min(1, gestureStartValue.current + change));
+      setBrightness(newBrightness);
+      setShowBrightnessIndicator(true);
+      
+      // Clear existing timeout
+      if (brightnessIndicatorTimeout.current) {
+        clearTimeout(brightnessIndicatorTimeout.current);
+      }
+      
+      try {
+        await Brightness.setBrightnessAsync(newBrightness);
+      } catch (e) {
+        // ignore
+      }
+    } else if (activeGesture.current === 'volume') {
+      const newVolume = Math.max(0, Math.min(1, gestureStartValue.current + change));
+      setVolume(newVolume);
+      setShowVolumeIndicator(true);
+      
+      // Clear existing timeout
+      if (volumeIndicatorTimeout.current) {
+        clearTimeout(volumeIndicatorTimeout.current);
+      }
+      
+      // Set player volume - use ref and wrap in try-catch as player may be released
+      try {
+        const currentPlayer = playerRef.current;
+        if (currentPlayer && typeof currentPlayer.volume !== 'undefined') {
+          currentPlayer.volume = newVolume;
+        }
+      } catch (e) {
+        // Player may have been released, ignore
+      }
+    }
+  }, [isLocked]);
+
+  const handleVerticalGestureEnd = useCallback(() => {
+    activeGesture.current = null;
+    
+    // Hide indicators after a delay
+    if (showBrightnessIndicator) {
+      brightnessIndicatorTimeout.current = setTimeout(() => {
+        setShowBrightnessIndicator(false);
+      }, 1000);
+    }
+    if (showVolumeIndicator) {
+      volumeIndicatorTimeout.current = setTimeout(() => {
+        setShowVolumeIndicator(false);
+      }, 1000);
+    }
+  }, [showBrightnessIndicator, showVolumeIndicator]);
+
+  // Left side pan responder (brightness)
+  const leftPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        // Only activate for vertical swipes
+        return Math.abs(gestureState.dy) > Math.abs(gestureState.dx) && Math.abs(gestureState.dy) > 10;
+      },
+      onPanResponderGrant: (event) => {
+        handleVerticalGestureStart(event, 'left');
+      },
+      onPanResponderMove: (event) => {
+        handleVerticalGestureMove(event);
+      },
+      onPanResponderRelease: () => {
+        handleVerticalGestureEnd();
+      },
+      onPanResponderTerminate: () => {
+        handleVerticalGestureEnd();
+      },
+    })
+  ).current;
+
+  // Right side pan responder (volume)
+  const rightPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        // Only activate for vertical swipes
+        return Math.abs(gestureState.dy) > Math.abs(gestureState.dx) && Math.abs(gestureState.dy) > 10;
+      },
+      onPanResponderGrant: (event) => {
+        handleVerticalGestureStart(event, 'right');
+      },
+      onPanResponderMove: (event) => {
+        handleVerticalGestureMove(event);
+      },
+      onPanResponderRelease: () => {
+        handleVerticalGestureEnd();
+      },
+      onPanResponderTerminate: () => {
+        handleVerticalGestureEnd();
+      },
+    })
+  ).current;
+
+  // Playback speed handler
+  const cyclePlaybackSpeed = useCallback(() => {
+    const currentIndex = PLAYBACK_SPEEDS.indexOf(playbackSpeed);
+    const nextIndex = (currentIndex + 1) % PLAYBACK_SPEEDS.length;
+    const newSpeed = PLAYBACK_SPEEDS[nextIndex];
+    setPlaybackSpeed(newSpeed);
+    if (player) {
+      player.playbackRate = newSpeed;
+    }
+    showControls();
+  }, [playbackSpeed, player, showControls]);
 
   // Format time
   const formatTime = (seconds: number) => {
@@ -494,8 +965,27 @@ export default function PlayerScreen() {
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
-  // Progress percentage
-  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
+  // Progress percentage - use preview time when seeking
+  const displayTime = seekPreviewTime !== null ? seekPreviewTime : currentTime;
+  const progressPercent = duration > 0 ? (displayTime / duration) * 100 : 0;
+
+  // Next episode handler
+  const handleNextEpisode = useCallback(() => {
+    if (!nextEpisodeSrc) return;
+    
+    router.replace({
+      pathname: '/player',
+      params: {
+        videoSrc: nextEpisodeSrc,
+        title: nextEpisodeTitle || title,
+        imdbId,
+        type,
+        poster,
+        season: nextEpisodeSeason,
+        episode: nextEpisodeNumber,
+      },
+    });
+  }, [nextEpisodeSrc, nextEpisodeTitle, title, imdbId, type, poster, nextEpisodeSeason, nextEpisodeNumber]);
 
   if (error) {
     return (
@@ -523,19 +1013,98 @@ export default function PlayerScreen() {
         />
       )}
 
-      {/* Tap catcher (VideoView can swallow touches) */}
+      {/* Tap catcher for gestures */}
       <Pressable 
         style={styles.tapOverlay} 
-        onPress={toggleControls}
+        onPress={handleTap}
         android_disableSound={true}
       />
 
+      {/* Left side gesture zone (brightness) */}
+      <View 
+        style={styles.gestureZoneLeft}
+        {...leftPanResponder.panHandlers}
+      />
+
+      {/* Right side gesture zone (volume) */}
+      <View 
+        style={styles.gestureZoneRight}
+        {...rightPanResponder.panHandlers}
+      />
+
+      {/* Brightness indicator */}
+      {showBrightnessIndicator && !isInPipMode && (
+        <View style={[styles.volumeBrightnessIndicator, styles.brightnessIndicator]}>
+          <Ionicons 
+            name={brightness > 0.5 ? 'sunny' : 'sunny-outline'} 
+            size={24} 
+            color="#fff" 
+          />
+          <View style={styles.indicatorBarContainer}>
+            <View style={[styles.indicatorBarFill, { height: `${brightness * 100}%` }]} />
+          </View>
+          <Text style={styles.indicatorText}>{Math.round(brightness * 100)}%</Text>
+        </View>
+      )}
+
+      {/* Volume indicator */}
+      {showVolumeIndicator && !isInPipMode && (
+        <View style={[styles.volumeBrightnessIndicator, styles.volumeIndicator]}>
+          <Ionicons 
+            name={volume === 0 ? 'volume-mute' : volume < 0.5 ? 'volume-low' : 'volume-high'} 
+            size={24} 
+            color="#fff" 
+          />
+          <View style={styles.indicatorBarContainer}>
+            <View style={[styles.indicatorBarFill, { height: `${volume * 100}%` }]} />
+          </View>
+          <Text style={styles.indicatorText}>{Math.round(volume * 100)}%</Text>
+        </View>
+      )}
+
+      {/* Double-tap seek feedback - Left */}
+      {seekFeedback?.side === 'left' && (
+        <Animated.View style={[styles.seekFeedback, styles.seekFeedbackLeft, seekFeedbackStyle]}>
+          <View style={styles.seekFeedbackInner}>
+            <Ionicons name="play-back" size={32} color="#fff" />
+            <Text style={styles.seekFeedbackText}>{seekFeedback.amount}s</Text>
+          </View>
+        </Animated.View>
+      )}
+
+      {/* Double-tap seek feedback - Right */}
+      {seekFeedback?.side === 'right' && (
+        <Animated.View style={[styles.seekFeedback, styles.seekFeedbackRight, seekFeedbackStyle]}>
+          <View style={styles.seekFeedbackInner}>
+            <Ionicons name="play-forward" size={32} color="#fff" />
+            <Text style={styles.seekFeedbackText}>{seekFeedback.amount}s</Text>
+          </View>
+        </Animated.View>
+      )}
+
+      {/* Skip Intro Button */}
+      {showSkipIntro && !isLocked && !isInPipMode && (
+        <Animated.View style={[styles.skipIntroContainer, skipIntroStyle]}>
+          <TouchableOpacity style={styles.skipIntroButton} onPress={handleSkipIntro}>
+            <Text style={styles.skipIntroText}>Skip Intro</Text>
+            <Ionicons name="play-forward" size={18} color="#000" />
+          </TouchableOpacity>
+        </Animated.View>
+      )}
+
+      {/* Seek preview time */}
+      {seekPreviewTime !== null && (
+        <View style={styles.seekPreview}>
+          <Text style={styles.seekPreviewText}>{formatTime(seekPreviewTime)}</Text>
+        </View>
+      )}
+
       {/* Loading Overlay */}
-      {loading && (
+      {(loading || buffering) && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color={Colors.primary} />
           <Text style={styles.loadingText}>
-            {torrentStatus || 'Loading...'}
+            {torrentStatus || (buffering ? 'Buffering...' : 'Loading...')}
           </Text>
           {torrentSession && torrentSession.info && (
             <View style={styles.torrentInfo}>
@@ -553,7 +1122,7 @@ export default function PlayerScreen() {
         </View>
       )}
 
-      {/* Locked Overlay - only show unlock button when locked */}
+      {/* Locked Overlay */}
       {isLocked && controlsVisible && (
         <View style={styles.lockedOverlay}>
           <TouchableOpacity style={styles.unlockButton} onPress={toggleLock}>
@@ -563,80 +1132,128 @@ export default function PlayerScreen() {
         </View>
       )}
 
-      {/* Controls Overlay */}
-      {!isLocked && (
-      <Animated.View
-        style={[styles.controlsOverlay, controlsStyle]}
-        // Allow the background area of the overlay to pass taps through to `tapOverlay`,
-        // while still keeping buttons interactive.
-        pointerEvents={controlsVisible ? 'box-none' : 'none'}
-      >
-        {/* Top Bar */}
-        <View style={[styles.topBar, { paddingTop: insets.top || Spacing.lg }]}>
-          <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-            <Ionicons name="chevron-down" size={28} color={Colors.text} />
-          </TouchableOpacity>
-          <View style={styles.titleContainer}>
-            <Text style={styles.videoTitle} numberOfLines={1}>
-              {title || 'Playing Video'}
+      {/* Next Episode Overlay */}
+      {showNextEpisode && nextEpisodeSrc && !loading && !isInPipMode && (
+        <Animated.View style={styles.nextEpisodeOverlay}>
+          <View style={styles.nextEpisodeCard}>
+            <Text style={styles.nextEpisodeLabel}>Up Next</Text>
+            <Text style={styles.nextEpisodeTitle} numberOfLines={1}>
+              {nextEpisodeTitle || `S${nextEpisodeSeason} E${nextEpisodeNumber}`}
             </Text>
-            {season && episode && (
-              <Text style={styles.episodeInfo}>
-                S{season} E{episode}
-              </Text>
-            )}
-          </View>
-          <View style={{ width: 44 }} />
-        </View>
-
-        {/* Center Controls */}
-        <View style={styles.centerControls}>
-          <TouchableOpacity style={styles.seekButton} onPress={seekBackward}>
-            <Ionicons name="play-back" size={32} color={Colors.text} />
-            <Text style={styles.seekText}>10</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.playButton} onPress={togglePlayPause}>
-            <Ionicons
-              name={isPlaying ? 'pause' : 'play'}
-              size={48}
-              color={Colors.text}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.seekButton} onPress={seekForward}>
-            <Ionicons name="play-forward" size={32} color={Colors.text} />
-            <Text style={styles.seekText}>10</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Bottom Bar */}
-        <View style={[styles.bottomBar, { paddingBottom: insets.bottom || Spacing.lg }]}>
-          {/* Progress Bar */}
-          <View style={styles.progressContainer}>
-            <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
-            <View style={styles.progressBarContainer}>
-              <View style={styles.progressBarBg}>
-                <View style={[styles.progressBarFill, { width: `${progressPercent}%` }]} />
-              </View>
+            <View style={styles.nextEpisodeActions}>
+              <TouchableOpacity 
+                style={styles.nextEpisodeButton} 
+                onPress={handleNextEpisode}
+              >
+                <Ionicons name="play" size={20} color="#000" />
+                <Text style={styles.nextEpisodeButtonText}>Play Now</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.nextEpisodeDismiss} 
+                onPress={() => setShowNextEpisode(false)}
+              >
+                <Ionicons name="close" size={20} color={Colors.textSecondary} />
+              </TouchableOpacity>
             </View>
-            <Text style={styles.timeText}>{formatTime(duration)}</Text>
+          </View>
+        </Animated.View>
+      )}
+
+      {/* Controls Overlay - hide in PiP mode */}
+      {!isLocked && !isInPipMode && (
+        <Animated.View
+          style={[styles.controlsOverlay, controlsStyle]}
+          pointerEvents={controlsVisible ? 'box-none' : 'none'}
+        >
+          {/* Top Bar */}
+          <View style={[styles.topBar, { paddingTop: insets.top || Spacing.lg }]}>
+            <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
+              <Ionicons name="chevron-down" size={28} color={Colors.text} />
+            </TouchableOpacity>
+            <View style={styles.titleContainer}>
+              <Text style={styles.videoTitle} numberOfLines={1}>
+                {title || 'Playing Video'}
+              </Text>
+              {season && episode && (
+                <Text style={styles.episodeInfo}>
+                  S{season} E{episode}
+                </Text>
+              )}
+            </View>
+            <View style={{ width: 44 }} />
           </View>
 
-          {/* Bottom Actions */}
-          <View style={styles.bottomActions}>
-            <TouchableOpacity style={styles.actionButton} onPress={toggleLock}>
-              <Ionicons name={isLocked ? 'lock-closed-outline' : 'lock-open-outline'} size={22} color={Colors.text} />
+          {/* Center Controls */}
+          <View style={styles.centerControls}>
+            <TouchableOpacity style={styles.seekButton} onPress={() => seekBackward()}>
+              <Ionicons name="play-back" size={32} color={Colors.text} />
+              <Text style={styles.seekText}>10</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton} onPress={handleSettings}>
-              <Ionicons name="settings-outline" size={22} color={Colors.text} />
+
+            <TouchableOpacity style={styles.playButton} onPress={togglePlayPause}>
+              <Ionicons
+                name={isPlaying ? 'pause' : 'play'}
+                size={48}
+                color={Colors.text}
+              />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton} onPress={handleFullscreen}>
-              <Ionicons name="expand-outline" size={22} color={Colors.text} />
+
+            <TouchableOpacity style={styles.seekButton} onPress={() => seekForward()}>
+              <Ionicons name="play-forward" size={32} color={Colors.text} />
+              <Text style={styles.seekText}>10</Text>
             </TouchableOpacity>
           </View>
-        </View>
-      </Animated.View>
+
+          {/* Bottom Bar */}
+          <View style={[styles.bottomBar, { paddingBottom: insets.bottom || Spacing.lg }]}>
+            {/* Progress Bar */}
+            <View style={styles.progressContainer}>
+              <Text style={styles.timeText}>{formatTime(displayTime)}</Text>
+              <View 
+                style={styles.progressBarContainer}
+                ref={progressBarRef}
+                onLayout={handleProgressBarLayout}
+                {...progressPanResponder.panHandlers}
+              >
+                <View style={styles.progressBarBg}>
+                  <View style={[styles.progressBarFill, { width: `${progressPercent}%` }]} />
+                  {/* Scrubber handle */}
+                  <View 
+                    style={[
+                      styles.progressBarHandle, 
+                      { left: `${progressPercent}%` },
+                      isSeeking && styles.progressBarHandleActive
+                    ]} 
+                  />
+                </View>
+              </View>
+              <Text style={styles.timeText}>{formatTime(duration)}</Text>
+            </View>
+
+            {/* Bottom Actions */}
+            <View style={styles.bottomActions}>
+              <TouchableOpacity style={styles.actionButton} onPress={toggleLock}>
+                <Ionicons name={isLocked ? 'lock-closed-outline' : 'lock-open-outline'} size={22} color={Colors.text} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionButton} onPress={handleSettings}>
+                <Ionicons name="settings-outline" size={22} color={Colors.text} />
+              </TouchableOpacity>
+              {nextEpisodeSrc && (
+                <TouchableOpacity style={styles.actionButton} onPress={handleNextEpisode}>
+                  <Ionicons name="play-skip-forward-outline" size={22} color={Colors.text} />
+                </TouchableOpacity>
+              )}
+              {isPipSupported && (
+                <TouchableOpacity style={styles.actionButton} onPress={enterPipMode}>
+                  <Ionicons name="tablet-landscape-outline" size={22} color={Colors.text} />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={styles.actionButton} onPress={handleFullscreen}>
+                <Ionicons name="expand-outline" size={22} color={Colors.text} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Animated.View>
       )}
 
       {/* Settings Sheet */}
@@ -662,7 +1279,9 @@ export default function PlayerScreen() {
                   ? 'Settings'
                   : settingsView === 'subtitles'
                     ? 'Subtitles'
-                    : 'Audio Track'}
+                    : settingsView === 'audio'
+                      ? 'Audio Track'
+                      : 'Playback Speed'}
               </Text>
               <View style={{ width: 32 }} />
             </View>
@@ -671,9 +1290,7 @@ export default function PlayerScreen() {
               <View style={styles.settingsList}>
                 <TouchableOpacity
                   style={styles.settingsRow}
-                  onPress={() => {
-                    setSettingsView('subtitles');
-                  }}
+                  onPress={() => setSettingsView('subtitles')}
                 >
                   <Text style={styles.settingsRowLabel}>Subtitles</Text>
                   <Text style={styles.settingsRowValue}>{selectedSubtitleLabel}</Text>
@@ -685,6 +1302,13 @@ export default function PlayerScreen() {
                   <Text style={styles.settingsRowLabel}>Audio Track</Text>
                   <Text style={styles.settingsRowValue}>{selectedAudioLabel}</Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.settingsRow}
+                  onPress={() => setSettingsView('speed')}
+                >
+                  <Text style={styles.settingsRowLabel}>Playback Speed</Text>
+                  <Text style={styles.settingsRowValue}>{playbackSpeed === 1 ? 'Normal' : `${playbackSpeed}x`}</Text>
+                </TouchableOpacity>
               </View>
             )}
 
@@ -695,6 +1319,9 @@ export default function PlayerScreen() {
                   onPress={() => selectSubtitle(null)}
                 >
                   <Text style={styles.settingsRowLabel}>Off</Text>
+                  {selectedSubtitleLabel === 'Off' && (
+                    <Ionicons name="checkmark" size={20} color={Colors.primary} />
+                  )}
                 </TouchableOpacity>
                 {availableSubtitleTracks.length === 0 ? (
                   <View style={styles.settingsEmpty}>
@@ -708,6 +1335,9 @@ export default function PlayerScreen() {
                       onPress={() => selectSubtitle(t)}
                     >
                       <Text style={styles.settingsRowLabel}>{t?.label || t?.language || `Subtitle ${idx + 1}`}</Text>
+                      {selectedSubtitleLabel === (t?.label || t?.language) && (
+                        <Ionicons name="checkmark" size={20} color={Colors.primary} />
+                      )}
                     </TouchableOpacity>
                   ))
                 )}
@@ -721,6 +1351,9 @@ export default function PlayerScreen() {
                   onPress={() => selectAudio(null)}
                 >
                   <Text style={styles.settingsRowLabel}>Default</Text>
+                  {selectedAudioLabel === 'Default' && (
+                    <Ionicons name="checkmark" size={20} color={Colors.primary} />
+                  )}
                 </TouchableOpacity>
                 {availableAudioTracks.length === 0 ? (
                   <View style={styles.settingsEmpty}>
@@ -734,9 +1367,37 @@ export default function PlayerScreen() {
                       onPress={() => selectAudio(t)}
                     >
                       <Text style={styles.settingsRowLabel}>{t?.label || t?.language || `Audio ${idx + 1}`}</Text>
+                      {selectedAudioLabel === (t?.label || t?.language) && (
+                        <Ionicons name="checkmark" size={20} color={Colors.primary} />
+                      )}
                     </TouchableOpacity>
                   ))
                 )}
+              </View>
+            )}
+
+            {settingsView === 'speed' && (
+              <View style={styles.settingsList}>
+                {PLAYBACK_SPEEDS.map((speed) => (
+                  <TouchableOpacity
+                    key={speed}
+                    style={styles.settingsRow}
+                    onPress={() => {
+                      setPlaybackSpeed(speed);
+                      if (player) {
+                        player.playbackRate = speed;
+                      }
+                      setSettingsView('root');
+                    }}
+                  >
+                    <Text style={styles.settingsRowLabel}>
+                      {speed === 1 ? 'Normal' : `${speed}x`}
+                    </Text>
+                    {playbackSpeed === speed && (
+                      <Ionicons name="checkmark" size={20} color={Colors.primary} />
+                    )}
+                  </TouchableOpacity>
+                ))}
               </View>
             )}
           </View>
@@ -760,6 +1421,129 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     zIndex: 1,
   },
+  // Gesture zones for volume/brightness
+  gestureZoneLeft: {
+    position: 'absolute',
+    left: 0,
+    top: '20%',
+    bottom: '20%',
+    width: '15%',
+    zIndex: 2,
+  },
+  gestureZoneRight: {
+    position: 'absolute',
+    right: 0,
+    top: '20%',
+    bottom: '20%',
+    width: '15%',
+    zIndex: 2,
+  },
+  // Volume/Brightness indicators
+  volumeBrightnessIndicator: {
+    position: 'absolute',
+    top: '30%',
+    bottom: '30%',
+    width: 50,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    zIndex: 10,
+  },
+  brightnessIndicator: {
+    left: 30,
+  },
+  volumeIndicator: {
+    right: 30,
+  },
+  indicatorBarContainer: {
+    width: 6,
+    height: '50%',
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    borderRadius: 3,
+    marginVertical: 8,
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
+  },
+  indicatorBarFill: {
+    width: '100%',
+    backgroundColor: '#fff',
+    borderRadius: 3,
+  },
+  indicatorText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  // Seek feedback styles
+  seekFeedback: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: '40%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 5,
+  },
+  seekFeedbackLeft: {
+    left: 0,
+  },
+  seekFeedbackRight: {
+    right: 0,
+  },
+  seekFeedbackInner: {
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 50,
+    padding: 20,
+    alignItems: 'center',
+  },
+  seekFeedbackText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  // Skip intro button
+  skipIntroContainer: {
+    position: 'absolute',
+    right: Spacing.xl,
+    bottom: 120,
+    zIndex: 6,
+  },
+  skipIntroButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    backgroundColor: '#fff',
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.xl,
+    borderRadius: BorderRadius.full,
+  },
+  skipIntroText: {
+    fontSize: Typography.sizes.md,
+    fontWeight: Typography.weights.bold,
+    color: '#000',
+  },
+  // Seek preview
+  seekPreview: {
+    position: 'absolute',
+    top: '40%',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 6,
+  },
+  seekPreviewText: {
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    color: '#fff',
+    fontSize: 32,
+    fontWeight: 'bold',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  // Settings overlay
   settingsOverlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 10,
@@ -901,18 +1685,33 @@ const styles = StyleSheet.create({
   },
   progressBarContainer: {
     flex: 1,
-    height: 4,
+    height: 24, // Larger touch target
+    justifyContent: 'center',
   },
   progressBarBg: {
-    flex: 1,
+    height: 4,
     backgroundColor: 'rgba(255,255,255,0.3)',
     borderRadius: 2,
-    overflow: 'hidden',
+    overflow: 'visible',
   },
   progressBarFill: {
     height: '100%',
     backgroundColor: Colors.primary,
     borderRadius: 2,
+  },
+  progressBarHandle: {
+    position: 'absolute',
+    top: -6,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: Colors.primary,
+    marginLeft: -8,
+    opacity: 0,
+  },
+  progressBarHandleActive: {
+    opacity: 1,
+    transform: [{ scale: 1.2 }],
   },
   bottomActions: {
     flexDirection: 'row',
@@ -976,5 +1775,53 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.xs,
     color: Colors.primary,
     marginTop: Spacing.xs,
+  },
+  // Next episode overlay
+  nextEpisodeOverlay: {
+    position: 'absolute',
+    right: Spacing.xl,
+    bottom: 100,
+    zIndex: 4,
+  },
+  nextEpisodeCard: {
+    backgroundColor: 'rgba(30,30,30,0.95)',
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    minWidth: 200,
+  },
+  nextEpisodeLabel: {
+    fontSize: Typography.sizes.xs,
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: Spacing.xs,
+  },
+  nextEpisodeTitle: {
+    fontSize: Typography.sizes.md,
+    fontWeight: Typography.weights.semibold,
+    color: Colors.text,
+    marginBottom: Spacing.md,
+  },
+  nextEpisodeActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  nextEpisodeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    backgroundColor: '#fff',
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.full,
+  },
+  nextEpisodeButtonText: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: Typography.weights.bold,
+    color: '#000',
+  },
+  nextEpisodeDismiss: {
+    padding: Spacing.sm,
   },
 });
