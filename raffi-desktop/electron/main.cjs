@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, screen, ipcMain } = require("electron");
+const { app, BrowserWindow, dialog, screen, ipcMain, shell } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
@@ -127,7 +127,37 @@ let mainWindow;
 let goServer;
 let httpServer;
 let fileToOpen = null;
+let pendingAveAuthPayload = null;
 let pendingUpdateInfo = null;
+
+function handleProtocolUrl(url) {
+  if (!url || typeof url !== "string") return false;
+  if (!url.startsWith("raffi://")) return false;
+
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname !== "auth" || parsed.pathname !== "/callback") {
+      return false;
+    }
+
+    pendingAveAuthPayload = {
+      code: parsed.searchParams.get("code") || undefined,
+      state: parsed.searchParams.get("state") || undefined,
+      error: parsed.searchParams.get("error") || undefined,
+    };
+
+    if (mainWindow && mainWindow.webContents) {
+      mainWindow.webContents.send("AVE_AUTH_CALLBACK", pendingAveAuthPayload);
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+
+    return true;
+  } catch (error) {
+    logToFile("Failed to parse protocol URL", error);
+    return false;
+  }
+}
 
 const LOCAL_MEDIA_EXTS = new Set([
   ".mp4",
@@ -232,6 +262,80 @@ const DEFAULT_WINDOW_WIDTH = 1778;
 const DEFAULT_WINDOW_HEIGHT = 1000;
 
 const isDev = !app.isPackaged;
+if (process.platform === "linux") {
+  app.commandLine.appendSwitch("class", "Raffi");
+}
+app.setName("Raffi");
+if (process.platform === "linux" && !isDev) {
+  try {
+    app.setDesktopName("raffi.desktop");
+  } catch {
+    // ignore
+  }
+}
+
+function registerLinuxProtocolHandler() {
+  if (process.platform !== "linux") return;
+
+  try {
+    const desktopDir = path.join(app.getPath("home"), ".local", "share", "applications");
+    fs.mkdirSync(desktopDir, { recursive: true });
+
+    const localMainDesktop = path.join(desktopDir, "raffi.desktop");
+    const localHandlerDesktop = path.join(desktopDir, "raffi-url-handler.desktop");
+    const launchTarget = isDev ? path.resolve(process.argv[1] || "") : process.execPath;
+    const execLine = isDev
+      ? `\"${process.execPath}\" \"${launchTarget}\" %U`
+      : `\"${process.execPath}\" %U`;
+
+    const desktopFile = [
+      "[Desktop Entry]",
+      "Name=Raffi",
+      "Type=Application",
+      "Terminal=false",
+      `Exec=${execLine}`,
+      `TryExec=${process.execPath}`,
+      "Icon=raffi",
+      "StartupWMClass=Raffi",
+      "StartupNotify=true",
+      "NoDisplay=false",
+      "MimeType=x-scheme-handler/raffi;",
+      isDev ? "Categories=Development;Video;" : "Categories=Video;",
+      "Comment=A modern video player",
+      "",
+    ].join("\n");
+
+    fs.writeFileSync(localMainDesktop, desktopFile, "utf8");
+
+    try {
+      if (fs.existsSync(localHandlerDesktop)) {
+        fs.unlinkSync(localHandlerDesktop);
+      }
+    } catch (error) {
+      logToFile("Failed removing stale raffi-url-handler desktop entry", error);
+    }
+
+    const xdg = spawn("xdg-mime", ["default", "raffi.desktop", "x-scheme-handler/raffi"], {
+      detached: true,
+      stdio: "ignore",
+    });
+    xdg.unref();
+
+    const xdgSettings = spawn("xdg-settings", ["set", "default-url-scheme-handler", "raffi", "raffi.desktop"], {
+      detached: true,
+      stdio: "ignore",
+    });
+    xdgSettings.unref();
+
+    const updateDb = spawn("update-desktop-database", [desktopDir], {
+      detached: true,
+      stdio: "ignore",
+    });
+    updateDb.unref();
+  } catch (error) {
+    logToFile("Failed Linux x-scheme-handler registration", error);
+  }
+}
 
 const gotTheLock = app.requestSingleInstanceLock();
 logToFile(`Single instance lock: ${gotTheLock ? "acquired" : "denied"}`);
@@ -246,6 +350,11 @@ app.on("open-file", (event, path) => {
   }
 });
 
+app.on("open-url", (event, url) => {
+  event.preventDefault();
+  handleProtocolUrl(url);
+});
+
 if (!gotTheLock) {
   logToFile("Another instance is running; quitting");
   app.quit();
@@ -255,6 +364,11 @@ if (!gotTheLock) {
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
+
+      const deepLink = commandLine.find((arg) => typeof arg === "string" && arg.startsWith("raffi://"));
+      if (deepLink && handleProtocolUrl(deepLink)) {
+        return;
+      }
 
       const filePath = commandLine[commandLine.length - 1];
       if (filePath && !filePath.startsWith("-") && filePath !== ".") {
@@ -583,6 +697,15 @@ function createWindow() {
   } else {
     // Linux: use standard frame to avoid compatibility issues
     windowOptions.frame = true;
+    const linuxIconCandidates = [
+      "/usr/share/icons/hicolor/512x512/apps/raffi.png",
+      "/usr/share/icons/hicolor/128x128/apps/raffi.png",
+      path.join(process.resourcesPath || "", "icon.png"),
+    ];
+    const iconPath = linuxIconCandidates.find((candidate) => candidate && fs.existsSync(candidate));
+    if (iconPath) {
+      windowOptions.icon = iconPath;
+    }
   }
 
   mainWindow = new BrowserWindow(windowOptions);
@@ -781,6 +904,10 @@ function createWindow() {
       mainWindow.webContents.send("open-file", fileToOpen);
       fileToOpen = null;
     }
+    if (pendingAveAuthPayload) {
+      mainWindow.webContents.send("AVE_AUTH_CALLBACK", pendingAveAuthPayload);
+      pendingAveAuthPayload = null;
+    }
   });
   mainWindow.on("resize", applyDisplayZoom);
   screen.on("display-metrics-changed", applyDisplayZoom);
@@ -842,6 +969,14 @@ ipcMain.on("WINDOW_TOGGLE_FULLSCREEN", () => {
 ipcMain.handle("WINDOW_IS_FULLSCREEN", async () => {
   if (!mainWindow || mainWindow.isDestroyed()) return false;
   return mainWindow.isFullScreen();
+});
+
+ipcMain.handle("OPEN_EXTERNAL_URL", async (_event, targetUrl) => {
+  if (!targetUrl || typeof targetUrl !== "string") {
+    throw new Error("Invalid URL");
+  }
+  await shell.openExternal(targetUrl);
+  return true;
 });
 
 ipcMain.handle("UPDATE_INSTALL", async () => {
@@ -954,9 +1089,28 @@ app.whenReady().then(async () => {
     app.setAppUserModelId(pendingAppUserModelId);
   }
 
+  try {
+    if (isDev && (process.platform === "win32" || process.platform === "linux")) {
+      app.setAsDefaultProtocolClient("raffi", process.execPath, [path.resolve(process.argv[1])]);
+    } else {
+      app.setAsDefaultProtocolClient("raffi");
+    }
+
+    if (process.platform === "linux") {
+      registerLinuxProtocolHandler();
+    }
+  } catch (error) {
+    logToFile("Failed to register raffi protocol", error);
+  }
+
   if (process.platform === "win32" || process.platform === "linux") {
     const argv = process.argv;
     console.log("Command line args:", argv);
+
+    const deepLink = argv.find((arg) => typeof arg === "string" && arg.startsWith("raffi://"));
+    if (deepLink && handleProtocolUrl(deepLink)) {
+      // handled as auth callback
+    }
 
     let filePath = null;
     if (isDev && argv.length >= 3) {
@@ -965,7 +1119,7 @@ app.whenReady().then(async () => {
       filePath = argv[1];
     }
 
-    if (filePath && !filePath.startsWith("-")) {
+    if (filePath && !filePath.startsWith("-") && !filePath.startsWith("raffi://")) {
       console.log("Found file to open:", filePath);
       fileToOpen = filePath;
     }
