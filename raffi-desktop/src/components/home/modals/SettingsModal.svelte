@@ -32,6 +32,7 @@
 		setAnalyticsSettings,
 		trackEvent,
 	} from "../../../lib/analytics";
+	import { formatReleaseNotes } from "../../../lib/updateNotes";
 
 	const portal = (node: HTMLElement) => {
 		if (typeof document === "undefined") {
@@ -78,14 +79,6 @@
 	let traktMessage = "";
 	let traktError = "";
 	let traktStatusRequested = false;
-
-	const formatUpdateNotes = (notes: string) => {
-		const trimmed = notes?.trim();
-		if (!trimmed) return "";
-		if (/<[a-z][\s\S]*>/i.test(trimmed)) return trimmed;
-		return trimmed.replace(/\n/g, "<br />");
-	};
-
 
 	let localLibrarySupported = false;
 	let localRoots: string[] = [];
@@ -574,8 +567,8 @@
 						</button>
 					</div>
 					{#if showUpdateNotes}
-						<div class="rounded-2xl bg-white/[0.06] p-4 text-white/70 text-sm whitespace-pre-wrap max-h-[200px] overflow-y-auto">
-							{@html formatUpdateNotes($updateStatus.notes || "Release notes unavailable.")}
+						<div class="release-notes-content rounded-2xl bg-white/[0.06] p-4 text-white/70 text-sm max-h-[200px] overflow-y-auto">
+							{@html formatReleaseNotes($updateStatus.notes || "Release notes unavailable.")}
 						</div>
 					{/if}
 				</section>
@@ -1059,3 +1052,80 @@
 		</div>
 	</div>
 {/if}
+
+<style>
+	.release-notes-content :global(h1),
+	.release-notes-content :global(h2),
+	.release-notes-content :global(h3),
+	.release-notes-content :global(h4) {
+		color: white;
+		font-weight: 700;
+		line-height: 1.2;
+		margin: 0 0 0.65rem;
+	}
+
+	.release-notes-content :global(h1) {
+		font-size: 1.15rem;
+	}
+
+	.release-notes-content :global(h2) {
+		font-size: 1.05rem;
+	}
+
+	.release-notes-content :global(h3),
+	.release-notes-content :global(h4) {
+		font-size: 0.98rem;
+	}
+
+	.release-notes-content :global(p),
+	.release-notes-content :global(ul),
+	.release-notes-content :global(ol),
+	.release-notes-content :global(blockquote),
+	.release-notes-content :global(pre) {
+		margin: 0 0 0.65rem;
+	}
+
+	.release-notes-content :global(ul) {
+		list-style: disc;
+		padding-left: 1.2rem;
+	}
+
+	.release-notes-content :global(ol) {
+		list-style: decimal;
+		padding-left: 1.2rem;
+	}
+
+	.release-notes-content :global(li) {
+		margin: 0.2rem 0;
+	}
+
+	.release-notes-content :global(code) {
+		background: rgba(255, 255, 255, 0.09);
+		border-radius: 0.35rem;
+		padding: 0.1rem 0.35rem;
+		color: white;
+		font-size: 0.85em;
+	}
+
+	.release-notes-content :global(blockquote) {
+		border-left: 2px solid rgba(255, 255, 255, 0.3);
+		padding-left: 0.65rem;
+		color: rgba(255, 255, 255, 0.72);
+	}
+
+	.release-notes-content :global(a) {
+		color: white;
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+
+	.release-notes-content :global(hr) {
+		border: 0;
+		border-top: 1px solid rgba(255, 255, 255, 0.18);
+		margin: 0.75rem 0;
+	}
+
+	.release-notes-content :global(*:last-child) {
+		margin-bottom: 0;
+	}
+</style>
