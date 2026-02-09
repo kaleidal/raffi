@@ -70,3 +70,7 @@ export const convexQuery = async <T = any>(name: string, args: Record<string, an
 export const convexMutation = async <T = any>(name: string, args: Record<string, any> = {}): Promise<T> => {
     return withFailover((instance) => instance.mutation(name as any, args as any) as Promise<T>);
 };
+
+export const convexAction = async <T = any>(name: string, args: Record<string, any> = {}): Promise<T> => {
+    return withFailover((instance) => instance.action(name as any, args as any) as Promise<T>);
+};

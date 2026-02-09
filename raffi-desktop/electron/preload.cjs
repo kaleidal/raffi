@@ -14,6 +14,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.on('AVE_AUTH_CALLBACK', handler);
         return () => ipcRenderer.removeListener('AVE_AUTH_CALLBACK', handler);
     },
+    onTraktAuthCallback: (callback) => {
+        const handler = (_event, payload) => callback(payload);
+        ipcRenderer.on('TRAKT_AUTH_CALLBACK', handler);
+        return () => ipcRenderer.removeListener('TRAKT_AUTH_CALLBACK', handler);
+    },
     getFilePath: (file) => webUtils.getPathForFile(file),
     saveClipPath: (suggestedName) => ipcRenderer.invoke('SAVE_CLIP_DIALOG', suggestedName),
     localLibrary: {

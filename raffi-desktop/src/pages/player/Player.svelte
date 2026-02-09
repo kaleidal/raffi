@@ -13,6 +13,7 @@
     import type { ShowResponse } from "../../lib/library/types/meta_types";
     import { watchParty } from "../../lib/stores/watchPartyStore";
     import { localMode } from "../../lib/stores/authStore";
+    import { traktScrobble } from "../../lib/db/db";
     import { trackEvent } from "../../lib/analytics";
     import { ChevronLeft } from "lucide-svelte";
     import * as NavigationLogic from "../meta/navigationLogic";
@@ -297,6 +298,9 @@
     };
 
     const handleClose = () => {
+        if (hasStarted && !traktStopSent) {
+            void sendTraktScrobble("stop", true);
+        }
         trackPlaybackClosed();
         if (!router.back()) {
             router.navigate("home");
@@ -317,6 +321,101 @@
     let bufferingStartedAt = 0;
     let errorModalOpen = false;
     let reprobeAttempted = false;
+    let lastTraktScrobbleAction: "start" | "pause" | "stop" | null = null;
+    let lastTraktScrobbleAt = 0;
+    let traktStopSent = false;
+    let traktStartSent = false;
+    let traktDisabledForSession = false;
+    let traktFailureCount = 0;
+    let traktCooldownUntil = 0;
+    const TRAKT_COMPLETION_THRESHOLD = 0.9;
+    const TRAKT_FAILURE_COOLDOWN_MS = 60_000;
+    const TRAKT_MAX_FAILURES = 3;
+
+    const getTraktMediaType = (): "movie" | "episode" => {
+        return metaData?.meta?.type === "series" ? "episode" : "movie";
+    };
+
+    const getTraktProgress = (): number => {
+        if ($duration <= 0) return 0;
+        return Math.max(0, Math.min(100, ($currentTime / $duration) * 100));
+    };
+
+    const sendTraktScrobble = async (
+        action: "start" | "pause" | "stop",
+        force = false,
+    ) => {
+        if ($localMode || !imdbID) return;
+        if (!hasStarted) return;
+        if (traktDisabledForSession) return;
+        if (!force && Date.now() < traktCooldownUntil) return;
+        if (action === "pause" && !traktStartSent) return;
+
+        const mediaType = getTraktMediaType();
+        if (mediaType === "episode" && (season == null || episode == null)) return;
+
+        const now = Date.now();
+        if (
+            !force &&
+            action === lastTraktScrobbleAction &&
+            now - lastTraktScrobbleAt < 10_000
+        ) {
+            return;
+        }
+
+        lastTraktScrobbleAction = action;
+        lastTraktScrobbleAt = now;
+
+        if (action === "stop") {
+            traktStopSent = true;
+        } else if (action === "start") {
+            traktStopSent = false;
+        }
+
+        try {
+            const result: any = await traktScrobble({
+                action,
+                imdbId: imdbID,
+                mediaType,
+                season: mediaType === "episode" ? season ?? undefined : undefined,
+                episode: mediaType === "episode" ? episode ?? undefined : undefined,
+                progress: getTraktProgress(),
+                appVersion: "desktop",
+            });
+
+            if (result?.ok) {
+                traktFailureCount = 0;
+                traktCooldownUntil = 0;
+                if (action === "start") {
+                    traktStartSent = true;
+                }
+                return;
+            }
+
+            const reason = String(result?.reason || "");
+            if (
+                reason === "not_connected" ||
+                reason === "not_configured" ||
+                reason === "missing_episode" ||
+                reason === "local_mode"
+            ) {
+                traktDisabledForSession = true;
+                return;
+            }
+
+            traktFailureCount += 1;
+            if (traktFailureCount >= TRAKT_MAX_FAILURES) {
+                traktCooldownUntil = Date.now() + TRAKT_FAILURE_COOLDOWN_MS;
+                traktFailureCount = 0;
+            }
+        } catch {
+            traktFailureCount += 1;
+            if (traktFailureCount >= TRAKT_MAX_FAILURES) {
+                traktCooldownUntil = Date.now() + TRAKT_FAILURE_COOLDOWN_MS;
+                traktFailureCount = 0;
+            }
+        }
+    };
 
     const computeHasNextEpisode = (): boolean => {
         if (!metaData || metaData.meta?.type !== "series") return false;
@@ -541,6 +640,9 @@
     });
 
     onDestroy(() => {
+        if (hasStarted && !traktStopSent) {
+            void sendTraktScrobble("stop", true);
+        }
         trackPlaybackClosed();
         clearInterval(metadataCheckInterval);
         stopTorrentStatusPolling();
@@ -563,6 +665,14 @@
         currentTime.set(time);
         handleProgressInternal(time, $duration);
 
+        if (
+            !traktStopSent &&
+            $duration > 0 &&
+            time / $duration >= TRAKT_COMPLETION_THRESHOLD
+        ) {
+            void sendTraktScrobble("stop", true);
+        }
+
         if (!$seekGuard) {
             const result = Chapters.checkChapters(
                 time,
@@ -579,6 +689,7 @@
     const handlePlay = () => {
         isPlaying.set(true);
         hasStarted = true;
+        void sendTraktScrobble("start");
         if (!playbackStartTracked) {
             trackEvent("playback_started", getPlaybackAnalyticsProps());
             playbackStartTracked = true;
@@ -598,6 +709,15 @@
 
     const handlePause = () => {
         isPlaying.set(false);
+        if (
+            !traktStopSent &&
+            !(
+                $duration > 0 &&
+                $currentTime / $duration >= TRAKT_COMPLETION_THRESHOLD
+            )
+        ) {
+            void sendTraktScrobble("pause");
+        }
         Discord.updateDiscordActivity(
             metaData,
             season,
@@ -626,6 +746,12 @@
             buffer_duration_ms: durationMs,
             ...getPlaybackAnalyticsProps(),
         });
+    };
+
+    const handleEnded = () => {
+        if (hasStarted && !traktStopSent) {
+            void sendTraktScrobble("stop", true);
+        }
     };
 
     const reloadSession = () => {
@@ -1078,6 +1204,7 @@
             on:timeupdate={handleTimeUpdate}
             on:play={handlePlay}
             on:pause={handlePause}
+            on:ended={handleEnded}
             on:click={togglePlayWithFeedback}
             on:waiting={() => {
                 loading.set(true);
