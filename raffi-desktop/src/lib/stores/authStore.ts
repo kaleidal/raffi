@@ -11,7 +11,7 @@ import {
     importLegacySupabaseSessionToLocal,
     clearLegacySupabaseSession,
 } from "../db/supabaseLegacy";
-import { convexQuery, setConvexAuthToken } from "../db/convex";
+import { setConvexAuthToken } from "../db/convex";
 import { writable } from "svelte/store";
 
 export type UpdateStatus = {
@@ -38,10 +38,14 @@ const AVE_USER_KEY = "ave_user";
 const AVE_TOKEN_KEY = "ave_token_jwt";
 const AVE_REFRESH_TOKEN_KEY = "ave_refresh_token";
 const HOME_REFRESH_EVENT = "raffi:home-refresh";
+const TOKEN_REFRESH_LEEWAY_MS = 5 * 60 * 1000;
+const TOKEN_REFRESH_RETRY_MS = 60 * 1000;
+const TOKEN_REFRESH_FALLBACK_MS = 45 * 60 * 1000;
 
 let userCache: AppUser | null = null;
 let initialized = false;
 let seededUserId: string | null = null;
+let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
 const readLocalMode = () => {
     if (typeof window === "undefined") return false;
@@ -62,6 +66,7 @@ const persistLocalMode = (enabled: boolean) => {
 };
 
 export const enableLocalMode = () => {
+    clearSessionRefreshTimer();
     localMode.set(true);
     persistLocalMode(true);
     setConvexAuthToken(null);
@@ -73,6 +78,12 @@ export const enableLocalMode = () => {
 export const disableLocalMode = () => {
     localMode.set(false);
     persistLocalMode(false);
+};
+
+const clearSessionRefreshTimer = () => {
+    if (!refreshTimer) return;
+    clearTimeout(refreshTimer);
+    refreshTimer = null;
 };
 
 const persistAveSession = (user: AppUser | null) => {
@@ -126,6 +137,48 @@ const emitHomeRefresh = () => {
     window.dispatchEvent(new CustomEvent(HOME_REFRESH_EVENT));
 };
 
+const decodeJwtPayload = (token: string): Record<string, any> | null => {
+    try {
+        const parts = token.split(".");
+        if (parts.length < 2) return null;
+        const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+        const json = decodeURIComponent(
+            atob(base64)
+                .split("")
+                .map((ch) => `%${(`00${ch.charCodeAt(0).toString(16)}`).slice(-2)}`)
+                .join(""),
+        );
+        return JSON.parse(json);
+    } catch {
+        return null;
+    }
+};
+
+const getTokenExpiryMs = (token: string | null | undefined): number | null => {
+    if (!token) return null;
+    const payload = decodeJwtPayload(token);
+    const exp = Number(payload?.exp);
+    if (!Number.isFinite(exp) || exp <= 0) return null;
+    return exp * 1000;
+};
+
+const shouldRefreshToken = (token: string, leewayMs = TOKEN_REFRESH_LEEWAY_MS) => {
+    const expiresAt = getTokenExpiryMs(token);
+    if (!expiresAt) return false;
+    return expiresAt - Date.now() <= leewayMs;
+};
+
+const isPermanentAveRefreshError = (error: any) => {
+    const message = String(error?.message || "").toLowerCase();
+    return (
+        message.includes("invalid refresh token") ||
+        message.includes("refresh token not found") ||
+        message.includes("invalid_grant") ||
+        message.includes("unauthorized") ||
+        message.includes("forbidden")
+    );
+};
+
 async function seedDefaultsIfNeeded(user: AppUser | null) {
     const userId = user?.id;
     if (!userId) return;
@@ -135,19 +188,11 @@ async function seedDefaultsIfNeeded(user: AppUser | null) {
 }
 
 const clearAveSession = () => {
+    clearSessionRefreshTimer();
     userCache = null;
     currentUser.set(null);
     persistAveSession(null);
     setConvexAuthToken(null);
-};
-
-const isStoredAveSessionValid = async () => {
-    try {
-        await convexQuery("raffi:getState", {});
-        return true;
-    } catch {
-        return false;
-    }
 };
 
 const tryRefreshAveSession = async (user: AppUser): Promise<AppUser | null> => {
@@ -155,13 +200,52 @@ const tryRefreshAveSession = async (user: AppUser): Promise<AppUser | null> => {
     try {
         const refreshedUser = await refreshAveUserSession(user);
         setConvexAuthToken(refreshedUser.token);
-        const valid = await isStoredAveSessionValid();
-        if (!valid) return null;
         persistAveSession(refreshedUser);
         return refreshedUser;
-    } catch {
+    } catch (error) {
+        if (isPermanentAveRefreshError(error)) {
+            return null;
+        }
+        // Transient refresh failures should not immediately sign users out.
+        return user;
+    }
+};
+
+const scheduleSessionRefresh = (user: AppUser | null) => {
+    clearSessionRefreshTimer();
+    if (!user?.refreshToken) return;
+
+    const expiresAt = getTokenExpiryMs(user.token);
+    const targetDelay = expiresAt
+        ? expiresAt - Date.now() - TOKEN_REFRESH_LEEWAY_MS
+        : TOKEN_REFRESH_FALLBACK_MS;
+    const delay = Math.max(TOKEN_REFRESH_RETRY_MS, targetDelay);
+
+    refreshTimer = setTimeout(async () => {
+        const activeUser = userCache;
+        if (!activeUser || activeUser.id !== user.id) return;
+        const refreshed = await tryRefreshAveSession(activeUser);
+        if (!refreshed) {
+            clearAveSession();
+            enableLocalMode();
+            emitHomeRefresh();
+            return;
+        }
+        userCache = refreshed;
+        currentUser.set(refreshed);
+        setConvexAuthToken(refreshed.token);
+        scheduleSessionRefresh(refreshed);
+    }, delay);
+};
+
+const resolveStartupSession = async (storedUser: AppUser): Promise<AppUser | null> => {
+    if (!shouldRefreshToken(storedUser.token)) {
+        return storedUser;
+    }
+    if (!storedUser.refreshToken) {
         return null;
     }
+    return tryRefreshAveSession(storedUser);
 };
 
 const isInvalidLegacyRefreshError = (error: any) => {
@@ -186,11 +270,7 @@ export async function initAuth() {
 
     if (storedUser) {
         setConvexAuthToken(storedUser.token);
-        let activeUser: AppUser | null = storedUser;
-        const valid = await isStoredAveSessionValid();
-        if (!valid) {
-            activeUser = await tryRefreshAveSession(storedUser);
-        }
+        const activeUser = await resolveStartupSession(storedUser);
 
         if (!activeUser) {
             clearAveSession();
@@ -199,6 +279,7 @@ export async function initAuth() {
             userCache = activeUser;
             currentUser.set(activeUser);
             setConvexAuthToken(activeUser.token);
+            scheduleSessionRefresh(activeUser);
         }
     }
 
@@ -223,6 +304,7 @@ export async function signInWithAve() {
     currentUser.set(user);
     setConvexAuthToken(user.token);
     persistAveSession(user);
+    scheduleSessionRefresh(user);
 
     disableLocalMode();
 
@@ -239,6 +321,7 @@ export async function signInWithAve() {
 }
 
 export function signOutToLocalMode() {
+    clearSessionRefreshTimer();
     userCache = null;
     currentUser.set(null);
     persistAveSession(null);
