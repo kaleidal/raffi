@@ -282,7 +282,7 @@
             (Boolean(stream?.infoHash) ||
                 Boolean(stream?.url && stream.url.startsWith("magnet:")));
 
-        const peerCount = parsePeerCount(fullText) ?? parsePeerCount(detailText);
+        const peerCount = parsePeerCount(detailText);
         const isP2PAdjusted = isP2P || peerCount != null;
 
         const featureBadges: StreamBadge[] = [];
