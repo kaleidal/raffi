@@ -96,7 +96,7 @@ const LANGUAGE_ALIAS_TO_TAG: Record<string, LanguageTag> = {
     ARA: { code: "AR", flag: "🇸🇦" },
     ARABIC: { code: "AR", flag: "🇸🇦" },
     TR: { code: "TR", flag: "🇹🇷" },
-    TUR: { code: "TR", flag: "🇹��" },
+    TUR: { code: "TR", flag: "🇹🇷" },
     TURKISH: { code: "TR", flag: "🇹🇷" },
     NL: { code: "NL", flag: "🇳🇱" },
     DUT: { code: "NL", flag: "🇳🇱" },
