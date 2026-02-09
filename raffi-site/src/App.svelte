@@ -30,6 +30,10 @@
            window.open('https://ko-fi.com/kaleidal', '_blank');
            return;
       }
+      if (section === 'privacy') {
+          window.location.href = '/privacy/';
+          return;
+      }
       
       if (activeSection === section) {
           activeSection = 'screenshots';
@@ -73,6 +77,7 @@
         <div class="flex flex-col gap-[40px] items-start z-10 w-[500px]">
             <HeroButton text="download" on:click={() => handleNav('download')} />
             <HeroButton text="about" on:click={() => handleNav('about')} />
+            <HeroButton text="privacy" on:click={() => handleNav('privacy')} />
             <HeroButton text="donate" on:click={() => handleNav('donate')} />
             <HeroButton text="source" on:click={() => handleNav('source')} />
         </div>

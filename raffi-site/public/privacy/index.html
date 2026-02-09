@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Raffi Privacy Policy</title>
+    <meta
+      name="description"
+      content="Privacy Policy for Raffi (desktop and mobile apps)."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #0a0a0a;
+        --panel: #131313;
+        --text: #f5f5f5;
+        --muted: #bdbdbd;
+        --line: #2a2a2a;
+        --accent: #f4f4f4;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Poppins", sans-serif;
+        background: radial-gradient(circle at 20% 0%, #1a1a1a 0%, var(--bg) 45%);
+        color: var(--text);
+        line-height: 1.65;
+      }
+
+      .wrap {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 32px 20px 64px;
+      }
+
+      .top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 24px;
+      }
+
+      .home-link {
+        display: inline-block;
+        color: #111;
+        background: var(--accent);
+        border: 1px solid var(--accent);
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 14px;
+        padding: 8px 12px;
+        border-radius: 10px;
+      }
+
+      .home-link:hover {
+        background: transparent;
+        color: var(--text);
+      }
+
+      .card {
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 28px;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+      }
+
+      h1 {
+        font-size: clamp(30px, 5vw, 44px);
+        margin: 0 0 8px;
+        line-height: 1.15;
+      }
+
+      h2 {
+        font-size: clamp(20px, 2.6vw, 28px);
+        margin: 34px 0 10px;
+      }
+
+      p {
+        margin: 0 0 14px;
+      }
+
+      ul {
+        margin: 8px 0 16px 22px;
+        padding: 0;
+      }
+
+      li {
+        margin: 7px 0;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      .small {
+        font-size: 14px;
+      }
+
+      a {
+        color: #cfe7ff;
+      }
+
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 6px;
+        padding: 1px 6px;
+        font-size: 0.93em;
+      }
+
+      .foot {
+        margin-top: 28px;
+        border-top: 1px solid var(--line);
+        padding-top: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <div class="top">
+        <a class="home-link" href="/">Back to Raffi</a>
+      </div>
+
+      <article class="card">
+        <h1>Privacy Policy for Raffi</h1>
+        <p class="muted">Last updated: February 9, 2026</p>
+        <p>
+          This Privacy Policy explains how Raffi collects, uses, and stores information when you use
+          the Raffi desktop app, mobile app, and website.
+        </p>
+
+        <h2>1. Who We Are</h2>
+        <p>
+          Raffi is a media application and related website available at
+          <a href="https://raffi.al">raffi.al</a>.
+        </p>
+
+        <h2>2. Information We Collect</h2>
+        <ul>
+          <li>
+            <strong>Account data (if you sign in with Ave):</strong> user ID, email, profile name, avatar,
+            and authentication token returned by Ave.
+          </li>
+          <li>
+            <strong>Cloud sync data:</strong> installed add-ons, watch progress, watch history visibility,
+            lists and list items, and watch party state (for example playback time and play/pause state).
+          </li>
+          <li>
+            <strong>Local app data:</strong> preferences/settings, local cache, and locally stored session data
+            on your device.
+          </li>
+          <li>
+            <strong>Downloads/local files:</strong> on mobile, downloaded media files and download metadata; on desktop,
+            optional local library roots and indexed local media file paths used for local playback.
+          </li>
+          <li>
+            <strong>Diagnostic and product analytics (desktop):</strong> anonymous usage events through PostHog.
+            Session replay is optional and off by default.
+          </li>
+          <li>
+            <strong>Technical logs (desktop):</strong> application logs that may include operational errors and
+            system/runtime details.
+          </li>
+        </ul>
+
+        <h2>3. How We Use Information</h2>
+        <ul>
+          <li>Authenticate your account and keep you signed in.</li>
+          <li>Sync your library, lists, and watch progress across devices.</li>
+          <li>Provide playback features like watch parties, downloads, and local file playback.</li>
+          <li>Maintain and improve app performance, reliability, and usability.</li>
+          <li>Deliver app updates and release information.</li>
+        </ul>
+
+        <h2>4. Third-Party Services</h2>
+        <p>Raffi uses third-party services to provide core functionality:</p>
+        <ul>
+          <li><strong>Ave</strong> for account authentication.</li>
+          <li><strong>Convex</strong> for synced app data storage.</li>
+          <li><strong>PostHog</strong> for desktop analytics (with in-app controls).</li>
+          <li><strong>GitHub Releases API</strong> for website/app release checks and download links.</li>
+          <li>
+            <strong>Metadata/add-on endpoints</strong> (for example Cinemeta and third-party add-ons) for catalog and
+            stream discovery.
+          </li>
+          <li><strong>YouTube (youtube-nocookie.com)</strong> for trailer embeds.</li>
+          <li><strong>Discord RPC</strong> on desktop if you enable Discord rich presence.</li>
+        </ul>
+        <p>
+          These services may process network metadata such as IP address and request headers under their own privacy
+          policies.
+        </p>
+
+        <h2>5. Torrent and Streaming Disclosure</h2>
+        <p>
+          If you use torrent-based sources, your IP address may be visible to peers in the torrent swarm.
+          Raffi does not control third-party peer visibility or third-party add-on behavior.
+        </p>
+
+        <h2>6. Data Sharing</h2>
+        <p>
+          Raffi does not sell personal information. We share data with service providers only as needed to run
+          the product features described in this policy.
+        </p>
+
+        <h2>7. Retention</h2>
+        <ul>
+          <li>Local device data remains until you clear it, sign out, or uninstall the app.</li>
+          <li>Synced cloud data is retained while your account is active or until deletion is requested.</li>
+          <li>Analytics retention is managed by the analytics provider configuration and controls.</li>
+        </ul>
+
+        <h2>8. Security</h2>
+        <p>
+          We use reasonable safeguards appropriate to the nature of the data. No system is perfectly secure, and we
+          cannot guarantee absolute security.
+        </p>
+
+        <h2>9. Your Choices and Rights</h2>
+        <ul>
+          <li>Desktop analytics can be disabled in Raffi Settings.</li>
+          <li>Desktop session replay can be enabled/disabled separately in Settings.</li>
+          <li>You can clear watch history and local cached data from the app.</li>
+          <li>
+            Depending on your location, you may have rights to request access, correction, or deletion of personal data.
+          </li>
+        </ul>
+
+        <h2>10. Children's Privacy</h2>
+        <p>
+          Raffi is not directed to children under 13, and we do not knowingly collect personal information from children
+          under 13.
+        </p>
+
+        <h2>11. Policy Changes</h2>
+        <p>
+          We may update this policy from time to time. Material updates will be reflected by revising the
+          "Last updated" date above.
+        </p>
+
+        <h2>12. Contact</h2>
+        <p>
+          For privacy requests or questions, contact: <a href="mailto:hello@kaleid.al">hello@kaleid.al</a>
+        </p>
+
+        <p class="foot small muted">
+          This policy describes current Raffi behavior based on the codebase as of February 9, 2026.
+        </p>
+      </article>
+    </main>
+  </body>
+</html>
