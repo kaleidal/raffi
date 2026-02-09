@@ -324,6 +324,7 @@
     let lastTraktScrobbleAction: "start" | "pause" | "stop" | null = null;
     let lastTraktScrobbleAt = 0;
     let traktStopSent = false;
+<<<<<<< HEAD
     let traktStartSent = false;
     let traktDisabledForSession = false;
     let traktFailureCount = 0;
@@ -331,6 +332,8 @@
     const TRAKT_COMPLETION_THRESHOLD = 0.9;
     const TRAKT_FAILURE_COOLDOWN_MS = 60_000;
     const TRAKT_MAX_FAILURES = 3;
+=======
+>>>>>>> 44cec52 (trakt)
 
     const getTraktMediaType = (): "movie" | "episode" => {
         return metaData?.meta?.type === "series" ? "episode" : "movie";
@@ -347,9 +350,12 @@
     ) => {
         if ($localMode || !imdbID) return;
         if (!hasStarted) return;
+<<<<<<< HEAD
         if (traktDisabledForSession) return;
         if (!force && Date.now() < traktCooldownUntil) return;
         if (action === "pause" && !traktStartSent) return;
+=======
+>>>>>>> 44cec52 (trakt)
 
         const mediaType = getTraktMediaType();
         if (mediaType === "episode" && (season == null || episode == null)) return;
@@ -373,7 +379,11 @@
         }
 
         try {
+<<<<<<< HEAD
             const result: any = await traktScrobble({
+=======
+            await traktScrobble({
+>>>>>>> 44cec52 (trakt)
                 action,
                 imdbId: imdbID,
                 mediaType,
@@ -382,6 +392,7 @@
                 progress: getTraktProgress(),
                 appVersion: "desktop",
             });
+<<<<<<< HEAD
 
             if (result?.ok) {
                 traktFailureCount = 0;
@@ -414,6 +425,10 @@
                 traktCooldownUntil = Date.now() + TRAKT_FAILURE_COOLDOWN_MS;
                 traktFailureCount = 0;
             }
+=======
+        } catch {
+            // ignore Trakt scrobble failures in playback flow
+>>>>>>> 44cec52 (trakt)
         }
     };
 
@@ -665,11 +680,15 @@
         currentTime.set(time);
         handleProgressInternal(time, $duration);
 
+<<<<<<< HEAD
         if (
             !traktStopSent &&
             $duration > 0 &&
             time / $duration >= TRAKT_COMPLETION_THRESHOLD
         ) {
+=======
+        if (!traktStopSent && $duration > 0 && time / $duration >= 0.9) {
+>>>>>>> 44cec52 (trakt)
             void sendTraktScrobble("stop", true);
         }
 
@@ -709,6 +728,7 @@
 
     const handlePause = () => {
         isPlaying.set(false);
+<<<<<<< HEAD
         if (
             !traktStopSent &&
             !(
@@ -716,6 +736,9 @@
                 $currentTime / $duration >= TRAKT_COMPLETION_THRESHOLD
             )
         ) {
+=======
+        if (!traktStopSent && !($duration > 0 && $currentTime / $duration >= 0.9)) {
+>>>>>>> 44cec52 (trakt)
             void sendTraktScrobble("pause");
         }
         Discord.updateDiscordActivity(

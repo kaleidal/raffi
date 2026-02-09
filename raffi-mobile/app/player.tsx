@@ -176,10 +176,13 @@ export default function PlayerScreen() {
   const lastTraktActionRef = useRef<'start' | 'pause' | 'stop' | null>(null);
   const lastTraktActionAtRef = useRef(0);
   const traktStopSentRef = useRef(false);
+<<<<<<< HEAD
   const traktStartSentRef = useRef(false);
   const traktDisabledRef = useRef(false);
   const traktFailureCountRef = useRef(0);
   const traktCooldownUntilRef = useRef(0);
+=======
+>>>>>>> 44cec52 (trakt)
 
   // Check PiP support and initialize brightness on mount
   useEffect(() => {
@@ -391,10 +394,13 @@ export default function PlayerScreen() {
     lastTraktActionRef.current = null;
     lastTraktActionAtRef.current = 0;
     traktStopSentRef.current = false;
+<<<<<<< HEAD
     traktStartSentRef.current = false;
     traktDisabledRef.current = false;
     traktFailureCountRef.current = 0;
     traktCooldownUntilRef.current = 0;
+=======
+>>>>>>> 44cec52 (trakt)
   }, [imdbId, season, episode, videoSrc]);
 
   const getTraktProgress = useCallback(() => {
@@ -406,9 +412,12 @@ export default function PlayerScreen() {
   const sendTraktEvent = useCallback(
     async (action: 'start' | 'pause' | 'stop', force = false) => {
       if (!imdbId || !type) return;
+<<<<<<< HEAD
       if (traktDisabledRef.current) return;
       if (!force && Date.now() < traktCooldownUntilRef.current) return;
       if (action === 'pause' && !traktStartSentRef.current) return;
+=======
+>>>>>>> 44cec52 (trakt)
 
       const mediaType = type === 'series' ? 'episode' : 'movie';
       const seasonNum = season != null ? Number(season) : undefined;
@@ -439,7 +448,11 @@ export default function PlayerScreen() {
       }
 
       try {
+<<<<<<< HEAD
         const result: any = await traktScrobble({
+=======
+        await traktScrobble({
+>>>>>>> 44cec52 (trakt)
           action,
           imdbId,
           mediaType,
@@ -448,6 +461,7 @@ export default function PlayerScreen() {
           progress: getTraktProgress(),
           appVersion: 'mobile',
         });
+<<<<<<< HEAD
 
         if (result?.ok) {
           traktFailureCountRef.current = 0;
@@ -480,6 +494,10 @@ export default function PlayerScreen() {
           traktCooldownUntilRef.current = Date.now() + TRAKT_FAILURE_COOLDOWN_MS;
           traktFailureCountRef.current = 0;
         }
+=======
+      } catch {
+        // Ignore Trakt scrobble errors during playback.
+>>>>>>> 44cec52 (trakt)
       }
     },
     [episode, getTraktProgress, imdbId, season, type]
@@ -538,10 +556,14 @@ export default function PlayerScreen() {
         void sendTraktEvent('start');
       } else if (
         !traktStopSentRef.current &&
+<<<<<<< HEAD
         !(
           durationRef.current > 0 &&
           currentTimeRef.current / durationRef.current >= TRAKT_COMPLETION_THRESHOLD
         )
+=======
+        !(durationRef.current > 0 && currentTimeRef.current / durationRef.current >= 0.9)
+>>>>>>> 44cec52 (trakt)
       ) {
         void sendTraktEvent('pause');
       }
@@ -579,11 +601,15 @@ export default function PlayerScreen() {
         setDuration(d);
         durationRef.current = d;
 
+<<<<<<< HEAD
         if (
           !traktStopSentRef.current &&
           d > 0 &&
           time / d >= TRAKT_COMPLETION_THRESHOLD
         ) {
+=======
+        if (!traktStopSentRef.current && d > 0 && time / d >= 0.9) {
+>>>>>>> 44cec52 (trakt)
           void sendTraktEvent('stop', true);
         }
         
