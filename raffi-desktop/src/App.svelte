@@ -63,6 +63,7 @@
         updateStatus.set({
             available: true,
             downloaded: true,
+            downloadProgress: 100,
             version: "test-build",
             releaseDate: new Date().toISOString(),
             notes: "# Test update\n\n- In-app update modal\n- Settings update banner\n- Update badge on settings",
@@ -211,6 +212,8 @@
                 updateStatus.update((state) => ({
                     ...state,
                     available: true,
+                    downloaded: false,
+                    downloadProgress: 0,
                     ...normalizeUpdateInfo(info),
                 }));
             }) ?? null;
@@ -221,9 +224,25 @@
                     ...state,
                     available: true,
                     downloaded: true,
+                    downloadProgress: 100,
                     ...normalizeUpdateInfo(info),
                 }));
                 showUpdatePrompt = true;
+            }) ?? null;
+
+        const removeUpdateDownloadProgress =
+            (window as any).electronAPI?.onUpdateDownloadProgress?.((info: any) => {
+                const rawPercent = Number(info?.percent);
+                const percent = Number.isFinite(rawPercent)
+                    ? Math.max(0, Math.min(100, rawPercent))
+                    : null;
+
+                updateStatus.update((state) => ({
+                    ...state,
+                    available: true,
+                    downloadProgress: percent,
+                    downloaded: percent != null && percent >= 100 ? true : state.downloaded,
+                }));
             }) ?? null;
 
         return () => {
@@ -237,6 +256,9 @@
             }
             if (typeof removeUpdateDownloaded === "function") {
                 removeUpdateDownloaded();
+            }
+            if (typeof removeUpdateDownloadProgress === "function") {
+                removeUpdateDownloadProgress();
             }
             if (updateLaterTimeout) {
                 clearTimeout(updateLaterTimeout);
