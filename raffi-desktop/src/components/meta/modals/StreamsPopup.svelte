@@ -8,6 +8,12 @@
     import { trackEvent } from "../../../lib/analytics";
     import { lockScroll, unlockScroll } from "../../../lib/modalScrollLock";
     import { X, Link2 } from "lucide-svelte";
+    import {
+        buildAudioLanguageBadge,
+        detectProvider,
+        formatAvailability,
+        parsePeerCount,
+    } from "../../../lib/streams/streamMetadata";
 
     export let streamsPopupVisible = false;
     export let addons: Addon[] = [];
@@ -214,87 +220,6 @@
         watched: boolean;
     }
 
-    const PROVIDER_KEYWORDS = [
-        "TorrentGalaxy",
-        "Torrentio",
-        "RARBG",
-        "ThePirateBay",
-        "1337x",
-        "Torlock",
-        "YTS",
-        "EZTV",
-        "TorrentLeech",
-        "Zooqle",
-        "Nyaa",
-        "AniDex",
-        "MediaFusion",
-        "Bitsearch",
-        "MagnetDL",
-        "LimeTorrents",
-        "TorrentSeed",
-        "Glotorrents",
-        "Demonoid",
-        "ByteSearch",
-    ];
-
-    const AVAILABILITY_MAP: Record<string, string> = {
-        RD: "Real-Debrid",
-        "RD+": "Real-Debrid+",
-        AD: "AllDebrid",
-        PM: "Premiumize",
-    };
-
-    function detectProvider(text: string | null): string | null {
-        if (!text) return null;
-        for (const keyword of PROVIDER_KEYWORDS) {
-            const pattern = new RegExp(keyword.replace(/\s+/g, "\\s*"), "i");
-            if (pattern.test(text)) {
-                return keyword;
-            }
-        }
-
-        const tokens = text
-            .split(/[|•\-\s]+/)
-            .map((token) => token.trim())
-            .filter(Boolean)
-            .reverse();
-
-        return (
-            tokens.find((token) => {
-                if (!/^[A-Za-z][A-Za-z0-9.+-]{2,}$/.test(token)) return false;
-                if (/(GB|MB|TB)$/i.test(token)) return false;
-                if (/\d+p$/i.test(token)) return false;
-                if (/HDR|SDR|HEVC|H\.?(?:26[45])|AV1|ATMOS|DDP/i.test(token))
-                    return false;
-                return true;
-            }) || null
-        );
-    }
-
-    function parsePeerCount(text: string | null) {
-        if (!text) return null;
-
-        const emojiMatch = text.match(/(?:👤|👥)\s*(\d{1,5})/);
-        if (emojiMatch) {
-            const value = parseInt(emojiMatch[1], 10);
-            if (!Number.isNaN(value)) return value;
-        }
-
-        const peerMatch = text.match(/(\d{1,5})\s*(?:peers?|seeders?|seeds?)/i);
-        if (peerMatch) {
-            const value = parseInt(peerMatch[1], 10);
-            if (!Number.isNaN(value)) return value;
-        }
-
-        return null;
-    }
-
-    function formatAvailability(label: string | null) {
-        if (!label) return null;
-        const normalized = label.replace(/[[\]]/g, "").toUpperCase();
-        return AVAILABILITY_MAP[normalized] ?? normalized;
-    }
-
     function parseStreamMetadata(stream: any): ParsedStreamMetadata {
         const isLocal = stream?.raffiSource === "local";
         const title = stream?.title ?? "";
@@ -343,18 +268,19 @@
                 : /DTS/i.test(fullText)
                     ? "DTS"
                     : null;
+        const audioLanguagesLabel = buildAudioLanguageBadge(fullText);
 
         const sizeMatch = fullText.match(/(\d+(?:\.\d+)?)\s?(GB|MB)/i);
         const sizeLabel = sizeMatch
             ? `${sizeMatch[1]} ${sizeMatch[2].toUpperCase()}`
             : null;
 
-                const provider = isLocal
-                        ? "Local"
-                        : detectProvider(detailText) ||
-                            detectProvider(fullText) ||
-                            stream?.name ||
-                            "Unknown Source";
+        const provider = isLocal
+            ? "Local"
+            : detectProvider(detailText) ||
+                detectProvider(fullText) ||
+                stream?.name ||
+                "Unknown Source";
 
         const hostLabel =
             stream?.name && stream.name !== provider ? stream.name : null;
@@ -403,6 +329,7 @@
         }
         addFeature(codecLabel);
         addFeature(audioLabel);
+        addFeature(audioLanguagesLabel, "accent");
         addFeature(sizeLabel, "muted");
 
         return {
@@ -965,6 +892,9 @@
                                                 {#each item.meta.featureBadges as badge (badge.label)}
                                                     <span
                                                         class={`px-3 py-1 rounded-full text-xs font-medium tracking-wide ${badge.variant ===
+                                                        'accent'
+                                                            ? 'bg-white text-black'
+                                                            : badge.variant ===
                                                         'muted'
                                                             ? 'bg-white/5 text-white/50'
                                                             : 'bg-white/10 text-white'}`}
@@ -1033,6 +963,9 @@
                                                 {#each item.meta.featureBadges as badge (badge.label)}
                                                     <span
                                                         class={`px-3 py-1 rounded-full text-xs font-medium tracking-wide ${badge.variant ===
+                                                        'accent'
+                                                            ? 'bg-white text-black'
+                                                            : badge.variant ===
                                                         'muted'
                                                             ? 'bg-white/5 text-white/50'
                                                             : 'bg-white/10 text-white'}`}
