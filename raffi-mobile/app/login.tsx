@@ -1,14 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React, { useState } from 'react';
+import React from 'react';
 import {
     ActivityIndicator,
     Alert,
-    KeyboardAvoidingView,
-    Platform,
     StyleSheet,
     Text,
-    TextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
@@ -18,21 +15,10 @@ import { BorderRadius, Colors, Spacing, Typography } from '@/constants/theme';
 import { useAuthStore } from '@/lib/stores/authStore';
 
 export default function LoginScreen() {
-  const { signIn, signUp, loading } = useAuthStore();
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const { signIn, loading } = useAuthStore();
 
   const handleSubmit = async () => {
-    if (!email.trim() || !password.trim()) {
-      Alert.alert('Error', 'Please enter both email and password');
-      return;
-    }
-
-    const { error } = isSignUp
-      ? await signUp(email.trim(), password)
-      : await signIn(email.trim(), password);
+    const { error } = await signIn();
 
     if (error) {
       Alert.alert('Error', error.message || 'Authentication failed');
@@ -43,10 +29,7 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
-      >
+      <View style={styles.keyboardView}>
         {/* Header */}
         <TouchableOpacity style={styles.closeButton} onPress={() => router.back()}>
           <Ionicons name="close" size={28} color={Colors.text} />
@@ -60,49 +43,13 @@ export default function LoginScreen() {
           </View>
 
           {/* Title */}
-          <Text style={styles.title}>{isSignUp ? 'Create Account' : 'Welcome Back'}</Text>
+          <Text style={styles.title}>Welcome Back</Text>
           <Text style={styles.subtitle}>
-            {isSignUp
-              ? 'Sign up to start watching'
-              : 'Sign in to continue watching'}
+            Sign in with Ave to continue watching
           </Text>
 
           {/* Form */}
           <View style={styles.form}>
-            <View style={styles.inputContainer}>
-              <Ionicons name="mail-outline" size={20} color={Colors.textMuted} />
-              <TextInput
-                style={styles.input}
-                value={email}
-                onChangeText={setEmail}
-                placeholder="Email"
-                placeholderTextColor={Colors.textMuted}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Ionicons name="lock-closed-outline" size={20} color={Colors.textMuted} />
-              <TextInput
-                style={styles.input}
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Password"
-                placeholderTextColor={Colors.textMuted}
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-              />
-              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                <Ionicons
-                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                  size={20}
-                  color={Colors.textMuted}
-                />
-              </TouchableOpacity>
-            </View>
-
             <TouchableOpacity
               style={styles.submitButton}
               onPress={handleSubmit}
@@ -112,25 +59,13 @@ export default function LoginScreen() {
                 <ActivityIndicator color="#000" />
               ) : (
                 <Text style={styles.submitButtonText}>
-                  {isSignUp ? 'Sign Up' : 'Sign In'}
+                  Continue with Ave
                 </Text>
               )}
             </TouchableOpacity>
           </View>
-
-          {/* Toggle */}
-          <View style={styles.toggleContainer}>
-            <Text style={styles.toggleText}>
-              {isSignUp ? 'Already have an account?' : "Don't have an account?"}
-            </Text>
-            <TouchableOpacity onPress={() => setIsSignUp(!isSignUp)}>
-              <Text style={styles.toggleLink}>
-                {isSignUp ? 'Sign In' : 'Sign Up'}
-              </Text>
-            </TouchableOpacity>
-          </View>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -187,20 +122,6 @@ const styles = StyleSheet.create({
   form: {
     gap: Spacing.md,
   },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: BorderRadius.lg,
-    paddingHorizontal: Spacing.lg,
-    gap: Spacing.sm,
-  },
-  input: {
-    flex: 1,
-    fontSize: Typography.sizes.md,
-    color: Colors.text,
-    paddingVertical: Spacing.lg,
-  },
   submitButton: {
     backgroundColor: Colors.text,
     paddingVertical: Spacing.lg,
@@ -212,21 +133,5 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.lg,
     fontWeight: Typography.weights.bold,
     color: Colors.background,
-  },
-  toggleContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: Spacing.xxl,
-    gap: Spacing.xs,
-  },
-  toggleText: {
-    fontSize: Typography.sizes.md,
-    color: Colors.textSecondary,
-  },
-  toggleLink: {
-    fontSize: Typography.sizes.md,
-    fontWeight: Typography.weights.bold,
-    color: Colors.primary,
   },
 });

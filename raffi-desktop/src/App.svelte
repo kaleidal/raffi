@@ -11,7 +11,15 @@
 
     import { X } from "lucide-svelte";
     import LoadingSpinner from "./components/common/LoadingSpinner.svelte";
-    import { currentUser, initAuth, localMode, updateStatus } from "./lib/stores/authStore";
+    import {
+        currentUser,
+        initAuth,
+        legacyMigrationNeeded,
+        migrateLegacySessionAndSignInAve,
+        migrateLegacySessionToLocal,
+        dismissLegacyMigrationPrompt,
+        updateStatus,
+    } from "./lib/stores/authStore";
     import { initAnalytics, setAnalyticsUser, trackEvent, trackPageView } from "./lib/analytics";
 
     const pages = {
@@ -25,6 +33,8 @@
     let showTitleBar = false;
     let displayZoom = 1;
     let showUpdatePrompt = false;
+    let legacyMigrationBusy = false;
+    let legacyMigrationError = "";
     let updateLaterTimeout: ReturnType<typeof setTimeout> | null = null;
     let updateTestArmed = false;
     let updateTestTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -99,6 +109,32 @@
     const handleUpdateRestart = () => {
         showUpdatePrompt = false;
         (window as any).electronAPI?.installUpdate?.();
+    };
+
+    const handleMigrateToLocal = async () => {
+        legacyMigrationBusy = true;
+        legacyMigrationError = "";
+        try {
+            await migrateLegacySessionToLocal();
+            router.navigate("home");
+        } catch (err: any) {
+            legacyMigrationError = err?.message || "Failed to migrate legacy session";
+        } finally {
+            legacyMigrationBusy = false;
+        }
+    };
+
+    const handleMigrateAndSignInAve = async () => {
+        legacyMigrationBusy = true;
+        legacyMigrationError = "";
+        try {
+            await migrateLegacySessionAndSignInAve();
+            router.navigate("home");
+        } catch (err: any) {
+            legacyMigrationError = err?.message || "Failed to migrate legacy session";
+        } finally {
+            legacyMigrationBusy = false;
+        }
     };
 
     onMount(() => {
@@ -298,6 +334,52 @@
                             Restart now
                         </button>
                     </div>
+                </div>
+            </div>
+        </div>
+    {/if}
+
+    {#if !checkingAuth && $legacyMigrationNeeded}
+        <div class="fixed inset-0 z-[520] bg-black/80 backdrop-blur-sm flex items-center justify-center">
+            <div class="bg-[#121212] w-full max-w-lg rounded-[32px] p-6 md:p-8 flex flex-col gap-5 shadow-[0_40px_160px_rgba(0,0,0,0.55)]">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <h2 class="text-white text-2xl font-poppins font-semibold">Legacy account detected</h2>
+                        <p class="text-white/60 text-sm">
+                            We found an old Supabase session. You can migrate data to local mode, or migrate then sign in with Ave.
+                        </p>
+                    </div>
+                    <button
+                        class="text-white/50 hover:text-white transition-colors cursor-pointer"
+                        on:click={dismissLegacyMigrationPrompt}
+                        aria-label="Dismiss migration dialog"
+                        disabled={legacyMigrationBusy}
+                    >
+                        <X size={24} strokeWidth={2} />
+                    </button>
+                </div>
+
+                {#if legacyMigrationError}
+                    <div class="p-3 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-300 text-sm">
+                        {legacyMigrationError}
+                    </div>
+                {/if}
+
+                <div class="flex flex-col gap-3">
+                    <button
+                        class="w-full px-4 py-3 rounded-2xl bg-white text-black font-semibold hover:bg-white/90 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                        on:click={handleMigrateAndSignInAve}
+                        disabled={legacyMigrationBusy}
+                    >
+                        {legacyMigrationBusy ? "Working..." : "Migrate + Sign in with Ave"}
+                    </button>
+                    <button
+                        class="w-full px-4 py-3 rounded-2xl bg-white/10 text-white font-semibold hover:bg-white/20 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                        on:click={handleMigrateToLocal}
+                        disabled={legacyMigrationBusy}
+                    >
+                        Switch to local mode
+                    </button>
                 </div>
             </div>
         </div>

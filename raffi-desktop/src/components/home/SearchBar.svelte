@@ -10,7 +10,7 @@
 	import ListsPopup from "../meta/modals/ListsPopup.svelte";
 	import PlayModal from "./modals/PlayModal.svelte";
 	import { trackEvent } from "../../lib/analytics";
-	import { updateStatus } from "../../lib/stores/authStore";
+	import { currentUser, updateStatus } from "../../lib/stores/authStore";
 
 
     const dispatch = createEventDispatcher();
@@ -415,11 +415,29 @@
         </button>
 
         <button
-            class="relative bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
+            class={`group relative bg-[#2C2C2C]/80 rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer ${$currentUser ? 'p-0 overflow-hidden w-[80px] h-[80px]' : 'p-[20px]'}`}
             aria-label="settings"
             onclick={openSettings}
         >
-            <Settings size={40} strokeWidth={2} color="#C3C3C3" />
+            {#if $currentUser}
+                <div class="w-full h-full bg-white/10 group-hover:bg-black/35 transition-colors duration-300 flex items-center justify-center">
+                    {#if $currentUser.avatar}
+                        <img
+                            src={$currentUser.avatar}
+                            alt="Profile"
+                            class="w-full h-full object-cover"
+                            loading="lazy"
+                        />
+                        <span class="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></span>
+                    {:else}
+                        <span class="text-white text-2xl font-semibold uppercase">
+                            {($currentUser.name || $currentUser.email || "?").slice(0, 1)}
+                        </span>
+                    {/if}
+                </div>
+            {:else}
+                <Settings size={40} strokeWidth={2} color="#C3C3C3" />
+            {/if}
             {#if $updateStatus.available}
                 <span class="absolute top-3 right-3 flex h-2.5 w-2.5">
                     <span class="absolute inline-flex h-full w-full rounded-full bg-[#FF3B30]/60 animate-ping"></span>

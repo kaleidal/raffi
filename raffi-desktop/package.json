@@ -130,9 +130,11 @@
     ]
   },
   "dependencies": {
+    "@ave-id/sdk": "^0.2.2",
     "@ryuziii/discord-rpc": "^1.0.1-rc.1",
     "@supabase/supabase-js": "^2.95.3",
     "@tailwindcss/vite": "^4.1.18",
+    "convex": "^1.31.7",
     "electron-updater": "^6.7.3",
     "eventemitter3": "^5.0.4",
     "express": "^5.2.1",

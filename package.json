@@ -1,0 +1,6 @@
+{
+  "name": "raffi",
+  "dependencies": {
+    "convex": "^1.31.7"
+  }
+}
