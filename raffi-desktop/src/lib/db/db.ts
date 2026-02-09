@@ -1,4 +1,4 @@
-import { convexMutation, convexQuery } from "./convex";
+import { convexAction, convexMutation, convexQuery } from "./convex";
 import { getCachedUser, localMode } from "../stores/authStore";
 import { get } from "svelte/store";
 
@@ -65,6 +65,29 @@ export interface WatchPartyMember {
     last_seen: string;
 }
 
+export interface TraktStatus {
+    configured: boolean;
+    clientId: string | null;
+    redirectUri: string;
+    authorizeUrl: string;
+    connected: boolean;
+    username: string | null;
+    slug: string | null;
+    scope: string | null;
+    updatedAt: string | null;
+    expiresAt: number | null;
+}
+
+export interface TraktScrobbleArgs {
+    action: "start" | "pause" | "stop";
+    imdbId: string;
+    mediaType: "movie" | "episode";
+    season?: number;
+    episode?: number;
+    progress: number;
+    appVersion?: string;
+}
+
 type RemoteState = {
     addons: Addon[];
     library: LibraryItem[];
@@ -94,6 +117,19 @@ const DEFAULT_ADDON = {
         idPrefixes: ["tt"],
         description: "OpenSubtitles v3 Addon for Stremio",
     },
+};
+
+const DEFAULT_TRAKT_STATUS: TraktStatus = {
+    configured: false,
+    clientId: null,
+    redirectUri: "raffi://trakt/callback",
+    authorizeUrl: "https://trakt.tv/oauth/authorize",
+    connected: false,
+    username: null,
+    slug: null,
+    scope: null,
+    updatedAt: null,
+    expiresAt: null,
 };
 
 let remoteStateCache: { userId: string; data: RemoteState; updatedAt: number } | null = null;
@@ -404,6 +440,37 @@ export const updateLibraryPoster = async (imdb_id: string, poster: string) => {
     getRequiredUserId();
     await convexMutation("raffi:updateLibraryPoster", { imdb_id, poster });
     invalidateRemoteCache();
+};
+
+export const getTraktStatus = async (): Promise<TraktStatus> => {
+    if (isLocalModeActive()) {
+        return DEFAULT_TRAKT_STATUS;
+    }
+    getRequiredUserId();
+    const status = await convexQuery<TraktStatus>("raffi:getTraktStatus", {});
+    return status || DEFAULT_TRAKT_STATUS;
+};
+
+export const exchangeTraktCode = async (code: string) => {
+    getRequiredUserId();
+    return convexAction("raffi:exchangeTraktCode", { code });
+};
+
+export const disconnectTrakt = async () => {
+    if (isLocalModeActive()) return { ok: true };
+    getRequiredUserId();
+    return convexMutation("raffi:disconnectTrakt", {});
+};
+
+export const refreshTraktToken = async () => {
+    getRequiredUserId();
+    return convexAction("raffi:refreshTraktToken", {});
+};
+
+export const traktScrobble = async (args: TraktScrobbleArgs) => {
+    if (isLocalModeActive()) return { ok: false, reason: "local_mode" };
+    getRequiredUserId();
+    return convexAction("raffi:traktScrobble", args as any);
 };
 
 export const getLists = async () => {
