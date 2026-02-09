@@ -20,6 +20,53 @@ const optionalString = (value: any) => {
     return undefined;
 };
 
+const importedAddonValidator = v.object({
+    transport_url: v.string(),
+    manifest: v.any(),
+    flags: v.optional(v.any()),
+    addon_id: v.optional(v.string()),
+    added_at: v.optional(v.string()),
+});
+
+const importedLibraryValidator = v.object({
+    imdb_id: v.string(),
+    progress: v.any(),
+    last_watched: v.optional(v.string()),
+    completed_at: v.optional(v.union(v.string(), v.null())),
+    type: v.optional(v.string()),
+    shown: v.optional(v.boolean()),
+    poster: v.optional(v.string()),
+});
+
+const importedListValidator = v.object({
+    list_id: v.string(),
+    name: v.string(),
+    position: v.optional(v.number()),
+    created_at: v.optional(v.string()),
+});
+
+const importedListItemValidator = v.object({
+    list_id: v.string(),
+    imdb_id: v.string(),
+    position: v.optional(v.number()),
+    type: v.optional(v.string()),
+    poster: v.optional(v.string()),
+});
+
+const MAX_IMPORT_COUNTS = {
+    addons: 500,
+    library: 10_000,
+    lists: 1_000,
+    listItems: 20_000,
+} as const;
+
+const assertImportCount = (label: keyof typeof MAX_IMPORT_COUNTS, count: number) => {
+    const max = MAX_IMPORT_COUNTS[label];
+    if (count > max) {
+        throw new Error(`Import payload for ${label} is too large (${count}/${max})`);
+    }
+};
+
 const requireAuthedUserId = async (ctx: any) => {
     const identity = await ctx.auth.getUserIdentity();
     const authedUserId = identity?.subject;
@@ -88,14 +135,15 @@ export const ensureDefaultAddon = mutationGeneric({
 
 export const importState = mutationGeneric({
     args: {
-        addons: v.array(v.any()),
-        library: v.array(v.any()),
-        lists: v.array(v.any()),
-        listItems: v.array(v.any()),
+        addons: v.array(importedAddonValidator),
+        library: v.array(importedLibraryValidator),
+        lists: v.array(importedListValidator),
+        listItems: v.array(importedListItemValidator),
     },
     handler: async (ctx, args) => {
         const userId = await requireAuthedUserId(ctx);
         const addons = uniqueBy(args.addons || [], (item) => item.transport_url || "");
+        assertImportCount("addons", addons.length);
         for (const addon of addons) {
             const existing = await ctx.db
                 .query("addons")
@@ -123,6 +171,7 @@ export const importState = mutationGeneric({
         }
 
         const library = uniqueBy(args.library || [], (item) => item.imdb_id || "");
+        assertImportCount("library", library.length);
         for (const row of library) {
             const existing = await ctx.db
                 .query("libraries")
@@ -152,6 +201,7 @@ export const importState = mutationGeneric({
         }
 
         const lists = uniqueBy(args.lists || [], (item) => item.list_id || "");
+        assertImportCount("lists", lists.length);
         for (const list of lists) {
             const existing = await ctx.db
                 .query("lists")
@@ -176,6 +226,7 @@ export const importState = mutationGeneric({
         }
 
         const listItems = uniqueBy(args.listItems || [], (item) => `${item.list_id}:${item.imdb_id}`);
+        assertImportCount("listItems", listItems.length);
         for (const item of listItems) {
             const existing = await ctx.db
                 .query("list_items")
