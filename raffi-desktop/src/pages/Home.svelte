@@ -25,6 +25,7 @@
     let genreMap: Record<string, PopularTitleMeta[]> = {};
     let topGenres: string[] = [];
     let absolutePopularTitles: PopularTitleMeta[] = [];
+    const HOME_REFRESH_EVENT = "raffi:home-refresh";
 
     async function checkTrailer(videoId: string): Promise<boolean> {
         try {
@@ -85,25 +86,8 @@
         if (newTitle) showcasedTitle = newTitle;
     }
 
-    onMount(async () => {
-        let mostPopularMovies = await getPopularTitles("movie");
-        let mostPopularSeries = await getPopularTitles("series");
-        absolutePopularTitles = [...mostPopularMovies, ...mostPopularSeries];
-
-        if (absolutePopularTitles.length > 0) {
-            absolutePopularTitles.sort(
-                (a, b) =>
-                    (b.popularities.moviedb || 0) -
-                    (a.popularities.moviedb || 0),
-            );
-
-            absolutePopularTitles = absolutePopularTitles.slice(0, 20);
-
-            popularMeta = absolutePopularTitles;
-        }
-
-        await refreshFeatured();
-
+    async function loadContinueWatching() {
+        const nextContinueWatchingMeta: (ShowResponse & { libraryItem: any })[] = [];
         try {
             const library = await getLibrary();
             library.sort(
@@ -118,7 +102,7 @@
             for (const item of recent) {
                 try {
                     if (item.poster) {
-                        continueWatchingMeta.push({
+                        nextContinueWatchingMeta.push({
                             meta: {
                                 poster: item.poster,
                                 imdb_id: item.imdb_id,
@@ -134,7 +118,6 @@
                             } as any,
                             libraryItem: item,
                         });
-                        continueWatchingMeta = continueWatchingMeta;
                         continue;
                     }
 
@@ -168,11 +151,10 @@
                             }
                         }
 
-                        continueWatchingMeta.push({
+                        nextContinueWatchingMeta.push({
                             ...meta,
                             libraryItem: item,
                         });
-                        continueWatchingMeta = continueWatchingMeta;
                     } else {
                         console.warn("No meta found for:", item.imdb_id);
                     }
@@ -183,29 +165,64 @@
         } catch (e) {
             console.error("Failed to load library", e);
         }
+        continueWatchingMeta = nextContinueWatchingMeta;
+    }
 
-        const allTitlesForGenres = [...mostPopularMovies, ...mostPopularSeries];
-        const genreCount: Record<string, number> = {};
+    onMount(() => {
+        const loadHomeData = async () => {
+            let mostPopularMovies = await getPopularTitles("movie");
+            let mostPopularSeries = await getPopularTitles("series");
+            absolutePopularTitles = [...mostPopularMovies, ...mostPopularSeries];
 
-        for (const title of allTitlesForGenres) {
-            if (title.genre && Array.isArray(title.genre)) {
-                for (const g of title.genre) {
-                    if (!genreMap[g]) {
-                        genreMap[g] = [];
-                        genreCount[g] = 0;
+            if (absolutePopularTitles.length > 0) {
+                absolutePopularTitles.sort(
+                    (a, b) =>
+                        (b.popularities.moviedb || 0) -
+                        (a.popularities.moviedb || 0),
+                );
+
+                absolutePopularTitles = absolutePopularTitles.slice(0, 20);
+
+                popularMeta = absolutePopularTitles;
+            }
+
+            await refreshFeatured();
+            await loadContinueWatching();
+
+            const allTitlesForGenres = [...mostPopularMovies, ...mostPopularSeries];
+            const genreCount: Record<string, number> = {};
+
+            for (const title of allTitlesForGenres) {
+                if (title.genre && Array.isArray(title.genre)) {
+                    for (const g of title.genre) {
+                        if (!genreMap[g]) {
+                            genreMap[g] = [];
+                            genreCount[g] = 0;
+                        }
+                        genreMap[g].push(title);
+                        genreCount[g]++;
                     }
-                    genreMap[g].push(title);
-                    genreCount[g]++;
                 }
             }
-        }
 
-        topGenres = Object.entries(genreCount)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 10)
-            .map(([genre]) => genre);
+            topGenres = Object.entries(genreCount)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10)
+                .map(([genre]) => genre);
 
-        fetchedTitles = true;
+            fetchedTitles = true;
+        };
+
+        void loadHomeData();
+
+        const handleHomeRefresh = () => {
+            void loadContinueWatching();
+        };
+        window.addEventListener(HOME_REFRESH_EVENT, handleHomeRefresh);
+
+        return () => {
+            window.removeEventListener(HOME_REFRESH_EVENT, handleHomeRefresh);
+        };
     });
 
     function handleOpenAddons() {
