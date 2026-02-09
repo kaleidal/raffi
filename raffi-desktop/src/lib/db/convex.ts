@@ -9,6 +9,7 @@ const CONVEX_URLS = import.meta.env.DEV
 const clients = new Map<string, ConvexHttpClient>();
 let activeUrl = CONVEX_URLS[0];
 let authToken: string | null = null;
+let authRefreshHandler: (() => Promise<string | null>) | null = null;
 
 const getClient = (url: string) => {
     let client = clients.get(url);
@@ -22,9 +23,17 @@ const getClient = (url: string) => {
     return client;
 };
 
-const shouldAttemptFailover = (error: any) => {
+const isAuthError = (error: any) => {
     const message = String(error?.message || "").toLowerCase();
-    if (message.includes("not authenticated") || message.includes("forbidden") || message.includes("unauthorized")) {
+    return (
+        message.includes("not authenticated") ||
+        message.includes("forbidden") ||
+        message.includes("unauthorized")
+    );
+};
+
+const shouldAttemptFailover = (error: any) => {
+    if (isAuthError(error)) {
         return false;
     }
     return true;
@@ -33,6 +42,7 @@ const shouldAttemptFailover = (error: any) => {
 const withFailover = async <T>(op: (client: ConvexHttpClient) => Promise<T>): Promise<T> => {
     const attempted = new Set<string>();
     let lastError: any = null;
+    let attemptedAuthRefresh = false;
 
     for (const candidate of [activeUrl, ...CONVEX_URLS]) {
         if (attempted.has(candidate)) continue;
@@ -43,6 +53,21 @@ const withFailover = async <T>(op: (client: ConvexHttpClient) => Promise<T>): Pr
             return result;
         } catch (error) {
             lastError = error;
+
+            if (isAuthError(error) && !attemptedAuthRefresh && authRefreshHandler) {
+                attemptedAuthRefresh = true;
+                try {
+                    const refreshedToken = await authRefreshHandler();
+                    if (refreshedToken) {
+                        const retriedResult = await op(getClient(candidate));
+                        activeUrl = candidate;
+                        return retriedResult;
+                    }
+                } catch (refreshError) {
+                    lastError = refreshError;
+                }
+            }
+
             if (!shouldAttemptFailover(error)) {
                 throw error;
             }
@@ -61,6 +86,10 @@ export const setConvexAuthToken = (token: string | null) => {
             instance.clearAuth();
         }
     }
+};
+
+export const setConvexAuthRefreshHandler = (handler: (() => Promise<string | null>) | null) => {
+    authRefreshHandler = handler;
 };
 
 export const convexQuery = async <T = any>(name: string, args: Record<string, any> = {}): Promise<T> => {
