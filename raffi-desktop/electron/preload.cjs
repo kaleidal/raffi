@@ -8,6 +8,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     enableRPC: () => ipcRenderer.send('RPC_ENABLE'),
     disableRPC: () => ipcRenderer.send('RPC_DISABLE'),
     onOpenFile: (callback) => ipcRenderer.on('open-file', (_event, value) => callback(value)),
+    openExternal: (url) => ipcRenderer.invoke('OPEN_EXTERNAL_URL', url),
+    onAveAuthCallback: (callback) => {
+        const handler = (_event, payload) => callback(payload);
+        ipcRenderer.on('AVE_AUTH_CALLBACK', handler);
+        return () => ipcRenderer.removeListener('AVE_AUTH_CALLBACK', handler);
+    },
     getFilePath: (file) => webUtils.getPathForFile(file),
     saveClipPath: (suggestedName) => ipcRenderer.invoke('SAVE_CLIP_DIALOG', suggestedName),
     localLibrary: {
@@ -49,4 +55,3 @@ contextBridge.exposeInMainWorld('electronAPI', {
         return () => ipcRenderer.removeListener('WINDOW_FULLSCREEN_CHANGED', handler);
     },
 });
-
