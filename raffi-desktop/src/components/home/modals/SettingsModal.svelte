@@ -9,12 +9,12 @@
 		setRoots as setLocalRoots,
 		scanAndIndex,
 	} from "../../../lib/localLibrary/localLibrary";
-	import { supabase } from "../../../lib/db/supabase";
-	import { clearLocalState, syncUserStateToLocal } from "../../../lib/db/db";
+	import { clearLocalState, syncLocalStateToUser, syncUserStateToLocal } from "../../../lib/db/db";
+	import { importLegacySupabaseDataToLocal } from "../../../lib/db/supabaseLegacy";
 	import {
 		currentUser,
-		disableLocalMode,
-		enableLocalMode,
+		signInWithAve,
+		signOutToLocalMode,
 		localMode,
 		updateStatus,
 	} from "../../../lib/stores/authStore";
@@ -53,18 +53,18 @@
 	let discordRpcEnabled = true;
 	let seekBarStyle = "raffi";
 	let email = "";
-	let newEmail = "";
-	let newPassword = "";
 	let message = "";
 	let error = "";
 	let analyticsEnabled = false;
 	let sessionReplayEnabled = false;
 	let analyticsAvailable = false;
 	let showUpdateNotes = false;
-	let loginEmail = "";
-	let loginPassword = "";
+	let legacyEmail = "";
+	let legacyPassword = "";
 	let loginMessage = "";
 	let loginError = "";
+	let aveLoading = false;
+	let legacyLoading = false;
 
 	const formatUpdateNotes = (notes: string) => {
 		const trimmed = notes?.trim();
@@ -80,17 +80,19 @@
 	let localScanMessage = "";
 	let bodyLocked = false;
 
-
-	onMount(async () => {
+	const refreshStats = async () => {
 		try {
 			const library = await getLibrary(1000);
-			stats.moviesWatched = library.filter(
-				(i) => i.type === "movie" || !i.type,
-			).length;
+			stats.moviesWatched = library.filter((i) => i.type === "movie" || !i.type).length;
 			stats.showsWatched = library.filter((i) => i.type === "series").length;
 		} catch (e) {
 			console.error("Failed to load stats", e);
 		}
+	};
+
+
+	onMount(async () => {
+		await refreshStats();
 
 		const storedRpc = localStorage.getItem("discord_rpc_enabled");
 		discordRpcEnabled = storedRpc !== null ? storedRpc === "true" : true;
@@ -111,9 +113,7 @@
 			localRoots = getLocalRoots();
 		}
 
-		if ($currentUser?.email) {
-			email = $currentUser.email;
-		}
+		email = $currentUser?.email || "";
 	});
 
 	const toggleBodyScroll = (active: boolean) => {
@@ -326,8 +326,8 @@
 			} else {
 				clearLocalState();
 			}
-			await supabase.auth.signOut();
-			enableLocalMode();
+			signOutToLocalMode();
+			await refreshStats();
 			trackEvent("local_mode_switched", { keep_data: keepData });
 			message = "Switched to local mode.";
 			router.navigate("home");
@@ -340,101 +340,72 @@
 		}
 	}
 
-
-	async function updateEmail() {
-		if (!newEmail) return;
-		message = "";
+	function recoverToLocalMode() {
+		signOutToLocalMode();
+		message = "Recovered auth state. You are now in local mode.";
 		error = "";
-		try {
-			const { error: err } = await supabase.auth.updateUser({
-				email: newEmail,
-			});
-			if (err) throw err;
-			message = "Check your new email for a confirmation link.";
-			newEmail = "";
-		} catch (e: any) {
-			error = e.message;
-		}
 	}
 
-	async function updatePassword() {
-		if (!newPassword) return;
-		message = "";
-		error = "";
-		try {
-			const { error: err } = await supabase.auth.updateUser({
-				password: newPassword,
-			});
-			if (err) throw err;
-			message = "Password updated successfully.";
-			newPassword = "";
-		} catch (e: any) {
-			error = e.message;
-		}
-	}
 
-	async function handleLogin() {
-		if (!loginEmail || !loginPassword) {
-			loginError = "Please fill in all fields";
-			loginMessage = "";
-			return;
-		}
+	async function handleAveLogin() {
 		loginError = "";
 		loginMessage = "";
-
-		const { data, error: err } = await supabase.auth.signInWithPassword({
-			email: loginEmail,
-			password: loginPassword,
-		});
-
-		if (err) {
-			console.error(err);
-			loginError = err.message;
-			trackEvent("login_failed", { error_name: err.name });
-			return;
+		aveLoading = true;
+		try {
+			await signInWithAve();
+			await refreshStats();
+			trackEvent("ave_login_success", { source: "settings" });
+			loginMessage = "Signed in with Ave.";
+			setTimeout(() => {
+				close();
+				router.navigate("home");
+			}, 500);
+		} catch (e: any) {
+			console.error(e);
+			loginError = e?.message || "Failed to sign in with Ave";
+			trackEvent("ave_login_failed", {
+				error_name: e instanceof Error ? e.name : "unknown",
+			});
+		} finally {
+			aveLoading = false;
 		}
-
-		loginMessage = "Signed in successfully!";
-		loginEmail = "";
-		loginPassword = "";
-		trackEvent("login_success", { source: "settings" });
-		
-		// Close the modal and navigate to home after a brief delay
-		setTimeout(() => {
-			close();
-			router.navigate("home");
-		}, 1000);
 	}
 
-	async function handleRegister() {
-		if (!loginEmail || !loginPassword) {
-			loginError = "Please fill in all fields";
-			loginMessage = "";
+	async function importFromLegacySupabase() {
+		if (!legacyEmail || !legacyPassword) {
+			loginError = "Enter your old Supabase email and password";
 			return;
 		}
+		legacyLoading = true;
 		loginError = "";
 		loginMessage = "";
-
-		const { data, error: err } = await supabase.auth.signUp({
-			email: loginEmail,
-			password: loginPassword,
-		});
-
-		if (err) {
-			console.error(err);
-			loginError = err.message;
-			trackEvent("register_failed", { error_name: err.name });
-			return;
+		try {
+			const counts = await importLegacySupabaseDataToLocal(legacyEmail, legacyPassword);
+			if ($currentUser && !$localMode) {
+				await syncLocalStateToUser($currentUser.id);
+			}
+			await refreshStats();
+			loginMessage = $currentUser && !$localMode
+				? `Imported ${counts.addons} addons, ${counts.library} history items, ${counts.lists} lists and synced to your Ave account.`
+				: `Imported ${counts.addons} addons, ${counts.library} history items, ${counts.lists} lists.`;
+			trackEvent("legacy_supabase_import_success", counts as any);
+			legacyPassword = "";
+		} catch (e: any) {
+			loginError = e?.message || "Failed to import from legacy Supabase";
+			trackEvent("legacy_supabase_import_failed", {
+				error_name: e instanceof Error ? e.name : "unknown",
+			});
+		} finally {
+			legacyLoading = false;
 		}
-
-		loginMessage = "Check your email for the confirmation link!";
-		loginEmail = "";
-		loginPassword = "";
-		trackEvent("register_success", { source: "settings" });
 	}
 
 	function installUpdate() {
 		(window as any).electronAPI?.installUpdate?.();
+	}
+
+	$: if (showSettings) {
+		refreshStats();
 	}
 
 	$: updateBodyLock(showSettings);
@@ -528,58 +499,72 @@
 					{#if $localMode}
 						<section class="rounded-[28px] bg-white/[0.04] p-6 flex flex-col gap-5">
 							<div>
-								<h3 class="text-white text-xl font-semibold">Sign In</h3>
+								<h3 class="text-white text-xl font-semibold">Sign In With Ave</h3>
 								<p class="text-white/60 text-sm">
-									Sign in to sync your library and lists across devices.
+									Use your Ave account to sync your library and lists across devices.
 								</p>
 							</div>
 							<div class="rounded-2xl bg-white/[0.08] p-5 space-y-4">
-								<div class="space-y-2">
-									<input
-										type="email"
-										placeholder="Email"
-										bind:value={loginEmail}
-										class="w-full bg-black/30 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/30 outline-none focus:border-white/40 transition-colors"
-									/>
-									<input
-										type="password"
-										placeholder="Password"
-										bind:value={loginPassword}
-										on:keydown={(e) => e.key === "Enter" && handleLogin()}
-										class="w-full bg-black/30 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/30 outline-none focus:border-white/40 transition-colors"
-									/>
-								</div>
-
-								{#if loginMessage}
-									<div class="p-3 rounded-2xl bg-green-500/10 border border-green-500/20 text-green-300 text-sm">
-										{loginMessage}
-									</div>
-								{/if}
-								{#if loginError}
-									<div class="p-3 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-300 text-sm">
-										{loginError}
-									</div>
-								{/if}
-
-								<div class="flex flex-col gap-2 sm:flex-row">
-									<button
-										class="flex-1 bg-white text-black px-6 py-3 rounded-2xl font-semibold hover:bg-white/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
-										on:click={handleLogin}
-										disabled={!loginEmail || !loginPassword}
-									>
-										Sign In
-									</button>
-									<button
-										class="flex-1 bg-white/10 text-white px-6 py-3 rounded-2xl font-semibold hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
-										on:click={handleRegister}
-										disabled={!loginEmail || !loginPassword}
-									>
-										Register
-									</button>
-								</div>
+								<button
+									class="w-full bg-white text-black px-6 py-3 rounded-2xl font-semibold hover:bg-white/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+									on:click={handleAveLogin}
+									disabled={aveLoading}
+								>
+									{aveLoading ? "Opening browser..." : "Continue with Ave"}
+								</button>
 							</div>
 						</section>
 					{/if}
+
+					<section class="rounded-[28px] bg-white/[0.04] p-6 flex flex-col gap-5">
+						<div>
+							<h3 class="text-white text-xl font-semibold">Legacy Supabase import</h3>
+							<p class="text-white/60 text-sm">
+								One-time import of your old Supabase data.
+								{#if $currentUser && !$localMode}
+									 Imported data will be synced to your Ave account.
+								{:else}
+									 Imported data will be stored in local mode.
+								{/if}
+							</p>
+						</div>
+						<div class="rounded-2xl bg-white/[0.08] p-5 space-y-4">
+							<div class="space-y-2">
+								<input
+									type="email"
+									placeholder="Old Supabase email"
+									bind:value={legacyEmail}
+									class="w-full bg-black/30 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/30 outline-none focus:border-white/40 transition-colors"
+								/>
+								<input
+									type="password"
+									placeholder="Old Supabase password"
+									bind:value={legacyPassword}
+									on:keydown={(e) => e.key === "Enter" && importFromLegacySupabase()}
+									class="w-full bg-black/30 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/30 outline-none focus:border-white/40 transition-colors"
+								/>
+							</div>
+
+							<button
+								class="w-full bg-white/10 text-white px-6 py-3 rounded-2xl font-semibold hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+								on:click={importFromLegacySupabase}
+								disabled={!legacyEmail || !legacyPassword || legacyLoading}
+							>
+								{legacyLoading ? "Importing..." : "Import Legacy Data"}
+							</button>
+
+							{#if loginMessage}
+								<div class="p-3 rounded-2xl bg-green-500/10 border border-green-500/20 text-green-300 text-sm">
+									{loginMessage}
+								</div>
+							{/if}
+							{#if loginError}
+								<div class="p-3 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-300 text-sm">
+									{loginError}
+								</div>
+							{/if}
+						</div>
+					</section>
 
 					<section class="rounded-[28px] bg-white/[0.04] p-6 flex flex-col gap-5">
 						<div>
@@ -820,7 +805,7 @@
 						</section>
 					{/if}
 
-					{#if !$localMode}
+					{#if !$localMode && $currentUser}
 						<div class="grid gap-6 lg:grid-cols-[1fr,1.2fr]">
 							<section class="rounded-[28px] bg-white/[0.04] p-6 flex flex-col gap-5">
 
@@ -864,45 +849,14 @@
 									<p class="text-white/60 text-xs uppercase tracking-[0.3em] mb-1">
 										Current Email
 									</p>
-									<p class="text-white break-all">{email}</p>
+									<p class="text-white break-all">{$currentUser.email || "No email returned by Ave"}</p>
 								</div>
 
-								<div class="space-y-2">
-									<p class="text-white font-medium">Change Email</p>
-									<div class="flex flex-col gap-3 sm:flex-row">
-										<input
-											type="email"
-											placeholder="New email"
-											bind:value={newEmail}
-											class="flex-1 bg-black/30 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/30 outline-none focus:border-white/40 transition-colors"
-										/>
-										<button
-											class="bg-white text-black px-6 py-3 rounded-2xl font-semibold hover:bg-white/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
-											on:click={updateEmail}
-											disabled={!newEmail}
-										>
-											Update
-										</button>
-									</div>
-								</div>
-
-								<div class="space-y-2">
-									<p class="text-white font-medium">Change Password</p>
-									<div class="flex flex-col gap-3 sm:flex-row">
-										<input
-											type="password"
-											placeholder="New password"
-											bind:value={newPassword}
-											class="flex-1 bg-black/30 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/30 outline-none focus:border-white/40 transition-colors"
-										/>
-										<button
-											class="bg-white text-black px-6 py-3 rounded-2xl font-semibold hover:bg-white/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
-											on:click={updatePassword}
-											disabled={!newPassword}
-										>
-											Update
-										</button>
-									</div>
+								<div class="rounded-2xl bg-white/[0.06] p-4">
+									<p class="text-white/60 text-xs uppercase tracking-[0.3em] mb-1">
+										Provider
+									</p>
+									<p class="text-white">Ave</p>
 								</div>
 
 								{#if message}
@@ -916,34 +870,45 @@
 									</div>
 								{/if}
 
-								{#if $currentUser && !$localMode}
-									<div class="rounded-2xl bg-white/[0.06] p-4 space-y-3">
-										<div>
-											<p class="text-white font-medium">Log out</p>
-											<p class="text-white/60 text-sm">
-												Sign out and switch to local mode. Choose whether to keep your synced data locally.
-											</p>
-										</div>
-										<div class="flex flex-col gap-2 sm:flex-row">
-											<button
-												class="flex-1 bg-white text-black px-4 py-2 rounded-2xl font-semibold hover:bg-white/90 transition-colors cursor-pointer"
-												on:click={() => switchToLocalMode(true)}
-											>
-												Keep synced data
-											</button>
-											<button
-												class="flex-1 bg-white/10 text-white px-4 py-2 rounded-2xl font-semibold hover:bg-white/20 transition-colors cursor-pointer"
-												on:click={() => switchToLocalMode(false)}
-											>
-												Start fresh
-											</button>
-										</div>
+								<div class="rounded-2xl bg-white/[0.06] p-4 space-y-3">
+									<div>
+										<p class="text-white font-medium">Log out</p>
+										<p class="text-white/60 text-sm">
+											Sign out and switch to local mode. Choose whether to keep your synced data locally.
+										</p>
 									</div>
-								{/if}
+									<div class="flex flex-col gap-2 sm:flex-row">
+										<button
+											class="flex-1 bg-white text-black px-4 py-2 rounded-2xl font-semibold hover:bg-white/90 transition-colors cursor-pointer"
+											on:click={() => switchToLocalMode(true)}
+										>
+											Keep synced data
+										</button>
+										<button
+											class="flex-1 bg-white/10 text-white px-4 py-2 rounded-2xl font-semibold hover:bg-white/20 transition-colors cursor-pointer"
+											on:click={() => switchToLocalMode(false)}
+										>
+											Start fresh
+										</button>
+									</div>
+								</div>
 
 							</div>
 						</section>
 					</div>
+					{:else if !$localMode && !$currentUser}
+						<section class="rounded-[28px] bg-white/[0.04] p-6 flex flex-col gap-4">
+							<h3 class="text-white text-xl font-semibold">Account state mismatch</h3>
+							<p class="text-white/60 text-sm">
+								Raffi is in synced mode but no valid Ave session is available.
+							</p>
+							<button
+								class="self-start bg-white text-black px-5 py-2 rounded-2xl font-semibold hover:bg-white/90 transition-colors cursor-pointer"
+								on:click={recoverToLocalMode}
+							>
+								Switch to local mode
+							</button>
+						</section>
 					{/if}
 				</div>
 

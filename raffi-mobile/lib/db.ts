@@ -1,108 +1,106 @@
-import { supabase } from './supabase';
+import type { AppUser } from './auth/types';
+import { convexMutation, convexQuery } from './convex';
 import type { Addon, LibraryItem, List, ListItem } from './types';
 
-let cachedUser: any = null;
+type RemoteState = {
+  addons: Addon[];
+  library: LibraryItem[];
+  lists: List[];
+  listItems: ListItem[];
+};
 
-export const setCachedUser = (user: any) => {
+let cachedUser: AppUser | null = null;
+
+let remoteStateCache: { userId: string; data: RemoteState; updatedAt: number } | null = null;
+const CACHE_TTL_MS = 15000;
+
+export const setCachedUser = (user: AppUser | null) => {
   cachedUser = user;
+  if (!user) {
+    remoteStateCache = null;
+  }
 };
 
 export const getCachedUser = () => cachedUser;
 
-// Addons
+const requireUserId = () => {
+  const user = getCachedUser();
+  if (!user?.id) throw new Error('Not authenticated');
+  return user.id;
+};
+
+const invalidateRemoteCache = () => {
+  remoteStateCache = null;
+};
+
+const getRemoteState = async (force = false): Promise<RemoteState> => {
+  const userId = requireUserId();
+  const now = Date.now();
+  if (
+    !force &&
+    remoteStateCache &&
+    remoteStateCache.userId === userId &&
+    now - remoteStateCache.updatedAt < CACHE_TTL_MS
+  ) {
+    return remoteStateCache.data;
+  }
+
+  const data = await convexQuery<RemoteState>('raffi:getState', {});
+  const normalized: RemoteState = {
+    addons: data?.addons || [],
+    library: data?.library || [],
+    lists: data?.lists || [],
+    listItems: data?.listItems || [],
+  };
+  remoteStateCache = { userId, data: normalized, updatedAt: now };
+  return normalized;
+};
+
 export const getAddons = async () => {
   const user = getCachedUser();
   if (!user) return [];
-
-  const { data, error } = await supabase
-    .from('addons')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('added_at', { ascending: false });
-  if (error) throw error;
-  return data as Addon[];
+  const state = await getRemoteState();
+  return [...state.addons].sort((a, b) => (b.added_at || '').localeCompare(a.added_at || ''));
 };
 
 export const addAddon = async (addon: Omit<Addon, 'user_id' | 'added_at'>) => {
-  const user = getCachedUser();
-  if (!user) throw new Error('Not authenticated');
-
-  const { data, error } = await supabase
-    .from('addons')
-    .insert({
-      user_id: user.id,
-      added_at: new Date().toISOString(),
-      ...addon,
-    })
-    .select()
-    .single();
-  if (error) throw error;
-  return data as Addon;
+  const userId = requireUserId();
+  const data = await convexMutation<Addon>('raffi:addAddon', { addon });
+  invalidateRemoteCache();
+  return data;
 };
 
 export const removeAddon = async (transport_url: string) => {
-  const user = getCachedUser();
-  if (!user) throw new Error('Not authenticated');
-
-  const { error } = await supabase
-    .from('addons')
-    .delete()
-    .eq('user_id', user.id)
-    .eq('transport_url', transport_url);
-  if (error) throw error;
+  const userId = requireUserId();
+  await convexMutation('raffi:removeAddon', { transport_url });
+  invalidateRemoteCache();
 };
 
-// Library
 export const getLibrary = async (limit: number = 100, offset: number = 0) => {
   const user = getCachedUser();
   if (!user) return [];
-
-  const { data, error } = await supabase
-    .from('libraries')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('last_watched', { ascending: false })
-    .range(offset, offset + limit - 1);
-  if (error) throw error;
-  return data as LibraryItem[];
+  const state = await getRemoteState();
+  const sorted = [...state.library].sort((a, b) => (b.last_watched || '').localeCompare(a.last_watched || ''));
+  return sorted.slice(offset, offset + limit);
 };
 
 export const getLibraryItem = async (imdb_id: string) => {
   const user = getCachedUser();
   if (!user) return null;
-
-  const { data, error } = await supabase
-    .from('libraries')
-    .select('*')
-    .eq('user_id', user.id)
-    .eq('imdb_id', imdb_id)
-    .maybeSingle();
-  if (error) throw error;
-  return data as LibraryItem | null;
+  const state = await getRemoteState();
+  return state.library.find((item) => item.imdb_id === imdb_id) ?? null;
 };
 
 export const hideFromContinueWatching = async (imdb_id: string) => {
-  const user = getCachedUser();
-  if (!user) throw new Error('Not authenticated');
-
-  const { error } = await supabase
-    .from('libraries')
-    .update({ shown: false })
-    .eq('user_id', user.id)
-    .eq('imdb_id', imdb_id);
-  if (error) throw error;
+  const userId = requireUserId();
+  await convexMutation('raffi:hideFromContinueWatching', { imdb_id });
+  invalidateRemoteCache();
 };
 
 export const forgetProgress = async (imdb_id: string) => {
-  const user = getCachedUser();
-  if (!user) throw new Error('Not authenticated');
-
-  const { error } = await supabase
-    .from('libraries')
-    .delete()
-    .eq('user_id', user.id)
-    .eq('imdb_id', imdb_id);
-  if (error) throw error;
+  const userId = requireUserId();
+  await convexMutation('raffi:forgetProgress', { imdb_id });
+  invalidateRemoteCache();
 };
 
 export const updateLibraryProgress = async (
@@ -112,90 +110,40 @@ export const updateLibraryProgress = async (
   completed?: boolean,
   poster?: string
 ) => {
-  const user = getCachedUser();
-  if (!user) throw new Error('Not authenticated');
-
-  const updates: any = {
-    user_id: user.id,
-    imdb_id,
+  const userId = requireUserId();
+  const data = await convexMutation<LibraryItem>('raffi:updateLibraryProgress', { imdb_id,
     progress,
-    last_watched: new Date().toISOString(),
     type,
-    shown: true,
-  };
-  if (completed === true) {
-    updates.completed_at = new Date().toISOString();
-  } else if (completed === false) {
-    updates.completed_at = null;
-  }
-  if (poster) {
-    updates.poster = poster;
-  }
-
-  const { data, error } = await supabase
-    .from('libraries')
-    .upsert(updates, { onConflict: 'user_id,imdb_id' })
-    .select()
-    .single();
-  if (error) throw error;
-  return data as LibraryItem;
+    completed,
+    poster,
+  });
+  invalidateRemoteCache();
+  return data;
 };
 
 export const updateLibraryPoster = async (imdb_id: string, poster: string) => {
-  const user = getCachedUser();
-  if (!user) throw new Error('Not authenticated');
-
-  const { error } = await supabase
-    .from('libraries')
-    .update({ poster })
-    .eq('user_id', user.id)
-    .eq('imdb_id', imdb_id);
-  if (error) throw error;
+  const userId = requireUserId();
+  await convexMutation('raffi:updateLibraryPoster', { imdb_id, poster });
+  invalidateRemoteCache();
 };
 
-// Lists
 export const getLists = async () => {
   const user = getCachedUser();
   if (!user) return [];
-
-  const { data, error } = await supabase
-    .from('lists')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('position', { ascending: true });
-  if (error) throw error;
-  return data as List[];
+  const state = await getRemoteState();
+  return [...state.lists].sort((a, b) => a.position - b.position);
 };
 
 export const getListItems = async (list_id: string) => {
-  const { data, error } = await supabase
-    .from('list_items')
-    .select('*')
-    .eq('list_id', list_id)
-    .order('position', { ascending: true });
-  if (error) throw error;
-  return data as ListItem[];
+  const state = await getRemoteState();
+  return state.listItems.filter((item) => item.list_id === list_id).sort((a, b) => a.position - b.position);
 };
 
 export const createList = async (name: string) => {
-  const user = getCachedUser();
-  if (!user) throw new Error('Not authenticated');
-
-  const lists = await getLists();
-  const position = lists.length;
-
-  const { data, error } = await supabase
-    .from('lists')
-    .insert({
-      user_id: user.id,
-      name,
-      position,
-      created_at: new Date().toISOString(),
-    })
-    .select()
-    .single();
-  if (error) throw error;
-  return data as List;
+  const userId = requireUserId();
+  const data = await convexMutation<List>('raffi:createList', { name });
+  invalidateRemoteCache();
+  return data;
 };
 
 export const addToList = async (
@@ -204,32 +152,30 @@ export const addToList = async (
   type: string,
   poster?: string
 ) => {
+  const userId = requireUserId();
   const items = await getListItems(list_id);
   const exists = items.find((i) => i.imdb_id === imdb_id);
   if (exists) return exists;
 
   const position = items.length;
-
-  const { data, error } = await supabase
-    .from('list_items')
-    .insert({
-      list_id,
-      imdb_id,
-      type,
-      position,
-      poster,
-    })
-    .select()
-    .single();
-  if (error) throw error;
-  return data as ListItem;
+  await convexMutation('raffi:addToList', { list_id,
+    imdb_id,
+    position,
+    type,
+    poster,
+  });
+  invalidateRemoteCache();
+  return {
+    list_id,
+    imdb_id,
+    type,
+    position,
+    poster,
+  } as ListItem;
 };
 
 export const removeFromList = async (list_id: string, imdb_id: string) => {
-  const { error } = await supabase
-    .from('list_items')
-    .delete()
-    .eq('list_id', list_id)
-    .eq('imdb_id', imdb_id);
-  if (error) throw error;
+  const userId = requireUserId();
+  await convexMutation('raffi:removeFromList', { list_id, imdb_id });
+  invalidateRemoteCache();
 };

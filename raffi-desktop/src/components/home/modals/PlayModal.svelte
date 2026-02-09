@@ -4,7 +4,7 @@
     import { fade, scale } from "svelte/transition";
     import { router } from "../../../lib/stores/router";
     import { getCachedMetaData } from "../../../lib/library/metaCache";
-    import { supabase } from "../../../lib/db/supabase";
+    import { getWatchPartyInfo } from "../../../lib/db/db";
     import { localMode } from "../../../lib/stores/authStore";
 
     const portal = (node: HTMLElement) => {
@@ -161,13 +161,7 @@
         error = "";
 
         try {
-            const { data, error: err } = await supabase
-                .from("watch_parties")
-                .select("*")
-                .eq("party_id", partyCode.trim())
-                .single();
-
-            if (err) throw err;
+            const data = await getWatchPartyInfo(partyCode.trim());
             if (!data) throw new Error("Party not found");
 
             let showName = "Unknown Show";
@@ -186,16 +180,11 @@
                 }
             }
 
-            const { count } = await supabase
-                .from("watch_party_members")
-                .select("*", { count: "exact", head: true })
-                .eq("party_id", partyCode.trim());
-
             partyDetails = {
                 ...data,
                 showName,
                 poster,
-                memberCount: count || 0
+                memberCount: data.memberCount || 0
             };
             
             mode = "preview";

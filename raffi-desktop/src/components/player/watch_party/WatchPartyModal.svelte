@@ -4,6 +4,7 @@
         createWatchParty as createParty,
         joinWatchParty as joinParty,
         leaveWatchParty,
+        getWatchPartyInfo,
     } from "../../../lib/stores/watchPartyStore";
     import { fade, scale } from "svelte/transition";
 
@@ -21,7 +22,6 @@
             },
         };
     };
-    import { supabase } from "../../../lib/db/supabase";
     import { onDestroy, onMount } from "svelte";
 
     import { trackEvent } from "../../../lib/analytics";
@@ -186,13 +186,7 @@
         error = "";
 
         try {
-            const { data, error: fetchError } = await supabase
-                .from("watch_parties")
-                .select("*, watch_party_members(count)")
-                .eq("party_id", partyIdInput.trim())
-                .single();
-
-            if (fetchError) throw fetchError;
+            const data = await getWatchPartyInfo(partyIdInput.trim());
             if (!data) throw new Error("Party not found");
 
             partyPreview = data;
@@ -761,7 +755,7 @@
                                         </div>
                                         <div>
                                             <p class="text-white font-medium">
-                                                {partyPreview?.watch_party_members[0]?.count || 0} Members
+                                                {partyPreview?.memberCount || 0} Members
                                             </p>
                                             <p class="text-white/40 text-xs">Currently Watching</p>
                                         </div>

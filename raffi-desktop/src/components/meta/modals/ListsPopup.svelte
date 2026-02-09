@@ -6,9 +6,9 @@
         addToList,
         removeFromList,
         createList,
+        getListMembershipByImdb,
         type List,
     } from "../../../lib/db/db";
-    import { supabase } from "../../../lib/db/supabase";
     import LoadingSpinner from "../../common/LoadingSpinner.svelte";
     import { trackEvent } from "../../../lib/analytics";
 
@@ -69,12 +69,7 @@
         try {
             lists = await getLists();
 
-            const { data: items } = await supabase
-                .from("list_items")
-                .select("list_id")
-                .eq("imdb_id", imdbId);
-
-            memberOf = new Set(items?.map((i) => i.list_id) || []);
+            memberOf = await getListMembershipByImdb(imdbId);
             trackEvent("list_modal_loaded", {
                 list_count: lists.length,
                 member_count: memberOf.size,

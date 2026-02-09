@@ -21,9 +21,6 @@
     "moduleResolution": "bundler",
     "composite": true
   },
-  "files": [
-    "src/lib/analytics.ts"
-  ],
   "include": [
     "src/**/*.ts",
     "src/**/*.js",

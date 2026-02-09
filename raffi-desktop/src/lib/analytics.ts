@@ -1,5 +1,5 @@
 import posthog from "posthog-js";
-import type { User } from "@supabase/supabase-js";
+import type { AppUser } from "./auth/types";
 import type { Route } from "./stores/router";
 
 export type AnalyticsSettings = {
@@ -123,7 +123,7 @@ export const trackPageView = (page: Route) => {
     posthog.capture("page_view", { page });
 };
 
-export const setAnalyticsUser = (user: User | null) => {
+export const setAnalyticsUser = (user: AppUser | null) => {
     lastUserId = user?.id ?? null;
     if (!canCapture()) return;
 
