@@ -24,6 +24,12 @@ import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { BorderRadius, Colors, Spacing, Typography } from '@/constants/theme';
 import { fetchStreams, getCachedMetaData } from '@/lib/api';
 import { addToList, getLibraryItem, getLists } from '@/lib/db';
+import {
+  buildAudioLanguageBadge,
+  detectProvider,
+  formatAvailability,
+  parsePeerCount,
+} from '@/lib/streams/streamMetadata';
 import { useAddonsStore } from '@/lib/stores/addonsStore';
 import { useDownloadsStore } from '@/lib/stores/downloadsStore';
 import { useLibraryStore } from '@/lib/stores/libraryStore';
@@ -49,20 +55,6 @@ interface ParsedStreamMeta {
   isP2P: boolean;
   infoLine: string | null;
 }
-
-const PROVIDER_KEYWORDS = [
-  'TorrentGalaxy', 'Torrentio', 'RARBG', 'ThePirateBay', '1337x', 'Torlock',
-  'YTS', 'EZTV', 'TorrentLeech', 'Zooqle', 'Nyaa', 'AniDex', 'MediaFusion',
-  'Bitsearch', 'MagnetDL', 'LimeTorrents', 'TorrentSeed', 'Glotorrents',
-  'Demonoid', 'ByteSearch',
-];
-
-const AVAILABILITY_MAP: Record<string, string> = {
-  RD: 'Real-Debrid',
-  'RD+': 'Real-Debrid+',
-  AD: 'AllDebrid',
-  PM: 'Premiumize',
-};
 
 function extractYouTubeId(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -158,42 +150,20 @@ function buildTrailerHtml(ytId: string): string {
 </html>`;
 }
 
-function detectProvider(text: string | null): string | null {
-  if (!text) return null;
-  for (const keyword of PROVIDER_KEYWORDS) {
-    const pattern = new RegExp(keyword.replace(/\s+/g, '\\s*'), 'i');
-    if (pattern.test(text)) return keyword;
-  }
-  const tokens = text.split(/[|•\-\s]+/).map((t) => t.trim()).filter(Boolean).reverse();
-  return tokens.find((token) => {
-    if (!/^[A-Za-z][A-Za-z0-9.+-]{2,}$/.test(token)) return false;
-    if (/(GB|MB|TB)$/i.test(token)) return false;
-    if (/\d+p$/i.test(token)) return false;
-    if (/HDR|SDR|HEVC|H\.?(?:26[45])|AV1|ATMOS|DDP/i.test(token)) return false;
-    return true;
-  }) || null;
-}
-
-function parsePeerCount(text: string | null): number | null {
-  if (!text) return null;
-  const peerMatch = text.match(/(\d+)\s*(?:peers?|seeders?|seeds?)/i);
-  if (peerMatch) return parseInt(peerMatch[1], 10);
-  const leadingMatch = text.trim().match(/^(\d{1,4})(?=\s)/);
-  if (leadingMatch) return parseInt(leadingMatch[1], 10);
-  return null;
-}
-
-function formatAvailability(label: string | null): string | null {
-  if (!label) return null;
-  const normalized = label.replace(/[[\]]/g, '').toUpperCase();
-  return AVAILABILITY_MAP[normalized] ?? normalized;
-}
-
 function parseStreamMetadata(stream: Stream): ParsedStreamMeta {
   const title = (stream as any)?.title ?? '';
-  const lines = title.split('\n').map((l: string) => l.trim()).filter(Boolean);
+  const description = (stream as any)?.description ?? '';
+  const behaviorFilename = (stream as any)?.behaviorHints?.filename ?? '';
+  const behaviorGroup = (stream as any)?.behaviorHints?.bingeGroup ?? '';
+
+  const primaryText = [title, description]
+    .map((v) => String(v ?? ''))
+    .filter(Boolean)
+    .join('\n');
+
+  const lines = primaryText.split('\n').map((l: string) => l.trim()).filter(Boolean);
   const detailText = lines.slice(1).join(' ') || lines.join(' ');
-  const fullText = `${title} ${stream?.name ?? ''}`;
+  const fullText = `${primaryText} ${stream?.name ?? ''} ${behaviorFilename} ${behaviorGroup}`;
 
   let resolutionMatch = fullText.match(/(2160|1440|1080|720|540|480|360|240)p/i);
   let resolution: string | null = resolutionMatch ? `${resolutionMatch[1]}p` : null;
@@ -215,6 +185,7 @@ function parseStreamMetadata(stream: Stream): ParsedStreamMeta {
     : /DDP(?:\s?5\.1)?|DD5\.1/i.test(fullText)
       ? 'DDP 5.1'
       : /DTS/i.test(fullText) ? 'DTS' : null;
+  const audioLanguagesLabel = buildAudioLanguageBadge(fullText);
 
   const sizeMatch = fullText.match(/(\d+(?:\.\d+)?)\s?(GB|MB)/i);
   const sizeLabel = sizeMatch ? `${sizeMatch[1]} ${sizeMatch[2].toUpperCase()}` : null;
@@ -245,6 +216,7 @@ function parseStreamMetadata(stream: Stream): ParsedStreamMeta {
   else if (hasHDR) addFeature('HDR');
   addFeature(codecLabel);
   addFeature(audioLabel);
+  addFeature(audioLanguagesLabel, 'accent');
   addFeature(sizeLabel, 'muted');
 
   return {
@@ -1173,12 +1145,14 @@ export default function MetaScreen() {
                                 key={badge.label}
                                 style={[
                                   styles.streamFeatureBadge,
+                                  badge.variant === 'accent' && styles.streamFeatureBadgeAccent,
                                   badge.variant === 'muted' && styles.streamFeatureBadgeMuted,
                                 ]}
                               >
                                 <Text
                                   style={[
                                     styles.streamFeatureBadgeText,
+                                    badge.variant === 'accent' && styles.streamFeatureBadgeTextAccent,
                                     badge.variant === 'muted' && styles.streamFeatureBadgeTextMuted,
                                   ]}
                                 >
@@ -1728,6 +1702,9 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full,
     backgroundColor: 'rgba(255,255,255,0.1)',
   },
+  streamFeatureBadgeAccent: {
+    backgroundColor: Colors.text,
+  },
   streamFeatureBadgeMuted: {
     backgroundColor: 'rgba(255,255,255,0.05)',
   },
@@ -1736,6 +1713,10 @@ const styles = StyleSheet.create({
     fontWeight: Typography.weights.medium,
     color: Colors.text,
     letterSpacing: 0.3,
+  },
+  streamFeatureBadgeTextAccent: {
+    color: Colors.background,
+    fontWeight: Typography.weights.semibold,
   },
   streamFeatureBadgeTextMuted: {
     color: 'rgba(255,255,255,0.5)',
