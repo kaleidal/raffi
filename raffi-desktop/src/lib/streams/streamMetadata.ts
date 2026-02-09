@@ -80,7 +80,7 @@ const LANGUAGE_ALIAS_TO_TAG: Record<string, LanguageTag> = {
     ML: { code: "ML", flag: "🇮🇳" },
     MAL: { code: "ML", flag: "🇮🇳" },
     MALAYALAM: { code: "ML", flag: "🇮🇳" },
-    KN: { code: "KN", flag: "��🇳" },
+    KN: { code: "KN", flag: "🇮🇳" },
     KAN: { code: "KN", flag: "🇮🇳" },
     KANNADA: { code: "KN", flag: "🇮🇳" },
     BN: { code: "BN", flag: "🇮🇳" },
