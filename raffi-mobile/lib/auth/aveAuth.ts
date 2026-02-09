@@ -10,6 +10,8 @@ import {
 } from '@ave-id/sdk';
 import type { AppUser } from './types';
 
+WebBrowser.maybeCompleteAuthSession();
+
 const AVE_CLIENT_ID = 'app_13afc5b8884e9985d89eac0f4ca4b5af';
 const AVE_ISSUER = 'https://api.aveid.net';
 const AVE_SIGNIN_URL = 'https://aveid.net/signin';
@@ -18,7 +20,9 @@ const decodeJwtPayload = (token: string): Record<string, any> | null => {
   try {
     const parts = token.split('.');
     if (parts.length < 2) return null;
-    const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const payloadBase64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padLength = (4 - (payloadBase64.length % 4)) % 4;
+    const payload = payloadBase64.padEnd(payloadBase64.length + padLength, '=');
     const decoded = Buffer.from(payload, 'base64').toString('utf8');
     return JSON.parse(decoded);
   } catch {

@@ -64,14 +64,14 @@ export const getAddons = async () => {
 };
 
 export const addAddon = async (addon: Omit<Addon, 'user_id' | 'added_at'>) => {
-  const userId = requireUserId();
+  requireUserId();
   const data = await convexMutation<Addon>('raffi:addAddon', { addon });
   invalidateRemoteCache();
   return data;
 };
 
 export const removeAddon = async (transport_url: string) => {
-  const userId = requireUserId();
+  requireUserId();
   await convexMutation('raffi:removeAddon', { transport_url });
   invalidateRemoteCache();
 };
@@ -92,13 +92,13 @@ export const getLibraryItem = async (imdb_id: string) => {
 };
 
 export const hideFromContinueWatching = async (imdb_id: string) => {
-  const userId = requireUserId();
+  requireUserId();
   await convexMutation('raffi:hideFromContinueWatching', { imdb_id });
   invalidateRemoteCache();
 };
 
 export const forgetProgress = async (imdb_id: string) => {
-  const userId = requireUserId();
+  requireUserId();
   await convexMutation('raffi:forgetProgress', { imdb_id });
   invalidateRemoteCache();
 };
@@ -110,7 +110,7 @@ export const updateLibraryProgress = async (
   completed?: boolean,
   poster?: string
 ) => {
-  const userId = requireUserId();
+  requireUserId();
   const data = await convexMutation<LibraryItem>('raffi:updateLibraryProgress', { imdb_id,
     progress,
     type,
@@ -122,7 +122,7 @@ export const updateLibraryProgress = async (
 };
 
 export const updateLibraryPoster = async (imdb_id: string, poster: string) => {
-  const userId = requireUserId();
+  requireUserId();
   await convexMutation('raffi:updateLibraryPoster', { imdb_id, poster });
   invalidateRemoteCache();
 };
@@ -140,7 +140,7 @@ export const getListItems = async (list_id: string) => {
 };
 
 export const createList = async (name: string) => {
-  const userId = requireUserId();
+  requireUserId();
   const data = await convexMutation<List>('raffi:createList', { name });
   invalidateRemoteCache();
   return data;
@@ -152,7 +152,7 @@ export const addToList = async (
   type: string,
   poster?: string
 ) => {
-  const userId = requireUserId();
+  requireUserId();
   const items = await getListItems(list_id);
   const exists = items.find((i) => i.imdb_id === imdb_id);
   if (exists) return exists;
@@ -175,7 +175,7 @@ export const addToList = async (
 };
 
 export const removeFromList = async (list_id: string, imdb_id: string) => {
-  const userId = requireUserId();
+  requireUserId();
   await convexMutation('raffi:removeFromList', { list_id, imdb_id });
   invalidateRemoteCache();
 };
