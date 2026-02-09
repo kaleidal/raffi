@@ -48,7 +48,7 @@ const LANGUAGE_ALIAS_TO_TAG: Record<string, LanguageTag> = {
     FRA: { code: "FR", flag: "🇫🇷" },
     FRENCH: { code: "FR", flag: "🇫🇷" },
     DE: { code: "DE", flag: "🇩🇪" },
-    GER: { code: "DE", flag: "🇩🇪" },
+    GER: { code: "DE", flag: "🇩��" },
     DEU: { code: "DE", flag: "🇩🇪" },
     GERMAN: { code: "DE", flag: "🇩🇪" },
     PT: { code: "PT", flag: "🇵🇹" },
@@ -80,7 +80,7 @@ const LANGUAGE_ALIAS_TO_TAG: Record<string, LanguageTag> = {
     ML: { code: "ML", flag: "🇮🇳" },
     MAL: { code: "ML", flag: "🇮🇳" },
     MALAYALAM: { code: "ML", flag: "🇮🇳" },
-    KN: { code: "KN", flag: "🇮🇳" },
+    KN: { code: "KN", flag: "��🇳" },
     KAN: { code: "KN", flag: "🇮🇳" },
     KANNADA: { code: "KN", flag: "🇮🇳" },
     BN: { code: "BN", flag: "🇮🇳" },
@@ -96,7 +96,7 @@ const LANGUAGE_ALIAS_TO_TAG: Record<string, LanguageTag> = {
     ARA: { code: "AR", flag: "🇸🇦" },
     ARABIC: { code: "AR", flag: "🇸🇦" },
     TR: { code: "TR", flag: "🇹🇷" },
-    TUR: { code: "TR", flag: "🇹🇷" },
+    TUR: { code: "TR", flag: "🇹��" },
     TURKISH: { code: "TR", flag: "🇹🇷" },
     NL: { code: "NL", flag: "🇳🇱" },
     DUT: { code: "NL", flag: "🇳🇱" },
@@ -125,7 +125,7 @@ const LANGUAGE_ALIAS_TO_TAG: Record<string, LanguageTag> = {
     GRE: { code: "EL", flag: "🇬🇷" },
     ELL: { code: "EL", flag: "🇬🇷" },
     GREEK: { code: "EL", flag: "🇬🇷" },
-    HE: { code: "HE", flag: "🇮🇱" },
+    HE: { code: "HE", flag: "🇮��" },
     HEB: { code: "HE", flag: "🇮🇱" },
     HEBREW: { code: "HE", flag: "🇮🇱" },
     VI: { code: "VI", flag: "🇻🇳" },
@@ -181,22 +181,41 @@ const LANGUAGE_ALIAS_TO_TAG: Record<string, LanguageTag> = {
 
 const FLAG_EMOJI_REGEX = /[\u{1F1E6}-\u{1F1FF}]{2}/gu;
 
-const flagEmojiToCountryCode = (flag: string): string | null => {
+const flagEmojiToLanguageCode = (flag: string): string | null => {
     const chars = Array.from(flag);
     if (chars.length !== 2) return null;
     const points = chars.map((char) => char.codePointAt(0) ?? 0);
     for (const point of points) {
         if (point < 0x1f1e6 || point > 0x1f1ff) return null;
     }
-    return points
+    const countryCode = points
         .map((point) => String.fromCharCode(point - 0x1f1e6 + 65))
         .join("");
+    
+    // Map country codes to language codes
+    const countryToLang: Record<string, string> = {
+        GB: "EN", IT: "IT", ES: "ES", FR: "FR", DE: "DE",
+        PT: "PT", RU: "RU", JP: "JA", KR: "KO", CN: "ZH",
+        IN: "HI", SA: "AR", TR: "TR", NL: "NL", PL: "PL",
+        SE: "SV", NO: "NO", DK: "DA", FI: "FI", CZ: "CS",
+        GR: "EL", IL: "HE", VN: "VI", TH: "TH", ID: "ID",
+        MY: "MS", UA: "UK", RO: "RO", HU: "HU", BG: "BG",
+        RS: "SR", HR: "HR", SK: "SK", SI: "SL", IR: "FA",
+        PK: "UR",
+    };
+    
+    return countryToLang[countryCode] || null;
 };
+
+// Precompile regex patterns for better performance
+const PROVIDER_PATTERNS = PROVIDER_KEYWORDS.map(keyword => ({
+    keyword,
+    pattern: new RegExp(keyword.replace(/\s+/g, "\\s*"), "i")
+}));
 
 export const detectProvider = (text: string | null): string | null => {
     if (!text) return null;
-    for (const keyword of PROVIDER_KEYWORDS) {
-        const pattern = new RegExp(keyword.replace(/\s+/g, "\\s*"), "i");
+    for (const {keyword, pattern} of PROVIDER_PATTERNS) {
         if (pattern.test(text)) {
             return keyword;
         }
@@ -257,9 +276,9 @@ export const buildAudioLanguageBadge = (text: string): string | null => {
 
     const flags = text.match(FLAG_EMOJI_REGEX) || [];
     for (const flag of flags) {
-        const countryCode = flagEmojiToCountryCode(flag);
-        if (!countryCode) continue;
-        const label = `${flag} ${countryCode}`;
+        const langCode = flagEmojiToLanguageCode(flag);
+        if (!langCode) continue;
+        const label = `${flag} ${langCode}`;
         if (seen.has(label)) continue;
         seen.add(label);
         seenFlags.add(flag);
