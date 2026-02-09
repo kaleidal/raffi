@@ -324,6 +324,13 @@
     let lastTraktScrobbleAction: "start" | "pause" | "stop" | null = null;
     let lastTraktScrobbleAt = 0;
     let traktStopSent = false;
+    let traktStartSent = false;
+    let traktDisabledForSession = false;
+    let traktFailureCount = 0;
+    let traktCooldownUntil = 0;
+    const TRAKT_COMPLETION_THRESHOLD = 0.9;
+    const TRAKT_FAILURE_COOLDOWN_MS = 60_000;
+    const TRAKT_MAX_FAILURES = 3;
 
     const getTraktMediaType = (): "movie" | "episode" => {
         return metaData?.meta?.type === "series" ? "episode" : "movie";
@@ -340,6 +347,9 @@
     ) => {
         if ($localMode || !imdbID) return;
         if (!hasStarted) return;
+        if (traktDisabledForSession) return;
+        if (!force && Date.now() < traktCooldownUntil) return;
+        if (action === "pause" && !traktStartSent) return;
 
         const mediaType = getTraktMediaType();
         if (mediaType === "episode" && (season == null || episode == null)) return;
@@ -363,7 +373,7 @@
         }
 
         try {
-            await traktScrobble({
+            const result: any = await traktScrobble({
                 action,
                 imdbId: imdbID,
                 mediaType,
@@ -372,8 +382,38 @@
                 progress: getTraktProgress(),
                 appVersion: "desktop",
             });
+
+            if (result?.ok) {
+                traktFailureCount = 0;
+                traktCooldownUntil = 0;
+                if (action === "start") {
+                    traktStartSent = true;
+                }
+                return;
+            }
+
+            const reason = String(result?.reason || "");
+            if (
+                reason === "not_connected" ||
+                reason === "not_configured" ||
+                reason === "missing_episode" ||
+                reason === "local_mode"
+            ) {
+                traktDisabledForSession = true;
+                return;
+            }
+
+            traktFailureCount += 1;
+            if (traktFailureCount >= TRAKT_MAX_FAILURES) {
+                traktCooldownUntil = Date.now() + TRAKT_FAILURE_COOLDOWN_MS;
+                traktFailureCount = 0;
+            }
         } catch {
-            // ignore Trakt scrobble failures in playback flow
+            traktFailureCount += 1;
+            if (traktFailureCount >= TRAKT_MAX_FAILURES) {
+                traktCooldownUntil = Date.now() + TRAKT_FAILURE_COOLDOWN_MS;
+                traktFailureCount = 0;
+            }
         }
     };
 
@@ -625,7 +665,11 @@
         currentTime.set(time);
         handleProgressInternal(time, $duration);
 
-        if (!traktStopSent && $duration > 0 && time / $duration >= 0.9) {
+        if (
+            !traktStopSent &&
+            $duration > 0 &&
+            time / $duration >= TRAKT_COMPLETION_THRESHOLD
+        ) {
             void sendTraktScrobble("stop", true);
         }
 
@@ -665,7 +709,13 @@
 
     const handlePause = () => {
         isPlaying.set(false);
-        if (!traktStopSent && !($duration > 0 && $currentTime / $duration >= 0.9)) {
+        if (
+            !traktStopSent &&
+            !(
+                $duration > 0 &&
+                $currentTime / $duration >= TRAKT_COMPLETION_THRESHOLD
+            )
+        ) {
             void sendTraktScrobble("pause");
         }
         Discord.updateDiscordActivity(
@@ -696,6 +746,12 @@
             buffer_duration_ms: durationMs,
             ...getPlaybackAnalyticsProps(),
         });
+    };
+
+    const handleEnded = () => {
+        if (hasStarted && !traktStopSent) {
+            void sendTraktScrobble("stop", true);
+        }
     };
 
     const reloadSession = () => {
@@ -1148,6 +1204,7 @@
             on:timeupdate={handleTimeUpdate}
             on:play={handlePlay}
             on:pause={handlePause}
+            on:ended={handleEnded}
             on:click={togglePlayWithFeedback}
             on:waiting={() => {
                 loading.set(true);
