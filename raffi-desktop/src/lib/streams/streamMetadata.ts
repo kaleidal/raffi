@@ -204,7 +204,8 @@ const flagEmojiToLanguageCode = (flag: string): string | null => {
         PK: "UR",
     };
     
-    return countryToLang[countryCode] || null;
+    // Fallback: if no explicit language mapping, return the country code
+    return countryToLang[countryCode] || countryCode;
 };
 
 // Precompile regex patterns for better performance
