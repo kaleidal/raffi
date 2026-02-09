@@ -128,6 +128,7 @@ let goServer;
 let httpServer;
 let fileToOpen = null;
 let pendingAveAuthPayload = null;
+let pendingTraktAuthPayload = null;
 let pendingUpdateInfo = null;
 const ALLOWED_EXTERNAL_HOSTS = new Set(["aveid.net", "www.aveid.net", "api.aveid.net"]);
 
@@ -148,23 +149,33 @@ function handleProtocolUrl(url) {
 
   try {
     const parsed = new URL(url);
-    if (parsed.hostname !== "auth" || parsed.pathname !== "/callback") {
-      return false;
-    }
-
-    pendingAveAuthPayload = {
+    const payload = {
       code: parsed.searchParams.get("code") || undefined,
       state: parsed.searchParams.get("state") || undefined,
       error: parsed.searchParams.get("error") || undefined,
     };
 
-    if (mainWindow && mainWindow.webContents) {
-      mainWindow.webContents.send("AVE_AUTH_CALLBACK", pendingAveAuthPayload);
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
+    if (parsed.hostname === "auth" && parsed.pathname === "/callback") {
+      pendingAveAuthPayload = payload;
+      if (mainWindow && mainWindow.webContents) {
+        mainWindow.webContents.send("AVE_AUTH_CALLBACK", pendingAveAuthPayload);
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.focus();
+      }
+      return true;
     }
 
-    return true;
+    if (parsed.hostname === "trakt" && parsed.pathname === "/callback") {
+      pendingTraktAuthPayload = payload;
+      if (mainWindow && mainWindow.webContents) {
+        mainWindow.webContents.send("TRAKT_AUTH_CALLBACK", pendingTraktAuthPayload);
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.focus();
+      }
+      return true;
+    }
+
+    return false;
   } catch (error) {
     logToFile("Failed to parse protocol URL", error);
     return false;
@@ -919,6 +930,10 @@ function createWindow() {
     if (pendingAveAuthPayload) {
       mainWindow.webContents.send("AVE_AUTH_CALLBACK", pendingAveAuthPayload);
       pendingAveAuthPayload = null;
+    }
+    if (pendingTraktAuthPayload) {
+      mainWindow.webContents.send("TRAKT_AUTH_CALLBACK", pendingTraktAuthPayload);
+      pendingTraktAuthPayload = null;
     }
   });
   mainWindow.on("resize", applyDisplayZoom);

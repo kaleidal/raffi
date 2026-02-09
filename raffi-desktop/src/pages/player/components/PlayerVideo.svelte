@@ -16,6 +16,7 @@
     on:timeupdate
     on:play
     on:pause
+    on:ended
     on:click
     on:waiting
     on:playing

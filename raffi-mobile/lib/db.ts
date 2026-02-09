@@ -1,6 +1,29 @@
 import type { AppUser } from './auth/types';
-import { convexMutation, convexQuery } from './convex';
+import { convexAction, convexMutation, convexQuery } from './convex';
 import type { Addon, LibraryItem, List, ListItem } from './types';
+
+export interface TraktStatus {
+  configured: boolean;
+  clientId: string | null;
+  redirectUri: string;
+  authorizeUrl: string;
+  connected: boolean;
+  username: string | null;
+  slug: string | null;
+  scope: string | null;
+  updatedAt: string | null;
+  expiresAt: number | null;
+}
+
+export interface TraktScrobbleArgs {
+  action: 'start' | 'pause' | 'stop';
+  imdbId: string;
+  mediaType: 'movie' | 'episode';
+  season?: number;
+  episode?: number;
+  progress: number;
+  appVersion?: string;
+}
 
 type RemoteState = {
   addons: Addon[];
@@ -125,6 +148,32 @@ export const updateLibraryPoster = async (imdb_id: string, poster: string) => {
   requireUserId();
   await convexMutation('raffi:updateLibraryPoster', { imdb_id, poster });
   invalidateRemoteCache();
+};
+
+export const getTraktStatus = async (): Promise<TraktStatus> => {
+  requireUserId();
+  const status = await convexQuery<TraktStatus>('raffi:getTraktStatus', {});
+  return status;
+};
+
+export const exchangeTraktCode = async (code: string) => {
+  requireUserId();
+  return convexAction('raffi:exchangeTraktCode', { code });
+};
+
+export const disconnectTrakt = async () => {
+  requireUserId();
+  return convexMutation('raffi:disconnectTrakt', {});
+};
+
+export const refreshTraktToken = async () => {
+  requireUserId();
+  return convexAction('raffi:refreshTraktToken', {});
+};
+
+export const traktScrobble = async (args: TraktScrobbleArgs) => {
+  requireUserId();
+  return convexAction('raffi:traktScrobble', args as any);
 };
 
 export const getLists = async () => {

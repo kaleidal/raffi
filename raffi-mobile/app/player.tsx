@@ -30,7 +30,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BorderRadius, Colors, Spacing, Typography } from '@/constants/theme';
-import { getLibraryItem } from '@/lib/db';
+import { getLibraryItem, traktScrobble } from '@/lib/db';
 import { useLibraryStore } from '@/lib/stores/libraryStore';
 import TorrentStreamer, { StreamSession } from '@/lib/torrent/TorrentStreamer';
 
@@ -56,6 +56,9 @@ const SEEK_AMOUNT = 10; // seconds
 const INTRO_START_TIME = 0; // Intro usually starts at beginning
 const INTRO_END_TIME = 90; // Most intros are under 90 seconds
 const INTRO_SKIP_TO = 90; // Skip to 90 seconds
+const TRAKT_COMPLETION_THRESHOLD = 0.9;
+const TRAKT_FAILURE_COOLDOWN_MS = 60000;
+const TRAKT_MAX_FAILURES = 3;
 
 // Settings keys
 const SETTINGS_KEYS = {
@@ -168,6 +171,15 @@ export default function PlayerScreen() {
   const lastSavedTime = useRef(0);
   const progressBarRef = useRef<View>(null);
   const progressBarWidth = useRef(0);
+  const currentTimeRef = useRef(0);
+  const durationRef = useRef(0);
+  const lastTraktActionRef = useRef<'start' | 'pause' | 'stop' | null>(null);
+  const lastTraktActionAtRef = useRef(0);
+  const traktStopSentRef = useRef(false);
+  const traktStartSentRef = useRef(false);
+  const traktDisabledRef = useRef(false);
+  const traktFailureCountRef = useRef(0);
+  const traktCooldownUntilRef = useRef(0);
 
   // Check PiP support and initialize brightness on mount
   useEffect(() => {
@@ -367,6 +379,120 @@ export default function PlayerScreen() {
     };
   }, [player]);
 
+  useEffect(() => {
+    currentTimeRef.current = currentTime;
+  }, [currentTime]);
+
+  useEffect(() => {
+    durationRef.current = duration;
+  }, [duration]);
+
+  useEffect(() => {
+    lastTraktActionRef.current = null;
+    lastTraktActionAtRef.current = 0;
+    traktStopSentRef.current = false;
+    traktStartSentRef.current = false;
+    traktDisabledRef.current = false;
+    traktFailureCountRef.current = 0;
+    traktCooldownUntilRef.current = 0;
+  }, [imdbId, season, episode, videoSrc]);
+
+  const getTraktProgress = useCallback(() => {
+    const d = durationRef.current;
+    if (!d || d <= 0) return 0;
+    return Math.max(0, Math.min(100, (currentTimeRef.current / d) * 100));
+  }, []);
+
+  const sendTraktEvent = useCallback(
+    async (action: 'start' | 'pause' | 'stop', force = false) => {
+      if (!imdbId || !type) return;
+      if (traktDisabledRef.current) return;
+      if (!force && Date.now() < traktCooldownUntilRef.current) return;
+      if (action === 'pause' && !traktStartSentRef.current) return;
+
+      const mediaType = type === 'series' ? 'episode' : 'movie';
+      const seasonNum = season != null ? Number(season) : undefined;
+      const episodeNum = episode != null ? Number(episode) : undefined;
+      if (mediaType === 'episode' && (!Number.isFinite(seasonNum) || !Number.isFinite(episodeNum))) {
+        return;
+      }
+      if (action !== 'start' && currentTimeRef.current <= 0) {
+        return;
+      }
+
+      const now = Date.now();
+      if (
+        !force &&
+        lastTraktActionRef.current === action &&
+        now - lastTraktActionAtRef.current < 10000
+      ) {
+        return;
+      }
+
+      lastTraktActionRef.current = action;
+      lastTraktActionAtRef.current = now;
+
+      if (action === 'start') {
+        traktStopSentRef.current = false;
+      } else if (action === 'stop') {
+        traktStopSentRef.current = true;
+      }
+
+      try {
+        const result: any = await traktScrobble({
+          action,
+          imdbId,
+          mediaType,
+          season: mediaType === 'episode' ? seasonNum : undefined,
+          episode: mediaType === 'episode' ? episodeNum : undefined,
+          progress: getTraktProgress(),
+          appVersion: 'mobile',
+        });
+
+        if (result?.ok) {
+          traktFailureCountRef.current = 0;
+          traktCooldownUntilRef.current = 0;
+          if (action === 'start') {
+            traktStartSentRef.current = true;
+          }
+          return;
+        }
+
+        const reason = String(result?.reason || '');
+        if (
+          reason === 'not_connected' ||
+          reason === 'not_configured' ||
+          reason === 'missing_episode' ||
+          reason === 'local_mode'
+        ) {
+          traktDisabledRef.current = true;
+          return;
+        }
+
+        traktFailureCountRef.current += 1;
+        if (traktFailureCountRef.current >= TRAKT_MAX_FAILURES) {
+          traktCooldownUntilRef.current = Date.now() + TRAKT_FAILURE_COOLDOWN_MS;
+          traktFailureCountRef.current = 0;
+        }
+      } catch {
+        traktFailureCountRef.current += 1;
+        if (traktFailureCountRef.current >= TRAKT_MAX_FAILURES) {
+          traktCooldownUntilRef.current = Date.now() + TRAKT_FAILURE_COOLDOWN_MS;
+          traktFailureCountRef.current = 0;
+        }
+      }
+    },
+    [episode, getTraktProgress, imdbId, season, type]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (!traktStopSentRef.current && currentTimeRef.current > 0) {
+        void sendTraktEvent('stop', true);
+      }
+    };
+  }, [sendTraktEvent]);
+
   // Subscribe to player events
   useEffect(() => {
     if (!player) return;
@@ -408,6 +534,17 @@ export default function PlayerScreen() {
     const playingSubscription = player.addListener('playingChange', (payload) => {
       setIsPlaying(payload.isPlaying);
       setBuffering(false);
+      if (payload.isPlaying) {
+        void sendTraktEvent('start');
+      } else if (
+        !traktStopSentRef.current &&
+        !(
+          durationRef.current > 0 &&
+          currentTimeRef.current / durationRef.current >= TRAKT_COMPLETION_THRESHOLD
+        )
+      ) {
+        void sendTraktEvent('pause');
+      }
     });
 
     const sourceLoadSubscription = player.addListener('sourceLoad', (payload: any) => {
@@ -427,7 +564,7 @@ export default function PlayerScreen() {
       playingSubscription.remove();
       sourceLoadSubscription.remove();
     };
-  }, [player]);
+  }, [player, sendTraktEvent]);
 
   // Check for skip intro and next episode triggers
   useEffect(() => {
@@ -437,7 +574,18 @@ export default function PlayerScreen() {
       if (!isSeeking && player.currentTime !== undefined) {
         const time = player.currentTime;
         setCurrentTime(time);
-        setDuration(player.duration || 0);
+        currentTimeRef.current = time;
+        const d = player.duration || 0;
+        setDuration(d);
+        durationRef.current = d;
+
+        if (
+          !traktStopSentRef.current &&
+          d > 0 &&
+          time / d >= TRAKT_COMPLETION_THRESHOLD
+        ) {
+          void sendTraktEvent('stop', true);
+        }
         
         // Skip intro logic (only for series)
         if (type === 'series' && duration > 300) { // Only for episodes longer than 5 min
@@ -471,7 +619,7 @@ export default function PlayerScreen() {
     }, 250);
 
     return () => clearInterval(interval);
-  }, [player, isSeeking, duration, nextEpisodeSrc, showNextEpisode, type, startTimeParam, autoSkipEnabled, showSkipIntro]);
+  }, [player, isSeeking, duration, nextEpisodeSrc, showNextEpisode, type, startTimeParam, autoSkipEnabled, showSkipIntro, sendTraktEvent]);
 
   // Lock to landscape on mount
   useEffect(() => {
@@ -713,6 +861,9 @@ export default function PlayerScreen() {
 
   const handleClose = async () => {
     await saveProgress();
+    if (!traktStopSentRef.current && currentTimeRef.current > 0) {
+      await sendTraktEvent('stop', true);
+    }
     if (player) {
       player.pause();
     }

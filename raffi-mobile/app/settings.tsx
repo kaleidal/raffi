@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   ScrollView,
   StyleSheet,
@@ -15,6 +16,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BorderRadius, Colors, Spacing, Typography } from '@/constants/theme';
 import { clearMetaCache } from '@/lib/api';
+import { signInWithTrakt } from '@/lib/auth/traktAuth';
+import { disconnectTrakt, getTraktStatus, type TraktStatus } from '@/lib/db';
+import { useAuthStore } from '@/lib/stores/authStore';
 import { useLibraryStore } from '@/lib/stores/libraryStore';
 
 // Settings keys
@@ -43,7 +47,28 @@ export default function SettingsScreen() {
     saveWatchHistory: true,
   });
   const [loading, setLoading] = useState(true);
+  const [traktStatus, setTraktStatus] = useState<TraktStatus | null>(null);
+  const [traktLoading, setTraktLoading] = useState(false);
+  const [traktBusy, setTraktBusy] = useState(false);
   const { clearLibrary } = useLibraryStore();
+  const { user } = useAuthStore();
+
+  const loadTraktStatus = async () => {
+    if (!user) {
+      setTraktStatus(null);
+      return;
+    }
+    setTraktLoading(true);
+    try {
+      const status = await getTraktStatus();
+      setTraktStatus(status);
+    } catch (e) {
+      console.error('Failed to load Trakt status:', e);
+      setTraktStatus(null);
+    } finally {
+      setTraktLoading(false);
+    }
+  };
 
   // Load settings from storage
   useEffect(() => {
@@ -79,6 +104,10 @@ export default function SettingsScreen() {
 
     loadSettings();
   }, []);
+
+  useEffect(() => {
+    loadTraktStatus();
+  }, [user]);
 
   // Save setting helper
   const updateSetting = async (key: string, value: boolean) => {
@@ -157,6 +186,39 @@ export default function SettingsScreen() {
         },
       ]
     );
+  };
+
+  const handleConnectTrakt = async () => {
+    if (!user) {
+      Alert.alert('Sign In Required', 'Please sign in with Ave first.');
+      return;
+    }
+
+    setTraktBusy(true);
+    try {
+      const status = await signInWithTrakt();
+      setTraktStatus(status);
+      Alert.alert('Connected', `Trakt connected${status.username ? ` as ${status.username}` : ''}.`);
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Failed to connect Trakt');
+    } finally {
+      setTraktBusy(false);
+    }
+  };
+
+  const handleDisconnectTrakt = async () => {
+    setTraktBusy(true);
+    try {
+      await disconnectTrakt();
+      setTraktStatus((prev) =>
+        prev ? { ...prev, connected: false, username: null, slug: null } : prev
+      );
+      Alert.alert('Disconnected', 'Trakt has been disconnected.');
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Failed to disconnect Trakt');
+    } finally {
+      setTraktBusy(false);
+    }
   };
 
   return (
@@ -258,6 +320,54 @@ export default function SettingsScreen() {
               trackColor={{ false: 'rgba(255,255,255,0.1)', true: Colors.primary }}
               thumbColor={Colors.text}
             />
+          </View>
+        </View>
+
+        {/* Integrations */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Integrations</Text>
+
+          <View style={styles.integrationCard}>
+            <View style={styles.integrationInfo}>
+              <Text style={styles.settingLabel}>Trakt</Text>
+              <Text style={styles.settingDescription}>
+                Sync start, pause, and stop watch activity to your Trakt profile
+              </Text>
+              {traktStatus?.connected && (
+                <Text style={styles.integrationConnectedText}>
+                  Connected as {traktStatus.username || traktStatus.slug || 'Trakt user'}
+                </Text>
+              )}
+              {!traktLoading && traktStatus && !traktStatus.configured && (
+                <Text style={styles.integrationDisabledText}>
+                  Trakt is not configured in this build
+                </Text>
+              )}
+            </View>
+
+            {traktLoading ? (
+              <ActivityIndicator color={Colors.primary} />
+            ) : traktStatus?.connected ? (
+              <TouchableOpacity
+                style={[styles.integrationButton, styles.integrationDisconnectButton, traktBusy && styles.integrationButtonDisabled]}
+                onPress={handleDisconnectTrakt}
+                disabled={traktBusy}
+              >
+                <Text style={styles.integrationDisconnectText}>
+                  {traktBusy ? 'Disconnecting...' : 'Disconnect'}
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[styles.integrationButton, traktBusy && styles.integrationButtonDisabled]}
+                onPress={handleConnectTrakt}
+                disabled={traktBusy || !!traktStatus && !traktStatus.configured}
+              >
+                <Text style={styles.integrationButtonText}>
+                  {traktBusy ? 'Connecting...' : 'Connect'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
@@ -389,5 +499,50 @@ const styles = StyleSheet.create({
   infoValue: {
     fontSize: Typography.sizes.md,
     color: Colors.textSecondary,
+  },
+  integrationCard: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.md,
+  },
+  integrationInfo: {
+    flex: 1,
+    gap: 4,
+  },
+  integrationConnectedText: {
+    fontSize: Typography.sizes.sm,
+    color: Colors.success,
+    marginTop: 2,
+  },
+  integrationDisabledText: {
+    fontSize: Typography.sizes.sm,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  integrationButton: {
+    backgroundColor: Colors.primary,
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+  },
+  integrationButtonDisabled: {
+    opacity: 0.6,
+  },
+  integrationButtonText: {
+    color: '#000',
+    fontSize: Typography.sizes.sm,
+    fontWeight: Typography.weights.bold,
+  },
+  integrationDisconnectButton: {
+    backgroundColor: 'rgba(255,255,255,0.14)',
+  },
+  integrationDisconnectText: {
+    color: Colors.text,
+    fontSize: Typography.sizes.sm,
+    fontWeight: Typography.weights.bold,
   },
 });
