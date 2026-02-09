@@ -56,6 +56,9 @@ const SEEK_AMOUNT = 10; // seconds
 const INTRO_START_TIME = 0; // Intro usually starts at beginning
 const INTRO_END_TIME = 90; // Most intros are under 90 seconds
 const INTRO_SKIP_TO = 90; // Skip to 90 seconds
+const TRAKT_COMPLETION_THRESHOLD = 0.9;
+const TRAKT_FAILURE_COOLDOWN_MS = 60000;
+const TRAKT_MAX_FAILURES = 3;
 
 // Settings keys
 const SETTINGS_KEYS = {
@@ -173,6 +176,10 @@ export default function PlayerScreen() {
   const lastTraktActionRef = useRef<'start' | 'pause' | 'stop' | null>(null);
   const lastTraktActionAtRef = useRef(0);
   const traktStopSentRef = useRef(false);
+  const traktStartSentRef = useRef(false);
+  const traktDisabledRef = useRef(false);
+  const traktFailureCountRef = useRef(0);
+  const traktCooldownUntilRef = useRef(0);
 
   // Check PiP support and initialize brightness on mount
   useEffect(() => {
@@ -384,6 +391,10 @@ export default function PlayerScreen() {
     lastTraktActionRef.current = null;
     lastTraktActionAtRef.current = 0;
     traktStopSentRef.current = false;
+    traktStartSentRef.current = false;
+    traktDisabledRef.current = false;
+    traktFailureCountRef.current = 0;
+    traktCooldownUntilRef.current = 0;
   }, [imdbId, season, episode, videoSrc]);
 
   const getTraktProgress = useCallback(() => {
@@ -395,6 +406,9 @@ export default function PlayerScreen() {
   const sendTraktEvent = useCallback(
     async (action: 'start' | 'pause' | 'stop', force = false) => {
       if (!imdbId || !type) return;
+      if (traktDisabledRef.current) return;
+      if (!force && Date.now() < traktCooldownUntilRef.current) return;
+      if (action === 'pause' && !traktStartSentRef.current) return;
 
       const mediaType = type === 'series' ? 'episode' : 'movie';
       const seasonNum = season != null ? Number(season) : undefined;
@@ -425,7 +439,7 @@ export default function PlayerScreen() {
       }
 
       try {
-        await traktScrobble({
+        const result: any = await traktScrobble({
           action,
           imdbId,
           mediaType,
@@ -434,8 +448,38 @@ export default function PlayerScreen() {
           progress: getTraktProgress(),
           appVersion: 'mobile',
         });
+
+        if (result?.ok) {
+          traktFailureCountRef.current = 0;
+          traktCooldownUntilRef.current = 0;
+          if (action === 'start') {
+            traktStartSentRef.current = true;
+          }
+          return;
+        }
+
+        const reason = String(result?.reason || '');
+        if (
+          reason === 'not_connected' ||
+          reason === 'not_configured' ||
+          reason === 'missing_episode' ||
+          reason === 'local_mode'
+        ) {
+          traktDisabledRef.current = true;
+          return;
+        }
+
+        traktFailureCountRef.current += 1;
+        if (traktFailureCountRef.current >= TRAKT_MAX_FAILURES) {
+          traktCooldownUntilRef.current = Date.now() + TRAKT_FAILURE_COOLDOWN_MS;
+          traktFailureCountRef.current = 0;
+        }
       } catch {
-        // Ignore Trakt scrobble errors during playback.
+        traktFailureCountRef.current += 1;
+        if (traktFailureCountRef.current >= TRAKT_MAX_FAILURES) {
+          traktCooldownUntilRef.current = Date.now() + TRAKT_FAILURE_COOLDOWN_MS;
+          traktFailureCountRef.current = 0;
+        }
       }
     },
     [episode, getTraktProgress, imdbId, season, type]
@@ -494,7 +538,10 @@ export default function PlayerScreen() {
         void sendTraktEvent('start');
       } else if (
         !traktStopSentRef.current &&
-        !(durationRef.current > 0 && currentTimeRef.current / durationRef.current >= 0.9)
+        !(
+          durationRef.current > 0 &&
+          currentTimeRef.current / durationRef.current >= TRAKT_COMPLETION_THRESHOLD
+        )
       ) {
         void sendTraktEvent('pause');
       }
@@ -532,7 +579,11 @@ export default function PlayerScreen() {
         setDuration(d);
         durationRef.current = d;
 
-        if (!traktStopSentRef.current && d > 0 && time / d >= 0.9) {
+        if (
+          !traktStopSentRef.current &&
+          d > 0 &&
+          time / d >= TRAKT_COMPLETION_THRESHOLD
+        ) {
           void sendTraktEvent('stop', true);
         }
         
