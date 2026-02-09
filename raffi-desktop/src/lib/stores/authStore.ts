@@ -11,7 +11,7 @@ import {
     importLegacySupabaseSessionToLocal,
     clearLegacySupabaseSession,
 } from "../db/supabaseLegacy";
-import { setConvexAuthToken } from "../db/convex";
+import { setConvexAuthRefreshHandler, setConvexAuthToken } from "../db/convex";
 import { writable } from "svelte/store";
 
 export type UpdateStatus = {
@@ -141,7 +141,9 @@ const decodeJwtPayload = (token: string): Record<string, any> | null => {
     try {
         const parts = token.split(".");
         if (parts.length < 2) return null;
-        const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+        const payloadBase64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+        const padLength = (4 - (payloadBase64.length % 4)) % 4;
+        const base64 = payloadBase64.padEnd(payloadBase64.length + padLength, "=");
         const json = decodeURIComponent(
             atob(base64)
                 .split("")
@@ -211,6 +213,29 @@ const tryRefreshAveSession = async (user: AppUser): Promise<AppUser | null> => {
     }
 };
 
+const applyRefreshedUser = (refreshed: AppUser) => {
+    userCache = refreshed;
+    currentUser.set(refreshed);
+    setConvexAuthToken(refreshed.token);
+    scheduleSessionRefresh(refreshed);
+};
+
+const refreshSessionFromConvexAuthFailure = async (): Promise<string | null> => {
+    const activeUser = userCache;
+    if (!activeUser) return null;
+
+    const refreshed = await tryRefreshAveSession(activeUser);
+    if (!refreshed) {
+        clearAveSession();
+        enableLocalMode();
+        emitHomeRefresh();
+        return null;
+    }
+
+    applyRefreshedUser(refreshed);
+    return refreshed.token;
+};
+
 const scheduleSessionRefresh = (user: AppUser | null) => {
     clearSessionRefreshTimer();
     if (!user?.refreshToken) return;
@@ -231,10 +256,7 @@ const scheduleSessionRefresh = (user: AppUser | null) => {
             emitHomeRefresh();
             return;
         }
-        userCache = refreshed;
-        currentUser.set(refreshed);
-        setConvexAuthToken(refreshed.token);
-        scheduleSessionRefresh(refreshed);
+        applyRefreshedUser(refreshed);
     }, delay);
 };
 
@@ -366,3 +388,5 @@ export const migrateLegacySessionAndSignInAve = async () => {
 export function getCachedUser(): AppUser | null {
     return userCache;
 }
+
+setConvexAuthRefreshHandler(refreshSessionFromConvexAuthFailure);
