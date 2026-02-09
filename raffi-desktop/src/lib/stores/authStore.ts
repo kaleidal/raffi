@@ -17,6 +17,7 @@ import { writable } from "svelte/store";
 export type UpdateStatus = {
     available: boolean;
     downloaded: boolean;
+    downloadProgress: number | null;
     version: string | null;
     notes: string;
     releaseDate: string | null;
@@ -28,6 +29,7 @@ export const legacyMigrationNeeded = writable(false);
 export const updateStatus = writable<UpdateStatus>({
     available: false,
     downloaded: false,
+    downloadProgress: null,
     version: null,
     notes: "",
     releaseDate: null,

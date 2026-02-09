@@ -828,6 +828,22 @@ function createWindow() {
         }
       });
 
+      autoUpdater.on("download-progress", (progress) => {
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        const percent =
+          typeof progress?.percent === "number" && Number.isFinite(progress.percent)
+            ? Math.max(0, Math.min(100, progress.percent))
+            : null;
+        mainWindow.webContents.send("UPDATE_DOWNLOAD_PROGRESS", {
+          percent,
+          bytesPerSecond:
+            typeof progress?.bytesPerSecond === "number" ? progress.bytesPerSecond : null,
+          transferred:
+            typeof progress?.transferred === "number" ? progress.transferred : null,
+          total: typeof progress?.total === "number" ? progress.total : null,
+        });
+      });
+
       autoUpdater.checkForUpdates().catch((err) => {
         logToFile("checkForUpdates failed", err);
       });
