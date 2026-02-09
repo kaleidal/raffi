@@ -9,12 +9,15 @@ export type AnalyticsSettings = {
 
 const ANALYTICS_ENABLED_KEY = "analytics_enabled";
 const ANALYTICS_REPLAY_KEY = "analytics_session_replay_enabled";
+const APP_SESSION_ID_KEY = "analytics_app_session_id";
 const DEFAULT_HOST = "https://eu.i.posthog.com";
 const DEFAULT_API_KEY = "phc_KfZzLVnffYNKrVo9iyWmAgrN7cY2wE9GVmeTIAl9SIy";
 
 let initialized = false;
 let lastPage: Route | null = null;
 let lastUserId: string | null = null;
+let lastUserTraits: Record<string, any> = {};
+let appSessionId: string | null = null;
 
 const isBrowser = () => typeof window !== "undefined";
 
@@ -39,6 +42,48 @@ export const getAnalyticsSettings = (): AnalyticsSettings => ({
     sessionReplay: readStoredBool(ANALYTICS_REPLAY_KEY, false),
 });
 
+const generateSessionId = () => {
+    if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+        return crypto.randomUUID();
+    }
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
+
+const ensureAppSessionId = () => {
+    if (!isBrowser()) return null;
+    if (appSessionId) return appSessionId;
+    try {
+        const stored = sessionStorage.getItem(APP_SESSION_ID_KEY);
+        if (stored) {
+            appSessionId = stored;
+            return appSessionId;
+        }
+        appSessionId = generateSessionId();
+        sessionStorage.setItem(APP_SESSION_ID_KEY, appSessionId);
+        return appSessionId;
+    } catch {
+        appSessionId = generateSessionId();
+        return appSessionId;
+    }
+};
+
+const getSessionLinkage = () => ({
+    app_session_id: appSessionId ?? ensureAppSessionId(),
+    ph_distinct_id: initialized ? posthog.get_distinct_id() : null,
+    ph_session_id: initialized ? posthog.get_session_id() : null,
+    user_id: lastUserId,
+});
+
+const registerBaseProperties = () => {
+    if (!initialized || !isBrowser()) return;
+    posthog.register({
+        app: "raffi",
+        platform: (window as any)?.electronAPI ? "electron" : "web",
+        environment: import.meta.env.MODE,
+        app_session_id: appSessionId ?? ensureAppSessionId(),
+    });
+};
+
 const persistSettings = (settings: AnalyticsSettings) => {
     if (!isBrowser()) return;
     try {
@@ -60,8 +105,10 @@ const applyConsent = (settings: AnalyticsSettings) => {
             posthog.stopSessionRecording();
         }
 
+        registerBaseProperties();
+
         if (lastUserId) {
-            posthog.identify(lastUserId);
+            posthog.identify(lastUserId, lastUserTraits);
         }
         return;
     }
@@ -101,35 +148,51 @@ export const initAnalytics = () => {
     });
 
     initialized = true;
+    ensureAppSessionId();
 
-    posthog.register({
-        app: "raffi",
-        platform: (window as any)?.electronAPI ? "electron" : "web",
-        environment: import.meta.env.MODE,
-    });
+    registerBaseProperties();
 
     applyConsent(getAnalyticsSettings());
+
+    trackEvent("analytics_session_started");
 };
 
 export const trackEvent = (event: string, properties?: Record<string, any>) => {
     if (!canCapture()) return;
-    posthog.capture(event, properties);
+    posthog.capture(event, {
+        ...getSessionLinkage(),
+        ...(properties ?? {}),
+    });
 };
 
 export const trackPageView = (page: Route) => {
     if (!canCapture()) return;
     if (page === lastPage) return;
     lastPage = page;
-    posthog.capture("page_view", { page });
+    posthog.capture("page_view", {
+        page,
+        ...getSessionLinkage(),
+    });
 };
 
 export const setAnalyticsUser = (user: AppUser | null) => {
     lastUserId = user?.id ?? null;
+    lastUserTraits = user
+        ? {
+              email: user.email ?? undefined,
+              name: user.name ?? undefined,
+              provider: user.provider ?? undefined,
+          }
+        : {};
     if (!canCapture()) return;
 
     if (lastUserId) {
-        posthog.identify(lastUserId);
+        posthog.identify(lastUserId, lastUserTraits);
+        posthog.register({ user_id: lastUserId });
+        trackEvent("analytics_user_identified");
     } else {
         posthog.reset();
+        registerBaseProperties();
+        lastPage = null;
     }
 };
