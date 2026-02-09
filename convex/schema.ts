@@ -71,4 +71,17 @@ export default defineSchema({
     })
         .index("by_party", ["party_id"])
         .index("by_party_user", ["party_id", "user_id"]),
+
+    trakt_integrations: defineTable({
+        user_id: v.string(),
+        username: v.optional(v.string()),
+        slug: v.optional(v.string()),
+        access_token: v.string(),
+        refresh_token: v.string(),
+        scope: v.optional(v.string()),
+        token_type: v.optional(v.string()),
+        expires_at: v.optional(v.number()),
+        created_at: v.string(),
+        updated_at: v.string(),
+    }).index("by_user", ["user_id"]),
 });
