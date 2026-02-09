@@ -23,6 +23,7 @@
 	let lastSearchQueryLength = 0;
 	let lastSearchResultsCount = 0;
 	let commandHint = "";
+	let updateProgressPercent = 0;
 
 
     export let absolute: boolean = true;
@@ -127,7 +128,7 @@
 
 
 
-    function closeSearch() {
+	function closeSearch() {
         // Delay closing to allow clicks on results or context menu
         setTimeout(() => {
             // Only close if we're not interacting with context menu or popup
@@ -165,6 +166,15 @@
 	function openSettings() {
 		trackEvent("settings_opened", { source: "search_bar" });
 		dispatch("openSettings");
+	}
+
+	$: {
+		const raw = $updateStatus.downloaded
+			? 100
+			: typeof $updateStatus.downloadProgress === "number"
+				? $updateStatus.downloadProgress
+				: 8;
+		updateProgressPercent = Math.max(8, Math.min(100, Math.round(raw)));
 	}
 
 	function openPlayModal() {
@@ -389,7 +399,7 @@
         onclose={() => (showListsPopup = false)}
     />
 
-    <div class="flex flex-row gap-[10px]">
+    <div class="flex flex-row items-start gap-[10px]">
         <button
             class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
             aria-label="addons"
@@ -414,36 +424,41 @@
             <Library size={40} strokeWidth={2} color="#C3C3C3" />
         </button>
 
-        <button
-            class={`group relative bg-[#2C2C2C]/80 rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer ${$currentUser ? 'p-0 overflow-hidden w-[80px] h-[80px]' : 'p-[20px]'}`}
-            aria-label="settings"
-            onclick={openSettings}
-        >
-            {#if $currentUser}
-                <div class="w-full h-full bg-white/10 group-hover:bg-black/35 transition-colors duration-300 flex items-center justify-center">
-                    {#if $currentUser.avatar}
-                        <img
-                            src={$currentUser.avatar}
-                            alt="Profile"
-                            class="w-full h-full object-cover"
-                            loading="lazy"
-                        />
-                        <span class="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></span>
-                    {:else}
-                        <span class="text-white text-2xl font-semibold uppercase">
-                            {($currentUser.name || $currentUser.email || "?").slice(0, 1)}
-                        </span>
-                    {/if}
-                </div>
-            {:else}
-                <Settings size={40} strokeWidth={2} color="#C3C3C3" />
-            {/if}
+        <div class="flex flex-col items-center">
+            <button
+                class={`group relative bg-[#2C2C2C]/80 rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer ${$currentUser ? 'p-0 overflow-hidden w-[80px] h-[80px]' : 'p-[20px]'}`}
+                aria-label="settings"
+                onclick={openSettings}
+            >
+                {#if $currentUser}
+                    <div class="w-full h-full bg-white/10 group-hover:bg-black/35 transition-colors duration-300 flex items-center justify-center">
+                        {#if $currentUser.avatar}
+                            <img
+                                src={$currentUser.avatar}
+                                alt="Profile"
+                                class="w-full h-full object-cover"
+                                loading="lazy"
+                            />
+                            <span class="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></span>
+                        {:else}
+                            <span class="text-white text-2xl font-semibold uppercase">
+                                {($currentUser.name || $currentUser.email || "?").slice(0, 1)}
+                            </span>
+                        {/if}
+                    </div>
+                {:else}
+                    <Settings size={40} strokeWidth={2} color="#C3C3C3" />
+                {/if}
+            </button>
+
             {#if $updateStatus.available}
-                <span class="absolute top-3 right-3 flex h-2.5 w-2.5">
-                    <span class="absolute inline-flex h-full w-full rounded-full bg-[#FF3B30]/60 animate-ping"></span>
-                    <span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#FF3B30]"></span>
-                </span>
+                <div class="mt-2 h-[3px] w-[54px] rounded-full bg-white/25 overflow-hidden">
+                    <div
+                        class="h-full bg-white transition-[width] duration-300"
+                        style={`width: ${updateProgressPercent}%`}
+                    ></div>
+                </div>
             {/if}
-        </button>
+        </div>
     </div>
 </div>
