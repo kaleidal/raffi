@@ -125,7 +125,7 @@ const LANGUAGE_ALIAS_TO_TAG: Record<string, LanguageTag> = {
     GRE: { code: "EL", flag: "🇬🇷" },
     ELL: { code: "EL", flag: "🇬🇷" },
     GREEK: { code: "EL", flag: "🇬🇷" },
-    HE: { code: "HE", flag: "🇮��" },
+    HE: { code: "HE", flag: "🇮🇱" },
     HEB: { code: "HE", flag: "🇮🇱" },
     HEBREW: { code: "HE", flag: "🇮🇱" },
     VI: { code: "VI", flag: "🇻🇳" },
