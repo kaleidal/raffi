@@ -1,12 +1,11 @@
 <script lang="ts">
     import { fade } from "svelte/transition";
-    import { createEventDispatcher, onDestroy, onMount } from "svelte";
+    import { createEventDispatcher, onMount } from "svelte";
     import type { Addon } from "../../../lib/db/db";
     import type { ShowResponse } from "../../../lib/library/types/meta_types";
     import type { ProgressMap, ProgressItem } from "../../../pages/meta/types";
     import LoadingSpinner from "../../common/LoadingSpinner.svelte";
     import { trackEvent } from "../../../lib/analytics";
-    import { lockScroll, unlockScroll } from "../../../lib/modalScrollLock";
     import { X, Link2 } from "lucide-svelte";
     import {
         buildAudioLanguageBadge,
@@ -56,7 +55,6 @@
     let resolutionFilter: ResolutionFilter = "all";
     let excludeHDR = false;
     let hasTrackedOpen = false;
-    let bodyLocked = false;
 
     const getStreamCounts = () => {
         const localCount = streams.filter(
@@ -67,16 +65,6 @@
             local: localCount,
             addon: Math.max(0, streams.length - localCount),
         };
-    };
-
-    const updateBodyLock = (active: boolean) => {
-        if (active && !bodyLocked) {
-            lockScroll();
-            bodyLocked = true;
-        } else if (!active && bodyLocked) {
-            unlockScroll();
-            bodyLocked = false;
-        }
     };
 
     function resetFilters() {
@@ -368,13 +356,6 @@
         hasTrackedOpen = false;
     }
 
-     $: updateBodyLock(streamsPopupVisible);
-
-
-    onDestroy(() => {
-        updateBodyLock(false);
-    });
-
     $: enrichedStreams = streams.map((stream, index) => ({
         key:
             stream?.url ||
@@ -641,8 +622,6 @@
         episodeNumber;
 
 </script>
-
-<svelte:body class:overflow-hidden={streamsPopupVisible} />
 
 {#if streamsPopupVisible}
     <div
