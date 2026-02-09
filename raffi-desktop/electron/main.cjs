@@ -129,6 +129,18 @@ let httpServer;
 let fileToOpen = null;
 let pendingAveAuthPayload = null;
 let pendingUpdateInfo = null;
+const ALLOWED_EXTERNAL_HOSTS = new Set(["aveid.net", "www.aveid.net", "api.aveid.net"]);
+
+function isAllowedExternalUrl(value) {
+  if (!value || typeof value !== "string") return false;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "https:") return false;
+    return ALLOWED_EXTERNAL_HOSTS.has(parsed.hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
 
 function handleProtocolUrl(url) {
   if (!url || typeof url !== "string") return false;
@@ -974,6 +986,9 @@ ipcMain.handle("WINDOW_IS_FULLSCREEN", async () => {
 ipcMain.handle("OPEN_EXTERNAL_URL", async (_event, targetUrl) => {
   if (!targetUrl || typeof targetUrl !== "string") {
     throw new Error("Invalid URL");
+  }
+  if (!isAllowedExternalUrl(targetUrl)) {
+    throw new Error("External URL is not allowed");
   }
   await shell.openExternal(targetUrl);
   return true;

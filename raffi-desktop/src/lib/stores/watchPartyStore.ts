@@ -80,6 +80,9 @@ const startHeartbeat = (partyId: string) => {
 const pollPartyState = async (partyId: string) => {
     const info = await getWatchPartyInfoDb(partyId);
     if (!info) {
+        stopHeartbeat();
+        stopPolling();
+        watchPartyState.set(initialState);
         if (partyEndCallback) partyEndCallback("party_deleted");
         return;
     }

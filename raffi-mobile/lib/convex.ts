@@ -2,7 +2,7 @@ import { ConvexHttpClient } from 'convex/browser';
 
 const PROD_CONVEX_URL = 'https://qualified-meerkat-631.eu-west-1.convex.cloud';
 const DEV_CONVEX_URL = 'https://nautical-poodle-361.eu-west-1.convex.cloud';
-const CONVEX_URLS = __DEV__ ? [DEV_CONVEX_URL, PROD_CONVEX_URL] : [PROD_CONVEX_URL, DEV_CONVEX_URL];
+const CONVEX_URLS = __DEV__ ? [DEV_CONVEX_URL] : [PROD_CONVEX_URL];
 
 const clients = new Map<string, ConvexHttpClient>();
 let activeUrl = CONVEX_URLS[0];
