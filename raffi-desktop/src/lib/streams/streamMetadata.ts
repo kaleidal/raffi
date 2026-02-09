@@ -180,6 +180,16 @@ const LANGUAGE_ALIAS_TO_TAG: Record<string, LanguageTag> = {
 };
 
 const FLAG_EMOJI_REGEX = /[\u{1F1E6}-\u{1F1FF}]{2}/gu;
+const COUNTRY_TO_LANG: Record<string, string> = {
+    GB: "EN", IT: "IT", ES: "ES", FR: "FR", DE: "DE",
+    PT: "PT", RU: "RU", JP: "JA", KR: "KO", CN: "ZH",
+    IN: "HI", SA: "AR", TR: "TR", NL: "NL", PL: "PL",
+    SE: "SV", NO: "NO", DK: "DA", FI: "FI", CZ: "CS",
+    GR: "EL", IL: "HE", VN: "VI", TH: "TH", ID: "ID",
+    MY: "MS", UA: "UK", RO: "RO", HU: "HU", BG: "BG",
+    RS: "SR", HR: "HR", SK: "SK", SI: "SL", IR: "FA",
+    PK: "UR",
+};
 
 const flagEmojiToLanguageCode = (flag: string): string | null => {
     const chars = Array.from(flag);
@@ -191,21 +201,8 @@ const flagEmojiToLanguageCode = (flag: string): string | null => {
     const countryCode = points
         .map((point) => String.fromCharCode(point - 0x1f1e6 + 65))
         .join("");
-    
-    // Map country codes to language codes
-    const countryToLang: Record<string, string> = {
-        GB: "EN", IT: "IT", ES: "ES", FR: "FR", DE: "DE",
-        PT: "PT", RU: "RU", JP: "JA", KR: "KO", CN: "ZH",
-        IN: "HI", SA: "AR", TR: "TR", NL: "NL", PL: "PL",
-        SE: "SV", NO: "NO", DK: "DA", FI: "FI", CZ: "CS",
-        GR: "EL", IL: "HE", VN: "VI", TH: "TH", ID: "ID",
-        MY: "MS", UA: "UK", RO: "RO", HU: "HU", BG: "BG",
-        RS: "SR", HR: "HR", SK: "SK", SI: "SL", IR: "FA",
-        PK: "UR",
-    };
-    
-    // Fallback: if no explicit language mapping, return the country code
-    return countryToLang[countryCode] || countryCode;
+
+    return COUNTRY_TO_LANG[countryCode] || countryCode;
 };
 
 // Precompile regex patterns for better performance
