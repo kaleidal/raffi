@@ -188,7 +188,6 @@
                 class="absolute top-12.5 left-12.5 z-50 bg-[#FFFFFF]/10 hover:bg-[#FFFFFF]/20 backdrop-blur-md p-4 rounded-full transition-colors duration-200 cursor-pointer"
                 on:click={() => {
                     router.navigate("home");
-                    StreamLogic.closePlayer();
                 }}
                 aria-label="Back to Home"
             >
