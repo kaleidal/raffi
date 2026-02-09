@@ -79,6 +79,7 @@
 	let scanningLocal = false;
 	let localScanMessage = "";
 	let bodyLocked = false;
+	const HOME_REFRESH_EVENT = "raffi:home-refresh";
 
 	const refreshStats = async () => {
 		try {
@@ -179,6 +180,10 @@
 			toggleBodyScroll(false);
 			bodyLocked = false;
 		}
+	};
+
+	const emitHomeRefresh = () => {
+		window.dispatchEvent(new CustomEvent(HOME_REFRESH_EVENT));
 	};
 
 	function close() {
@@ -388,6 +393,7 @@
 			loginMessage = $currentUser && !$localMode
 				? `Imported ${counts.addons} addons, ${counts.library} history items, ${counts.lists} lists and synced to your Ave account.`
 				: `Imported ${counts.addons} addons, ${counts.library} history items, ${counts.lists} lists.`;
+			emitHomeRefresh();
 			trackEvent("legacy_supabase_import_success", counts as any);
 			legacyPassword = "";
 		} catch (e: any) {

@@ -4,6 +4,7 @@ import {
     generateCodeChallenge,
     generateCodeVerifier,
     generateNonce,
+    refreshToken,
 } from "@ave-id/sdk";
 import type { AppUser } from "./types";
 
@@ -14,6 +15,12 @@ const AVE_REDIRECT_URI = "raffi://auth/callback";
 
 const PKCE_VERIFIER_KEY = "ave_pkce_verifier";
 const PKCE_STATE_KEY = "ave_pkce_state";
+
+const AVE_OAUTH_CONFIG = {
+    clientId: AVE_CLIENT_ID,
+    redirectUri: AVE_REDIRECT_URI,
+    issuer: AVE_ISSUER,
+};
 
 const decodeJwtPayload = (token: string): Record<string, any> | null => {
     try {
@@ -37,6 +44,45 @@ const getElectronApi = () => (window as any).electronAPI as {
     onAveAuthCallback?: (callback: (payload: { code?: string; state?: string; error?: string }) => void) => () => void;
 };
 
+const buildUserFromTokens = async (tokens: any, fallback?: AppUser): Promise<AppUser> => {
+    const jwtToken = tokens?.id_token || tokens?.access_token_jwt || tokens?.access_token;
+    if (!jwtToken) {
+        throw new Error("Ave token exchange did not return a JWT token");
+    }
+
+    let profile: any = null;
+    const accessToken = tokens?.access_token;
+    if (accessToken) {
+        try {
+            profile = await fetchUserInfo(AVE_OAUTH_CONFIG, accessToken);
+        } catch {
+            profile = null;
+        }
+    }
+
+    const claims = decodeJwtPayload(jwtToken) || {};
+    const id = String(profile?.sub || claims.sub || fallback?.id || "");
+    if (!id) {
+        throw new Error("Unable to resolve Ave user id");
+    }
+
+    return {
+        id,
+        email: profile?.email || claims.email || fallback?.email || null,
+        name:
+            profile?.name ||
+            profile?.preferred_username ||
+            claims.name ||
+            claims.preferred_username ||
+            fallback?.name ||
+            null,
+        avatar: profile?.picture || claims.picture || fallback?.avatar || null,
+        provider: "ave",
+        token: jwtToken,
+        refreshToken: tokens?.refresh_token || fallback?.refreshToken || null,
+    };
+};
+
 export async function signInWithAveViaBrowser(): Promise<AppUser> {
     const codeVerifier = generateCodeVerifier();
     const codeChallenge = await generateCodeChallenge(codeVerifier);
@@ -49,7 +95,7 @@ export async function signInWithAveViaBrowser(): Promise<AppUser> {
     const authParams = new URLSearchParams({
         client_id: AVE_CLIENT_ID,
         redirect_uri: AVE_REDIRECT_URI,
-        scope: "openid profile email",
+        scope: "openid profile email offline_access",
         state,
         nonce,
         code_challenge: codeChallenge,
@@ -99,57 +145,25 @@ export async function signInWithAveViaBrowser(): Promise<AppUser> {
         throw new Error("Invalid Ave state");
     }
 
-    const tokens = await exchangeCode(
-        {
-            clientId: AVE_CLIENT_ID,
-            redirectUri: AVE_REDIRECT_URI,
-            issuer: AVE_ISSUER,
-        },
-        {
-            code: receivedCode,
-            codeVerifier: storedVerifier,
-        },
-    );
+    const tokens = await exchangeCode(AVE_OAUTH_CONFIG, {
+        code: receivedCode,
+        codeVerifier: storedVerifier,
+    });
 
-    const jwtToken = (tokens as any).id_token || (tokens as any).access_token_jwt || (tokens as any).access_token;
-    if (!jwtToken) {
-        throw new Error("Ave token exchange did not return a JWT token");
-    }
-
-    let profile: any = null;
-    const accessToken = (tokens as any).access_token;
-    if (accessToken) {
-        try {
-            profile = await fetchUserInfo(
-                {
-                    clientId: AVE_CLIENT_ID,
-                    redirectUri: AVE_REDIRECT_URI,
-                    issuer: AVE_ISSUER,
-                },
-                accessToken,
-            );
-        } catch {
-            profile = null;
-        }
-    }
-
-    const claims = decodeJwtPayload(jwtToken) || {};
-    const id = String(profile?.sub || claims.sub || "");
-    if (!id) {
-        throw new Error("Unable to resolve Ave user id");
-    }
-
-    const user: AppUser = {
-        id,
-        email: profile?.email || claims.email || null,
-        name: profile?.name || profile?.preferred_username || claims.name || claims.preferred_username || null,
-        avatar: profile?.picture || claims.picture || null,
-        provider: "ave",
-        token: jwtToken,
-    };
+    const user = await buildUserFromTokens(tokens);
 
     sessionStorage.removeItem(PKCE_VERIFIER_KEY);
     sessionStorage.removeItem(PKCE_STATE_KEY);
 
     return user;
+}
+
+export async function refreshAveUserSession(user: AppUser): Promise<AppUser> {
+    if (!user?.refreshToken) {
+        throw new Error("No Ave refresh token available");
+    }
+    const tokens = await refreshToken(AVE_OAUTH_CONFIG, {
+        refreshToken: user.refreshToken,
+    });
+    return buildUserFromTokens(tokens, user);
 }

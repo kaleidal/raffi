@@ -5,4 +5,5 @@ export interface AppUser {
     avatar: string | null;
     provider: "ave";
     token: string;
+    refreshToken?: string | null;
 }

@@ -1,5 +1,5 @@
 import type { AppUser } from "../auth/types";
-import { signInWithAveViaBrowser } from "../auth/aveAuth";
+import { refreshAveUserSession, signInWithAveViaBrowser } from "../auth/aveAuth";
 import {
     ensureDefaultAddonsForUser,
     ensureDefaultAddonsForLocal,
@@ -36,6 +36,8 @@ export const updateStatus = writable<UpdateStatus>({
 const LOCAL_MODE_KEY = "local_mode_enabled";
 const AVE_USER_KEY = "ave_user";
 const AVE_TOKEN_KEY = "ave_token_jwt";
+const AVE_REFRESH_TOKEN_KEY = "ave_refresh_token";
+const HOME_REFRESH_EVENT = "raffi:home-refresh";
 
 let userCache: AppUser | null = null;
 let initialized = false;
@@ -78,6 +80,7 @@ const persistAveSession = (user: AppUser | null) => {
     if (!user) {
         localStorage.removeItem(AVE_USER_KEY);
         localStorage.removeItem(AVE_TOKEN_KEY);
+        localStorage.removeItem(AVE_REFRESH_TOKEN_KEY);
         return;
     }
     localStorage.setItem(AVE_USER_KEY, JSON.stringify({
@@ -88,6 +91,11 @@ const persistAveSession = (user: AppUser | null) => {
         provider: user.provider,
     }));
     localStorage.setItem(AVE_TOKEN_KEY, user.token);
+    if (user.refreshToken) {
+        localStorage.setItem(AVE_REFRESH_TOKEN_KEY, user.refreshToken);
+    } else {
+        localStorage.removeItem(AVE_REFRESH_TOKEN_KEY);
+    }
 };
 
 const readAveSession = (): AppUser | null => {
@@ -95,6 +103,7 @@ const readAveSession = (): AppUser | null => {
     try {
         const userRaw = localStorage.getItem(AVE_USER_KEY);
         const token = localStorage.getItem(AVE_TOKEN_KEY);
+        const refreshToken = localStorage.getItem(AVE_REFRESH_TOKEN_KEY);
         if (!userRaw || !token) return null;
         const parsed = JSON.parse(userRaw);
         if (!parsed?.id) return null;
@@ -105,10 +114,16 @@ const readAveSession = (): AppUser | null => {
             avatar: parsed.avatar ?? null,
             provider: "ave",
             token,
+            refreshToken: refreshToken ?? parsed.refreshToken ?? null,
         };
     } catch {
         return null;
     }
+};
+
+const emitHomeRefresh = () => {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new CustomEvent(HOME_REFRESH_EVENT));
 };
 
 async function seedDefaultsIfNeeded(user: AppUser | null) {
@@ -135,6 +150,20 @@ const isStoredAveSessionValid = async () => {
     }
 };
 
+const tryRefreshAveSession = async (user: AppUser): Promise<AppUser | null> => {
+    if (!user?.refreshToken) return null;
+    try {
+        const refreshedUser = await refreshAveUserSession(user);
+        setConvexAuthToken(refreshedUser.token);
+        const valid = await isStoredAveSessionValid();
+        if (!valid) return null;
+        persistAveSession(refreshedUser);
+        return refreshedUser;
+    } catch {
+        return null;
+    }
+};
+
 const isInvalidLegacyRefreshError = (error: any) => {
     const message = String(error?.message || "").toLowerCase();
     return message.includes("invalid refresh token") || message.includes("refresh token not found");
@@ -151,15 +180,25 @@ export async function initAuth() {
         persistLocalMode(true);
     }
 
-    userCache = readAveSession();
-    currentUser.set(userCache);
+    const storedUser = readAveSession();
+    userCache = storedUser;
+    currentUser.set(storedUser);
 
-    if (userCache) {
-        setConvexAuthToken(userCache.token);
+    if (storedUser) {
+        setConvexAuthToken(storedUser.token);
+        let activeUser: AppUser | null = storedUser;
         const valid = await isStoredAveSessionValid();
         if (!valid) {
+            activeUser = await tryRefreshAveSession(storedUser);
+        }
+
+        if (!activeUser) {
             clearAveSession();
             enableLocalMode();
+        } else {
+            userCache = activeUser;
+            currentUser.set(activeUser);
+            setConvexAuthToken(activeUser.token);
         }
     }
 
@@ -195,6 +234,8 @@ export async function signInWithAve() {
     } catch (error) {
         console.error("Ave sign-in sync failed", error);
     }
+
+    emitHomeRefresh();
 }
 
 export function signOutToLocalMode() {
@@ -202,6 +243,7 @@ export function signOutToLocalMode() {
     currentUser.set(null);
     persistAveSession(null);
     enableLocalMode();
+    emitHomeRefresh();
 }
 
 export const dismissLegacyMigrationPrompt = () => {
@@ -214,12 +256,14 @@ export const migrateLegacySessionToLocal = async () => {
         clearLegacySupabaseSession();
         enableLocalMode();
         legacyMigrationNeeded.set(false);
+        emitHomeRefresh();
         return result;
     } catch (error) {
         if (isInvalidLegacyRefreshError(error)) {
             clearLegacySupabaseSession();
             enableLocalMode();
             legacyMigrationNeeded.set(false);
+            emitHomeRefresh();
             return {
                 addons: 0,
                 library: 0,
