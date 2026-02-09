@@ -1,5 +1,7 @@
-import { mutationGeneric, queryGeneric } from "convex/server";
+import { actionGeneric, mutationGeneric, queryGeneric } from "convex/server";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
+import { internalMutation, internalQuery } from "./_generated/server";
 
 const getNowIso = () => new Date().toISOString();
 
@@ -74,6 +76,125 @@ const requireAuthedUserId = async (ctx: any) => {
         throw new Error("Not authenticated");
     }
     return authedUserId;
+};
+
+const TRAKT_API_BASE_URL = "https://api.trakt.tv";
+const TRAKT_AUTHORIZE_URL = "https://trakt.tv/oauth/authorize";
+const DEFAULT_TRAKT_REDIRECT_URI = "raffi://trakt/callback";
+
+const getEnv = (key: string): string | undefined => {
+    const value = (globalThis as any)?.process?.env?.[key];
+    return optionalString(value);
+};
+
+const getTraktConfig = () => {
+    const clientId = getEnv("TRAKT_CLIENT_ID");
+    const clientSecret = getEnv("TRAKT_CLIENT_SECRET");
+    const redirectUri = getEnv("TRAKT_REDIRECT_URI") || DEFAULT_TRAKT_REDIRECT_URI;
+    return {
+        clientId,
+        clientSecret,
+        redirectUri,
+        configured: Boolean(clientId && clientSecret),
+    };
+};
+
+const parseJsonSafe = async (response: Response) => {
+    try {
+        return await response.json();
+    } catch {
+        return null;
+    }
+};
+
+const buildTraktHeaders = (clientId: string, accessToken?: string) => {
+    const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "trakt-api-version": "2",
+        "trakt-api-key": clientId,
+    };
+    if (accessToken) {
+        headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return headers;
+};
+
+const getTraktErrorMessage = (status: number, payload: any) => {
+    const msg =
+        optionalString(payload?.error_description) ||
+        optionalString(payload?.error) ||
+        optionalString(payload?.message);
+    return msg || `Trakt request failed (${status})`;
+};
+
+const exchangeOrRefreshTraktToken = async (
+    body: Record<string, any>,
+    config: { clientId: string; clientSecret: string },
+) => {
+    const response = await fetch(`${TRAKT_API_BASE_URL}/oauth/token`, {
+        method: "POST",
+        headers: buildTraktHeaders(config.clientId),
+        body: JSON.stringify({
+            ...body,
+            client_id: config.clientId,
+            client_secret: config.clientSecret,
+        }),
+    });
+    const payload = await parseJsonSafe(response);
+    if (!response.ok) {
+        throw new Error(getTraktErrorMessage(response.status, payload));
+    }
+    return payload || {};
+};
+
+const fetchTraktSettings = async (clientId: string, accessToken: string) => {
+    const response = await fetch(`${TRAKT_API_BASE_URL}/users/settings`, {
+        method: "GET",
+        headers: buildTraktHeaders(clientId, accessToken),
+    });
+    const payload = await parseJsonSafe(response);
+    if (!response.ok) {
+        throw new Error(getTraktErrorMessage(response.status, payload));
+    }
+    return payload;
+};
+
+const toExpiresAtMs = (payload: any): number | undefined => {
+    const createdAt = Number(payload?.created_at);
+    const expiresIn = Number(payload?.expires_in);
+    if (!Number.isFinite(expiresIn) || expiresIn <= 0) return undefined;
+    const created = Number.isFinite(createdAt) && createdAt > 0
+        ? createdAt
+        : Math.floor(Date.now() / 1000);
+    return Math.round((created + expiresIn) * 1000);
+};
+
+const getProfileValues = (settingsPayload: any) => {
+    const user = settingsPayload?.user || {};
+    return {
+        username: optionalString(user?.username),
+        slug: optionalString(user?.ids?.slug) || optionalString(user?.slug),
+    };
+};
+
+const getTraktIntegrationForUser = async (ctx: any, userId: string) => {
+    return ctx.runQuery((internal as any).raffi.getTraktIntegrationInternal, { userId });
+};
+
+const saveTraktIntegrationForUser = async (
+    ctx: any,
+    args: {
+        userId: string;
+        accessToken: string;
+        refreshToken: string;
+        scope?: string;
+        tokenType?: string;
+        expiresAt?: number;
+        username?: string;
+        slug?: string;
+    },
+) => {
+    return ctx.runMutation((internal as any).raffi.upsertTraktIntegrationInternal, args);
 };
 
 export const getState = queryGeneric({
@@ -691,5 +812,350 @@ export const getWatchPartyMembers = queryGeneric({
             .query("watch_party_members")
             .withIndex("by_party", (q: any) => q.eq("party_id", args.partyId))
             .collect();
+    },
+});
+
+export const getTraktIntegrationInternal = internalQuery({
+    args: { userId: v.string() },
+    handler: async (ctx, args) => {
+        return ctx.db
+            .query("trakt_integrations")
+            .withIndex("by_user", (q: any) => q.eq("user_id", args.userId))
+            .unique();
+    },
+});
+
+export const upsertTraktIntegrationInternal = internalMutation({
+    args: {
+        userId: v.string(),
+        accessToken: v.string(),
+        refreshToken: v.string(),
+        scope: v.optional(v.string()),
+        tokenType: v.optional(v.string()),
+        expiresAt: v.optional(v.number()),
+        username: v.optional(v.string()),
+        slug: v.optional(v.string()),
+    },
+    handler: async (ctx, args) => {
+        const now = getNowIso();
+        const existing = await ctx.db
+            .query("trakt_integrations")
+            .withIndex("by_user", (q: any) => q.eq("user_id", args.userId))
+            .unique();
+
+        const patch = {
+            user_id: args.userId,
+            access_token: args.accessToken,
+            refresh_token: args.refreshToken,
+            scope: optionalString(args.scope),
+            token_type: optionalString(args.tokenType),
+            expires_at: args.expiresAt,
+            username: optionalString(args.username),
+            slug: optionalString(args.slug),
+            updated_at: now,
+        };
+
+        if (existing) {
+            await ctx.db.patch(existing._id, patch);
+            return { ...existing, ...patch };
+        }
+
+        const id = await ctx.db.insert("trakt_integrations", {
+            ...patch,
+            created_at: now,
+        });
+        return ctx.db.get(id);
+    },
+});
+
+export const deleteTraktIntegrationInternal = internalMutation({
+    args: { userId: v.string() },
+    handler: async (ctx, args) => {
+        const existing = await ctx.db
+            .query("trakt_integrations")
+            .withIndex("by_user", (q: any) => q.eq("user_id", args.userId))
+            .unique();
+        if (existing) {
+            await ctx.db.delete(existing._id);
+        }
+        return { ok: true };
+    },
+});
+
+export const getTraktStatus = queryGeneric({
+    args: {},
+    handler: async (ctx) => {
+        const userId = await requireAuthedUserId(ctx);
+        const existing = await ctx.db
+            .query("trakt_integrations")
+            .withIndex("by_user", (q: any) => q.eq("user_id", userId))
+            .unique();
+        const config = getTraktConfig();
+        return {
+            configured: config.configured,
+            clientId: config.clientId ?? null,
+            redirectUri: config.redirectUri,
+            authorizeUrl: TRAKT_AUTHORIZE_URL,
+            connected: Boolean(existing),
+            username: existing?.username ?? null,
+            slug: existing?.slug ?? null,
+            scope: existing?.scope ?? null,
+            updatedAt: existing?.updated_at ?? null,
+            expiresAt: existing?.expires_at ?? null,
+        };
+    },
+});
+
+export const disconnectTrakt = mutationGeneric({
+    args: {},
+    handler: async (ctx) => {
+        const userId = await requireAuthedUserId(ctx);
+        const existing = await ctx.db
+            .query("trakt_integrations")
+            .withIndex("by_user", (q: any) => q.eq("user_id", userId))
+            .unique();
+        if (existing) {
+            await ctx.db.delete(existing._id);
+        }
+        return { ok: true };
+    },
+});
+
+export const exchangeTraktCode = actionGeneric({
+    args: {
+        code: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const userId = await requireAuthedUserId(ctx);
+        const config = getTraktConfig();
+        if (!config.clientId || !config.clientSecret) {
+            throw new Error("Trakt is not configured on the server");
+        }
+
+        const tokenPayload = await exchangeOrRefreshTraktToken(
+            {
+                code: args.code,
+                grant_type: "authorization_code",
+                redirect_uri: config.redirectUri,
+            },
+            {
+                clientId: config.clientId,
+                clientSecret: config.clientSecret,
+            },
+        );
+
+        const accessToken = optionalString(tokenPayload?.access_token);
+        const refreshToken = optionalString(tokenPayload?.refresh_token);
+        if (!accessToken || !refreshToken) {
+            throw new Error("Trakt token exchange returned an invalid payload");
+        }
+
+        let profile = { username: undefined as string | undefined, slug: undefined as string | undefined };
+        try {
+            const settingsPayload = await fetchTraktSettings(config.clientId, accessToken);
+            profile = getProfileValues(settingsPayload);
+        } catch {
+            // Profile is optional; token storage still succeeds.
+        }
+
+        await saveTraktIntegrationForUser(ctx, {
+            userId,
+            accessToken,
+            refreshToken,
+            scope: optionalString(tokenPayload?.scope),
+            tokenType: optionalString(tokenPayload?.token_type),
+            expiresAt: toExpiresAtMs(tokenPayload),
+            username: profile.username,
+            slug: profile.slug,
+        });
+
+        return {
+            ok: true,
+            connected: true,
+            username: profile.username ?? null,
+            slug: profile.slug ?? null,
+            scope: optionalString(tokenPayload?.scope) ?? null,
+            expiresAt: toExpiresAtMs(tokenPayload) ?? null,
+        };
+    },
+});
+
+export const refreshTraktToken = actionGeneric({
+    args: {},
+    handler: async (ctx) => {
+        const userId = await requireAuthedUserId(ctx);
+        const config = getTraktConfig();
+        if (!config.clientId || !config.clientSecret) {
+            throw new Error("Trakt is not configured on the server");
+        }
+
+        const integration = await getTraktIntegrationForUser(ctx, userId);
+        if (!integration) {
+            throw new Error("Trakt is not connected");
+        }
+
+        const tokenPayload = await exchangeOrRefreshTraktToken(
+            {
+                refresh_token: integration.refresh_token,
+                grant_type: "refresh_token",
+                redirect_uri: config.redirectUri,
+            },
+            {
+                clientId: config.clientId,
+                clientSecret: config.clientSecret,
+            },
+        );
+
+        const accessToken = optionalString(tokenPayload?.access_token);
+        const refreshToken = optionalString(tokenPayload?.refresh_token);
+        if (!accessToken || !refreshToken) {
+            throw new Error("Trakt refresh returned an invalid payload");
+        }
+
+        await saveTraktIntegrationForUser(ctx, {
+            userId,
+            accessToken,
+            refreshToken,
+            scope: optionalString(tokenPayload?.scope) || integration.scope,
+            tokenType: optionalString(tokenPayload?.token_type) || integration.token_type,
+            expiresAt: toExpiresAtMs(tokenPayload),
+            username: integration.username,
+            slug: integration.slug,
+        });
+
+        return { ok: true };
+    },
+});
+
+export const traktScrobble = actionGeneric({
+    args: {
+        action: v.union(v.literal("start"), v.literal("pause"), v.literal("stop")),
+        imdbId: v.string(),
+        mediaType: v.union(v.literal("movie"), v.literal("episode")),
+        season: v.optional(v.number()),
+        episode: v.optional(v.number()),
+        progress: v.number(),
+        appVersion: v.optional(v.string()),
+    },
+    handler: async (ctx, args) => {
+        try {
+            const userId = await requireAuthedUserId(ctx);
+            const config = getTraktConfig();
+            if (!config.clientId || !config.clientSecret) {
+                return { ok: false, reason: "not_configured" };
+            }
+
+            const integration = await getTraktIntegrationForUser(ctx, userId);
+            if (!integration?.access_token || !integration?.refresh_token) {
+                return { ok: false, reason: "not_connected" };
+            }
+
+            const progress = Math.max(0, Math.min(100, Number(args.progress) || 0));
+            const payload: Record<string, any> = {
+                progress,
+            };
+
+            if (optionalString(args.appVersion)) {
+                payload.app_version = optionalString(args.appVersion);
+            }
+
+            if (args.mediaType === "movie") {
+                payload.movie = {
+                    ids: {
+                        imdb: args.imdbId,
+                    },
+                };
+            } else {
+                const season = Number(args.season);
+                const episode = Number(args.episode);
+                if (!Number.isFinite(season) || !Number.isFinite(episode)) {
+                    return { ok: false, reason: "missing_episode" };
+                }
+                payload.show = {
+                    ids: {
+                        imdb: args.imdbId,
+                    },
+                };
+                payload.episode = {
+                    season,
+                    number: episode,
+                };
+            }
+
+            const runScrobble = async (accessToken: string) => {
+                const response = await fetch(`${TRAKT_API_BASE_URL}/scrobble/${args.action}`, {
+                    method: "POST",
+                    headers: buildTraktHeaders(config.clientId!, accessToken),
+                    body: JSON.stringify(payload),
+                });
+                const body = await parseJsonSafe(response);
+                return { response, body };
+            };
+
+            let activeAccessToken = integration.access_token;
+            let result = await runScrobble(activeAccessToken);
+
+            if (result.response.status === 401) {
+                try {
+                    const tokenPayload = await exchangeOrRefreshTraktToken(
+                        {
+                            refresh_token: integration.refresh_token,
+                            grant_type: "refresh_token",
+                            redirect_uri: config.redirectUri,
+                        },
+                        {
+                            clientId: config.clientId,
+                            clientSecret: config.clientSecret,
+                        },
+                    );
+                    const refreshedAccess = optionalString(tokenPayload?.access_token);
+                    const refreshedRefresh = optionalString(tokenPayload?.refresh_token);
+                    if (refreshedAccess && refreshedRefresh) {
+                        activeAccessToken = refreshedAccess;
+                        await saveTraktIntegrationForUser(ctx, {
+                            userId,
+                            accessToken: refreshedAccess,
+                            refreshToken: refreshedRefresh,
+                            scope: optionalString(tokenPayload?.scope) || integration.scope,
+                            tokenType: optionalString(tokenPayload?.token_type) || integration.token_type,
+                            expiresAt: toExpiresAtMs(tokenPayload),
+                            username: integration.username,
+                            slug: integration.slug,
+                        });
+                        result = await runScrobble(activeAccessToken);
+                    }
+                } catch {
+                    // Fall through and return the original error response below.
+                }
+            }
+
+            if (result.response.ok) {
+                return {
+                    ok: true,
+                    duplicate: false,
+                    action: args.action,
+                };
+            }
+            if (result.response.status === 409) {
+                return {
+                    ok: true,
+                    duplicate: true,
+                    action: args.action,
+                };
+            }
+
+            return {
+                ok: false,
+                reason: "trakt_error",
+                status: result.response.status,
+                message: getTraktErrorMessage(result.response.status, result.body),
+            };
+        } catch (error: any) {
+            return {
+                ok: false,
+                reason: "exception",
+                message: String(error?.message || error || "Unknown error"),
+            };
+        }
     },
 });
