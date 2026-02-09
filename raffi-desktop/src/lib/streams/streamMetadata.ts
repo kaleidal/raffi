@@ -48,7 +48,7 @@ const LANGUAGE_ALIAS_TO_TAG: Record<string, LanguageTag> = {
     FRA: { code: "FR", flag: "🇫🇷" },
     FRENCH: { code: "FR", flag: "🇫🇷" },
     DE: { code: "DE", flag: "🇩🇪" },
-    GER: { code: "DE", flag: "🇩��" },
+    GER: { code: "DE", flag: "🇩🇪" },
     DEU: { code: "DE", flag: "🇩🇪" },
     GERMAN: { code: "DE", flag: "🇩🇪" },
     PT: { code: "PT", flag: "🇵🇹" },
