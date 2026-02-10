@@ -169,6 +169,19 @@ const invalidateRemoteCache = () => {
     remoteStateCache = null;
 };
 
+export const resetRemoteStateCache = () => {
+    invalidateRemoteCache();
+};
+
+export const warmRemoteStateCache = async () => {
+    if (isLocalModeActive()) return null;
+    try {
+        return await getRemoteState(true);
+    } catch {
+        return null;
+    }
+};
+
 const getRequiredUserId = () => {
     const user = getCachedUser();
     if (!user?.id) throw new Error("Not authenticated");
@@ -252,6 +265,7 @@ export const syncLocalStateToUser = async (userId: string) => {
 
     if (addons.length === 0 && library.length === 0 && lists.length === 0 && listItems.length === 0) {
         clearLocalState();
+        invalidateRemoteCache();
         return;
     }
 

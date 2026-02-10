@@ -3,7 +3,9 @@ import { refreshAveUserSession, signInWithAveViaBrowser } from "../auth/aveAuth"
 import {
     ensureDefaultAddonsForUser,
     ensureDefaultAddonsForLocal,
+    resetRemoteStateCache,
     syncLocalStateToUser,
+    warmRemoteStateCache,
     hasLocalState,
 } from "../db/db";
 import {
@@ -312,7 +314,9 @@ export async function initAuth() {
             await syncLocalStateToUser(userCache.id);
         }
         disableLocalMode();
+        resetRemoteStateCache();
         await seedDefaultsIfNeeded(userCache);
+        await warmRemoteStateCache();
     } else {
         enableLocalMode();
         await ensureDefaultAddonsForLocal();
@@ -331,6 +335,7 @@ export async function signInWithAve() {
     scheduleSessionRefresh(user);
 
     disableLocalMode();
+    resetRemoteStateCache();
 
     try {
         if (hasLocalState()) {
@@ -341,6 +346,8 @@ export async function signInWithAve() {
         console.error("Ave sign-in sync failed", error);
     }
 
+    await warmRemoteStateCache();
+
     emitHomeRefresh();
 }
 
@@ -349,6 +356,7 @@ export function signOutToLocalMode() {
     userCache = null;
     currentUser.set(null);
     persistAveSession(null);
+    resetRemoteStateCache();
     enableLocalMode();
     emitHomeRefresh();
 }
