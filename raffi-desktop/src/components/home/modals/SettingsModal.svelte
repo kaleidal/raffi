@@ -43,6 +43,15 @@
 		getStoredHomeHeroSource,
 		setStoredHomeHeroSource,
 	} from "../../../lib/home/heroSettings";
+	import {
+		HOME_SEARCH_BAR_POSITION_AUTO,
+		HOME_SEARCH_BAR_POSITION_BOTTOM,
+		HOME_SEARCH_BAR_POSITION_CHANGED_EVENT,
+		HOME_SEARCH_BAR_POSITION_HEADER,
+		type HomeSearchBarPosition,
+		getStoredHomeSearchBarPosition,
+		setStoredHomeSearchBarPosition,
+	} from "../../../lib/home/searchBarSettings";
 
 	const portal = (node: HTMLElement) => {
 		if (typeof document === "undefined") {
@@ -98,6 +107,7 @@
 	let heroSourceOptions: HeroCatalogSourceOption[] = [];
 	let heroSourceLoading = false;
 	let heroSourceRequested = false;
+	let searchBarPosition: HomeSearchBarPosition = HOME_SEARCH_BAR_POSITION_AUTO;
 	let bodyLocked = false;
 	const HOME_REFRESH_EVENT = "raffi:home-refresh";
 
@@ -121,6 +131,7 @@
 		const storedSeek = localStorage.getItem("seek_bar_style");
 		seekBarStyle = storedSeek || "raffi";
 		heroSource = getStoredHomeHeroSource();
+		searchBarPosition = getStoredHomeSearchBarPosition();
 
 		analyticsAvailable = isAnalyticsAvailable();
 		const analyticsSettings = getAnalyticsSettings();
@@ -272,6 +283,24 @@
 		dispatch("close");
 	}
 
+	function openExternalLink(url: string) {
+		const target = String(url || "").trim();
+		if (!target) return;
+		const electronApi = (window as any).electronAPI as
+			| { openExternal?: (url: string) => Promise<void> }
+			| undefined;
+
+		if (electronApi?.openExternal) {
+			electronApi.openExternal(target).catch((error) => {
+				console.error("Failed to open external link", error);
+				window.open(target, "_blank", "noopener,noreferrer");
+			});
+			return;
+		}
+
+		window.open(target, "_blank", "noopener,noreferrer");
+	}
+
 
 	function toggleRpc() {
 		discordRpcEnabled = !discordRpcEnabled;
@@ -348,6 +377,25 @@
 					? "cinemeta"
 					: "addon_catalog",
 		});
+	}
+
+	function setSearchBarPosition(value: string) {
+		const next =
+			value === HOME_SEARCH_BAR_POSITION_BOTTOM
+				? HOME_SEARCH_BAR_POSITION_BOTTOM
+				: value === HOME_SEARCH_BAR_POSITION_AUTO
+					? HOME_SEARCH_BAR_POSITION_AUTO
+					: HOME_SEARCH_BAR_POSITION_HEADER;
+
+		if (next === searchBarPosition) return;
+		searchBarPosition = next;
+		setStoredHomeSearchBarPosition(next);
+		window.dispatchEvent(
+			new CustomEvent(HOME_SEARCH_BAR_POSITION_CHANGED_EVENT, {
+				detail: { position: next },
+			}),
+		);
+		trackEvent("home_search_bar_position_changed", { position: next });
 	}
 
 
@@ -798,46 +846,87 @@
 							</button>
 						</div>
 
-						<div class="rounded-2xl bg-white/[0.08] p-4 flex flex-col gap-3">
-							<div>
-								<p class="text-white font-medium">
-									Home Hero Source
-								</p>
-								<p class="text-white/60 text-sm">
-									Choose where the Home hero pulls featured titles from.
-								</p>
-								<p class="text-white/45 text-xs mt-2">
-									Using addon catalogs may increase initial Home load time if the addon is slow.
-								</p>
-							</div>
-							<div class="w-full sm:max-w-[420px]">
-								<div class="relative group">
-								<select
-									class="w-full appearance-none bg-black/35 border border-white/10 rounded-2xl px-4 pr-12 py-3 text-white outline-none focus:border-white/40 transition-colors cursor-pointer hover:bg-black/45 hover:border-white/25 disabled:opacity-60 disabled:cursor-not-allowed"
-									value={heroSource}
-									on:change={(e) =>
-										setHeroSource(
-											(e.target as HTMLSelectElement).value,
-										)}
-									disabled={heroSourceLoading}
-								>
-									<option value={HOME_HERO_SOURCE_CINEMETA}>
-										Cinemeta (Default)
-									</option>
-									{#each heroSourceOptions as option}
-										<option value={option.id}>{option.label}</option>
-									{/each}
-								</select>
-									<div class="pointer-events-none absolute inset-y-0 right-4 flex items-center text-white/70 transition-colors group-hover:text-white/90">
-										<ChevronDown size={18} strokeWidth={2.4} />
+						<div class="grid items-stretch gap-4 xl:grid-cols-2">
+							<div class="rounded-2xl bg-white/[0.08] p-4 flex flex-col gap-3 h-full">
+								<div>
+									<p class="text-white font-medium">
+										Search Bar Position
+									</p>
+									<p class="text-white/60 text-sm">
+										Choose where the search bar is pinned on Home.
+									</p>
+									<p class="text-white/45 text-xs mt-2">
+										In Auto mode, it moves to bottom after you scroll past the hero.
+									</p>
+								</div>
+								<div class="w-full mt-auto pt-2">
+									<div class="relative group">
+									<select
+										class="w-full appearance-none bg-black/35 border border-white/10 rounded-2xl px-4 pr-12 py-3 text-white outline-none focus:border-white/40 transition-colors cursor-pointer hover:bg-black/45 hover:border-white/25"
+										value={searchBarPosition}
+										on:change={(e) =>
+											setSearchBarPosition(
+												(e.target as HTMLSelectElement).value,
+											)}
+									>
+										<option value={HOME_SEARCH_BAR_POSITION_HEADER}>
+											Header (Top)
+										</option>
+										<option value={HOME_SEARCH_BAR_POSITION_BOTTOM}>
+											Bottom (Always)
+										</option>
+										<option value={HOME_SEARCH_BAR_POSITION_AUTO}>
+											Auto (Bottom after Hero)
+										</option>
+									</select>
+										<div class="pointer-events-none absolute inset-y-0 right-4 flex items-center text-white/70 transition-colors group-hover:text-white/90">
+											<ChevronDown size={18} strokeWidth={2.4} />
+										</div>
 									</div>
 								</div>
 							</div>
-							{#if !heroSourceLoading && heroSourceOptions.length === 0}
-								<p class="text-white/50 text-xs">
-									No compatible catalog addons installed yet.
-								</p>
-							{/if}
+
+							<div class="rounded-2xl bg-white/[0.08] p-4 flex flex-col gap-3 h-full">
+								<div>
+									<p class="text-white font-medium">
+										Home Hero Source
+									</p>
+									<p class="text-white/60 text-sm">
+										Choose where the Home hero pulls featured titles from.
+									</p>
+									<p class="text-white/45 text-xs mt-2">
+										Using addon catalogs may increase initial Home load time if the addon is slow.
+									</p>
+								</div>
+								<div class="w-full mt-auto pt-2">
+									<div class="relative group">
+									<select
+										class="w-full appearance-none bg-black/35 border border-white/10 rounded-2xl px-4 pr-12 py-3 text-white outline-none focus:border-white/40 transition-colors cursor-pointer hover:bg-black/45 hover:border-white/25 disabled:opacity-60 disabled:cursor-not-allowed"
+										value={heroSource}
+										on:change={(e) =>
+											setHeroSource(
+												(e.target as HTMLSelectElement).value,
+											)}
+										disabled={heroSourceLoading}
+									>
+										<option value={HOME_HERO_SOURCE_CINEMETA}>
+											Cinemeta (Default)
+										</option>
+										{#each heroSourceOptions as option}
+											<option value={option.id}>{option.label}</option>
+										{/each}
+									</select>
+										<div class="pointer-events-none absolute inset-y-0 right-4 flex items-center text-white/70 transition-colors group-hover:text-white/90">
+											<ChevronDown size={18} strokeWidth={2.4} />
+										</div>
+									</div>
+								</div>
+								{#if !heroSourceLoading && heroSourceOptions.length === 0}
+									<p class="text-white/50 text-xs">
+										No compatible catalog addons installed yet.
+									</p>
+								{/if}
+							</div>
 						</div>
 					</section>
 
@@ -913,24 +1002,22 @@
 							</p>
 						</div>
 						<div class="grid gap-4 sm:grid-cols-2">
-							<a
-								href="https://stator.sh/bugs/lantharos/raffi"
-								target="_blank"
-								rel="noreferrer"
-								class="rounded-2xl bg-white/[0.08] p-4 text-white font-medium hover:bg-white/[0.14] transition-colors"
+							<button
+								type="button"
+								on:click={() => openExternalLink("https://stator.sh/lantharos/raffi/bugs")}
+								class="rounded-2xl bg-white/[0.08] p-4 text-white font-medium hover:bg-white/[0.14] transition-colors cursor-pointer text-left"
 							>
 								Report a bug
 								<span class="block text-white/50 text-sm mt-1">Open the bug tracker</span>
-							</a>
-							<a
-								href="https://stator.sh/feedback/lantharos/raffi"
-								target="_blank"
-								rel="noreferrer"
-								class="rounded-2xl bg-white/[0.08] p-4 text-white font-medium hover:bg-white/[0.14] transition-colors"
+							</button>
+							<button
+								type="button"
+								on:click={() => openExternalLink("https://stator.sh/lantharos/raffi/feedback")}
+								class="rounded-2xl bg-white/[0.08] p-4 text-white font-medium hover:bg-white/[0.14] transition-colors cursor-pointer text-left"
 							>
 								Request a feature
 								<span class="block text-white/50 text-sm mt-1">Share your ideas</span>
-							</a>
+							</button>
 						</div>
 					</section>
 
