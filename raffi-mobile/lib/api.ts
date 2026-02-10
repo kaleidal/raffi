@@ -148,11 +148,16 @@ function toPopularMeta(item: any, fallbackType: 'movie' | 'series'): PopularTitl
   const id = String(item?.imdb_id ?? item?.id ?? '').trim();
   if (!id) return null;
 
+  const normalizedType: 'movie' | 'series' =
+    item?.type === 'movie' || item?.type === 'series'
+      ? item.type
+      : fallbackType;
+
   return {
     imdb_id: id,
     id,
     name: String(item?.name ?? 'Unknown'),
-    type: item?.type === 'series' ? 'series' : fallbackType,
+    type: normalizedType,
     popularities: item?.popularities ?? {},
     description: String(item?.description ?? ''),
     poster: item?.poster,
