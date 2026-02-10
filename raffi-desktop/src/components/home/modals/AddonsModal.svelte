@@ -34,7 +34,7 @@
     let communityAddons: any[] = [];
     let loadingCommunity = false;
     let communitySearch = "";
-    let communityResourceFilter: "all" | "stream" | "subtitles" | "catalog" = "all";
+    let communityResourceFilter: "all" | "stream" | "subtitles" | "catalog" | "meta" = "all";
     let hasTrackedOpen = false;
     let communitySearchTimeout: any;
     const HOME_REFRESH_EVENT = "raffi:home-refresh";
@@ -45,11 +45,12 @@
         "https://api.strem.io/addonscollection.json",
         "https://stremio-addons.com/catalog.json"
     ];
-    const SUPPORTED_RESOURCES = new Set(["stream", "subtitles", "catalog"]);
+    const SUPPORTED_RESOURCES = new Set(["stream", "subtitles", "catalog", "meta"]);
     const RESOURCE_LABELS: Record<string, string> = {
         stream: "Streams",
         subtitles: "Subtitles",
         catalog: "Catalogs",
+        meta: "Metadata",
     };
 
     const normalizeTransportUrl = (url: string) =>
@@ -90,7 +91,7 @@
     const hasSupportedResource = (manifest: any) =>
         matchesResource(manifest, (name) => SUPPORTED_RESOURCES.has(name));
 
-    const supportsResource = (manifest: any, target: "stream" | "subtitles" | "catalog") =>
+    const supportsResource = (manifest: any, target: "stream" | "subtitles" | "catalog" | "meta") =>
         matchesResource(manifest, (name) => name === target);
 
     const isUuid = (value: unknown): value is string => {
@@ -276,6 +277,7 @@
                 has_stream: supportsResource(manifest, "stream"),
                 has_subtitles: supportsResource(manifest, "subtitles"),
                 has_catalog: supportsResource(manifest, "catalog"),
+                has_meta: supportsResource(manifest, "meta"),
             });
         } catch (e) {
             console.error("Failed to add addon", e);
@@ -302,6 +304,7 @@
                 has_stream: supportsResource(addon?.manifest, "stream"),
                 has_subtitles: supportsResource(addon?.manifest, "subtitles"),
                 has_catalog: supportsResource(addon?.manifest, "catalog"),
+                has_meta: supportsResource(addon?.manifest, "meta"),
                 configurable: Boolean(addon?.manifest?.behaviorHints?.configurable),
             });
         } catch (e) {
@@ -357,7 +360,7 @@
         }, 500);
     }
 
-    function setCommunityFilter(next: "all" | "stream" | "subtitles" | "catalog") {
+    function setCommunityFilter(next: "all" | "stream" | "subtitles" | "catalog" | "meta") {
         if (communityResourceFilter === next) return;
         communityResourceFilter = next;
         trackEvent("community_addon_filter_changed", { filter: next });
@@ -523,6 +526,17 @@
                             >
                                 Catalogs
                             </button>
+                            <button
+                                class={`px-3 py-2 rounded-full text-xs font-semibold tracking-[0.18em] uppercase transition-colors ${
+                                    communityResourceFilter === "meta"
+                                        ? "bg-white text-black"
+                                        : "bg-white/10 text-white/70 hover:text-white"
+                                }`}
+                                on:click={() => setCommunityFilter("meta")}
+
+                            >
+                                Metadata
+                            </button>
                         </div>
 
                         <div class="flex-1 min-h-0 space-y-3 overflow-y-auto pr-1">
@@ -577,6 +591,11 @@
                                         {#if supportsResource(addon.manifest, "catalog")}
                                             <span class="px-2 py-1 rounded-full bg-white/15 text-white/90">
                                                 Catalogs
+                                            </span>
+                                        {/if}
+                                        {#if supportsResource(addon.manifest, "meta")}
+                                            <span class="px-2 py-1 rounded-full bg-white/15 text-white/90">
+                                                Metadata
                                             </span>
                                         {/if}
                                         {#if addon.manifest.behaviorHints?.configurable}
