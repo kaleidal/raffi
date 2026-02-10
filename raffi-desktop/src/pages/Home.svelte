@@ -77,7 +77,10 @@
             return;
         }
 
-        const looseFallback = chooseRandom(heroPoolTitles) ?? chooseRandom(absolutePopularTitles);
+        const looseCandidates = [...heroPoolTitles, ...absolutePopularTitles].filter(
+            (title) => Boolean(title.logo)
+        );
+        const looseFallback = chooseRandom(looseCandidates);
         if (looseFallback) showcasedTitle = looseFallback;
     }
 
