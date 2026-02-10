@@ -1,9 +1,10 @@
 <script lang="ts">
     import { createEventDispatcher, onDestroy, onMount } from "svelte";
-    import { X } from "lucide-svelte";
+    import { ChevronDown, X } from "lucide-svelte";
     import { fade, scale } from "svelte/transition";
 	import {
 		getLibrary,
+		getAddons,
 		getListsWithItems,
 		getTraktStatus,
 		disconnectTrakt as disconnectTraktFromDb,
@@ -33,6 +34,15 @@
 		trackEvent,
 	} from "../../../lib/analytics";
 	import { formatReleaseNotes } from "../../../lib/updateNotes";
+	import {
+		getHeroCatalogSourceOptions,
+		type HeroCatalogSourceOption,
+	} from "../../../lib/library/addonCatalogs";
+	import {
+		HOME_HERO_SOURCE_CINEMETA,
+		getStoredHomeHeroSource,
+		setStoredHomeHeroSource,
+	} from "../../../lib/home/heroSettings";
 
 	const portal = (node: HTMLElement) => {
 		if (typeof document === "undefined") {
@@ -84,6 +94,10 @@
 	let localRoots: string[] = [];
 	let scanningLocal = false;
 	let localScanMessage = "";
+	let heroSource = HOME_HERO_SOURCE_CINEMETA;
+	let heroSourceOptions: HeroCatalogSourceOption[] = [];
+	let heroSourceLoading = false;
+	let heroSourceRequested = false;
 	let bodyLocked = false;
 	const HOME_REFRESH_EVENT = "raffi:home-refresh";
 
@@ -106,6 +120,7 @@
 
 		const storedSeek = localStorage.getItem("seek_bar_style");
 		seekBarStyle = storedSeek || "raffi";
+		heroSource = getStoredHomeHeroSource();
 
 		analyticsAvailable = isAnalyticsAvailable();
 		const analyticsSettings = getAnalyticsSettings();
@@ -297,6 +312,44 @@
 		});
 	}
 
+	async function loadHeroSourceOptions() {
+		heroSourceLoading = true;
+		try {
+			const addons = await getAddons();
+			heroSourceOptions = getHeroCatalogSourceOptions(addons);
+			if (
+				heroSource !== HOME_HERO_SOURCE_CINEMETA &&
+				!heroSourceOptions.some((option) => option.id === heroSource)
+			) {
+				heroSource = HOME_HERO_SOURCE_CINEMETA;
+				setStoredHomeHeroSource(HOME_HERO_SOURCE_CINEMETA);
+				emitHomeRefresh();
+			}
+		} catch (e) {
+			console.error("Failed to load hero source options", e);
+			heroSourceOptions = [];
+		} finally {
+			heroSourceLoading = false;
+		}
+	}
+
+	function setHeroSource(sourceId: string) {
+		const next =
+			sourceId && sourceId.length > 0
+				? sourceId
+				: HOME_HERO_SOURCE_CINEMETA;
+		if (next === heroSource) return;
+		heroSource = next;
+		setStoredHomeHeroSource(next);
+		emitHomeRefresh();
+		trackEvent("home_hero_source_changed", {
+			source:
+				next === HOME_HERO_SOURCE_CINEMETA
+					? "cinemeta"
+					: "addon_catalog",
+		});
+	}
+
 
 	async function addLocalFolder() {
 		if (!localLibrarySupported) return;
@@ -480,6 +533,11 @@
 		refreshStats();
 	}
 
+	$: if (showSettings && !heroSourceRequested) {
+		heroSourceRequested = true;
+		void loadHeroSourceOptions();
+	}
+
 	$: if (showSettings && !$localMode && $currentUser && !traktStatusRequested) {
 		traktStatusRequested = true;
 		void loadTraktStatus();
@@ -487,6 +545,7 @@
 
 	$: if (!showSettings) {
 		traktStatusRequested = false;
+		heroSourceRequested = false;
 	}
 
 	$: updateBodyLock(showSettings);
@@ -737,6 +796,48 @@
 									class={`absolute top-1 bottom-1 left-1 w-[calc(50%-4px)] bg-white rounded-full transition-transform duration-200 ${seekBarStyle === 'normal' ? 'translate-x-full' : 'translate-x-0'}`}
 								></div>
 							</button>
+						</div>
+
+						<div class="rounded-2xl bg-white/[0.08] p-4 flex flex-col gap-3">
+							<div>
+								<p class="text-white font-medium">
+									Home Hero Source
+								</p>
+								<p class="text-white/60 text-sm">
+									Choose where the Home hero pulls featured titles from.
+								</p>
+								<p class="text-white/45 text-xs mt-2">
+									Using addon catalogs may increase initial Home load time if the addon is slow.
+								</p>
+							</div>
+							<div class="w-full sm:max-w-[420px]">
+								<div class="relative group">
+								<select
+									class="w-full appearance-none bg-black/35 border border-white/10 rounded-2xl px-4 pr-12 py-3 text-white outline-none focus:border-white/40 transition-colors cursor-pointer hover:bg-black/45 hover:border-white/25 disabled:opacity-60 disabled:cursor-not-allowed"
+									value={heroSource}
+									on:change={(e) =>
+										setHeroSource(
+											(e.target as HTMLSelectElement).value,
+										)}
+									disabled={heroSourceLoading}
+								>
+									<option value={HOME_HERO_SOURCE_CINEMETA}>
+										Cinemeta (Default)
+									</option>
+									{#each heroSourceOptions as option}
+										<option value={option.id}>{option.label}</option>
+									{/each}
+								</select>
+									<div class="pointer-events-none absolute inset-y-0 right-4 flex items-center text-white/70 transition-colors group-hover:text-white/90">
+										<ChevronDown size={18} strokeWidth={2.4} />
+									</div>
+								</div>
+							</div>
+							{#if !heroSourceLoading && heroSourceOptions.length === 0}
+								<p class="text-white/50 text-xs">
+									No compatible catalog addons installed yet.
+								</p>
+							{/if}
 						</div>
 					</section>
 

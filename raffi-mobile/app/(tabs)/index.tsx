@@ -12,11 +12,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors, Spacing, Typography } from '@/constants/theme';
-import { getPopularTitles, getFeaturedTitles, getNewReleases, getTitlesByGenre } from '@/lib/api';
+import { getAddonHomeSections, getPopularTitles, getNewReleases, getTitlesByGenre } from '@/lib/api';
 import { useAddonsStore } from '@/lib/stores/addonsStore';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useLibraryStore } from '@/lib/stores/libraryStore';
-import type { PopularTitleMeta } from '@/lib/types';
+import type { Addon, PopularTitleMeta } from '@/lib/types';
 
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import ContentRow from '@/components/home/ContentRow';
@@ -33,8 +33,8 @@ interface ContentSection {
 
 export default function HomeScreen() {
   const { user } = useAuthStore();
-  const { items: libraryItems, fetchLibrary, loading: libraryLoading } = useLibraryStore();
-  const { fetchAddons } = useAddonsStore();
+  const { items: libraryItems, fetchLibrary } = useLibraryStore();
+  const { addons, fetchAddons } = useAddonsStore();
 
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -43,7 +43,7 @@ export default function HomeScreen() {
   // Content sections
   const [sections, setSections] = useState<ContentSection[]>([]);
 
-  const loadContent = async () => {
+  const loadContent = async (installedAddons: Addon[] = addons) => {
     try {
       const currentYear = new Date().getFullYear();
       
@@ -159,6 +159,17 @@ export default function HomeScreen() {
         });
       }
 
+      // Addon-driven catalogs (Stremio-style home rows from addon manifests)
+      const addonSections = await getAddonHomeSections(installedAddons).catch(() => []);
+      for (const section of addonSections) {
+        contentSections.push({
+          id: `addon-${section.id}`,
+          title: section.title,
+          data: section.data,
+          size: 'medium',
+        });
+      }
+
       // Top Rated (Mix sorted by rating)
       const topRated = [...popularMovies, ...popularSeries]
         .filter((item) => item.imdbRating && item.poster)
@@ -192,7 +203,12 @@ export default function HomeScreen() {
 
   const initialize = async () => {
     setLoading(true);
-    await Promise.all([loadContent(), fetchAddons(), user ? fetchLibrary() : Promise.resolve()]);
+    await fetchAddons();
+    const installedAddons = useAddonsStore.getState().addons;
+    await Promise.all([
+      loadContent(installedAddons),
+      user ? fetchLibrary() : Promise.resolve(),
+    ]);
     setLoading(false);
   };
 
@@ -202,9 +218,10 @@ export default function HomeScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([loadContent(), user ? fetchLibrary() : Promise.resolve()]);
+    const installedAddons = useAddonsStore.getState().addons;
+    await Promise.all([loadContent(installedAddons), user ? fetchLibrary() : Promise.resolve()]);
     setRefreshing(false);
-  }, [user]);
+  }, [user, addons]);
 
   const refreshFeatured = useCallback(() => {
     if (sections.length === 0) return;

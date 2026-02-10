@@ -34,9 +34,10 @@
     let communityAddons: any[] = [];
     let loadingCommunity = false;
     let communitySearch = "";
-    let communityResourceFilter: "all" | "stream" | "subtitles" = "all";
+    let communityResourceFilter: "all" | "stream" | "subtitles" | "catalog" = "all";
     let hasTrackedOpen = false;
     let communitySearchTimeout: any;
+    const HOME_REFRESH_EVENT = "raffi:home-refresh";
 
 
     const COMMUNITY_ENDPOINTS = [
@@ -44,7 +45,12 @@
         "https://api.strem.io/addonscollection.json",
         "https://stremio-addons.com/catalog.json"
     ];
-    const SUPPORTED_RESOURCES = new Set(["stream", "subtitles"]);
+    const SUPPORTED_RESOURCES = new Set(["stream", "subtitles", "catalog"]);
+    const RESOURCE_LABELS: Record<string, string> = {
+        stream: "Streams",
+        subtitles: "Subtitles",
+        catalog: "Catalogs",
+    };
 
     const normalizeTransportUrl = (url: string) =>
         url.endsWith("/manifest.json")
@@ -55,19 +61,36 @@
         const resources = manifest?.resources ?? [];
         return resources.some((resource: any) => {
             if (typeof resource === "string") {
-                return predicate(resource);
+                return predicate(resource.toLowerCase());
             }
             if (resource && typeof resource === "object") {
-                return predicate(resource.name);
+                return predicate(String(resource.name || "").toLowerCase());
             }
             return false;
         });
     };
 
+    const getResourceNames = (manifest: any): string[] => {
+        const resources = manifest?.resources ?? [];
+        const names = resources
+            .map((resource: any) => {
+                if (typeof resource === "string") return resource.toLowerCase();
+                if (resource && typeof resource === "object") {
+                    return String(resource.name || "").toLowerCase();
+                }
+                return "";
+            })
+            .filter((name: string) => name.length > 0);
+        return Array.from(new Set(names));
+    };
+
+    const formatResourceName = (name: string): string =>
+        RESOURCE_LABELS[name] ?? `${name.charAt(0).toUpperCase()}${name.slice(1)}`;
+
     const hasSupportedResource = (manifest: any) =>
         matchesResource(manifest, (name) => SUPPORTED_RESOURCES.has(name));
 
-    const supportsResource = (manifest: any, target: "stream" | "subtitles") =>
+    const supportsResource = (manifest: any, target: "stream" | "subtitles" | "catalog") =>
         matchesResource(manifest, (name) => name === target);
 
     const isUuid = (value: unknown): value is string => {
@@ -75,6 +98,11 @@
         return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
             value,
         );
+    };
+
+    const emitHomeRefresh = () => {
+        if (typeof window === "undefined") return;
+        window.dispatchEvent(new CustomEvent(HOME_REFRESH_EVENT));
     };
 
     async function loadAddons() {
@@ -243,9 +271,11 @@
             });
             newAddonUrl = "";
             await loadAddons();
+            emitHomeRefresh();
             trackEvent("addon_custom_added", {
                 has_stream: supportsResource(manifest, "stream"),
                 has_subtitles: supportsResource(manifest, "subtitles"),
+                has_catalog: supportsResource(manifest, "catalog"),
             });
         } catch (e) {
             console.error("Failed to add addon", e);
@@ -267,9 +297,11 @@
                 addon_id: isUuid(manifestId) ? manifestId : crypto.randomUUID(),
             });
             await loadAddons();
+            emitHomeRefresh();
             trackEvent("addon_community_installed", {
                 has_stream: supportsResource(addon?.manifest, "stream"),
                 has_subtitles: supportsResource(addon?.manifest, "subtitles"),
+                has_catalog: supportsResource(addon?.manifest, "catalog"),
                 configurable: Boolean(addon?.manifest?.behaviorHints?.configurable),
             });
         } catch (e) {
@@ -305,6 +337,7 @@
         try {
             await removeAddon(url);
             await loadAddons();
+            emitHomeRefresh();
             trackEvent("addon_removed");
         } catch (e) {
             console.error("Failed to remove addon", e);
@@ -324,7 +357,7 @@
         }, 500);
     }
 
-    function setCommunityFilter(next: "all" | "stream" | "subtitles") {
+    function setCommunityFilter(next: "all" | "stream" | "subtitles" | "catalog") {
         if (communityResourceFilter === next) return;
         communityResourceFilter = next;
         trackEvent("community_addon_filter_changed", { filter: next });
@@ -479,6 +512,17 @@
                             >
                                 Subtitles
                             </button>
+                            <button
+                                class={`px-3 py-2 rounded-full text-xs font-semibold tracking-[0.18em] uppercase transition-colors ${
+                                    communityResourceFilter === "catalog"
+                                        ? "bg-white text-black"
+                                        : "bg-white/10 text-white/70 hover:text-white"
+                                }`}
+                                on:click={() => setCommunityFilter("catalog")}
+
+                            >
+                                Catalogs
+                            </button>
                         </div>
 
                         <div class="flex-1 min-h-0 space-y-3 overflow-y-auto pr-1">
@@ -528,6 +572,11 @@
                                         {#if supportsResource(addon.manifest, "subtitles")}
                                             <span class="px-2 py-1 rounded-full bg-white/15 text-white/90">
                                                 Subtitles
+                                            </span>
+                                        {/if}
+                                        {#if supportsResource(addon.manifest, "catalog")}
+                                            <span class="px-2 py-1 rounded-full bg-white/15 text-white/90">
+                                                Catalogs
                                             </span>
                                         {/if}
                                         {#if addon.manifest.behaviorHints?.configurable}
@@ -585,6 +634,7 @@
                             </div>
                         {:else}
                             {#each addonsList as addon}
+                                {@const addonResources = getResourceNames(addon.manifest)}
                                 <div class="rounded-2xl bg-white/[0.08] p-4 flex items-center gap-4">
                                     {#if addon.manifest.logo}
                                         <img
@@ -596,6 +646,11 @@
                                     <div class="flex-1 min-w-0">
                                         <p class="text-white font-semibold truncate">
                                             {addon.manifest.name}
+                                        </p>
+                                        <p class="text-white/55 text-xs mt-1 line-clamp-1">
+                                            {addonResources.length > 0
+                                                ? addonResources.map((name) => formatResourceName(name)).join(" • ")
+                                                : "No declared resources"}
                                         </p>
                                     </div>
                                     <div class="flex gap-2">
