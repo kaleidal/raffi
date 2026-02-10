@@ -121,7 +121,9 @@ async function resolveImdbId(
     let bestScore = -1;
     for (const r of results) {
         const candidateTitle = r?.["#TITLE"];
-        const score = scoreTitleMatch(candidateTitle, title);
+        const candidateType = String(r?.["#TYPE"] ?? "").toLowerCase();
+        const typeBonus = candidateType === type ? 2 : 0;
+        const score = scoreTitleMatch(candidateTitle, title) + typeBonus;
         if (score > bestScore) {
             bestScore = score;
             best = r;

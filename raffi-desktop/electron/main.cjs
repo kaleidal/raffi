@@ -130,7 +130,15 @@ let fileToOpen = null;
 let pendingAveAuthPayload = null;
 let pendingTraktAuthPayload = null;
 let pendingUpdateInfo = null;
-const ALLOWED_EXTERNAL_HOSTS = new Set(["aveid.net", "www.aveid.net", "api.aveid.net"]);
+const ALLOWED_EXTERNAL_HOSTS = new Set([
+  "aveid.net",
+  "www.aveid.net",
+  "api.aveid.net",
+  "stator.sh",
+  "www.stator.sh",
+  "trakt.tv",
+  "www.trakt.tv",
+]);
 
 function isAllowedExternalUrl(value) {
   if (!value || typeof value !== "string") return false;
