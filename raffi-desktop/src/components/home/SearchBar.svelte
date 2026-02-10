@@ -2,6 +2,7 @@
     import { createEventDispatcher, onMount } from "svelte";
     import { Search, Link, Blocks, Library, Settings } from "lucide-svelte";
     import {
+        searchAddonTitlesSplit,
         searchTitlesSplit,
         type SearchTitleResult,
         type SplitSearchResults,
@@ -154,6 +155,20 @@
 		}
 	};
 
+    function mergeSearchRows(
+        primary: SearchTitleResult[],
+        secondary: SearchTitleResult[],
+    ) {
+        const merged = new Map<string, SearchTitleResult>();
+        for (const item of primary) {
+            if (!merged.has(item.id)) merged.set(item.id, item);
+        }
+        for (const item of secondary) {
+            if (!merged.has(item.id)) merged.set(item.id, item);
+        }
+        return Array.from(merged.values());
+    }
+
 	const handleCommandEnter = () => {
 		const trimmed = searchQuery.trim();
 		if (!trimmed.startsWith("/")) return false;
@@ -206,6 +221,40 @@
 					query_length: queryLength,
 					results_count: totalResults,
 				});
+
+                // Non-blocking addon search enrichment.
+                void searchAddonTitlesSplit(trimmed)
+                    .then((addonResults) => {
+                        if (searchQuery.trim() !== trimmed) return;
+                        if (
+                            addonResults.movies.length === 0 &&
+                            addonResults.series.length === 0
+                        ) {
+                            return;
+                        }
+                        const merged: SplitSearchResults = {
+                            movies: mergeSearchRows(
+                                searchResults.movies,
+                                addonResults.movies,
+                            ),
+                            series: mergeSearchRows(
+                                searchResults.series,
+                                addonResults.series,
+                            ),
+                        };
+                        if (
+                            merged.movies.length === searchResults.movies.length &&
+                            merged.series.length === searchResults.series.length
+                        ) {
+                            return;
+                        }
+                        searchResults = merged;
+                        lastSearchResultsCount =
+                            merged.movies.length + merged.series.length;
+                    })
+                    .catch((error) => {
+                        console.error("Addon search enrichment failed", error);
+                    });
 			} catch (e) {
 				console.error("Search failed", e);
 				if (searchQuery.trim() !== trimmed) return;
