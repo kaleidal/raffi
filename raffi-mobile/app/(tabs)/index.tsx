@@ -221,7 +221,7 @@ export default function HomeScreen() {
     const installedAddons = useAddonsStore.getState().addons;
     await Promise.all([loadContent(installedAddons), user ? fetchLibrary() : Promise.resolve()]);
     setRefreshing(false);
-  }, [user, addons]);
+  }, [user]);
 
   const refreshFeatured = useCallback(() => {
     if (sections.length === 0) return;
