@@ -30,6 +30,8 @@ type PlannedCatalog = {
     transportUrl: string;
     catalogId: string;
     catalogType: CatalogType;
+    extra: Record<string, string>;
+    extraKey: string;
 };
 
 export type AddonHomeSection = {
@@ -48,7 +50,11 @@ export type HeroCatalogSourceOption = {
     label: string;
     addonName: string;
     transportUrl: string;
-    catalogs: { catalogId: string; catalogType: CatalogType }[];
+    catalogs: {
+        catalogId: string;
+        catalogType: CatalogType;
+        extra: Record<string, string>;
+    }[];
 };
 
 function normalizeAddonBaseUrl(transportUrl: string) {
@@ -83,8 +89,51 @@ function getCatalogExtraProps(catalog: ManifestCatalog): ManifestExtraProp[] {
     }));
 }
 
-function catalogRequiresExtra(catalog: ManifestCatalog) {
-    return getCatalogExtraProps(catalog).some((extra) => Boolean(extra.isRequired));
+function sortExtraEntries(entries: Array<[string, string]>) {
+    return entries.sort((a, b) => a[0].localeCompare(b[0]));
+}
+
+function resolveCatalogDefaultExtra(
+    catalog: ManifestCatalog,
+): { extra: Record<string, string>; extraKey: string } | null {
+    const extras = getCatalogExtraProps(catalog);
+    if (extras.length === 0) {
+        return { extra: {}, extraKey: "" };
+    }
+
+    const resolved: Record<string, string> = {};
+
+    for (const extra of extras) {
+        const name = String(extra.name ?? "").trim();
+        if (!name || !extra.isRequired) continue;
+
+        if (name === "search") {
+            return null;
+        }
+
+        const firstOption =
+            Array.isArray(extra.options) && extra.options.length > 0
+                ? String(extra.options[0] ?? "").trim()
+                : "";
+
+        if (firstOption) {
+            resolved[name] = firstOption;
+            continue;
+        }
+
+        if (name === "skip") {
+            resolved[name] = "0";
+            continue;
+        }
+
+        return null;
+    }
+
+    const entries = sortExtraEntries(Object.entries(resolved));
+    return {
+        extra: Object.fromEntries(entries),
+        extraKey: entries.map(([key, value]) => `${key}=${value}`).join("&"),
+    };
 }
 
 function buildCatalogTitle(catalog: ManifestCatalog) {
@@ -136,12 +185,36 @@ function toPopularMeta(item: any, fallbackType: string): PopularTitleMeta | null
     };
 }
 
-async function fetchCatalog(baseUrl: string, type: string, catalogId: string) {
+function buildCatalogExtraPath(extra: Record<string, string>) {
+    const entries = sortExtraEntries(
+        Object.entries(extra).filter(
+            ([key, value]) =>
+                String(key).trim().length > 0 &&
+                String(value).trim().length > 0,
+        ),
+    );
+
+    if (entries.length === 0) return "";
+    return entries
+        .map(
+            ([key, value]) =>
+                `/${encodeURIComponent(key)}=${encodeURIComponent(value)}`,
+        )
+        .join("");
+}
+
+async function fetchCatalog(
+    baseUrl: string,
+    type: string,
+    catalogId: string,
+    extra: Record<string, string> = {},
+) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
     try {
-        const url = `${baseUrl}/catalog/${encodeURIComponent(type)}/${encodeURIComponent(catalogId)}.json`;
+        const extraPath = buildCatalogExtraPath(extra);
+        const url = `${baseUrl}/catalog/${encodeURIComponent(type)}/${encodeURIComponent(catalogId)}${extraPath}.json`;
         const response = await fetch(url, {
             signal: controller.signal,
             headers: {
@@ -189,16 +262,19 @@ function planAddonCatalogs(addons: Addon[]): PlannedCatalog[] {
                     const catalogType = String(catalog?.type ?? "").trim();
 
                     if (!catalogId || !isSupportedCatalogType(catalogType)) return null;
-                    if (catalogRequiresExtra(catalog)) return null;
+                    const resolvedExtra = resolveCatalogDefaultExtra(catalog);
+                    if (!resolvedExtra) return null;
 
                     return {
-                        key: `${baseUrl}::${catalogType}::${catalogId}`,
+                        key: `${baseUrl}::${catalogType}::${catalogId}::${resolvedExtra.extraKey}`,
                         baseUrl,
                         addonName,
                         title: buildCatalogTitle(catalog),
                         transportUrl: addon.transport_url,
                         catalogId,
                         catalogType,
+                        extra: resolvedExtra.extra,
+                        extraKey: resolvedExtra.extraKey,
                     };
                 })
                 .filter((item): item is NonNullable<typeof item> => item !== null);
@@ -211,7 +287,7 @@ export function getHeroCatalogSourceOptions(addons: Addon[]): HeroCatalogSourceO
     const grouped = new Map<string, HeroCatalogSourceOption>();
 
     for (const item of planned) {
-        const key = `${item.baseUrl}::${item.title.toLowerCase()}`;
+        const key = `${item.baseUrl}::${item.title.toLowerCase()}::${item.extraKey}`;
         const id = `addon:${key}`;
         const current = grouped.get(key);
 
@@ -226,6 +302,7 @@ export function getHeroCatalogSourceOptions(addons: Addon[]): HeroCatalogSourceO
                     {
                         catalogId: item.catalogId,
                         catalogType: item.catalogType,
+                        extra: item.extra,
                     },
                 ],
             });
@@ -235,7 +312,8 @@ export function getHeroCatalogSourceOptions(addons: Addon[]): HeroCatalogSourceO
         const exists = current.catalogs.some(
             (catalog) =>
                 catalog.catalogId === item.catalogId &&
-                catalog.catalogType === item.catalogType,
+                catalog.catalogType === item.catalogType &&
+                JSON.stringify(catalog.extra) === JSON.stringify(item.extra),
         );
         if (!exists) {
             current.catalogs = [
@@ -243,6 +321,7 @@ export function getHeroCatalogSourceOptions(addons: Addon[]): HeroCatalogSourceO
                 {
                     catalogId: item.catalogId,
                     catalogType: item.catalogType,
+                    extra: item.extra,
                 },
             ];
         }
@@ -262,7 +341,7 @@ export async function fetchHeroTitlesFromCatalogSource(
 
     const batches = await Promise.all(
         source.catalogs.map((catalog) =>
-            fetchCatalog(baseUrl, catalog.catalogType, catalog.catalogId),
+            fetchCatalog(baseUrl, catalog.catalogType, catalog.catalogId, catalog.extra),
         ),
     );
     const deduped = new Map<string, PopularTitleMeta>();
@@ -287,7 +366,12 @@ export async function fetchAddonHomeSections(
 
     const content = await Promise.all(
         planned.map(async (item) => {
-            const titles = await fetchCatalog(item.baseUrl, item.catalogType, item.catalogId);
+            const titles = await fetchCatalog(
+                item.baseUrl,
+                item.catalogType,
+                item.catalogId,
+                item.extra,
+            );
             return {
                 ...item,
                 titles: titles.slice(0, maxItemsPerSection),

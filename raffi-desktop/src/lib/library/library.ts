@@ -22,6 +22,9 @@ export type SplitSearchResults = {
 const CINEMETA_BASE_URL = "https://v3-cinemeta.strem.io";
 const REQUEST_TIMEOUT_MS = 9000;
 const SEARCH_LIMIT = 20;
+const ADDON_SEARCH_TIMEOUT_MS = 1800;
+const ADDON_SEARCH_MAX_CATALOGS_PER_TYPE = 8;
+const ADDON_SEARCH_CACHE_TTL_MS = 60 * 1000;
 
 function normalizeType(type: string): CatalogType {
     return type === "series" ? "series" : "movie";
@@ -275,6 +278,237 @@ async function searchCinemetaByType(type: CatalogType, query: string): Promise<S
     }
 }
 
+type ManifestExtraProp = {
+    name?: string;
+    isRequired?: boolean;
+    options?: string[];
+};
+
+type ManifestCatalog = {
+    id?: string;
+    type?: string;
+    extra?: ManifestExtraProp[];
+    extraRequired?: string[];
+    extraSupported?: string[];
+};
+
+type AddonSearchCatalog = {
+    baseUrl: string;
+    catalogId: string;
+    catalogType: CatalogType;
+    extra: Record<string, string>;
+};
+
+type CachedAddonSearch = {
+    timestamp: number;
+    data: SplitSearchResults;
+    promise?: Promise<SplitSearchResults>;
+};
+
+const addonSearchCache = new Map<string, CachedAddonSearch>();
+
+function getCatalogExtraProps(catalog: ManifestCatalog): ManifestExtraProp[] {
+    if (Array.isArray(catalog.extra)) {
+        return catalog.extra.filter((item) => Boolean(item?.name));
+    }
+
+    const supported = Array.isArray(catalog.extraSupported)
+        ? catalog.extraSupported.filter(Boolean)
+        : [];
+    const required = new Set(
+        Array.isArray(catalog.extraRequired)
+            ? catalog.extraRequired.filter(Boolean)
+            : [],
+    );
+
+    return supported.map((name) => ({
+        name: String(name),
+        isRequired: required.has(name),
+        options: [],
+    }));
+}
+
+function resolveSearchExtra(catalog: ManifestCatalog) {
+    const extras = getCatalogExtraProps(catalog);
+    if (extras.length === 0) return null;
+
+    const supportsSearch = extras.some(
+        (extra) => String(extra.name ?? "").trim().toLowerCase() === "search",
+    );
+    if (!supportsSearch) return null;
+
+    const resolved: Record<string, string> = {};
+    for (const extra of extras) {
+        const name = String(extra.name ?? "").trim();
+        if (!name || !extra.isRequired) continue;
+        if (name === "search") continue;
+
+        const firstOption =
+            Array.isArray(extra.options) && extra.options.length > 0
+                ? String(extra.options[0] ?? "").trim()
+                : "";
+        if (firstOption) {
+            resolved[name] = firstOption;
+            continue;
+        }
+        if (name === "skip") {
+            resolved[name] = "0";
+            continue;
+        }
+        return null;
+    }
+
+    return resolved;
+}
+
+function addonHasCatalogResource(addon: Addon) {
+    const resources = Array.isArray(addon?.manifest?.resources)
+        ? addon.manifest.resources
+        : [];
+    if (resources.length === 0) return true;
+    return resources.some((resource: any) => {
+        if (typeof resource === "string") {
+            return resource.toLowerCase() === "catalog";
+        }
+        if (resource && typeof resource === "object") {
+            return String(resource.name || "").toLowerCase() === "catalog";
+        }
+        return false;
+    });
+}
+
+function normalizeCatalogType(type: unknown): CatalogType | null {
+    const value = String(type ?? "").trim().toLowerCase();
+    if (value === "movie" || value === "series") return value;
+    return null;
+}
+
+function buildCatalogExtraPath(extra: Record<string, string>) {
+    const entries = Object.entries(extra)
+        .filter(
+            ([key, value]) =>
+                String(key).trim().length > 0 &&
+                String(value).trim().length > 0,
+        )
+        .sort((a, b) => a[0].localeCompare(b[0]));
+    if (entries.length === 0) return "";
+    return entries
+        .map(
+            ([key, value]) =>
+                `/${encodeURIComponent(key)}=${encodeURIComponent(value)}`,
+        )
+        .join("");
+}
+
+function discoverAddonSearchCatalogs(
+    addons: Addon[],
+    type: CatalogType,
+): AddonSearchCatalog[] {
+    const catalogs: AddonSearchCatalog[] = [];
+    const seen = new Set<string>();
+
+    for (const addon of addons) {
+        if (!addonHasCatalogResource(addon)) continue;
+
+        const baseUrl = normalizeAddonBaseUrl(addon.transport_url);
+        if (!baseUrl) continue;
+
+        const manifestCatalogs: ManifestCatalog[] = Array.isArray(addon?.manifest?.catalogs)
+            ? addon.manifest.catalogs
+            : [];
+
+        for (const catalog of manifestCatalogs) {
+            const catalogType = normalizeCatalogType(catalog?.type);
+            if (!catalogType || catalogType !== type) continue;
+            const catalogId = String(catalog?.id ?? "").trim();
+            if (!catalogId) continue;
+
+            const extra = resolveSearchExtra(catalog);
+            if (extra == null) continue;
+
+            const key = `${baseUrl}::${catalogType}::${catalogId}::${JSON.stringify(extra)}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+
+            catalogs.push({
+                baseUrl,
+                catalogId,
+                catalogType,
+                extra,
+            });
+        }
+    }
+
+    return catalogs.slice(0, ADDON_SEARCH_MAX_CATALOGS_PER_TYPE);
+}
+
+async function fetchAddonCatalogSearch(
+    catalog: AddonSearchCatalog,
+    query: string,
+): Promise<SearchTitleResult[]> {
+    const extraPath = buildCatalogExtraPath({
+        search: query,
+        ...catalog.extra,
+    });
+    const url = `${catalog.baseUrl}/catalog/${encodeURIComponent(catalog.catalogType)}/${encodeURIComponent(catalog.catalogId)}${extraPath}.json`;
+
+    try {
+        const payload = await fetchJson(url);
+        const metas = Array.isArray(payload?.metas) ? payload.metas : [];
+        const mapped = metas
+            .map((meta: any) => mapSearchMeta(meta, catalog.catalogType))
+            .filter((item: SearchTitleResult | null): item is SearchTitleResult => item !== null);
+
+        const deduped = new Map<string, SearchTitleResult>();
+        for (const item of mapped) {
+            if (!deduped.has(item.id)) deduped.set(item.id, item);
+        }
+        return Array.from(deduped.values());
+    } catch {
+        return [];
+    }
+}
+
+async function searchAddonCatalogsByType(
+    type: CatalogType,
+    query: string,
+    addons: Addon[],
+): Promise<SearchTitleResult[]> {
+    const catalogs = discoverAddonSearchCatalogs(addons, type);
+    if (catalogs.length === 0) return [];
+
+    const timeout = new Promise<SearchTitleResult[]>((resolve) =>
+        setTimeout(() => resolve([]), ADDON_SEARCH_TIMEOUT_MS),
+    );
+    const searchPromise = Promise.all(
+        catalogs.map((catalog) => fetchAddonCatalogSearch(catalog, query)),
+    ).then((batches) => {
+        const deduped = new Map<string, SearchTitleResult>();
+        for (const batch of batches) {
+            for (const item of batch) {
+                if (!deduped.has(item.id)) deduped.set(item.id, item);
+            }
+        }
+        return Array.from(deduped.values());
+    });
+
+    return Promise.race([searchPromise, timeout]);
+}
+
+function mergeSearchResults(
+    primary: SearchTitleResult[],
+    secondary: SearchTitleResult[],
+) {
+    const merged = new Map<string, SearchTitleResult>();
+    for (const item of primary) {
+        if (!merged.has(item.id)) merged.set(item.id, item);
+    }
+    for (const item of secondary) {
+        if (!merged.has(item.id)) merged.set(item.id, item);
+    }
+    return Array.from(merged.values()).slice(0, SEARCH_LIMIT);
+}
+
 export const searchTitlesSplit = async (query: string): Promise<SplitSearchResults> => {
     const trimmed = (query || "").trim();
     if (!trimmed) return { movies: [], series: [] };
@@ -285,6 +519,45 @@ export const searchTitlesSplit = async (query: string): Promise<SplitSearchResul
     ]);
 
     return { movies, series };
+}
+
+export const searchAddonTitlesSplit = async (
+    query: string,
+): Promise<SplitSearchResults> => {
+    const trimmed = (query || "").trim();
+    if (!trimmed) return { movies: [], series: [] };
+    if (trimmed.length < 2) return { movies: [], series: [] };
+
+    const cacheKey = trimmed.toLowerCase();
+    const cached = addonSearchCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < ADDON_SEARCH_CACHE_TTL_MS) {
+        if (cached.data.movies.length > 0 || cached.data.series.length > 0) {
+            return cached.data;
+        }
+        if (cached.promise) return cached.promise;
+    }
+
+    const promise = (async () => {
+        const addons = await getAddons().catch(() => [] as Addon[]);
+        const [movies, series] = await Promise.all([
+            searchAddonCatalogsByType("movie", trimmed, addons),
+            searchAddonCatalogsByType("series", trimmed, addons),
+        ]);
+        const result = { movies, series };
+        addonSearchCache.set(cacheKey, {
+            timestamp: Date.now(),
+            data: result,
+        });
+        return result;
+    })();
+
+    addonSearchCache.set(cacheKey, {
+        timestamp: Date.now(),
+        data: { movies: [], series: [] },
+        promise,
+    });
+
+    return promise;
 }
 
 export const searchTitles = async (query: string): Promise<any[]> => {
