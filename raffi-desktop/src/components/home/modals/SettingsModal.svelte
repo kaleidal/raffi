@@ -856,7 +856,7 @@
 										Choose where the search bar is pinned on Home.
 									</p>
 									<p class="text-white/45 text-xs mt-2">
-										In Auto mode, it moves to bottom after you scroll past the hero.
+										In Auto mode, it moves to bottom after you scroll past the header.
 									</p>
 								</div>
 								<div class="w-full mt-auto pt-2">
@@ -876,7 +876,7 @@
 											Bottom (Always)
 										</option>
 										<option value={HOME_SEARCH_BAR_POSITION_AUTO}>
-											Auto (Bottom after Hero)
+											Auto (Bottom after Header)
 										</option>
 									</select>
 										<div class="pointer-events-none absolute inset-y-0 right-4 flex items-center text-white/70 transition-colors group-hover:text-white/90">
