@@ -486,9 +486,7 @@
         class={`flex flex-col left-1/2 -translate-x-1/2 ${
             homeOverlayMode
                 ? "fixed z-[140] transition-[top,filter] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]"
-                : absolute
-                    ? "absolute"
-                    : "relative"
+                : "absolute"
         }`}
     >
         {#if searchDockBottom}
