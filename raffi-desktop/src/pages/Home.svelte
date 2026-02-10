@@ -3,9 +3,24 @@
     import { fade } from "svelte/transition";
     import { getCachedMetaData } from "../lib/library/metaCache";
     import { getPopularTitles } from "../lib/library/library";
+    import {
+        fetchAddonHomeSections,
+        fetchHeroTitlesFromCatalogSource,
+        getHeroCatalogSourceOptions,
+        type HeroCatalogSourceOption,
+    } from "../lib/library/addonCatalogs";
     import type { ShowResponse } from "../lib/library/types/meta_types";
     import type { PopularTitleMeta } from "../lib/library/types/popular_types";
-    import { getLibrary, updateLibraryPoster } from "../lib/db/db";
+    import {
+        getAddons,
+        getLibrary,
+        updateLibraryPoster,
+        type Addon,
+    } from "../lib/db/db";
+    import {
+        getStoredHomeHeroSource,
+        HOME_HERO_SOURCE_CINEMETA,
+    } from "../lib/home/heroSettings";
 
     import Hero from "../components/home/Hero.svelte";
     import SearchBar from "../components/home/SearchBar.svelte";
@@ -15,6 +30,7 @@
     import PopularSection from "../components/home/sections/PopularSection.svelte";
     import GenreSection from "../components/home/sections/GenreSection.svelte";
     import LoadingSpinner from "../components/common/LoadingSpinner.svelte";
+    import Skeleton from "../components/common/Skeleton.svelte";
 
     let showcasedTitle: PopularTitleMeta;
     let fetchedTitles = false;
@@ -25,65 +41,51 @@
     let genreMap: Record<string, PopularTitleMeta[]> = {};
     let topGenres: string[] = [];
     let absolutePopularTitles: PopularTitleMeta[] = [];
+    let heroPoolTitles: PopularTitleMeta[] = [];
+    let addonSections: { id: string; title: string; titles: PopularTitleMeta[] }[] =
+        [];
+    let addonSectionsLoading = false;
     const HOME_REFRESH_EVENT = "raffi:home-refresh";
 
-    async function checkTrailer(videoId: string): Promise<boolean> {
-        try {
-            const response = await fetch(
-                `https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`,
-            );
-            const data = await response.json();
-            if (data.error) return false;
-            return true;
-        } catch (e) {
-            return false;
+    function isHeroCandidate(title: PopularTitleMeta) {
+        const year = parseInt(title.year ?? "");
+        return (
+            Boolean(title.logo) &&
+            Array.isArray(title.trailerStreams) &&
+            title.trailerStreams.length > 0 &&
+            year >= 2010
+        );
+    }
+
+    function chooseRandom(items: PopularTitleMeta[]) {
+        if (items.length === 0) return undefined;
+        return items[Math.floor(Math.random() * items.length)];
+    }
+
+    function setFeaturedFromPool() {
+        const primaryCandidates = heroPoolTitles.filter(isHeroCandidate);
+        if (primaryCandidates.length > 0) {
+            const selected = chooseRandom(primaryCandidates);
+            if (selected) showcasedTitle = selected;
+            return;
         }
+
+        const fallbackCandidates = absolutePopularTitles.filter(isHeroCandidate);
+        if (fallbackCandidates.length > 0) {
+            const selected = chooseRandom(fallbackCandidates);
+            if (selected) showcasedTitle = selected;
+            return;
+        }
+
+        const looseCandidates = [...heroPoolTitles, ...absolutePopularTitles].filter(
+            (title) => Boolean(title.logo)
+        );
+        const looseFallback = chooseRandom(looseCandidates);
+        if (looseFallback) showcasedTitle = looseFallback;
     }
 
     async function refreshFeatured() {
-        if (absolutePopularTitles.length === 0) return;
-
-        let attempts = 0;
-        const maxAttempts = 10;
-        let newTitle: PopularTitleMeta | undefined;
-
-        while (attempts < maxAttempts) {
-            let randomIndex = Math.floor(
-                Math.random() * absolutePopularTitles.length,
-            );
-            let randomTitle = absolutePopularTitles[randomIndex];
-
-            const year = parseInt(randomTitle.year ?? "");
-            if (!year || year < 2010) {
-                attempts++;
-                continue;
-            }
-
-            if (
-                randomTitle.trailerStreams &&
-                randomTitle.trailerStreams.length > 0 &&
-                randomTitle.trailerStreams[0] &&
-                randomTitle.logo != undefined
-            ) {
-                const isPlayable = await checkTrailer(
-                    randomTitle.trailerStreams[0].ytId,
-                );
-                if (isPlayable) {
-                    newTitle = randomTitle;
-                    break;
-                }
-            }
-            attempts++;
-        }
-
-        if (!newTitle) {
-            const fallback = absolutePopularTitles.find(
-                (t) => t.trailerStreams && t.trailerStreams.length > 0,
-            );
-            if (fallback) newTitle = fallback;
-        }
-
-        if (newTitle) showcasedTitle = newTitle;
+        setFeaturedFromPool();
     }
 
     async function loadContinueWatching() {
@@ -168,10 +170,59 @@
         continueWatchingMeta = nextContinueWatchingMeta;
     }
 
+    async function refreshAddonSections(installedAddons?: Addon[]) {
+        addonSectionsLoading = true;
+        try {
+            const addons = installedAddons ?? (await getAddons());
+            addonSections = await fetchAddonHomeSections(addons);
+        } catch (e) {
+            console.error("Failed to refresh addon sections", e);
+            addonSections = [];
+        } finally {
+            addonSectionsLoading = false;
+        }
+    }
+
+    async function refreshHeroSourcePool(installedAddons?: Addon[]) {
+        try {
+            const addons = installedAddons ?? (await getAddons());
+            const selectedSourceId = getStoredHomeHeroSource();
+            const heroOptions: HeroCatalogSourceOption[] =
+                getHeroCatalogSourceOptions(addons);
+
+            if (selectedSourceId !== HOME_HERO_SOURCE_CINEMETA) {
+                const selectedOption = heroOptions.find(
+                    (option) => option.id === selectedSourceId,
+                );
+                if (selectedOption) {
+                    const addonHeroTitles = await fetchHeroTitlesFromCatalogSource(
+                        selectedOption,
+                    );
+                    if (addonHeroTitles.length > 0) {
+                        heroPoolTitles = addonHeroTitles;
+                        setFeaturedFromPool();
+                        return;
+                    }
+                }
+            }
+
+            heroPoolTitles = absolutePopularTitles;
+            setFeaturedFromPool();
+        } catch (e) {
+            console.error("Failed to refresh hero source", e);
+            heroPoolTitles = absolutePopularTitles;
+            setFeaturedFromPool();
+        }
+    }
+
     onMount(() => {
         const loadHomeData = async () => {
-            let mostPopularMovies = await getPopularTitles("movie");
-            let mostPopularSeries = await getPopularTitles("series");
+            const [mostPopularMovies, mostPopularSeries, installedAddons] =
+                await Promise.all([
+                    getPopularTitles("movie"),
+                    getPopularTitles("series"),
+                    getAddons().catch(() => []),
+                ]);
             absolutePopularTitles = [...mostPopularMovies, ...mostPopularSeries];
 
             if (absolutePopularTitles.length > 0) {
@@ -186,7 +237,7 @@
                 popularMeta = absolutePopularTitles;
             }
 
-            await refreshFeatured();
+            await refreshHeroSourcePool(installedAddons);
             await loadContinueWatching();
 
             const allTitlesForGenres = [...mostPopularMovies, ...mostPopularSeries];
@@ -210,13 +261,19 @@
                 .slice(0, 10)
                 .map(([genre]) => genre);
 
+            void refreshAddonSections(installedAddons);
             fetchedTitles = true;
         };
 
         void loadHomeData();
 
-        const handleHomeRefresh = () => {
-            void loadContinueWatching();
+        const handleHomeRefresh = async () => {
+            const installedAddons = await getAddons().catch(() => [] as Addon[]);
+            await Promise.all([
+                loadContinueWatching(),
+                refreshAddonSections(installedAddons),
+                refreshHeroSourcePool(installedAddons),
+            ]);
         };
         window.addEventListener(HOME_REFRESH_EVENT, handleHomeRefresh);
 
@@ -253,6 +310,27 @@
             >
                 <ContinueWatching {continueWatchingMeta} />
                 <PopularSection {popularMeta} />
+
+                {#each addonSections as section (section.id)}
+                    <GenreSection genre={section.title} titles={section.titles} />
+                {/each}
+
+                {#if addonSectionsLoading}
+                    {#each Array(2) as _}
+                        <div class="w-full h-fit flex flex-col gap-4">
+                            <Skeleton width="460px" height="58px" borderRadius="14px" />
+                            <div class="flex flex-row gap-[20px] overflow-hidden pb-6 pt-3">
+                                {#each Array(7) as __}
+                                    <Skeleton
+                                        width="200px"
+                                        height="300px"
+                                        borderRadius="16px"
+                                    />
+                                {/each}
+                            </div>
+                        </div>
+                    {/each}
+                {/if}
 
                 {#each topGenres as genre}
                     <GenreSection {genre} titles={genreMap[genre]} />
