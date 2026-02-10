@@ -39,7 +39,7 @@ export type AddonHomeSection = {
     addonName: string;
     transportUrl: string;
     catalogId: string;
-    catalogType: string;
+    catalogType: CatalogType;
 };
 
 export type HeroCatalogSourceOption = {
