@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React from 'react';
 import {
+    Image,
     ScrollView,
     StyleSheet,
     Text,
@@ -15,6 +16,7 @@ import { useAuthStore } from '@/lib/stores/authStore';
 
 export default function ProfileScreen() {
   const { user, signOut } = useAuthStore();
+  const initial = (user?.name || user?.email || '?').slice(0, 1).toUpperCase();
 
   const handleSignOut = async () => {
     await signOut();
@@ -32,8 +34,13 @@ export default function ProfileScreen() {
         {/* User Info */}
         <View style={styles.userSection}>
           <View style={styles.avatar}>
-            <Ionicons name="person" size={40} color={Colors.text} />
+            {user?.avatar ? (
+              <Image source={{ uri: user.avatar }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.avatarFallback}>{initial}</Text>
+            )}
           </View>
+          <Text style={styles.name}>{user?.name || 'Raffi User'}</Text>
           <Text style={styles.email}>{user?.email || 'Guest'}</Text>
         </View>
 
@@ -130,16 +137,31 @@ const styles = StyleSheet.create({
   avatar: {
     width: 100,
     height: 100,
-    borderRadius: 50,
+    borderRadius: BorderRadius.lg,
     backgroundColor: 'rgba(255,255,255,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
     marginBottom: Spacing.lg,
   },
-  email: {
-    fontSize: Typography.sizes.xl,
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarFallback: {
+    fontSize: 38,
     fontWeight: Typography.weights.semibold,
     color: Colors.text,
+  },
+  name: {
+    fontSize: Typography.sizes.xxl,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+    marginBottom: 4,
+  },
+  email: {
+    fontSize: Typography.sizes.md,
+    color: Colors.textSecondary,
   },
   menuSection: {
     paddingHorizontal: Spacing.lg,

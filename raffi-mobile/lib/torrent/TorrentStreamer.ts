@@ -143,9 +143,9 @@ class TorrentStreamerClass {
       try {
         await NativeTorrentStreamer.initialize({
           // Don't pass downloadPath - let native code use getCacheDir() for correct app package
-          maxConnections: 100,
+          maxConnections: 180,
           maxDownloadSpeed: 0, // unlimited
-          maxUploadSpeed: 50 * 1024, // 50 KB/s upload limit to save bandwidth
+          maxUploadSpeed: 128 * 1024,
         });
         this.isInitialized = true;
       } catch (e) {
@@ -167,12 +167,16 @@ class TorrentStreamerClass {
       await this.initialize();
     }
 
+    const normalizedFileIndex = Number.isFinite(fileIndex as number) && (fileIndex as number) >= 0
+      ? Math.floor(fileIndex as number)
+      : -1;
+
     const sessionId = this.generateSessionId();
     
     const session: StreamSession = {
       id: sessionId,
       magnetUri,
-      fileIndex: fileIndex ?? -1, // -1 means auto-select largest video file
+      fileIndex: normalizedFileIndex,
       streamUrl: '',
       info: null,
       status: 'initializing',
@@ -193,7 +197,7 @@ class TorrentStreamerClass {
       const result = await NativeTorrentStreamer.startStream({
         sessionId,
         magnetUri,
-        fileIndex: fileIndex ?? -1,
+        fileIndex: normalizedFileIndex,
         port: this.localServerPort,
       });
 

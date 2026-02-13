@@ -221,6 +221,30 @@ export default function SettingsScreen() {
     }
   };
 
+  if (!user) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Ionicons name="chevron-back" size={28} color={Colors.text} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Settings</Text>
+          <View style={{ width: 44 }} />
+        </View>
+
+        <View style={styles.authGateContainer}>
+          <Text style={styles.authGateTitle}>Sign in required</Text>
+          <Text style={styles.authGateDescription}>
+            Sign in with Ave to access settings and sync across devices.
+          </Text>
+          <TouchableOpacity style={styles.authGateButton} onPress={() => router.push('/login')}>
+            <Text style={styles.authGateButtonText}>Continue with Ave</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
@@ -311,7 +335,7 @@ export default function SettingsScreen() {
             <View style={styles.settingInfo}>
               <Text style={styles.settingLabel}>Save watch history</Text>
               <Text style={styles.settingDescription}>
-                Keep track of what you've watched
+                Keep track of what you&apos;ve watched
               </Text>
             </View>
             <Switch
@@ -543,6 +567,36 @@ const styles = StyleSheet.create({
   integrationDisconnectText: {
     color: Colors.text,
     fontSize: Typography.sizes.sm,
+    fontWeight: Typography.weights.bold,
+  },
+  authGateContainer: {
+    flex: 1,
+    paddingHorizontal: Spacing.xl,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  authGateTitle: {
+    fontSize: Typography.sizes.xxl,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+  },
+  authGateDescription: {
+    fontSize: Typography.sizes.md,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.xl,
+    maxWidth: 320,
+  },
+  authGateButton: {
+    backgroundColor: Colors.primary,
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.md,
+  },
+  authGateButtonText: {
+    color: '#000',
+    fontSize: Typography.sizes.md,
     fontWeight: Typography.weights.bold,
   },
 });

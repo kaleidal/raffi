@@ -36,16 +36,9 @@ export default function LoginScreen() {
         </TouchableOpacity>
 
         <View style={styles.content}>
-          {/* Logo */}
-          <View style={styles.logoContainer}>
-            <Ionicons name="film" size={60} color={Colors.primary} />
-            <Text style={styles.logoText}>Raffi</Text>
-          </View>
-
-          {/* Title */}
-          <Text style={styles.title}>Welcome Back</Text>
+          <Text style={styles.title}>Sign In</Text>
           <Text style={styles.subtitle}>
-            Sign in with Ave to continue watching
+            Sign in with Ave to sync your library, lists, and settings
           </Text>
 
           {/* Form */}
@@ -94,17 +87,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     paddingHorizontal: Spacing.xl,
-  },
-  logoContainer: {
-    alignItems: 'center',
-    marginBottom: Spacing.xxl,
-  },
-  logoText: {
-    fontSize: 44,
-    fontWeight: '800',
-    color: Colors.primary,
-    marginTop: Spacing.sm,
-    letterSpacing: -1,
   },
   title: {
     fontSize: Typography.sizes.hero,

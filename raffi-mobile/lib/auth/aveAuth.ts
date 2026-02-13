@@ -1,12 +1,10 @@
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
+import * as Crypto from 'expo-crypto';
 import { Buffer } from 'buffer';
 import {
   exchangeCode,
   fetchUserInfo,
-  generateCodeChallenge,
-  generateCodeVerifier,
-  generateNonce,
 } from '@ave-id/sdk';
 import type { AppUser } from './types';
 
@@ -15,6 +13,31 @@ WebBrowser.maybeCompleteAuthSession();
 const AVE_CLIENT_ID = 'app_13afc5b8884e9985d89eac0f4ca4b5af';
 const AVE_ISSUER = 'https://api.aveid.net';
 const AVE_SIGNIN_URL = 'https://aveid.net/signin';
+
+const base64UrlEncode = (bytes: Uint8Array): string =>
+  Buffer.from(bytes)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+
+const generateCodeVerifier = (): string => {
+  const bytes = Crypto.getRandomBytes(32);
+  return base64UrlEncode(bytes);
+};
+
+const generateNonce = (): string => {
+  const bytes = Crypto.getRandomBytes(32);
+  return base64UrlEncode(bytes).slice(0, 32);
+};
+
+const generateCodeChallenge = async (verifier: string): Promise<string> => {
+  const hash = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, verifier, {
+    encoding: Crypto.CryptoEncoding.BASE64,
+  });
+
+  return hash.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+};
 
 const decodeJwtPayload = (token: string): Record<string, any> | null => {
   try {
@@ -31,7 +54,7 @@ const decodeJwtPayload = (token: string): Record<string, any> | null => {
 };
 
 export async function signInWithAve(): Promise<AppUser> {
-  const redirectUri = Linking.createURL('/auth/callback');
+  const redirectUri = Linking.createURL('auth/callback');
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = await generateCodeChallenge(codeVerifier);
   const state = generateNonce();

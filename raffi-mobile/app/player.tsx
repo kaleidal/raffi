@@ -59,6 +59,7 @@ const INTRO_SKIP_TO = 90; // Skip to 90 seconds
 const TRAKT_COMPLETION_THRESHOLD = 0.9;
 const TRAKT_FAILURE_COOLDOWN_MS = 60000;
 const TRAKT_MAX_FAILURES = 3;
+const MAX_TORRENT_PLAYBACK_RETRIES = 6;
 
 // Settings keys
 const SETTINGS_KEYS = {
@@ -114,6 +115,8 @@ export default function PlayerScreen() {
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
   const [torrentSession, setTorrentSession] = useState<StreamSession | null>(null);
   const torrentSessionRef = useRef<StreamSession | null>(null);
+  const torrentPlaybackRetriesRef = useRef(0);
+  const torrentRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [torrentStatus, setTorrentStatus] = useState<string>('');
   const [isLocked, setIsLocked] = useState(false);
   const [buffering, setBuffering] = useState(false);
@@ -304,9 +307,14 @@ export default function PlayerScreen() {
             return;
           }
           
+          const parsedFileIndex = fileIdx != null ? Number(fileIdx) : NaN;
+          const safeFileIndex = Number.isFinite(parsedFileIndex) && parsedFileIndex >= 0
+            ? Math.floor(parsedFileIndex)
+            : undefined;
+
           const session = await TorrentStreamer.startStream(
             videoSrc,
-            fileIdx ? parseInt(fileIdx) : undefined
+            safeFileIndex
           );
           
           setTorrentSession(session);
@@ -487,6 +495,10 @@ export default function PlayerScreen() {
 
   useEffect(() => {
     return () => {
+      if (torrentRetryTimeoutRef.current) {
+        clearTimeout(torrentRetryTimeoutRef.current);
+        torrentRetryTimeoutRef.current = null;
+      }
       if (!traktStopSentRef.current && currentTimeRef.current > 0) {
         void sendTraktEvent('stop', true);
       }
@@ -500,6 +512,7 @@ export default function PlayerScreen() {
     const statusSubscription = player.addListener('statusChange', (payload) => {
       const status = payload.status;
       if (status === 'readyToPlay') {
+        torrentPlaybackRetriesRef.current = 0;
         setLoading(false);
         setBuffering(false);
         setDuration(player.duration);
@@ -525,6 +538,39 @@ export default function PlayerScreen() {
       } else if (status === 'error') {
         if (playbackUrl) {
           console.error('Video player error for URL:', playbackUrl);
+
+          const isLocalTorrentStream = playbackUrl.startsWith('http://127.0.0.1:8765/stream/');
+          const activeTorrent = torrentSessionRef.current;
+
+          if (
+            isLocalTorrentStream &&
+            activeTorrent &&
+            activeTorrent.status !== 'error' &&
+            torrentPlaybackRetriesRef.current < MAX_TORRENT_PLAYBACK_RETRIES
+          ) {
+            const retry = torrentPlaybackRetriesRef.current + 1;
+            torrentPlaybackRetriesRef.current = retry;
+
+            setLoading(true);
+            setBuffering(true);
+            setError(null);
+            setTorrentStatus(`Buffering stream... retry ${retry}/${MAX_TORRENT_PLAYBACK_RETRIES}`);
+
+            if (torrentRetryTimeoutRef.current) {
+              clearTimeout(torrentRetryTimeoutRef.current);
+            }
+
+            const retryDelayMs = Math.min(4000, 900 + retry * 500);
+            torrentRetryTimeoutRef.current = setTimeout(() => {
+              const base = playbackUrl.split('?')[0];
+              setPlaybackUrl(null);
+              setTimeout(() => {
+                setPlaybackUrl(`${base}?r=${Date.now()}-${retry}`);
+              }, 100);
+            }, retryDelayMs);
+            return;
+          }
+
           setError('Failed to play video');
           setLoading(false);
         }
@@ -564,7 +610,7 @@ export default function PlayerScreen() {
       playingSubscription.remove();
       sourceLoadSubscription.remove();
     };
-  }, [player, sendTraktEvent]);
+  }, [player, playbackUrl, sendTraktEvent]);
 
   // Check for skip intro and next episode triggers
   useEffect(() => {

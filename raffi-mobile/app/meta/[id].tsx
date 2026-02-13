@@ -56,6 +56,18 @@ interface ParsedStreamMeta {
   infoLine: string | null;
 }
 
+const RESOLUTION_FILTERS = [
+  { label: 'All', value: 'all' },
+  { label: '2160p', value: '2160p' },
+  { label: '1440p', value: '1440p' },
+  { label: '1080p', value: '1080p' },
+  { label: '720p', value: '720p' },
+  { label: '480p', value: '480p' },
+  { label: 'Other', value: 'other' },
+] as const;
+
+type ResolutionFilter = (typeof RESOLUTION_FILTERS)[number]['value'];
+
 function extractYouTubeId(value: string | null | undefined): string | null {
   if (!value) return null;
   const v = value.trim();
@@ -278,6 +290,8 @@ export default function MetaScreen() {
   const [streamsByAddon, setStreamsByAddon] = useState<Record<string, Stream[]>>({});
   const [loadingStreams, setLoadingStreams] = useState(false);
   const [selectedEpisode, setSelectedEpisode] = useState<Episode | null>(null);
+  const [resolutionFilter, setResolutionFilter] = useState<ResolutionFilter>('all');
+  const [excludeHDR, setExcludeHDR] = useState(false);
 
   // Add to list modal
   const [showListModal, setShowListModal] = useState(false);
@@ -422,6 +436,39 @@ export default function MetaScreen() {
     [id, sortStreams]
   );
 
+  const selectedAddonStreams = useMemo(
+    () => (selectedAddonUrl ? streamsByAddon[selectedAddonUrl] || [] : []),
+    [selectedAddonUrl, streamsByAddon]
+  );
+
+  const filteredAddonStreams = useMemo(() => {
+    const enriched = selectedAddonStreams.map((stream, index) => ({
+      key: `${stream.infoHash || stream.url || 'stream'}-${index}`,
+      stream,
+      meta: parseStreamMetadata(stream),
+    }));
+
+    const filtered = enriched.filter((item) => {
+      if (excludeHDR && item.meta.isHDR) return false;
+      if (resolutionFilter === 'all') return true;
+      if (resolutionFilter === 'other') return !item.meta.resolution;
+      return item.meta.resolution === resolutionFilter;
+    });
+
+    const p2p = filtered.filter((item) => item.meta.isP2P);
+    const rest = filtered.filter((item) => !item.meta.isP2P);
+
+    p2p.sort((a, b) => (b.meta.peerCount ?? -1) - (a.meta.peerCount ?? -1));
+    return [...p2p, ...rest];
+  }, [excludeHDR, resolutionFilter, selectedAddonStreams]);
+
+  const streamFiltersActive = resolutionFilter !== 'all' || excludeHDR;
+
+  const resetStreamFilters = useCallback(() => {
+    setResolutionFilter('all');
+    setExcludeHDR(false);
+  }, []);
+
   useEffect(() => {
     const loadMeta = async () => {
       if (!id) return;
@@ -563,6 +610,7 @@ export default function MetaScreen() {
     const defaultAddonUrl = selectedAddon || streamAddons?.[0]?.transport_url || null;
     setSelectedAddonUrl(defaultAddonUrl);
     setStreamsByAddon({});
+    resetStreamFilters();
 
     if (defaultAddonUrl) {
       await fetchStreamsForAddon(defaultAddonUrl, 'movie', null);
@@ -578,6 +626,7 @@ export default function MetaScreen() {
     const defaultAddonUrl = selectedAddon || streamAddons?.[0]?.transport_url || null;
     setSelectedAddonUrl(defaultAddonUrl);
     setStreamsByAddon({});
+    resetStreamFilters();
 
     if (defaultAddonUrl) {
       await fetchStreamsForAddon(defaultAddonUrl, 'series', episode);
@@ -1073,7 +1122,7 @@ export default function MetaScreen() {
                 <ActivityIndicator size="large" color={Colors.primary} />
                 <Text style={styles.modalLoadingText}>Loading streams...</Text>
               </View>
-            ) : !selectedAddonUrl || (streamsByAddon[selectedAddonUrl] || []).length === 0 ? (
+            ) : !selectedAddonUrl || selectedAddonStreams.length === 0 ? (
               selectedAddonUrl && (
                 <View style={styles.modalEmpty}>
                   <Ionicons name="alert-circle-outline" size={48} color={Colors.textMuted} />
@@ -1081,16 +1130,54 @@ export default function MetaScreen() {
                 </View>
               )
             ) : (
-              <FlatList
-                data={streamsByAddon[selectedAddonUrl] || []}
-                keyExtractor={(item, idx) => `${item.infoHash || item.url}-${idx}`}
+              <>
+                <View style={styles.filtersWrap}>
+                  <View style={styles.filtersRow}>
+                    <Text style={styles.filtersLabel}>Resolution</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersChipRow}>
+                      {RESOLUTION_FILTERS.map((option) => {
+                        const active = resolutionFilter === option.value;
+                        return (
+                          <TouchableOpacity
+                            key={option.value}
+                            style={[styles.filterChip, active && styles.filterChipActive]}
+                            onPress={() => setResolutionFilter(option.value)}
+                          >
+                            <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{option.label}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+
+                  <View style={styles.filtersToggleRow}>
+                    <Text style={styles.filtersLabel}>HDR</Text>
+                    <TouchableOpacity
+                      style={[styles.filterChip, excludeHDR && styles.filterChipWarning]}
+                      onPress={() => setExcludeHDR((prev) => !prev)}
+                    >
+                      <Text style={[styles.filterChipText, excludeHDR && styles.filterChipWarningText]}>
+                        {excludeHDR ? 'Excluded' : 'Include'}
+                      </Text>
+                    </TouchableOpacity>
+                    {streamFiltersActive && (
+                      <TouchableOpacity style={styles.resetFilterButton} onPress={resetStreamFilters}>
+                        <Text style={styles.resetFilterText}>Reset filters</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+
+                <FlatList
+                data={filteredAddonStreams}
+                keyExtractor={(item) => item.key}
                 style={styles.streamsListFlex}
                 renderItem={({ item }) => {
-                  const streamMeta = parseStreamMetadata(item);
+                  const streamMeta = item.meta;
                   return (
                     <TouchableOpacity
                       style={styles.streamCard}
-                      onPress={() => handleSelectStream(item)}
+                      onPress={() => handleSelectStream(item.stream)}
                       activeOpacity={0.7}
                     >
                       {/* Provider + Status badges row */}
@@ -1163,12 +1250,12 @@ export default function MetaScreen() {
                           </View>
                         )}
                         {/* Download button - only for debrid/HTTP streams */}
-                        {item.url && !item.url.startsWith('magnet:') && !item.infoHash && (
+                        {item.stream.url && !item.stream.url.startsWith('magnet:') && !item.stream.infoHash && (
                           <TouchableOpacity
                             style={styles.downloadButton}
                             onPress={(e) => {
                               e.stopPropagation();
-                              handleDownloadStream(item);
+                              handleDownloadStream(item.stream);
                             }}
                           >
                             <Ionicons name="download-outline" size={18} color={Colors.text} />
@@ -1181,11 +1268,17 @@ export default function MetaScreen() {
                 contentContainerStyle={styles.streamsList}
                 ListHeaderComponent={
                   <Text style={styles.streamsCount}>
-                    {(streamsByAddon[selectedAddonUrl] || []).length} source
-                    {(streamsByAddon[selectedAddonUrl] || []).length !== 1 ? 's' : ''}
+                    {filteredAddonStreams.length} source
+                    {filteredAddonStreams.length !== 1 ? 's' : ''}
                   </Text>
                 }
+                ListEmptyComponent={
+                  <View style={styles.modalEmptyFiltered}>
+                    <Text style={styles.modalEmptyText}>No streams match current filters</Text>
+                  </View>
+                }
               />
+              </>
             )}
             </View>
           </View>
@@ -1527,7 +1620,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.backgroundSecondary,
     borderTopLeftRadius: BorderRadius.xxl,
     borderTopRightRadius: BorderRadius.xxl,
-    height: SCREEN_HEIGHT * 0.8,
+    height: SCREEN_HEIGHT * 0.92,
     overflow: 'hidden',
   },
   modalBody: {
@@ -1608,9 +1701,69 @@ const styles = StyleSheet.create({
   streamsListFlex: {
     flex: 1,
   },
+  filtersWrap: {
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  filtersRow: {
+    gap: Spacing.xs,
+  },
+  filtersToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  filtersLabel: {
+    fontSize: Typography.sizes.xs,
+    color: 'rgba(255,255,255,0.65)',
+    fontWeight: Typography.weights.semibold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  filtersChipRow: {
+    gap: Spacing.xs,
+    paddingRight: Spacing.lg,
+  },
+  filterChip: {
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: BorderRadius.full,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  filterChipActive: {
+    backgroundColor: Colors.text,
+  },
+  filterChipWarning: {
+    backgroundColor: '#FFDD57',
+  },
+  filterChipText: {
+    fontSize: 11,
+    fontWeight: Typography.weights.semibold,
+    color: 'rgba(255,255,255,0.85)',
+    textTransform: 'uppercase',
+  },
+  filterChipTextActive: {
+    color: Colors.background,
+  },
+  filterChipWarningText: {
+    color: '#000',
+  },
+  resetFilterButton: {
+    marginLeft: 'auto',
+  },
+  resetFilterText: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: Typography.sizes.xs,
+    textDecorationLine: 'underline',
+  },
   streamsList: {
     paddingHorizontal: Spacing.lg,
     paddingBottom: Spacing.lg,
+  },
+  modalEmptyFiltered: {
+    paddingVertical: Spacing.xxl,
+    alignItems: 'center',
   },
   streamsCount: {
     fontSize: Typography.sizes.xs,
