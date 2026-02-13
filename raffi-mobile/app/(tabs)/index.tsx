@@ -1,24 +1,18 @@
-import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Colors, Spacing, Typography } from '@/constants/theme';
+import { Colors, Spacing } from '@/constants/theme';
 import { getAddonHomeSections, getPopularTitles, getNewReleases, getTitlesByGenre } from '@/lib/api';
 import { useAddonsStore } from '@/lib/stores/addonsStore';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useLibraryStore } from '@/lib/stores/libraryStore';
 import type { Addon, PopularTitleMeta } from '@/lib/types';
 
-import LoadingSpinner from '@/components/common/LoadingSpinner';
 import ContentRow from '@/components/home/ContentRow';
 import ContinueWatching from '@/components/home/ContinueWatching';
 import Hero from '@/components/home/Hero';
@@ -34,16 +28,17 @@ interface ContentSection {
 export default function HomeScreen() {
   const { user } = useAuthStore();
   const { items: libraryItems, fetchLibrary } = useLibraryStore();
-  const { addons, fetchAddons } = useAddonsStore();
+  const { fetchAddons } = useAddonsStore();
 
   const [refreshing, setRefreshing] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [addonSectionsLoading, setAddonSectionsLoading] = useState(false);
   const [featuredTitle, setFeaturedTitle] = useState<PopularTitleMeta | null>(null);
   
-  // Content sections
-  const [sections, setSections] = useState<ContentSection[]>([]);
+  const [baseSections, setBaseSections] = useState<ContentSection[]>([]);
+  const [addonSections, setAddonSections] = useState<ContentSection[]>([]);
+  const sections = useMemo(() => [...baseSections, ...addonSections], [baseSections, addonSections]);
 
-  const loadContent = async (installedAddons: Addon[] = addons) => {
+  const loadBaseContent = async () => {
     try {
       const currentYear = new Date().getFullYear();
       
@@ -73,9 +68,6 @@ export default function HomeScreen() {
       // Build content sections
       const contentSections: ContentSection[] = [];
 
-      // Continue watching will be handled separately above these rows
-
-      // New Releases (Mix of movies and series from current year)
       const newReleases = [...newMovies.slice(0, 10), ...newSeries.slice(0, 10)]
         .filter(item => item.poster)
         .sort(() => Math.random() - 0.5)
@@ -89,7 +81,6 @@ export default function HomeScreen() {
         });
       }
 
-      // Popular Movies
       if (popularMovies.length > 0) {
         contentSections.push({
           id: 'popular-movies',
@@ -99,7 +90,6 @@ export default function HomeScreen() {
         });
       }
 
-      // Popular TV Shows
       if (popularSeries.length > 0) {
         contentSections.push({
           id: 'popular-series',
@@ -109,7 +99,6 @@ export default function HomeScreen() {
         });
       }
 
-      // Action Movies
       if (actionMovies.length > 0) {
         contentSections.push({
           id: 'action-movies',
@@ -119,7 +108,6 @@ export default function HomeScreen() {
         });
       }
 
-      // Sci-Fi Movies
       if (sciFiMovies.length > 0) {
         contentSections.push({
           id: 'scifi-movies',
@@ -129,7 +117,6 @@ export default function HomeScreen() {
         });
       }
 
-      // Thriller Movies
       if (thrillerMovies.length > 0) {
         contentSections.push({
           id: 'thriller-movies',
@@ -139,7 +126,6 @@ export default function HomeScreen() {
         });
       }
 
-      // Comedy Series
       if (comedySeries.length > 0) {
         contentSections.push({
           id: 'comedy-series',
@@ -149,7 +135,6 @@ export default function HomeScreen() {
         });
       }
 
-      // Drama Series
       if (dramaSeries.length > 0) {
         contentSections.push({
           id: 'drama-series',
@@ -159,18 +144,6 @@ export default function HomeScreen() {
         });
       }
 
-      // Addon-driven catalogs (Stremio-style home rows from addon manifests)
-      const addonSections = await getAddonHomeSections(installedAddons).catch(() => []);
-      for (const section of addonSections) {
-        contentSections.push({
-          id: `addon-${section.id}`,
-          title: section.title,
-          data: section.data,
-          size: 'medium',
-        });
-      }
-
-      // Top Rated (Mix sorted by rating)
       const topRated = [...popularMovies, ...popularSeries]
         .filter((item) => item.imdbRating && item.poster)
         .sort((a, b) => parseFloat(b.imdbRating || '0') - parseFloat(a.imdbRating || '0'))
@@ -184,9 +157,8 @@ export default function HomeScreen() {
         });
       }
 
-      setSections(contentSections);
+      setBaseSections(contentSections);
 
-      // Pick a featured title for hero (recent with good imagery)
       const heroPool = [...newMovies, ...newSeries, ...popularMovies, ...popularSeries].filter(
         (item) => item.background && item.logo && parseInt(item.year || '0') >= 2020
       );
@@ -201,15 +173,34 @@ export default function HomeScreen() {
     }
   };
 
+  const loadAddonSections = async (installedAddons: Addon[]) => {
+    try {
+      const nextAddonSections = await getAddonHomeSections(installedAddons).catch(() => []);
+      setAddonSections(
+        nextAddonSections.map((section) => ({
+          id: `addon-${section.id}`,
+          title: section.title,
+          data: section.data,
+          size: 'medium' as const,
+        }))
+      );
+    } catch (error) {
+      console.error('Failed to load addon sections:', error);
+      setAddonSections([]);
+    }
+  };
+
   const initialize = async () => {
-    setLoading(true);
-    await fetchAddons();
-    const installedAddons = useAddonsStore.getState().addons;
+    setAddonSections([]);
+    setAddonSectionsLoading(true);
+
     await Promise.all([
-      loadContent(installedAddons),
+      loadBaseContent(),
       user ? fetchLibrary() : Promise.resolve(),
+      fetchAddons()
+        .then(() => loadAddonSections(useAddonsStore.getState().addons))
+        .finally(() => setAddonSectionsLoading(false)),
     ]);
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -218,10 +209,16 @@ export default function HomeScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    const installedAddons = useAddonsStore.getState().addons;
-    await Promise.all([loadContent(installedAddons), user ? fetchLibrary() : Promise.resolve()]);
+    setAddonSectionsLoading(true);
+    await Promise.all([
+      loadBaseContent(),
+      user ? fetchLibrary() : Promise.resolve(),
+      fetchAddons()
+        .then(() => loadAddonSections(useAddonsStore.getState().addons))
+        .finally(() => setAddonSectionsLoading(false)),
+    ]);
     setRefreshing(false);
-  }, [user]);
+  }, [fetchAddons, fetchLibrary, user]);
 
   const refreshFeatured = useCallback(() => {
     if (sections.length === 0) return;
@@ -236,28 +233,6 @@ export default function HomeScreen() {
       setFeaturedTitle(allItems[randomIndex]);
     }
   }, [sections]);
-
-  if (loading) {
-    return <LoadingSpinner fullScreen message="Loading..." />;
-  }
-
-  if (!user) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loginPrompt}>
-          <Ionicons name="film-outline" size={80} color={Colors.primary} />
-          <Text style={styles.logoText}>Raffi</Text>
-          <Text style={styles.loginMessage}>Sign in to start watching</Text>
-          <TouchableOpacity
-            style={styles.loginButton}
-            onPress={() => router.push('/login')}
-          >
-            <Text style={styles.loginButtonText}>Sign In</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   return (
     <View style={styles.container}>
@@ -291,6 +266,21 @@ export default function HomeScreen() {
           />
         ))}
 
+        {addonSectionsLoading && (
+          <View style={styles.addonSkeletonGroup}>
+            {[0, 1, 2].map((group) => (
+              <View key={`addon-skeleton-${group}`} style={styles.addonSkeletonSection}>
+                <View style={styles.addonSkeletonTitle} />
+                <View style={styles.addonSkeletonRow}>
+                  {[0, 1, 2, 3].map((card) => (
+                    <View key={`addon-skeleton-${group}-${card}`} style={styles.addonSkeletonCard} />
+                  ))}
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
         {/* Spacing at bottom for tab bar */}
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -303,34 +293,28 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  loginPrompt: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Spacing.xxl,
+  addonSkeletonGroup: {
+    gap: Spacing.lg,
+    paddingTop: Spacing.md,
   },
-  logoText: {
-    fontSize: 56,
-    fontWeight: '800',
-    color: Colors.primary,
-    marginTop: Spacing.lg,
-    letterSpacing: -1,
+  addonSkeletonSection: {
+    paddingHorizontal: Spacing.lg,
+    gap: Spacing.md,
   },
-  loginMessage: {
-    fontSize: Typography.sizes.lg,
-    color: Colors.textSecondary,
-    marginTop: Spacing.lg,
-    marginBottom: Spacing.xxl,
+  addonSkeletonTitle: {
+    height: 18,
+    width: 160,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.12)',
   },
-  loginButton: {
-    backgroundColor: Colors.primary,
-    paddingVertical: Spacing.lg,
-    paddingHorizontal: Spacing.xxxl,
-    borderRadius: 100,
+  addonSkeletonRow: {
+    flexDirection: 'row',
+    gap: Spacing.md,
   },
-  loginButtonText: {
-    fontSize: Typography.sizes.lg,
-    fontWeight: '700',
-    color: Colors.background,
+  addonSkeletonCard: {
+    width: 120,
+    height: 180,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
 });

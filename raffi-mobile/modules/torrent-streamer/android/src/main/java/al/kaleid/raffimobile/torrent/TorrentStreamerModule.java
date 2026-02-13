@@ -128,15 +128,22 @@ public class TorrentStreamerModule extends ReactContextBaseJavaModule {
                     return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "File not found: " + videoFile.getName());
                 }
                 
-                // Use expected size from torrent metadata for Content-Length
-                // This allows the video player to know the total duration
-                long fileLength = expectedSize != null ? expectedSize : videoFile.length();
                 long actualSize = videoFile.length();
-                Log.d("StreamingServer", "Serving file: " + videoFile.getName() + ", expected: " + fileLength + ", actual: " + actualSize);
+                // Always serve using actual bytes currently available on disk.
+                // Advertising expected torrent size too early causes players to request far ranges
+                // that are not downloaded yet and fail playback.
+                long fileLength = actualSize;
+                Log.d("StreamingServer", "Serving file: " + videoFile.getName() + ", expected: " + (expectedSize != null ? expectedSize : -1) + ", actual: " + actualSize);
 
                 try {
                     String mimeType = getMimeType(videoFile.getName());
                     
+                    if (fileLength <= 0) {
+                        Response resp = newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "text/plain", "Buffering");
+                        resp.addHeader("Retry-After", "1");
+                        return resp;
+                    }
+
                     // Handle range requests for seeking
                     String rangeHeader = session.getHeaders().get("range");
                     if (rangeHeader != null) {
@@ -200,7 +207,6 @@ public class TorrentStreamerModule extends ReactContextBaseJavaModule {
                     end = Long.parseLong(parts[1]);
                 }
                 
-                // Limit chunk size to 2MB for streaming
                 long maxChunk = 2 * 1024 * 1024;
                 if (end - start + 1 > maxChunk) {
                     end = start + maxChunk - 1;
@@ -221,11 +227,11 @@ public class TorrentStreamerModule extends ReactContextBaseJavaModule {
                     // The player is requesting bytes that aren't downloaded yet.
                     // Wait briefly for the file to grow instead of returning 416 (often treated as fatal).
                     Log.d("StreamingServer", "Waiting for buffered data. start=" + start + ", actual=" + actualFileSize);
-                    boolean ok = waitForFileSize(file, start + 1, 10_000);
+                    boolean ok = waitForFileSize(file, start + 1, 30_000);
                     if (!ok) {
-                        Response resp = newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "text/plain",
-                            "Not enough data buffered yet");
-                        resp.addHeader("Retry-After", "1");
+                        Response resp = newFixedLengthResponse(Response.Status.RANGE_NOT_SATISFIABLE, "text/plain",
+                            "Range not yet buffered");
+                        resp.addHeader("Content-Range", "bytes */" + Math.max(file.length(), 0));
                         resp.addHeader("Accept-Ranges", "bytes");
                         return resp;
                     }
@@ -239,29 +245,25 @@ public class TorrentStreamerModule extends ReactContextBaseJavaModule {
                 
                 Log.d("StreamingServer", "Serving range " + start + "-" + end + " of " + fileLength + " (actual: " + actualFileSize + ")");
                 
-                java.io.RandomAccessFile raf = new java.io.RandomAccessFile(file, "r");
-                raf.seek(start);
-                
-                byte[] buffer = new byte[(int) contentLength];
-                int bytesRead = raf.read(buffer);
-                raf.close();
-                
-                if (bytesRead < contentLength) {
-                    Log.w("StreamingServer", "Only read " + bytesRead + " of " + contentLength + " bytes");
-                    // Truncate buffer to actual bytes read
-                    if (bytesRead > 0) {
-                        byte[] truncated = new byte[bytesRead];
-                        System.arraycopy(buffer, 0, truncated, 0, bytesRead);
-                        buffer = truncated;
-                        contentLength = bytesRead;
-                        end = start + bytesRead - 1;
+                java.io.FileInputStream inputStream = new java.io.FileInputStream(file);
+                long toSkip = start;
+                while (toSkip > 0) {
+                    long skipped = inputStream.skip(toSkip);
+                    if (skipped <= 0) {
+                        int b = inputStream.read();
+                        if (b == -1) {
+                            inputStream.close();
+                            return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "text/plain", "Not enough data buffered yet");
+                        }
+                        skipped = 1;
                     }
+                    toSkip -= skipped;
                 }
-                
+
                 Response response = newFixedLengthResponse(
                     Response.Status.PARTIAL_CONTENT, 
                     mimeType, 
-                    new java.io.ByteArrayInputStream(buffer), 
+                    inputStream,
                     contentLength
                 );
                 response.addHeader("Content-Range", "bytes " + start + "-" + end + "/" + fileLength);
@@ -288,7 +290,7 @@ public class TorrentStreamerModule extends ReactContextBaseJavaModule {
     private static final String TAG = "TorrentStreamer";
 
     private static final String MODULE_NAME = "TorrentStreamer";
-    private static final int PREPARE_PIECES = 10; // pieces to download before ready (increased for reliability)
+    private static final int PREPARE_PIECES = 10;
     private final ReactApplicationContext reactContext;
     private SessionManager sessionManager;
     private StreamingServer streamingServer;
@@ -811,42 +813,28 @@ public class TorrentStreamerModule extends ReactContextBaseJavaModule {
             
             if (session.streamReady) return;
 
-            // Check if we have enough pieces to start streaming
+            // Check if we have enough data to start streaming
             if (session.torrentInfo != null) {
                 int pieceLength = session.torrentInfo.pieceLength();
-                long fileOffset = session.torrentInfo.files().fileOffset(session.selectedFileIndex);
-                int firstPiece = (int) (fileOffset / pieceLength);
-                int lastFilePiece = (int) ((fileOffset + session.torrentInfo.files().fileSize(session.selectedFileIndex)) / pieceLength);
-            
-            // Log which pieces we're checking
-            Log.d(TAG, "Piece finished alert - Piece: " + alert.pieceIndex() + 
-                       ", FirstPiece: " + firstPiece + ", LastFilePiece: " + lastFilePiece +
-                       ", Checking pieces " + firstPiece + " to " + (firstPiece + PREPARE_PIECES - 1));
-            
-            boolean ready = true;
-            StringBuilder missingPieces = new StringBuilder();
-            for (int i = firstPiece; i < firstPiece + PREPARE_PIECES && i < session.torrentInfo.numPieces(); i++) {
-                if (!handle.havePiece(i)) {
-                    ready = false;
-                    missingPieces.append(i).append(" ");
-                }
-            }
-            
-            if (!ready) {
-                Log.d(TAG, "Not ready yet, missing pieces: " + missingPieces.toString());
+                int minReadyBytes = Math.max(pieceLength * PREPARE_PIECES, 256 * 1024);
+                boolean ready = true;
+
+            // Check if the file exists on disk and has readable content
+            if (ready && session.videoFile == null) {
+                ready = false;
             }
 
-            // Also check if the file exists on disk and has readable content
             if (ready && session.videoFile != null) {
                 if (!session.videoFile.exists()) {
-                    Log.d(TAG, "Pieces ready but file doesn't exist yet: " + session.videoFile.getAbsolutePath());
+                    Log.d(TAG, "File doesn't exist yet: " + session.videoFile.getAbsolutePath());
                     ready = false;
                 } else if (session.videoFile.length() == 0) {
                     Log.d(TAG, "File exists but is empty: " + session.videoFile.getAbsolutePath());
                     ready = false;
+                } else if (session.videoFile.length() < minReadyBytes) {
+                    Log.d(TAG, "File exists but below ready threshold: " + session.videoFile.length() + " / " + minReadyBytes);
+                    ready = false;
                 } else {
-                    // Verify we can actually read non-zero bytes from the start of the file
-                    // This catches cases where libtorrent has the file but hasn't written the first bytes yet
                     ready = verifyFileReadable(session.videoFile, pieceLength);
                     if (!ready) {
                         Log.d(TAG, "File exists but first bytes not yet readable");
