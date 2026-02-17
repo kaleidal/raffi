@@ -1,7 +1,7 @@
 import { ConvexHttpClient } from "convex/browser";
 
-const PROD_CONVEX_URL = "https://qualified-meerkat-631.eu-west-1.convex.cloud";
-const DEV_CONVEX_URL = "https://nautical-poodle-361.eu-west-1.convex.cloud";
+const PROD_CONVEX_URL = "https://shiny-bloodhound-22.convex.cloud";
+const DEV_CONVEX_URL = "https://brainy-shrimp-254.convex.cloud";
 const CONVEX_URLS = import.meta.env.DEV
     ? [DEV_CONVEX_URL]
     : [PROD_CONVEX_URL];
