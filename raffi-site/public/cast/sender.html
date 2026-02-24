@@ -468,10 +468,14 @@
             "application/vnd.apple.mpegurl",
           );
           mediaInfo.streamType = chrome.cast.media.StreamType.BUFFERED;
+          const durationSeconds = Number(payload?.metadata?.durationSeconds || 0);
+          if (Number.isFinite(durationSeconds) && durationSeconds > 0) {
+            mediaInfo.duration = durationSeconds;
+          }
 
           const title = String(payload?.metadata?.title || "").trim();
           const subtitle = String(payload?.metadata?.subtitle || "").trim();
-          const cover = String(payload?.metadata?.cover || "").trim();
+          const cover = String(payload?.metadata?.cover || payload?.metadata?.background || "").trim();
 
           if (title || subtitle || cover) {
             const metadata = new chrome.cast.media.GenericMediaMetadata();
@@ -535,6 +539,7 @@
               title: String(params.get("title") || "Raffi"),
               subtitle: String(params.get("subtitle") || ""),
               cover: String(params.get("cover") || ""),
+              background: String(params.get("background") || ""),
             },
           };
         }

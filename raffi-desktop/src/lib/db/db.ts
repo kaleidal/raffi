@@ -102,14 +102,40 @@ type RemoteState = {
     listItems: ListItem[];
 };
 
+type RemoteStateSection = "addons" | "library" | "lists" | "listItems";
+
+type RemoteStateChunkResponse<T> = {
+    section: RemoteStateSection;
+    items: T[];
+    total: number;
+    nextOffset: number;
+    done: boolean;
+};
+
+type PendingLibraryProgressEntry = {
+    imdb_id: string;
+    progress: any;
+    type: string;
+    completed?: boolean;
+    poster?: string;
+    updated_at: number;
+};
+
 const LOCAL_USER_ID = "local-user";
 const LOCAL_ADDONS_KEY = "local:addons";
 const LOCAL_LIBRARY_KEY = "local:library";
 const LOCAL_LISTS_KEY = "local:lists";
 const LOCAL_LIST_ITEMS_KEY = "local:list_items";
+const LOCAL_PENDING_LIBRARY_PROGRESS_KEY = "local:pending_library_progress";
 const LOCAL_MODE_KEY = "local_mode_enabled";
 
 const CACHE_TTL_MS = 15_000;
+const REMOTE_PAGE_LIMITS: Record<RemoteStateSection, number> = {
+    addons: 250,
+    library: 100,
+    lists: 250,
+    listItems: 150,
+};
 
 const DEFAULT_ADDON = {
     transportUrl: "https://opensubtitles-v3.strem.io",
@@ -195,6 +221,148 @@ const getRequiredUserId = () => {
     return user.id;
 };
 
+const upsertLibraryItem = (
+    items: LibraryItem[],
+    imdb_id: string,
+    progress: any,
+    type: string,
+    completed?: boolean,
+    poster?: string,
+) => {
+    const existingIndex = items.findIndex((item) => item.imdb_id === imdb_id);
+    const nowIso = new Date().toISOString();
+    const next: LibraryItem = {
+        user_id: LOCAL_USER_ID,
+        imdb_id,
+        progress,
+        last_watched: nowIso,
+        completed_at: completed === true ? nowIso : null,
+        type,
+        shown: true,
+        poster: poster ?? items[existingIndex]?.poster,
+    };
+    if (completed === false) {
+        next.completed_at = null;
+    }
+    const updated = [...items];
+    if (existingIndex >= 0) {
+        updated[existingIndex] = { ...items[existingIndex], ...next };
+    } else {
+        updated.push(next);
+    }
+    return { updated, next };
+};
+
+const readPendingLibraryProgress = () =>
+    readLocal<PendingLibraryProgressEntry[]>(LOCAL_PENDING_LIBRARY_PROGRESS_KEY, []);
+
+const writePendingLibraryProgress = (entries: PendingLibraryProgressEntry[]) => {
+    writeLocal(LOCAL_PENDING_LIBRARY_PROGRESS_KEY, entries);
+};
+
+const queuePendingLibraryProgress = (entry: PendingLibraryProgressEntry) => {
+    const current = readPendingLibraryProgress();
+    const index = current.findIndex((item) => item.imdb_id === entry.imdb_id);
+    const next = [...current];
+    if (index >= 0) {
+        const existing = next[index];
+        const existingUpdatedAt = Number(existing?.updated_at ?? 0);
+        const nextUpdatedAt = Number(entry?.updated_at ?? 0);
+        next[index] = nextUpdatedAt >= existingUpdatedAt ? entry : existing;
+    } else {
+        next.push(entry);
+    }
+    writePendingLibraryProgress(next);
+};
+
+const updateRemoteCacheLibraryItem = (userId: string, nextItem: LibraryItem) => {
+    if (!remoteStateCache || remoteStateCache.userId !== userId) return;
+    const updated = [...remoteStateCache.data.library];
+    const index = updated.findIndex((item) => item.imdb_id === nextItem.imdb_id);
+    if (index >= 0) {
+        updated[index] = { ...updated[index], ...nextItem };
+    } else {
+        updated.push(nextItem);
+    }
+    remoteStateCache = {
+        ...remoteStateCache,
+        data: {
+            ...remoteStateCache.data,
+            library: updated,
+        },
+    };
+};
+
+export const flushPendingLibraryProgress = async (imdbId?: string) => {
+    if (isLocalModeActive()) {
+        return { flushed: 0, pending: 0 };
+    }
+
+    const userId = getRequiredUserId();
+    const pending = readPendingLibraryProgress();
+    if (pending.length === 0) {
+        return { flushed: 0, pending: 0 };
+    }
+
+    const targets = imdbId
+        ? pending.filter((entry) => entry.imdb_id === imdbId)
+        : pending;
+    if (targets.length === 0) {
+        return { flushed: 0, pending: pending.length };
+    }
+
+    const targetImdb = new Set(targets.map((entry) => entry.imdb_id));
+    const survivors = pending.filter((entry) => !targetImdb.has(entry.imdb_id));
+
+    try {
+        await convexMutation("raffi:updateLibraryProgressBatch", {
+            updates: targets,
+        });
+    } catch {
+        writePendingLibraryProgress(pending);
+        return { flushed: 0, pending: pending.length };
+    }
+
+    writePendingLibraryProgress(survivors);
+
+    if (targets.length > 0) {
+        const localItems = readLocal<LibraryItem[]>(LOCAL_LIBRARY_KEY, []);
+        const sanitized = localItems.map((item) => ({ ...item, user_id: userId }));
+        writeLocal(LOCAL_LIBRARY_KEY, sanitized);
+    }
+
+    return { flushed: targets.length, pending: survivors.length };
+};
+
+const fetchRemoteSection = async <T>(section: RemoteStateSection): Promise<T[]> => {
+    const pageLimit = REMOTE_PAGE_LIMITS[section];
+    let offset = 0;
+    const all: T[] = [];
+
+    while (true) {
+        const page = await convexQuery<RemoteStateChunkResponse<T>>("raffi:getStateChunk", {
+            section,
+            offset,
+            limit: pageLimit,
+        });
+        const items = page?.items || [];
+        all.push(...items);
+
+        if (page?.done || items.length === 0) {
+            break;
+        }
+
+        const nextOffset = Number(page?.nextOffset);
+        if (!Number.isFinite(nextOffset) || nextOffset <= offset) {
+            offset += items.length;
+        } else {
+            offset = nextOffset;
+        }
+    }
+
+    return all;
+};
+
 const getRemoteState = async (force = false): Promise<RemoteState> => {
     const userId = getRequiredUserId();
     const now = Date.now();
@@ -207,12 +375,18 @@ const getRemoteState = async (force = false): Promise<RemoteState> => {
         return remoteStateCache.data;
     }
 
-    const data = await convexQuery<RemoteState>("raffi:getState", {});
+    const [addons, library, lists, listItems] = await Promise.all([
+        fetchRemoteSection<Addon>("addons"),
+        fetchRemoteSection<LibraryItem>("library"),
+        fetchRemoteSection<List>("lists"),
+        fetchRemoteSection<ListItem>("listItems"),
+    ]);
+
     const normalized: RemoteState = {
-        addons: data?.addons || [],
-        library: data?.library || [],
-        lists: data?.lists || [],
-        listItems: data?.listItems || [],
+        addons,
+        library,
+        lists,
+        listItems,
     };
     remoteStateCache = { userId, data: normalized, updatedAt: now };
     return normalized;
@@ -335,7 +509,7 @@ export const syncLocalStateToUser = async (userId: string) => {
 export const syncUserStateToLocal = async (userId: string) => {
     if (!userId) return;
     clearLocalState();
-    const data = await convexQuery<RemoteState>("raffi:getState", {});
+    const data = await getRemoteState(true);
     writeLocal(LOCAL_ADDONS_KEY, data?.addons || []);
     writeLocal(LOCAL_LIBRARY_KEY, data?.library || []);
     writeLocal(LOCAL_LISTS_KEY, data?.lists || []);
@@ -441,41 +615,41 @@ export const updateLibraryProgress = async (
     completed?: boolean,
     poster?: string,
 ) => {
-    if (isLocalModeActive()) {
-        const items = readLocal<LibraryItem[]>(LOCAL_LIBRARY_KEY, []);
-        const existingIndex = items.findIndex((item) => item.imdb_id === imdb_id);
-        const next: LibraryItem = {
-            user_id: LOCAL_USER_ID,
-            imdb_id,
-            progress,
-            last_watched: new Date().toISOString(),
-            completed_at: completed === true ? new Date().toISOString() : null,
-            type,
-            shown: true,
-            poster: poster ?? items[existingIndex]?.poster,
-        };
-        if (completed === false) {
-            next.completed_at = null;
-        }
-        const updated = [...items];
-        if (existingIndex >= 0) {
-            updated[existingIndex] = { ...items[existingIndex], ...next };
-        } else {
-            updated.push(next);
-        }
-        writeLocal(LOCAL_LIBRARY_KEY, updated);
-        return next;
-    }
-
-    getRequiredUserId();
-    const result = await convexMutation<LibraryItem>("raffi:updateLibraryProgress", { imdb_id,
+    const items = readLocal<LibraryItem[]>(LOCAL_LIBRARY_KEY, []);
+    const { updated, next } = upsertLibraryItem(
+        items,
+        imdb_id,
         progress,
         type,
         completed,
         poster,
+    );
+    writeLocal(LOCAL_LIBRARY_KEY, updated);
+
+    if (isLocalModeActive()) {
+        return next;
+    }
+
+    const userId = getRequiredUserId();
+    const queuedAt = Date.now();
+    queuePendingLibraryProgress({
+        imdb_id,
+        progress,
+        type,
+        completed,
+        poster,
+        updated_at: queuedAt,
     });
-    invalidateRemoteCache();
-    return result;
+
+    updateRemoteCacheLibraryItem(userId, {
+        ...next,
+        user_id: userId,
+    });
+
+    return {
+        ...next,
+        user_id: userId,
+    };
 };
 
 export const updateLibraryPoster = async (imdb_id: string, poster: string) => {

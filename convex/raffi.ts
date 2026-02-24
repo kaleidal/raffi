@@ -308,6 +308,84 @@ export const getState = queryGeneric({
     },
 });
 
+export const getStateChunk = queryGeneric({
+    args: {
+        section: v.union(
+            v.literal("addons"),
+            v.literal("library"),
+            v.literal("lists"),
+            v.literal("listItems"),
+        ),
+        offset: v.optional(v.number()),
+        limit: v.optional(v.number()),
+    },
+    handler: async (ctx, args) => {
+        const userId = await requireAuthedUserId(ctx);
+        const rawOffset = Number(args.offset ?? 0);
+        const rawLimit = Number(args.limit ?? 200);
+        const offset = Number.isFinite(rawOffset) && rawOffset > 0 ? Math.floor(rawOffset) : 0;
+        const limit = Math.max(1, Math.min(1000, Number.isFinite(rawLimit) ? Math.floor(rawLimit) : 200));
+
+        if (args.section === "addons") {
+            const items = await collectByUser(ctx.db, "addons", userId);
+            const total = items.length;
+            const page = items.slice(offset, offset + limit);
+            return {
+                section: args.section,
+                items: page,
+                total,
+                nextOffset: offset + page.length,
+                done: offset + page.length >= total,
+            };
+        }
+
+        if (args.section === "lists") {
+            const items = await collectByUser(ctx.db, "lists", userId);
+            const total = items.length;
+            const page = items.slice(offset, offset + limit);
+            return {
+                section: args.section,
+                items: page,
+                total,
+                nextOffset: offset + page.length,
+                done: offset + page.length >= total,
+            };
+        }
+
+        if (args.section === "library") {
+            const items = await collectByUser(ctx.db, "libraries", userId);
+            const total = items.length;
+            const page = items.slice(offset, offset + limit);
+            return {
+                section: args.section,
+                items: page,
+                total,
+                nextOffset: offset + page.length,
+                done: offset + page.length >= total,
+            };
+        }
+
+        const lists = await collectByUser(ctx.db, "lists", userId);
+        const listIds = lists.map((list: any) => list.list_id);
+        let allListItems: any[] = [];
+        if (listIds.length > 0) {
+            const rows = await Promise.all(
+                listIds.map((listId: string) => collectListItemsByListId(ctx.db, listId)),
+            );
+            allListItems = rows.flat();
+        }
+        const total = allListItems.length;
+        const page = allListItems.slice(offset, offset + limit);
+        return {
+            section: args.section,
+            items: page,
+            total,
+            nextOffset: offset + page.length,
+            done: offset + page.length >= total,
+        };
+    },
+});
+
 export const ensureDefaultAddon = mutationGeneric({
     args: {
         addon: v.object({
@@ -512,6 +590,65 @@ export const updateLibraryProgress = mutationGeneric({
         }
         const id = await ctx.db.insert("libraries", patch);
         return ctx.db.get(id);
+    },
+});
+
+export const updateLibraryProgressBatch = mutationGeneric({
+    args: {
+        updates: v.array(v.object({
+            imdb_id: v.string(),
+            progress: v.any(),
+            type: v.string(),
+            completed: v.optional(v.boolean()),
+            poster: v.optional(v.string()),
+            updated_at: v.optional(v.number()),
+        })),
+    },
+    handler: async (ctx, args) => {
+        const userId = await requireAuthedUserId(ctx);
+        const dedupedByImdb = new Map<string, any>();
+
+        for (const row of args.updates || []) {
+            const previous = dedupedByImdb.get(row.imdb_id);
+            const previousUpdatedAt = Number(previous?.updated_at ?? 0);
+            const nextUpdatedAt = Number(row?.updated_at ?? 0);
+            if (!previous || nextUpdatedAt >= previousUpdatedAt) {
+                dedupedByImdb.set(row.imdb_id, row);
+            }
+        }
+
+        const now = getNowIso();
+        let applied = 0;
+
+        for (const row of dedupedByImdb.values()) {
+            const existing = await findLibraryByUserImdb(ctx.db, userId, row.imdb_id);
+            const patch = {
+                user_id: userId,
+                imdb_id: row.imdb_id,
+                progress: row.progress,
+                last_watched: now,
+                type: row.type,
+                shown: true,
+                completed_at: row.completed === true
+                    ? now
+                    : row.completed === false
+                        ? null
+                        : existing?.completed_at ?? null,
+                poster: optionalString(row.poster ?? existing?.poster),
+            };
+
+            if (existing) {
+                await ctx.db.patch(existing._id, patch);
+            } else {
+                await ctx.db.insert("libraries", patch);
+            }
+            applied += 1;
+        }
+
+        return {
+            ok: true,
+            applied,
+        };
     },
 });
 
