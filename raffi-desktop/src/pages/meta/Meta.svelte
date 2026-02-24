@@ -47,10 +47,22 @@
     $: imdbID = $router.params.imdbId;
     $: titleType = $router.params.type || "movie";
     $: expectedName = $router.params.name || "";
+    $: joinPartyId = $router.params.joinPartyId || null;
+    $: joinPartyAuto = Boolean($router.params.autoJoin);
+    $: openStreamsPopup = Boolean($router.params.openStreamsPopup);
+    $: partySeasonParam =
+        typeof $router.params.partySeason === "number"
+            ? $router.params.partySeason
+            : null;
+    $: partyEpisodeParam =
+        typeof $router.params.partyEpisode === "number"
+            ? $router.params.partyEpisode
+            : null;
 
     // Local state for player start
     let streamsModalKey = "initial";
     let unsupportedReason: string | null = null;
+    let partyJoinStreamPromptHandled = false;
 
     let useOverlayScrollHint = true;
     let viewportAspect = 16 / 9;
@@ -171,6 +183,46 @@
             );
             return parts.join("|") || "series:empty";
         })();
+    }
+
+    $: if (!joinPartyId || !joinPartyAuto || !openStreamsPopup) {
+        partyJoinStreamPromptHandled = false;
+    }
+
+    $: if (
+        !partyJoinStreamPromptHandled &&
+        joinPartyId &&
+        joinPartyAuto &&
+        openStreamsPopup &&
+        imdbID &&
+        $loadedMeta &&
+        $metaData &&
+        $selectedAddon
+    ) {
+        const isSeries = $metaData.meta?.type === "series";
+
+        let targetEpisode: any = { season: 0, episode: 0 };
+
+        if (isSeries) {
+            const videos = Array.isArray($metaData.meta?.videos)
+                ? $metaData.meta.videos
+                : [];
+
+            const matched = videos.find(
+                (video: any) =>
+                    video?.season === partySeasonParam &&
+                    video?.episode === partyEpisodeParam,
+            );
+
+            targetEpisode =
+                matched ||
+                (partySeasonParam != null && partyEpisodeParam != null
+                    ? { season: partySeasonParam, episode: partyEpisodeParam }
+                    : videos[0] || { season: 1, episode: 1 });
+        }
+
+        partyJoinStreamPromptHandled = true;
+        void StreamLogic.episodeClicked(targetEpisode, imdbID);
     }
 </script>
 

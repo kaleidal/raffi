@@ -150,6 +150,13 @@ export const playStream = (stream: Stream, progressMap: any, options?: { replace
 
         streamsPopupVisible.set(false);
 
+        const routerState = get(router);
+        const routeJoinPartyId =
+            typeof routerState?.params?.joinPartyId === "string"
+                ? routerState.params.joinPartyId
+                : null;
+        const routeAutoJoin = Boolean(routerState?.params?.autoJoin);
+
         router.navigate("player", {
             videoSrc: url,
             fileIdx,
@@ -157,6 +164,8 @@ export const playStream = (stream: Stream, progressMap: any, options?: { replace
             startTime,
             season: episode?.season ?? null,
             episode: episode?.episode ?? null,
+            joinPartyId: routeJoinPartyId,
+            autoJoin: routeJoinPartyId ? routeAutoJoin : false,
         }, { replace: options?.replace });
     } else {
         console.warn("Stream has no URL", stream);
