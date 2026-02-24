@@ -17,6 +17,7 @@ import (
 	"raffi-server/src/stream/hls"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -25,6 +26,8 @@ type Server struct {
 	sessions        session.Store
 	torrentStreamer *stream.TorrentStreamer
 	hlsController   *hls.Controller
+	probeMu         sync.Mutex
+	probeCooldown   map[string]time.Time
 }
 
 func main() {
@@ -32,6 +35,7 @@ func main() {
 		sessions:        session.NewMemoryStore(),
 		torrentStreamer: stream.NewTorrentStreamer(filepath.Join(os.TempDir(), "raffi-torrents")),
 		hlsController:   hls.NewController(),
+		probeCooldown:   make(map[string]time.Time),
 	}
 
 	// Set up cleanup on exit
@@ -245,6 +249,26 @@ func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request, id str
 		}
 
 		if sess.DurationSeconds == 0 || len(sess.Chapters) == 0 || len(sess.AvailableStreams) == 0 {
+			if sess.IsTorrent && sess.TorrentInfoHash != "" {
+				status, ok := s.torrentStreamer.GetStatus(sess.TorrentInfoHash)
+				if !ok || !status.Ready {
+					writeJSON(w, sess)
+					return
+				}
+				if status.PiecesComplete <= 0 {
+					writeJSON(w, sess)
+					return
+				}
+
+				s.probeMu.Lock()
+				cooldownUntil := s.probeCooldown[sess.ID]
+				s.probeMu.Unlock()
+				if !cooldownUntil.IsZero() && time.Now().Before(cooldownUntil) {
+					writeJSON(w, sess)
+					return
+				}
+			}
+
 			var meta *hls.Metadata
 			var probeErr error
 			maxAttempts := 3
@@ -272,6 +296,10 @@ func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request, id str
 			}
 
 			if probeErr == nil && meta != nil {
+				s.probeMu.Lock()
+				delete(s.probeCooldown, sess.ID)
+				s.probeMu.Unlock()
+
 				sess.DurationSeconds = meta.Format.DurationSeconds
 				sess.Chapters = make([]session.Chapter, len(meta.Chapters))
 				for i, c := range meta.Chapters {
@@ -306,6 +334,11 @@ func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request, id str
 					sess.AudioIndex = preferredIndex
 				}
 			} else if probeErr != nil {
+				if sess.IsTorrent {
+					s.probeMu.Lock()
+					s.probeCooldown[sess.ID] = time.Now().Add(10 * time.Second)
+					s.probeMu.Unlock()
+				}
 				log.Printf("metadata probe failed for session %s: %v", sess.ID, probeErr)
 			}
 		}
