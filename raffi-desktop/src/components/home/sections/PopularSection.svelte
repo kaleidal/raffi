@@ -7,6 +7,7 @@
     import { Flame, ChevronLeft, ChevronRight } from "lucide-svelte";
     import TitleContextMenu from "../context_menus/TitleContextMenu.svelte";
     import ListsPopup from "../../meta/modals/ListsPopup.svelte";
+    import PosterImage from "./PosterImage.svelte";
 
     export let popularMeta: PopularTitleMeta[] = [];
 
@@ -116,10 +117,10 @@
                         on:contextmenu={(e) =>
                             handleContextMenu(e, title.imdb_id, title.type)}
                     >
-                        <img
+                        <PosterImage
                             src={title.poster}
-                            alt=""
-                            class="w-full h-full object-cover"
+                            title={title.name}
+                            alt={title.name || "Popular title poster"}
                         />
                     </button>
                 {/each}

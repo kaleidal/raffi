@@ -6,6 +6,7 @@
     import ListsPopup from "../../meta/modals/ListsPopup.svelte";
     import { onMount } from "svelte";
     import { ChevronLeft, ChevronRight } from "lucide-svelte";
+    import PosterImage from "./PosterImage.svelte";
  
     export let genre: string;
     export let titles: PopularTitleMeta[];
@@ -108,10 +109,10 @@
                     on:contextmenu={(e) =>
                         handleContextMenu(e, title.imdb_id, title.type)}
                 >
-                    <img
+                    <PosterImage
                         src={title.poster}
-                        alt={title.name}
-                        class="w-full h-full object-cover"
+                        title={title.name}
+                        alt={title.name || `${genre} title poster`}
                     />
                 </button>
             {/each}
