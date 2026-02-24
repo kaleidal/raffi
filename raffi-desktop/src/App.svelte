@@ -22,6 +22,8 @@
     } from "./lib/stores/authStore";
     import { initAnalytics, setAnalyticsUser, trackEvent, trackPageView } from "./lib/analytics";
     import { formatReleaseNotes } from "./lib/updateNotes";
+    import { userZoom } from "./lib/stores/settingsStore";
+    import ZoomModal from "./components/common/ZoomModal.svelte";
 
     const pages = {
         home: Home,
@@ -66,6 +68,25 @@
     };
 
     const handleUpdateTestKey = (event: KeyboardEvent) => {
+        if (event.ctrlKey) {
+            const key = event.key.toLowerCase();
+            if (key === "=" || key === "+" || (event.shiftKey && (key === "=" || key === "+"))) {
+                event.preventDefault();
+                userZoom.update(z => Math.min(z + 0.1, 2.0));
+                return;
+            }
+            if (key === "-" || key === "_" || (event.shiftKey && (key === "-" || key === "_"))) {
+                event.preventDefault();
+                userZoom.update(z => Math.max(z - 0.1, 0.5));
+                return;
+            }
+            if (key === "0" || (event.shiftKey && key === "0")) {
+                event.preventDefault();
+                userZoom.set(1.0);
+                return;
+            }
+        }
+
         if (!event.ctrlKey || !event.shiftKey) return;
         const key = event.key.toLowerCase();
         if (key === "t") {
@@ -283,7 +304,7 @@
     <div class="relative flex-1 min-h-0 overflow-x-hidden overflow-y-auto" data-scroll-container>
         <div
             class="w-full h-full"
-            style={`transform: scale(${displayZoom}); transform-origin: top left; width: calc(100% / ${displayZoom}); height: calc(100% / ${displayZoom});`}
+            style={`transform: scale(${displayZoom * $userZoom}); transform-origin: top left; width: calc(100% / ${displayZoom * $userZoom}); height: calc(100% / ${displayZoom * $userZoom});`}
         >
             {#if checkingAuth}
                 <div class="w-full h-full bg-[#090909] flex items-center justify-center">
@@ -294,6 +315,8 @@
             {/if}
         </div>
     </div>
+
+    <ZoomModal />
 
     {#if showUpdatePrompt}
         <div

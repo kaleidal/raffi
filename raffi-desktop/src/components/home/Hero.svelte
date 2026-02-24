@@ -146,7 +146,7 @@
 </script>
 
 <div
-    class="w-full relative overflow-hidden aspect-21/9"
+    class="w-full relative overflow-hidden aspect-21/9 bg-[#090909] isolate"
     bind:this={container}
 >
     <div
@@ -196,7 +196,7 @@
     </div>
 
     <div
-        class="absolute inset-0 w-full h-full scale-[1.35] pointer-events-none"
+        class="absolute -left-[2px] -right-[2px] top-0 -bottom-[8px] w-[calc(100%+4px)] h-[calc(100%+8px)] overflow-hidden scale-[1.35] pointer-events-none will-change-transform"
     >
         {#if trailerSrc}
             <iframe
@@ -204,16 +204,17 @@
                 frameborder="0"
                 referrerpolicy="strict-origin-when-cross-origin"
                 src={trailerSrc}
-                class="w-full h-full object-cover"
+                class="w-full h-[calc(100%+8px)] -translate-y-[2px] object-cover"
                 title="Trailer"
                 on:load={handleTrailerLoad}
             ></iframe>
         {/if}
     </div>
     <div
-        class="absolute inset-0 bg-gradient-to-t from-[#090909] via-transparent to-transparent"
+        class="absolute inset-0 z-[1] bg-gradient-to-t from-[#090909] via-[#090909]/80 to-transparent"
     ></div>
     <div
-        class="absolute inset-0 bg-gradient-to-r from-[#090909]/80 via-transparent to-transparent"
+        class="absolute inset-0 z-[1] bg-gradient-to-r from-[#090909]/80 via-transparent to-transparent"
     ></div>
+    <div class="absolute bottom-0 left-0 right-0 h-[14px] z-[2] bg-[#090909]"></div>
 </div>
