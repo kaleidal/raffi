@@ -27,6 +27,8 @@ export const loadingStreams = writable<boolean>(false);
 export const selectedStream = writable<Stream | null>(null);
 export const selectedStreamUrl = writable<string | null>(null);
 export const selectedFileIdx = writable<number | null>(null);
+export const failedStreamKeys = writable<string[]>([]);
+export const streamFailureMessage = writable<string>("");
 export const selectedAddon = writable<string>("");
 export const addons = writable<Addon[]>([]);
 
@@ -61,6 +63,8 @@ export function resetMetaState() {
     selectedStream.set(null);
     selectedStreamUrl.set(null);
     selectedFileIdx.set(null);
+    failedStreamKeys.set([]);
+    streamFailureMessage.set("");
     selectedAddon.set("");
     addons.set([]);
     streamsPopupVisible.set(false);

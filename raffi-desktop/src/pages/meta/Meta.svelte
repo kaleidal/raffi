@@ -39,6 +39,7 @@
     import * as DataLoader from "./dataLoader";
     import * as StreamLogic from "./streamLogic";
     import * as ProgressLogic from "./progressLogic";
+    import { hydrateStreamFailures } from "./streamFailures";
     import ActionButtons from "../../components/meta/ActionButtons.svelte";
     import MetaInfo from "./components/MetaInfo.svelte";
     import UnsupportedTitleModal from "../../components/meta/modals/UnsupportedTitleModal.svelte";
@@ -94,6 +95,7 @@
 
     onMount(async () => {
         resetMetaState();
+        hydrateStreamFailures();
         await DataLoader.loadAddons();
         updateViewportAspect();
         window.addEventListener("resize", updateViewportAspect);
