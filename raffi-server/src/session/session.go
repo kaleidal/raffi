@@ -47,6 +47,7 @@ type Chapter struct {
 type Store interface {
 	Create(source string, kind SessionKind, startTime float64) (*Session, error)
 	Get(id string) (*Session, error)
+	Delete(id string) error
 }
 
 type memoryStore struct {
@@ -102,6 +103,16 @@ func (s *memoryStore) Get(id string) (*Session, error) {
 		return nil, errors.New("not found")
 	}
 	return sess, nil
+}
+
+func (s *memoryStore) Delete(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.sessions[id]; !ok {
+		return errors.New("not found")
+	}
+	delete(s.sessions, id)
+	return nil
 }
 
 func TempDirForSession(id string) string {
