@@ -14,7 +14,12 @@ type TrackEvent = (name: string, payload?: Record<string, unknown>) => void;
 type CastMetadata = {
     title?: string;
     subtitle?: string;
+    cover?: string;
+    background?: string;
+    durationSeconds?: number;
 };
+
+type CastMode = "native" | "chrome";
 
 type CreatePlayerCastControllerDeps = {
     getSessionId: () => string;
@@ -23,13 +28,17 @@ type CreatePlayerCastControllerDeps = {
     setCastBusy: (busy: boolean) => void;
     setCastActive: (active: boolean) => void;
     setCastDeviceName: (name: string) => void;
+    setCastTransport: (mode: CastMode | null) => void;
+    getCastTransport: () => CastMode | null;
+    setHasStarted: (started: boolean) => void;
     getCurrentTime: () => number;
+    getPlaybackOffset: () => number;
     setCurrentTime: (time: number) => void;
     setVolumeLevel: (level: number) => void;
     setIsPlaying: (playing: boolean) => void;
     setPendingSeek: (time: number | null) => void;
     pauseLocalVideo: () => void;
-    showDeviceScanLoading: () => void;
+    showDeviceScanLoading: (mode: CastMode) => void;
     hideDevicePicker: () => void;
     showAlert: (message: string, title: string) => Promise<void>;
     trackEvent: TrackEvent;
@@ -41,6 +50,7 @@ export function createPlayerCastController(deps: CreatePlayerCastControllerDeps)
     const setDisconnectedState = () => {
         deps.setCastActive(false);
         deps.setCastDeviceName("");
+        deps.setCastTransport(null);
     };
 
     const stopAndDisconnect = async () => {
@@ -57,7 +67,7 @@ export function createPlayerCastController(deps: CreatePlayerCastControllerDeps)
         setDisconnectedState();
     };
 
-    const connectOrDisconnect = async () => {
+    const connectOrDisconnect = async (mode: CastMode = "native", deviceId?: string) => {
         if (deps.isCastBusy()) {
             return;
         }
@@ -73,17 +83,24 @@ export function createPlayerCastController(deps: CreatePlayerCastControllerDeps)
                 return;
             }
 
-            deps.showDeviceScanLoading();
+            deps.showDeviceScanLoading(mode);
             const cast = await createCastBootstrap(sessionId, 900);
+            const absoluteCurrentTime = deps.getCurrentTime();
+            const playbackOffset = Math.max(0, Number(deps.getPlaybackOffset() || 0));
+            const streamRelativeStartTime = Math.max(0, absoluteCurrentTime - playbackOffset);
 
-            await connectAndLoadCast({
+            const connection = await connectAndLoadCast({
+                deviceId,
                 streamUrl: cast.streamUrl,
-                startTime: deps.getCurrentTime(),
+                startTime: streamRelativeStartTime,
+                mode,
                 metadata: deps.getMetadata(),
             });
 
             deps.setCastActive(true);
-            deps.setCastDeviceName("Chromecast");
+            deps.setCastDeviceName(String(connection?.deviceName || (mode === "chrome" ? "Chromecast (Chrome)" : "Chromecast")));
+            deps.setCastTransport((connection?.transport as CastMode | undefined) || mode);
+            deps.setHasStarted(true);
             deps.pauseLocalVideo();
             deps.setIsPlaying(true);
             deps.hideDevicePicker();
@@ -93,10 +110,14 @@ export function createPlayerCastController(deps: CreatePlayerCastControllerDeps)
                 localIp: cast.localIp,
                 port: cast.port,
                 deviceId: "google-cast-session",
-                deviceName: "Cast Receiver",
+                deviceName: String(connection?.deviceName || "Cast Receiver"),
+                transport: (connection?.transport as CastMode | undefined) || mode,
                 ...deps.getPlaybackAnalyticsProps(),
             });
-            await deps.showAlert("Connected to Chromecast.", "Cast Connected");
+            const message = mode === "chrome"
+                ? "Casting launched in Chrome. Playback is running on your TV."
+                : "Connected to Chromecast.";
+            await deps.showAlert(message, "Cast Connected");
         } catch (error) {
             deps.hideDevicePicker();
             const details = error instanceof Error ? error.message : String(error);
@@ -122,9 +143,14 @@ export function createPlayerCastController(deps: CreatePlayerCastControllerDeps)
     };
 
     const seek = async (targetTime: number) => {
+        if (deps.getCastTransport() !== "native") {
+            return;
+        }
+        const playbackOffset = Math.max(0, Number(deps.getPlaybackOffset() || 0));
+        const streamRelativeTarget = Math.max(0, Number(targetTime || 0) - playbackOffset);
         deps.setPendingSeek(targetTime);
         try {
-            await seekCast(targetTime);
+            await seekCast(streamRelativeTarget);
             deps.setCurrentTime(targetTime);
         } finally {
             deps.setPendingSeek(null);
@@ -132,6 +158,9 @@ export function createPlayerCastController(deps: CreatePlayerCastControllerDeps)
     };
 
     const togglePlay = async (isCurrentlyPlaying: boolean) => {
+        if (deps.getCastTransport() !== "native") {
+            return;
+        }
         if (isCurrentlyPlaying) {
             await pauseCast();
             deps.setIsPlaying(false);
@@ -142,6 +171,9 @@ export function createPlayerCastController(deps: CreatePlayerCastControllerDeps)
     };
 
     const setVolume = async (nextVolume: number) => {
+        if (deps.getCastTransport() !== "native") {
+            return;
+        }
         const clamped = Math.max(0, Math.min(1, nextVolume));
         deps.setVolumeLevel(clamped);
         await setCastVolume(clamped);
