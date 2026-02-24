@@ -9,9 +9,10 @@ import (
 )
 
 const (
-	throttleCycleWindow       = time.Second
-	throttleActivePortion     = 600 * time.Millisecond // ~60% active
-	throttleMinAheadToEngage  = 12 * time.Second
+	throttleCycleWindow      = time.Second
+	throttleActivePortion    = 600 * time.Millisecond // ~60% active
+	throttleMinAheadToEngage = 12 * time.Second
+	clientDemandResumeGrace  = 4 * time.Second
 )
 
 func (c *Controller) monitorBuffer(id string, ctx context.Context) {
@@ -45,6 +46,14 @@ func (c *Controller) adjustThrottleLocked(sess *Session) {
 		}
 	}
 
+	if !sess.DemandResumeUntil.IsZero() && time.Now().Before(sess.DemandResumeUntil) {
+		if sess.Paused && sess.PausedByCap {
+			sess.PausedByCap = false
+			resumeProcessPlatform(sess, c, sess.ID, sess.Source)
+		}
+		return
+	}
+
 	mediaSeq, segCount, err := readPlaylistState(filepath.Join(sess.WorkDir, fmt.Sprintf("slice_%03d", sess.SliceIndex), "child.m3u8"))
 	if err != nil || segCount == 0 {
 		return
@@ -56,14 +65,42 @@ func (c *Controller) adjustThrottleLocked(sess *Session) {
 
 	switch {
 	case aheadDuration >= MaxBufferAhead && !sess.Paused:
-		sess.PausedByCap = false
-		pauseProcess(sess)
+		// For HTTP sources, permanent pause causes connection drops.
+		// We will handle them with duty-cycle throttling below.
+		if src := sess.Source; src == "" || (!strings.HasPrefix(src, "http://") && !strings.HasPrefix(src, "https://")) {
+			sess.PausedByCap = true
+			pauseProcess(sess)
+		}
 	case aheadDuration <= MaxBufferAhead/2 && sess.Paused:
 		sess.PausedByCap = false
 		resumeProcessPlatform(sess, c, sess.ID, sess.Source)
 	}
 
-	if aheadDuration >= MaxBufferAhead || aheadDuration <= MaxBufferAhead/2 {
+	if aheadDuration >= MaxBufferAhead {
+		// If it's a local file, it's already paused permanently above.
+		// If it's an HTTP source, we apply a very strict duty cycle to keep the connection alive
+		// without buffering too much.
+		now := time.Now()
+		phase := time.Duration(now.UnixNano()) % throttleCycleWindow
+		// 2% active portion (20ms per second) to keep connection alive but barely generate segments
+		allowWork := phase < (20 * time.Millisecond)
+
+		if allowWork {
+			if sess.Paused {
+				sess.PausedByCap = false
+				resumeProcessPlatform(sess, c, sess.ID, sess.Source)
+			}
+			return
+		}
+
+		if !sess.Paused {
+			sess.PausedByCap = true
+			pauseProcess(sess)
+		}
+		return
+	}
+
+	if aheadDuration <= MaxBufferAhead/2 {
 		return
 	}
 
@@ -121,4 +158,26 @@ func (c *Controller) MarkSegmentServed(id, filename string) {
 	}
 	c.adjustThrottleLocked(sess)
 	c.mu.Unlock()
+}
+
+func (c *Controller) NotifyClientAssetRequest(id string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	sess := c.sessions[id]
+	if sess == nil {
+		return
+	}
+
+	sess.DemandResumeUntil = time.Now().Add(clientDemandResumeGrace)
+
+	// If throttling paused ffmpeg and a client is actively requesting assets,
+	// resume immediately so waitForFile can make progress.
+	if sess.Paused && sess.PausedByCap {
+		sess.PausedByCap = false
+		resumeProcessPlatform(sess, c, id, sess.Source)
+	}
+
+	// Re-evaluate cap state after the resume signal.
+	c.adjustThrottleLocked(sess)
 }

@@ -1,7 +1,27 @@
 function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, baseDir }) {
   const ChromecastAPI = require("chromecast-api");
   const CastV2Client = require("castv2-client").Client;
-  const DefaultMediaReceiver = require("castv2-client").DefaultMediaReceiver;
+  const Application = require("castv2-client").Application;
+  const MediaController = require("castv2-client").MediaController;
+
+  const defaultReceiverAppId = "29330CDE";
+
+  class RaffiMediaReceiver extends Application {
+    constructor(client, session) {
+      super(client, session);
+      this.media = this.createController(MediaController);
+      this.media.on("status", (status) => {
+        this.emit("status", status);
+      });
+    }
+    getStatus(callback) { this.media.getStatus(callback); }
+    load(media, options, callback) { this.media.load(media, options, callback); }
+    play(callback) { this.media.play(callback); }
+    pause(callback) { this.media.pause(callback); }
+    stop(callback) { this.media.stop(callback); }
+    seek(currentTime, callback) { this.media.seek(currentTime, callback); }
+  }
+  RaffiMediaReceiver.APP_ID = defaultReceiverAppId;
 
   let senderWindow = null;
   let senderReadyPromise = null;
@@ -19,12 +39,13 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, ba
   let nativeLastKnownTimeSeconds = 0;
   let nativeLastKnownAtMs = 0;
   let nativeIsPlaying = false;
+  let nativeDurationSeconds = 0;
+  let activeMetadata = null;
   let chromeLastKnownTimeSeconds = 0;
   let chromeLastKnownAtMs = 0;
   let chromeIsPlaying = false;
 
   const senderBridgeUrl = "https://raffi.al/cast/sender.html";
-  const defaultReceiverAppId = "29330CDE";
 
   function normalizeDevice(device) {
     return {
@@ -202,9 +223,12 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, ba
 
   function buildLegacyMedia({ streamUrl, metadata }) {
     const coverUrl = String(metadata?.cover || metadata?.background || "").trim();
+    const normalizedUrl = String(streamUrl || "").trim();
+    const lowerUrl = normalizedUrl.toLowerCase();
+    const isHlsPlaylist = lowerUrl.includes(".m3u8") || lowerUrl.includes("stream?stream=");
     const media = {
-      url: String(streamUrl || ""),
-      contentType: "application/vnd.apple.mpegurl",
+      url: normalizedUrl,
+      contentType: isHlsPlaylist ? "application/vnd.apple.mpegurl" : "video/mp2t",
       streamType: "BUFFERED",
       cover: {
         title: String(metadata?.title || "Raffi"),
@@ -275,9 +299,9 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, ba
     });
 
     const player = await new Promise((resolve, reject) => {
-      castClient.launch(DefaultMediaReceiver, (error, launchedPlayer) => {
+      castClient.launch(RaffiMediaReceiver, (error, launchedPlayer) => {
         if (error || !launchedPlayer) {
-          reject(error || new Error("Failed to launch DefaultMediaReceiver"));
+          reject(error || new Error("Failed to launch RaffiMediaReceiver"));
           return;
         }
         resolve(launchedPlayer);
@@ -289,19 +313,26 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, ba
     const media = buildLegacyMedia({ streamUrl, metadata });
     const startAt = Math.max(0, Number(startTime || 0));
 
-    await callNativePlayer("load", {
+    const durationSeconds = Number(media.duration);
+    const hasDuration = Number.isFinite(durationSeconds) && durationSeconds > 0;
+
+    const loadRequest = {
       contentId: media.url,
       contentType: media.contentType,
       streamType: media.streamType,
-      duration: media.duration,
       metadata: {
-        type: 0,
-        metadataType: 0,
+        metadataType: 1,
         title: media.cover.title,
         subtitle: media.cover.subtitle,
         images: media.cover.url ? [{ url: media.cover.url }] : [],
       },
-    }, {
+      customData: hasDuration ? { durationSeconds } : {},
+    };
+    if (hasDuration) {
+      loadRequest.duration = durationSeconds;
+    }
+
+    await callNativePlayer("load", loadRequest, {
       autoplay: true,
       currentTime: startAt,
     });
@@ -314,6 +345,8 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, ba
     nativeLastKnownTimeSeconds = startAt;
     nativeLastKnownAtMs = Date.now();
     nativeIsPlaying = true;
+    nativeDurationSeconds = Number(media.duration || 0);
+    activeMetadata = metadata || null;
 
     return {
       active: true,
@@ -720,13 +753,6 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, ba
 
   async function stop() {
     if (activeTransport === "native") {
-      if (activeLegacyDevice) {
-        try {
-          await callDevice(activeLegacyDevice, "stop");
-        } catch {
-          // ignore
-        }
-      }
       activeMediaUrl = "";
       activeDeviceName = "";
       activeTransport = "";
@@ -735,6 +761,8 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, ba
       nativeLastKnownTimeSeconds = 0;
       nativeLastKnownAtMs = 0;
       nativeIsPlaying = false;
+      nativeDurationSeconds = 0;
+      activeMetadata = null;
       return;
     }
     if (activeTransport === "chrome") {
@@ -760,6 +788,8 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, ba
       nativeLastKnownTimeSeconds = 0;
       nativeLastKnownAtMs = 0;
       nativeIsPlaying = false;
+      nativeDurationSeconds = 0;
+      activeMetadata = null;
       return;
     }
     if (activeTransport === "chrome") {
@@ -811,12 +841,17 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, ba
       const nowMs = Date.now();
       let current = null;
       let playerState = "UNKNOWN";
+      let reportedDuration = null;
 
       if (nativeCastPlayer && typeof nativeCastPlayer.getStatus === "function") {
         try {
           const legacyStatus = await callNativePlayer("getStatus");
           playerState = parseLegacyPlayerState(legacyStatus);
           current = parseLegacyCurrentTime(legacyStatus);
+          const mediaDur = Number(legacyStatus?.media?.duration ?? legacyStatus?.duration ?? 0);
+          if (Number.isFinite(mediaDur) && mediaDur > 0) {
+            reportedDuration = mediaDur;
+          }
         } catch {
           // fallback to getCurrentTime below
         }
@@ -829,9 +864,19 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, ba
           if (playerState === "UNKNOWN") {
             playerState = parseLegacyPlayerState(maybeTime);
           }
+          if (reportedDuration == null) {
+            const mediaDur = Number(maybeTime?.media?.duration ?? maybeTime?.duration ?? 0);
+            if (Number.isFinite(mediaDur) && mediaDur > 0) {
+              reportedDuration = mediaDur;
+            }
+          }
         }
       } catch {
         current = null;
+      }
+
+      if (reportedDuration != null && reportedDuration > 0 && nativeDurationSeconds <= 0) {
+        nativeDurationSeconds = reportedDuration;
       }
 
       const pausedState = playerState.includes("PAUSE") || playerState.includes("IDLE");
@@ -864,6 +909,7 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, ba
         mediaUrl: activeMediaUrl,
         playerState,
         currentTime: Number.isFinite(Number(current)) ? Number(current) : 0,
+        duration: nativeDurationSeconds > 0 ? nativeDurationSeconds : undefined,
         volumeLevel: 0,
         deviceName: activeDeviceName || "Chromecast",
         transport: activeTransport,
@@ -925,6 +971,60 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, ba
     senderReadyPromise = null;
   }
 
+  async function reloadMedia({ durationSeconds }) {
+    if (activeTransport !== "native" || !nativeCastPlayer || !activeMediaUrl) {
+      return false;
+    }
+
+    const dur = Number(durationSeconds || 0);
+    if (!Number.isFinite(dur) || dur <= 0) {
+      return false;
+    }
+
+    if (nativeDurationSeconds > 0) {
+      return false;
+    }
+
+    const currentPos = Math.max(0, nativeLastKnownTimeSeconds);
+    const wasPlaying = nativeIsPlaying;
+
+    const updatedMetadata = { ...(activeMetadata || {}), durationSeconds: dur };
+    const media = buildLegacyMedia({ streamUrl: activeMediaUrl, metadata: updatedMetadata });
+
+    const loadRequest = {
+      contentId: media.url,
+      contentType: media.contentType,
+      streamType: media.streamType,
+      metadata: {
+        metadataType: 1,
+        title: media.cover.title,
+        subtitle: media.cover.subtitle,
+        images: media.cover.url ? [{ url: media.cover.url }] : [],
+      },
+      customData: { durationSeconds: dur },
+      duration: dur,
+    };
+
+    try {
+      await callNativePlayer("load", loadRequest, {
+        autoplay: wasPlaying,
+        currentTime: currentPos,
+      });
+
+      nativeDurationSeconds = dur;
+      activeMetadata = updatedMetadata;
+      nativeLastKnownTimeSeconds = currentPos;
+      nativeLastKnownAtMs = Date.now();
+      nativeIsPlaying = wasPlaying;
+
+      logToFile("Cast media reloaded with duration", { durationSeconds: dur, currentPos });
+      return true;
+    } catch (error) {
+      logToFile("Cast media reload failed", { error: String(error?.message || error) });
+      return false;
+    }
+  }
+
   return {
     listDevices,
     connectAndLoad,
@@ -935,6 +1035,7 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, ba
     seek,
     setVolume,
     getStatus,
+    reloadMedia,
     shutdown,
   };
 }

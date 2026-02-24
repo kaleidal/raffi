@@ -22,6 +22,7 @@ export type CastStatus = {
     mediaUrl?: string;
     playerState?: string;
     currentTime?: number;
+    duration?: number;
     volumeLevel?: number;
     raw?: unknown;
 };
@@ -132,4 +133,10 @@ export async function getCastStatus(): Promise<CastStatus> {
     const api = getCastApi();
     if (!api.status) throw new Error("Cast status API unavailable");
     return api.status() as Promise<CastStatus>;
+}
+
+export async function reloadCastMedia(durationSeconds: number): Promise<boolean> {
+    const api = getCastApi();
+    if (!api.reloadMedia) throw new Error("Cast reloadMedia API unavailable");
+    return api.reloadMedia({ durationSeconds }) as Promise<boolean>;
 }

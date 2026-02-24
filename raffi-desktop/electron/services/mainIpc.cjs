@@ -361,6 +361,18 @@ function registerMainIpcHandlers({
       throw error;
     }
   });
+
+  ipcMain.handle("CAST_RELOAD_MEDIA", async (_event, payload) => {
+    try {
+      if (!castSenderService?.reloadMedia) {
+        throw new Error("Cast sender service unavailable");
+      }
+      return await castSenderService.reloadMedia(payload || {});
+    } catch (error) {
+      logToFile("CAST_RELOAD_MEDIA failed", error);
+      throw error;
+    }
+  });
 }
 
 module.exports = {

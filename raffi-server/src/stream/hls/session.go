@@ -23,9 +23,10 @@ type Session struct {
 	AvailableStreams []session.StreamInfo
 	Finished         bool
 
-	LastServedSeq int
-	Paused        bool
-	PausedByCap   bool
+	LastServedSeq     int
+	Paused            bool
+	PausedByCap       bool
+	DemandResumeUntil time.Time
 
 	SliceIndex int
 	LastSeekID string

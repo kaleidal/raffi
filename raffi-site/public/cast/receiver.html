@@ -32,7 +32,15 @@
 
       playerManager.setMessageInterceptor(
         cast.framework.messages.MessageType.LOAD,
-        (request) => request,
+        (request) => {
+          if (request.media) {
+            request.media.streamType = cast.framework.messages.StreamType.BUFFERED;
+            if (request.media.customData && request.media.customData.durationSeconds) {
+              request.media.duration = request.media.customData.durationSeconds;
+            }
+          }
+          return request;
+        },
       );
 
       context.start({
