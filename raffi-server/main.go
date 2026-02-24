@@ -403,6 +403,9 @@ func (s *Server) handleHLSSessionAsset(w http.ResponseWriter, r *http.Request, s
 		http.Error(w, "failed to prepare stream", http.StatusInternalServerError)
 		return
 	}
+	if s.hlsController != nil {
+		s.hlsController.NotifyClientAssetRequest(sess.ID)
+	}
 	castToken := castTokenFromRequest(r)
 
 	if asset == "child.m3u8" {

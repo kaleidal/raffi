@@ -45,6 +45,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
         stop: () => ipcRenderer.invoke('CAST_STOP'),
         disconnect: () => ipcRenderer.invoke('CAST_DISCONNECT'),
         status: () => ipcRenderer.invoke('CAST_STATUS'),
+        reloadMedia: (payload) => ipcRenderer.invoke('CAST_RELOAD_MEDIA', payload),
     },
     windowControls: {
         minimize: () => ipcRenderer.send('WINDOW_MINIMIZE'),
