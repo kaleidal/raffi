@@ -192,6 +192,19 @@
           }
         }
 
+        function getCastStateName() {
+          if (!castFrameworkAvailable) {
+            return "SDK_UNAVAILABLE";
+          }
+          try {
+            const context = cast.framework.CastContext.getInstance();
+            const state = context.getCastState();
+            return String(state || "UNKNOWN");
+          } catch {
+            return "UNKNOWN";
+          }
+        }
+
         async function beginInteractiveSession(payload) {
           await ensureReady(payload);
           const context = cast.framework.CastContext.getInstance();
@@ -208,15 +221,18 @@
                 setChooseButtonBusy(true);
                 setStatus("Waiting for device selection...");
                 try {
+                  window.focus();
+                  chooseButton.focus();
                   await context.requestSession();
                 } catch (error) {
                   setChooseButtonBusy(false);
                   const details = formatError(error);
+                  const castState = getCastStateName();
                   const hint = details === "session_error"
-                    ? " — app ID may be unavailable on this device."
+                    ? " — check device discovery and app availability."
                     : "";
-                  setStatus(`Session request failed: ${details}${hint}`);
-                  reject(new Error(`interactive_session_request_failed:${details}`));
+                  setStatus(`Session request failed: ${details} (state: ${castState})${hint}`);
+                  reject(new Error(`interactive_session_request_failed:${details}|cast_state:${castState}`));
                   clearInteractiveFlow();
                 }
               };
@@ -250,8 +266,9 @@
                   return;
                 }
                 const details = formatError(event?.errorCode || event?.error || event);
-                setStatus(`Session failed: ${details}`);
-                reject(new Error(`interactive_session_failed:${details}`));
+                const castState = getCastStateName();
+                setStatus(`Session failed: ${details} (state: ${castState})`);
+                reject(new Error(`interactive_session_failed:${details}|cast_state:${castState}`));
                 clearInteractiveFlow();
               }
             };
@@ -280,7 +297,8 @@
             if (interactiveSession) return interactiveSession;
           } catch (error) {
             const details = formatError(error);
-            throw new Error(`request_session_failed:${details}`);
+            const castState = getCastStateName();
+            throw new Error(`request_session_failed:${details}|cast_state:${castState}|app_id:${requestedAppId}`);
           }
 
           const session = context.getCurrentSession();
