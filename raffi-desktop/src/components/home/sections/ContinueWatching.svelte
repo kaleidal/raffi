@@ -10,7 +10,7 @@
     } from "../../../lib/db/db";
     import ListsPopup from "../../meta/modals/ListsPopup.svelte";
 
-    import { onMount } from "svelte";
+    import { onMount, onDestroy, tick } from "svelte";
     import { Play, ChevronDown, ChevronLeft, ChevronRight } from "lucide-svelte";
  
     export let continueWatchingMeta: (ShowResponse & { libraryItem: any })[] =
@@ -54,6 +54,7 @@
     let selectedType = "";
     let showListsPopup = false;
     let isExpanded = false;
+    let resizeObserver: ResizeObserver | null = null;
 
     const BASE_CARD_WIDTH = 200;
     const MAX_CARD_WIDTH_DELTA = 50;
@@ -164,31 +165,45 @@
         }
     }
 
-    onMount(() => {
-        updateScrollButtons();
-        recomputeCardWidth();
+    function attachResizeObserver() {
+        if (typeof ResizeObserver === "undefined") return;
+        if (!scrollContainer) return;
+        if (resizeObserver) return;
 
-        let ro: ResizeObserver | null = null;
-        if (typeof ResizeObserver !== "undefined") {
-            ro = new ResizeObserver(() => {
-                updateScrollButtons();
-                recomputeCardWidth();
-            });
-            if (scrollContainer) {
-                ro.observe(scrollContainer);
-            }
-        }
+        resizeObserver = new ResizeObserver(() => {
+            updateScrollButtons();
+            recomputeCardWidth();
+        });
+        resizeObserver.observe(scrollContainer);
+    }
+
+    async function recomputeAfterRender() {
+        await tick();
+        requestAnimationFrame(() => {
+            attachResizeObserver();
+            updateScrollButtons();
+            recomputeCardWidth();
+        });
+    }
+
+    onMount(() => {
+        void recomputeAfterRender();
 
         window.addEventListener("resize", updateScrollButtons);
-        return () => {
-            window.removeEventListener("resize", updateScrollButtons);
-            ro?.disconnect();
-        };
+    });
+
+    onDestroy(() => {
+        window.removeEventListener("resize", updateScrollButtons);
+        resizeObserver?.disconnect();
+        resizeObserver = null;
     });
 
     $: if (continueWatchingMeta.length) {
-        // Re-run sizing when the number of items changes.
-        recomputeCardWidth();
+        void recomputeAfterRender();
+    }
+
+    $: if (scrollContainer && continueWatchingMeta.length) {
+        attachResizeObserver();
     }
 </script>
 
