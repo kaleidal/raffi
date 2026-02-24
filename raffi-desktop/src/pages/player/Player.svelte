@@ -13,7 +13,6 @@
     import type { ShowResponse } from "../../lib/library/types/meta_types";
     import { watchParty } from "../../lib/stores/watchPartyStore";
     import { localMode } from "../../lib/stores/authStore";
-    import { traktScrobble } from "../../lib/db/db";
     import { trackEvent } from "../../lib/analytics";
     import { ChevronLeft } from "lucide-svelte";
     import * as NavigationLogic from "../meta/navigationLogic";
@@ -51,7 +50,6 @@
         sessionData,
         pendingSeek,
         seekGuard,
-        firstSeekLoad,
         showSeekStyleModal,
         hasStarted as hasStartedStore,
         currentChapter,
@@ -64,6 +62,23 @@
     import * as Chapters from "./chapters";
     import * as Discord from "./discord";
     import * as WatchParty from "./watchParty";
+    import { getPlaybackAnalyticsProps as buildPlaybackAnalyticsProps } from "./playerAnalytics";
+    import {
+        acknowledgeSeekStyleInfo,
+        getSeekBarStyleFromStorage,
+        persistSeekBarStyle,
+        shouldShowSeekStyleInfoModal,
+        type SeekBarStyle,
+    } from "./seekStyle";
+    import {
+        createTraktScrobbler,
+        TRAKT_COMPLETION_THRESHOLD,
+    } from "./traktScrobbleManager";
+    import { createTorrentStatusPoller } from "./torrentStatusPolling";
+    import { performSeekWithEffects } from "./playerSeek";
+    import { createNextEpisodeHandler } from "./playerNextEpisode";
+    import { createPlayerSessionLoader } from "./playerSessionLoader";
+    import { createPlayerModalHandlers } from "./playerModalHandlers";
 
     import { serverUrl } from "../../lib/client";
 
@@ -100,35 +115,16 @@
         }
     };
 
-    type SeekBarStyle = "raffi" | "normal";
-    const SEEK_BAR_STYLE_KEY = "seek_bar_style";
-    const SEEK_STYLE_INFO_ACK_KEY = "seek_style_info_ack";
-
     let seekBarStyle: SeekBarStyle = "raffi";
     let pendingStartAfterSeekStyleModal = false;
 
-    const getSeekBarStyleFromStorage = (): SeekBarStyle => {
-        const v = localStorage.getItem(SEEK_BAR_STYLE_KEY);
-        return v === "normal" ? "normal" : "raffi";
-    };
-
-    const shouldShowSeekStyleInfoModal = (): boolean => {
-        const ack = localStorage.getItem(SEEK_STYLE_INFO_ACK_KEY);
-        if (ack === "true") return false;
-
-        const storedSeek = localStorage.getItem(SEEK_BAR_STYLE_KEY);
-        if (storedSeek !== null) return false;
-
-        return true;
-    };
-
     const handleSeekStyleChange = (style: SeekBarStyle) => {
         seekBarStyle = style;
-        localStorage.setItem(SEEK_BAR_STYLE_KEY, style);
+        persistSeekBarStyle(style);
     };
 
     const handleSeekStyleAcknowledge = async () => {
-        localStorage.setItem(SEEK_STYLE_INFO_ACK_KEY, "true");
+        acknowledgeSeekStyleInfo();
         showSeekStyleModal.set(false);
 
         if (!pendingStartAfterSeekStyleModal) return;
@@ -143,105 +139,17 @@
         }
     };
 
-    const normalizeLang = (raw?: string | null): string | null => {
-        if (!raw) return null;
-        const s = String(raw).toLowerCase().trim();
-        if (!s) return null;
-
-        if (s === "en" || s === "eng" || s === "english") return "en";
-        if (s === "ja" || s === "jpn" || s === "japanese") return "ja";
-        if (s === "es" || s === "spa" || s === "spanish") return "es";
-        if (s === "fr" || s === "fra" || s === "fre" || s === "french") return "fr";
-        if (s === "de" || s === "deu" || s === "ger" || s === "german") return "de";
-
-        if (/^[a-z]{2}$/.test(s)) return s;
-        if (/^[a-z]{3}$/.test(s)) return s;
-
-        const match2 = s.match(/\b[a-z]{2}\b/);
-        if (match2?.[0]) return match2[0];
-
-        const match3 = s.match(/\b[a-z]{3}\b/);
-        if (match3?.[0]) return match3[0];
-
-        return null;
-    };
-
-    const getPreferredSubtitleLang = (sess: any): string | null => {
-        const audioIndex = Number.isFinite(sess?.audioIndex)
-            ? Number(sess.audioIndex)
-            : 0;
-        const streams = Array.isArray(sess?.availableStreams)
-            ? sess.availableStreams
-            : [];
-        const audioStream = streams.find(
-            (s: any) => s?.type === "audio" && s?.index === audioIndex,
-        );
-        return normalizeLang(audioStream?.language || audioStream?.title);
-    };
-
-    const autoEnableDefaultSubtitles = async (sess: any) => {
-        const tracks = $subtitleTracks;
-        if (!tracks || tracks.length === 0) return;
-
-        const alreadySelected = tracks.find((t: any) => t?.selected);
-        if (alreadySelected && String(alreadySelected.id) !== "off") return;
-
-        const preferredLang = getPreferredSubtitleLang(sess);
-        const candidates = tracks.filter((t: any) => String(t?.id) !== "off");
-        if (candidates.length === 0) return;
-
-        const findByLang = (lang: string) =>
-            candidates.find((t: any) => normalizeLang(t?.lang) === lang);
-
-        const picked =
-            (preferredLang ? findByLang(preferredLang) : undefined) ||
-            findByLang("en");
-
-        if (!picked) return;
-        if (!videoElem) return;
-
-        subtitleTracks.update((all) =>
-            all.map((t: any) => ({
-                ...t,
-                selected: String(t?.id) === String(picked.id),
-            })),
-        );
-        currentSubtitleLabel.set(picked.label);
-        await Subtitles.handleSubtitleSelect(
-            picked,
-            videoElem,
-            $currentTime,
-            $playbackOffset,
-            () => cueLinePercent,
-        );
-    };
-
-    const getPlaybackSourceType = (src: string | null, sess: any) => {
-        if (!src) return "unknown";
-        if (sess?.isTorrent || src.startsWith("magnet:")) return "torrent";
-        if (!src.startsWith("http://") && !src.startsWith("https://")) return "local";
-        return "direct";
-    };
-
-    const getPlaybackAnalyticsProps = () => {
-        const sourceType = getPlaybackSourceType(currentVideoSrc, $sessionData);
-        const isTorrent = sourceType === "torrent";
-        const isLocal = sourceType === "local";
-        const progressPercent =
-            $duration > 0 ? Math.round(($currentTime / $duration) * 100) : null;
-
-        return {
-            source_type: sourceType,
-            is_torrent: isTorrent,
-            is_local: isLocal,
-            content_type: metaData?.meta?.type ?? null,
-            season: season ?? null,
-            episode: episode ?? null,
-            watch_party: $watchParty.isActive,
-            progress_percent: progressPercent,
-            elapsed_seconds: Math.round($currentTime),
-        };
-    };
+    const getPlaybackAnalyticsProps = () =>
+        buildPlaybackAnalyticsProps({
+            currentVideoSrc,
+            sessionData: $sessionData,
+            duration: $duration,
+            currentTime: $currentTime,
+            metaData,
+            season,
+            episode,
+            watchPartyActive: $watchParty.isActive,
+        });
 
     const trackPlaybackClosed = () => {
         if (playbackClosedTracked) return;
@@ -249,16 +157,6 @@
         playbackClosedTracked = true;
         trackEvent("playback_closed", getPlaybackAnalyticsProps());
     };
-
-    const getTrackAnalyticsProps = (detail: any, kind: "audio" | "subtitles") => ({
-        kind,
-        language: detail?.lang ?? null,
-        group: detail?.group ?? null,
-        format: detail?.format ?? null,
-        is_local: Boolean(detail?.isLocal),
-        is_addon: Boolean(detail?.isAddon),
-        is_off: detail?.id === "off",
-    });
 
     const handleToggleFullscreen = () => {
         const entering = typeof document !== "undefined"
@@ -298,8 +196,8 @@
     };
 
     const handleClose = () => {
-        if (hasStarted && !traktStopSent) {
-            void sendTraktScrobble("stop", true);
+        if (hasStarted && !traktScrobbler.isStopSent()) {
+            void traktScrobbler.send("stop", true);
         }
         trackPlaybackClosed();
         if (!router.back()) {
@@ -321,16 +219,6 @@
     let bufferingStartedAt = 0;
     let errorModalOpen = false;
     let reprobeAttempted = false;
-    let lastTraktScrobbleAction: "start" | "pause" | "stop" | null = null;
-    let lastTraktScrobbleAt = 0;
-    let traktStopSent = false;
-    let traktStartSent = false;
-    let traktDisabledForSession = false;
-    let traktFailureCount = 0;
-    let traktCooldownUntil = 0;
-    const TRAKT_COMPLETION_THRESHOLD = 0.9;
-    const TRAKT_FAILURE_COOLDOWN_MS = 60_000;
-    const TRAKT_MAX_FAILURES = 3;
 
     const getTraktMediaType = (): "movie" | "episode" => {
         return metaData?.meta?.type === "series" ? "episode" : "movie";
@@ -341,81 +229,14 @@
         return Math.max(0, Math.min(100, ($currentTime / $duration) * 100));
     };
 
-    const sendTraktScrobble = async (
-        action: "start" | "pause" | "stop",
-        force = false,
-    ) => {
-        if ($localMode || !imdbID) return;
-        if (!hasStarted) return;
-        if (traktDisabledForSession) return;
-        if (!force && Date.now() < traktCooldownUntil) return;
-        if (action === "pause" && !traktStartSent) return;
-
-        const mediaType = getTraktMediaType();
-        if (mediaType === "episode" && (season == null || episode == null)) return;
-
-        const now = Date.now();
-        if (
-            !force &&
-            action === lastTraktScrobbleAction &&
-            now - lastTraktScrobbleAt < 10_000
-        ) {
-            return;
-        }
-
-        lastTraktScrobbleAction = action;
-        lastTraktScrobbleAt = now;
-
-        if (action === "stop") {
-            traktStopSent = true;
-        } else if (action === "start") {
-            traktStopSent = false;
-        }
-
-        try {
-            const result: any = await traktScrobble({
-                action,
-                imdbId: imdbID,
-                mediaType,
-                season: mediaType === "episode" ? season ?? undefined : undefined,
-                episode: mediaType === "episode" ? episode ?? undefined : undefined,
-                progress: getTraktProgress(),
-                appVersion: "desktop",
-            });
-
-            if (result?.ok) {
-                traktFailureCount = 0;
-                traktCooldownUntil = 0;
-                if (action === "start") {
-                    traktStartSent = true;
-                }
-                return;
-            }
-
-            const reason = String(result?.reason || "");
-            if (
-                reason === "not_connected" ||
-                reason === "not_configured" ||
-                reason === "missing_episode" ||
-                reason === "local_mode"
-            ) {
-                traktDisabledForSession = true;
-                return;
-            }
-
-            traktFailureCount += 1;
-            if (traktFailureCount >= TRAKT_MAX_FAILURES) {
-                traktCooldownUntil = Date.now() + TRAKT_FAILURE_COOLDOWN_MS;
-                traktFailureCount = 0;
-            }
-        } catch {
-            traktFailureCount += 1;
-            if (traktFailureCount >= TRAKT_MAX_FAILURES) {
-                traktCooldownUntil = Date.now() + TRAKT_FAILURE_COOLDOWN_MS;
-                traktFailureCount = 0;
-            }
-        }
-    };
+    const traktScrobbler = createTraktScrobbler({
+        isLocalMode: () => $localMode,
+        getImdbId: () => imdbID,
+        getHasStarted: () => hasStarted,
+        getMediaType: getTraktMediaType,
+        getSeasonEpisode: () => ({ season, episode }),
+        getProgress: getTraktProgress,
+    });
 
     const computeHasNextEpisode = (): boolean => {
         if (!metaData || metaData.meta?.type !== "series") return false;
@@ -437,86 +258,66 @@
 
     $: showNextEpisodeAllowed = $showNextEpisode && hasNextEpisode;
 
-    let torrentStatusInterval: ReturnType<typeof setInterval> | null = null;
-    let torrentStatusHash: string | null = null;
-
-    const stopTorrentStatusPolling = () => {
-        if (torrentStatusInterval) {
-            clearInterval(torrentStatusInterval);
-            torrentStatusInterval = null;
-        }
-        torrentStatusHash = null;
-    };
-
-    const startTorrentStatusPolling = (hash: string) => {
-        if (!hash) return;
-        if (torrentStatusInterval && torrentStatusHash === hash) return;
-
-        stopTorrentStatusPolling();
-        torrentStatusHash = hash;
-
-        const poll = async () => {
-            try {
-                const res = await fetch(`${serverUrl}/torrents/${hash}/status`);
-                if (!res.ok) return;
-                const data = await res.json();
-
-                const stage = String(data.stage || "");
-                const peers = typeof data.peers === "number" ? data.peers : null;
-                const piecesComplete =
-                    typeof data.piecesComplete === "number" ? data.piecesComplete : null;
-                const piecesTotal =
-                    typeof data.piecesTotal === "number" ? data.piecesTotal : null;
-                const progress =
-                    typeof data.progress === "number" ? data.progress : null;
-                const err = typeof data.error === "string" ? data.error : "";
-
-                if (err) {
-                    loadingStage.set("Torrent error");
-                    loadingDetails.set(err);
-                    loadingProgress.set(null);
-                    return;
-                }
-
-                if (stage === "metadata") {
-                    loadingStage.set("Torrent: fetching metadata");
-                    loadingDetails.set(peers != null ? `Peers: ${peers}` : "");
-                    loadingProgress.set(null);
-                    return;
-                }
-
-                if (stage === "downloading") {
-                    loadingStage.set("Torrent: downloading");
-                    const detailParts: string[] = [];
-                    if (peers != null) detailParts.push(`Peers: ${peers}`);
-                    if (piecesComplete != null && piecesTotal != null) {
-                        detailParts.push(`Pieces: ${piecesComplete}/${piecesTotal}`);
-                    }
-                    loadingDetails.set(detailParts.join(" • "));
-                    loadingProgress.set(progress);
-                    return;
-                }
-
-                if (stage === "ready") {
-                    // Once ready, HLS/transcode/buffering events will usually take over.
-                    if ($loading) {
-                        loadingStage.set("Torrent: ready (starting stream)");
-                        loadingDetails.set("");
-                    }
-                    loadingProgress.set(null);
-                }
-            } catch {
-                // ignore
-            }
-        };
-
-        void poll();
-        torrentStatusInterval = setInterval(poll, 1000);
-    };
+    const torrentStatusPoller = createTorrentStatusPoller({
+        serverUrl,
+    });
 
     let playPauseFeedback: { type: "play" | "pause"; id: number } | null = null;
     let playPauseFeedbackTimeout: ReturnType<typeof setTimeout> | null = null;
-    let loadTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const playerSessionLoader = createPlayerSessionLoader({
+        fileIdx,
+        startTime,
+        autoPlay,
+        metaData,
+        season,
+        episode,
+        getVideoElem: () => videoElem,
+        getHls: () => hls,
+        setHls: (value) => {
+            hls = value;
+        },
+        setSessionId: (value) => {
+            sessionId = value;
+        },
+        getCueLinePercent: () => cueLinePercent,
+        shouldShowSeekStyleInfoModal,
+        setPendingStartAfterSeekStyleModal: (value) => {
+            pendingStartAfterSeekStyleModal = value;
+        },
+        setHasStarted: (value) => (hasStarted = value),
+        startTorrentStatusPolling: torrentStatusPoller.start,
+        stopTorrentStatusPolling: torrentStatusPoller.stop,
+        awaitDomUpdate: tick,
+    });
+
+    const loadVideo = playerSessionLoader.loadVideo;
+
+    const seekToTime = (targetTime: number) => {
+        if (!videoElem) return;
+        performSeekWithEffects({
+            targetTime,
+            duration: $duration,
+            playbackOffset: $playbackOffset,
+            videoElem,
+            captureFrame: () => Session.captureFrame(videoElem, canvasElem),
+            onAfterSeek: () =>
+                Discord.updateDiscordActivity(
+                    metaData,
+                    season,
+                    episode,
+                    $duration,
+                    $currentTime,
+                    $isPlaying,
+                ),
+            isWatchPartyHost: $watchParty.isHost,
+            isPlaying: $isPlaying,
+            updatePlaybackState: WatchParty.updatePlaybackState,
+            setPendingSeek: pendingSeek.set,
+            setCurrentTime: currentTime.set,
+            setShowCanvas: showCanvas.set,
+        });
+    };
 
     const triggerPlayPauseFeedback = (type: "play" | "pause") => {
         if (playPauseFeedbackTimeout) clearTimeout(playPauseFeedbackTimeout);
@@ -572,33 +373,7 @@
 
         WatchParty.setupWatchPartySync(
             videoElem,
-            (t) =>
-                Session.performSeek(
-                    t,
-                    $duration,
-                    $playbackOffset,
-                    videoElem,
-                    () => Session.captureFrame(videoElem, canvasElem),
-                    () =>
-                        Discord.updateDiscordActivity(
-                            metaData,
-                            season,
-                            episode,
-                            $duration,
-                            $currentTime,
-                            $isPlaying,
-                        ),
-                    $watchParty.isHost,
-                    false,
-                    $isPlaying,
-                    WatchParty.updatePlaybackState,
-                    {
-                        setPendingSeek: pendingSeek.set,
-                        setCurrentTime: currentTime.set,
-                        setShowCanvas: showCanvas.set,
-                        setIgnoreNextSeek: () => {}, // Handled internally in sync
-                    },
-                ),
+            seekToTime,
             () => $currentTime,
             (val) => {}, // ignorePlayPause setter - handled in sync logic if needed
             (val) => {}, // ignoreSeek setter
@@ -640,14 +415,14 @@
     });
 
     onDestroy(() => {
-        if (hasStarted && !traktStopSent) {
-            void sendTraktScrobble("stop", true);
+        if (hasStarted && !traktScrobbler.isStopSent()) {
+            void traktScrobbler.send("stop", true);
         }
         trackPlaybackClosed();
         clearInterval(metadataCheckInterval);
-        stopTorrentStatusPolling();
+        torrentStatusPoller.stop();
         if (playPauseFeedbackTimeout) clearTimeout(playPauseFeedbackTimeout);
-        if (loadTimeout) clearTimeout(loadTimeout);
+        playerSessionLoader.clearLoadTimeout();
         Session.cleanupSession(
             hls,
             sessionId,
@@ -666,11 +441,11 @@
         handleProgressInternal(time, $duration);
 
         if (
-            !traktStopSent &&
+            !traktScrobbler.isStopSent() &&
             $duration > 0 &&
             time / $duration >= TRAKT_COMPLETION_THRESHOLD
         ) {
-            void sendTraktScrobble("stop", true);
+            void traktScrobbler.send("stop", true);
         }
 
         if (!$seekGuard) {
@@ -689,7 +464,7 @@
     const handlePlay = () => {
         isPlaying.set(true);
         hasStarted = true;
-        void sendTraktScrobble("start");
+        void traktScrobbler.send("start");
         if (!playbackStartTracked) {
             trackEvent("playback_started", getPlaybackAnalyticsProps());
             playbackStartTracked = true;
@@ -710,13 +485,13 @@
     const handlePause = () => {
         isPlaying.set(false);
         if (
-            !traktStopSent &&
+            !traktScrobbler.isStopSent() &&
             !(
                 $duration > 0 &&
                 $currentTime / $duration >= TRAKT_COMPLETION_THRESHOLD
             )
         ) {
-            void sendTraktScrobble("pause");
+            void traktScrobbler.send("pause");
         }
         Discord.updateDiscordActivity(
             metaData,
@@ -749,8 +524,8 @@
     };
 
     const handleEnded = () => {
-        if (hasStarted && !traktStopSent) {
-            void sendTraktScrobble("stop", true);
+        if (hasStarted && !traktScrobbler.isStopSent()) {
+            void traktScrobbler.send("stop", true);
         }
     };
 
@@ -767,223 +542,8 @@
         loadVideo(currentVideoSrc);
     };
 
-    const loadVideo = async (src: string) => {
-        try {
-            loadingStage.set("Initializing playback");
-            loadingDetails.set("");
-            loadingProgress.set(null);
-
-            const result = await Session.loadVideoSession(
-                src,
-                fileIdx,
-                startTime,
-                {
-                    setLoading: loading.set,
-                    setLoadingStage: loadingStage.set,
-                    setLoadingDetails: loadingDetails.set,
-                    setLoadingProgress: loadingProgress.set,
-                    setShowCanvas: showCanvas.set,
-                    setIsPlaying: isPlaying.set,
-                    setHasStarted: (value: boolean) => (hasStarted = value),
-                    setShowError: showError.set,
-                    setErrorMessage: errorMessage.set,
-                    setErrorDetails: errorDetails.set,
-                    setCurrentTime: currentTime.set,
-                    setDuration: duration.set,
-                    setPlaybackOffset: playbackOffset.set,
-                    setCurrentChapter: currentChapter.set,
-                    setShowSkipIntro: showSkipIntro.set,
-                    setShowNextEpisode: showNextEpisode.set,
-                    setSeekGuard: seekGuard.set,
-                    setFirstSeekLoad: firstSeekLoad.set,
-                    setPendingSeek: pendingSeek.set,
-                    setAudioTracks: audioTracks.set,
-                    setSubtitleTracks: subtitleTracks.set,
-                    setCurrentAudioLabel: currentAudioLabel.set,
-                    setCurrentSubtitleLabel: currentSubtitleLabel.set,
-                },
-                () =>
-                    Subtitles.fetchAddonSubtitles(
-                        metaData,
-                        season,
-                        episode,
-                    ).then((tracks) => {
-                        subtitleTracks.update((current) => [
-                            ...current,
-                            ...tracks,
-                        ]);
-                    }),
-            );
-
-            sessionId = result.sessionId;
-            sessionData.set(result.sessionData);
-
-            if (result.sessionData?.isTorrent && result.sessionData?.torrentInfoHash) {
-                startTorrentStatusPolling(result.sessionData.torrentInfoHash);
-            } else {
-                stopTorrentStatusPolling();
-            }
-
-            await tick();
-            if (!videoElem) return;
-
-            // Hint for the HLS layer: local file paths behave differently than addon/torrent HTTP sources.
-            // Used to prevent live-edge style snapping during small seeks.
-            try {
-                const isLocalFile =
-                    typeof src === "string" &&
-                    !src.startsWith("http://") &&
-                    !src.startsWith("https://") &&
-                    !src.startsWith("magnet:");
-                videoElem.dataset.raffiSource = isLocalFile ? "local" : "remote";
-            } catch {
-                // ignore
-            }
-
-            Discord.updateDiscordActivity(
-                metaData,
-                season,
-                episode,
-                $duration,
-                0,
-                false,
-            );
-
-            const needsSeekStyleModal = !!autoPlay && shouldShowSeekStyleInfoModal();
-            if (needsSeekStyleModal) {
-                showSeekStyleModal.set(true);
-                pendingStartAfterSeekStyleModal = true;
-            }
-
-            const bypassServer = Session.shouldBypassServerForHttpStream(
-                src,
-                videoElem,
-            );
-
-            if (bypassServer) {
-                loadingStage.set("Loading stream directly");
-                loadingDetails.set("Bypassing server transcoding");
-                loadingProgress.set(null);
-
-                if (hls) {
-                    try {
-                        hls.destroy();
-                    } catch {
-                        // ignore
-                    }
-                    hls = null;
-                }
-
-                // For direct playback we treat the video element time as the global timeline.
-                playbackOffset.set(0);
-                void autoEnableDefaultSubtitles(result.sessionData).catch(() => {
-                    // ignore
-                });
-                loading.set(true);
-
-                const onLoaded = () => {
-                    if (!videoElem) return;
-
-                    if (Number.isFinite(videoElem.duration) && videoElem.duration > 0) {
-                        duration.set(videoElem.duration);
-                    }
-
-                    if (startTime > 0) {
-                        try {
-                            videoElem.currentTime = startTime;
-                        } catch {
-                            // ignore
-                        }
-                    }
-
-                    loading.set(false);
-                    loadingStage.set("");
-                    loadingDetails.set("");
-                    showCanvas.set(false);
-
-                    if (!needsSeekStyleModal && autoPlay) {
-                        videoElem.play().catch(() => {
-                            // ignore
-                        });
-                    }
-                };
-
-                videoElem.addEventListener("loadedmetadata", onLoaded, {
-                    once: true,
-                });
-
-                videoElem.src = src;
-                videoElem.load();
-                return;
-            }
-
-            void autoEnableDefaultSubtitles(result.sessionData).catch(() => {
-                // ignore
-            });
-
-            loadingStage.set("Preparing stream");
-            loadingDetails.set("Starting HLS session...");
-            loadingProgress.set(null);
-
-            hls = Session.initHLS(
-                videoElem,
-                sessionId,
-                startTime,
-                needsSeekStyleModal ? false : autoPlay,
-                Session.createSeekHandler(
-                    videoElem,
-                    () => hls,
-                    sessionId,
-                    () => $pendingSeek,
-                    () => $seekGuard,
-                    () => $playbackOffset,
-                    () => $subtitleTracks,
-                    () => $currentSubtitleLabel,
-                    (t) =>
-                        Subtitles.handleSubtitleSelect(
-                            t,
-                            videoElem,
-                            $currentTime,
-                            $playbackOffset,
-                            () => cueLinePercent,
-                        ),
-                    {
-                        setPendingSeek: pendingSeek.set,
-                        setSeekGuard: seekGuard.set,
-                        setLoading: loading.set,
-                        setShowCanvas: showCanvas.set,
-                        setFirstSeekLoad: firstSeekLoad.set,
-                        setPlaybackOffset: playbackOffset.set,
-                    },
-                ),
-                {
-                    setLoading: loading.set,
-                    setShowCanvas: showCanvas.set,
-                    setPlaybackOffset: playbackOffset.set,
-                    setShowError: showError.set,
-                    setErrorMessage: errorMessage.set,
-                    setErrorDetails: errorDetails.set,
-                },
-            );
-
-            if (loadTimeout) {
-                clearTimeout(loadTimeout);
-            }
-            loadTimeout = setTimeout(() => {
-                if ($loading && !$hasStartedStore && !$isPlaying) {
-                    loading.set(false);
-                    showError.set(true);
-                    errorMessage.set("Stream took too long to load");
-                    errorDetails.set("Please try another stream.");
-                }
-            }, 60000);
-        } catch (err) {
-            console.error(err);
-        }
-    };
-
     $: if (!$loading) {
-        stopTorrentStatusPolling();
+        torrentStatusPoller.stop();
     }
 
     $: if ($showError && !errorModalOpen) {
@@ -998,8 +558,6 @@
         errorModalOpen = false;
     }
 
-    let nextEpisodeAttemptId = 0;
-
     const showActionLoading = (actionLabel: string, err: unknown) => {
         loading.set(false);
         showError.set(true);
@@ -1009,75 +567,34 @@
 
     const handleSkipIntro = () => {
         trackEvent("skip_intro_clicked", getPlaybackAnalyticsProps());
-        Chapters.skipChapter($currentChapter, (t) =>
-            Session.performSeek(
-                t,
-                $duration,
-                $playbackOffset,
-                videoElem,
-                () => Session.captureFrame(videoElem, canvasElem),
-                () =>
-                    Discord.updateDiscordActivity(
-                        metaData,
-                        season,
-                        episode,
-                        $duration,
-                        $currentTime,
-                        $isPlaying,
-                    ),
-                $watchParty.isHost,
-                false,
-                $isPlaying,
-                WatchParty.updatePlaybackState,
-                {
-                    setPendingSeek: pendingSeek.set,
-                    setCurrentTime: currentTime.set,
-                    setShowCanvas: showCanvas.set,
-                    setIgnoreNextSeek: () => {},
-                },
-            ),
-        );
+        Chapters.skipChapter($currentChapter, seekToTime);
     };
 
-    const handleNextEpisodeClick = () => {
-        trackEvent("next_episode_clicked", getPlaybackAnalyticsProps());
+    const handleNextEpisodeClick = createNextEpisodeHandler({
+        trackEvent,
+        getPlaybackAnalyticsProps,
+        handleProgressInternal,
+        getVideoSrc: () => videoSrc,
+        setCurrentVideoSrc: (value) => {
+            currentVideoSrc = value;
+        },
+        invokeNextEpisode: handleNextEpisodeInternal,
+        showActionLoading,
+    });
 
-        // Immediately show loading overlay so the action can't be triggered twice.
-        nextEpisodeAttemptId += 1;
-        const attemptId = nextEpisodeAttemptId;
-        currentVideoSrc = videoSrc;
-        const beforeSrc = currentVideoSrc;
-        loading.set(true);
-
-        if ($duration > 0 && $duration - $currentTime <= 600) {
-            handleProgressInternal($duration, $duration);
-        }
-
-        try {
-            const res = (handleNextEpisodeInternal as unknown as (() => unknown))?.();
-            if (res && typeof (res as any).then === "function") {
-                (res as Promise<unknown>).catch((err) => {
-                    if (attemptId !== nextEpisodeAttemptId) return;
-                    showActionLoading("Next Episode Failed", err);
-                });
-            }
-        } catch (err) {
-            if (attemptId !== nextEpisodeAttemptId) return;
-            showActionLoading("Next Episode Failed", err);
-            return;
-        }
-
-        // If nothing changes, don't fail silently.
-        window.setTimeout(() => {
-            if (attemptId !== nextEpisodeAttemptId) return;
-            if ($loading && currentVideoSrc === beforeSrc) {
-                showActionLoading(
-                    "Next Episode Failed",
-                    "No new stream started. Please try again.",
-                );
-            }
-        }, 10000);
-    };
+    const modalHandlers = createPlayerModalHandlers({
+        getSessionId: () => sessionId,
+        getVideoElem: () => videoElem,
+        getHls: () => hls,
+        setHls: (value) => {
+            hls = value;
+        },
+        getCueLinePercent: () => cueLinePercent,
+        getPlaybackAnalyticsProps,
+        getVideoSrc: () => videoSrc,
+        loadVideo,
+        handleClose,
+    });
 
     let controlsOverlayElem: HTMLElement | null = null;
     let clipPanelOpen = false;
@@ -1156,33 +673,7 @@
             $currentTime,
             $duration,
             $volume,
-            (t) =>
-                Session.performSeek(
-                    t,
-                    $duration,
-                    $playbackOffset,
-                    videoElem,
-                    () => Session.captureFrame(videoElem, canvasElem),
-                    () =>
-                        Discord.updateDiscordActivity(
-                            metaData,
-                            season,
-                            episode,
-                            $duration,
-                            $currentTime,
-                            $isPlaying,
-                        ),
-                    $watchParty.isHost,
-                    false,
-                    $isPlaying,
-                    WatchParty.updatePlaybackState,
-                    {
-                        setPendingSeek: pendingSeek.set,
-                        setCurrentTime: currentTime.set,
-                        setShowCanvas: showCanvas.set,
-                        setIgnoreNextSeek: () => {},
-                    },
-                ),
+            seekToTime,
             volume.set,
             seekFeedback.set,
             togglePlayWithFeedback,
@@ -1294,34 +785,7 @@
                 onSeekInput={(e) =>
                     controlsManager.onSeekInput(e, $duration, pendingSeek.set)}
                 onSeekChange={(e) =>
-                    controlsManager.onSeekChange(e, $duration, (t) =>
-                        Session.performSeek(
-                            t,
-                            $duration,
-                            $playbackOffset,
-                            videoElem,
-                            () => Session.captureFrame(videoElem, canvasElem),
-                            () =>
-                                Discord.updateDiscordActivity(
-                                    metaData,
-                                    season,
-                                    episode,
-                                    $duration,
-                                    $currentTime,
-                                    $isPlaying,
-                                ),
-                            $watchParty.isHost,
-                            false,
-                            $isPlaying,
-                            WatchParty.updatePlaybackState,
-                            {
-                                setPendingSeek: pendingSeek.set,
-                                setCurrentTime: currentTime.set,
-                                setShowCanvas: showCanvas.set,
-                                setIgnoreNextSeek: () => {},
-                            },
-                        ),
-                    )}
+                    controlsManager.onSeekChange(e, $duration, seekToTime)}
                 onVolumeChange={(e) =>
                     controlsManager.onVolumeChange(e, volume.set)}
                 toggleFullscreen={handleToggleFullscreen}
@@ -1367,147 +831,18 @@
         {fileIdx}
         onSeekStyleChange={handleSeekStyleChange}
         onSeekStyleAcknowledge={handleSeekStyleAcknowledge}
-        onAudioSelect={(detail) => {
-            trackEvent("audio_track_selected", {
-                ...getPlaybackAnalyticsProps(),
-                ...getTrackAnalyticsProps(detail, "audio"),
-            });
-            Session.handleAudioSelect(
-                detail,
-                $audioTracks,
-                sessionId,
-                hls,
-                $currentTime,
-                videoElem,
-                (sid, t) =>
-                    (hls = Session.initHLS(
-                        videoElem,
-                        sid,
-                        t,
-                        true,
-                        Session.createSeekHandler(
-                            videoElem,
-                            () => hls,
-                            sid,
-                            () => $pendingSeek,
-                            () => $seekGuard,
-                            () => $playbackOffset,
-                            () => $subtitleTracks,
-                            () => $currentSubtitleLabel,
-                            (tr) =>
-                                Subtitles.handleSubtitleSelect(
-                                    tr,
-                                    videoElem,
-                                    $currentTime,
-                                    $playbackOffset,
-                                    () => cueLinePercent,
-                                ),
-                            {
-                                setPendingSeek: pendingSeek.set,
-                                setSeekGuard: seekGuard.set,
-                                setLoading: loading.set,
-                                setShowCanvas: showCanvas.set,
-                                setFirstSeekLoad: firstSeekLoad.set,
-                                setPlaybackOffset: playbackOffset.set,
-                            },
-                        ),
-                        {
-                            setLoading: loading.set,
-                            setShowCanvas: showCanvas.set,
-                            setPlaybackOffset: playbackOffset.set,
-                            setShowError: showError.set,
-                            setErrorMessage: errorMessage.set,
-                            setErrorDetails: errorDetails.set,
-                        },
-                    )),
-                {
-                    setAudioTracks: audioTracks.set,
-                    setCurrentAudioLabel: currentAudioLabel.set,
-                    setLoading: loading.set,
-                    setLoadingStage: loadingStage.set,
-                },
-            );
-        }}
-        onSubtitleSelect={(detail) => {
-            trackEvent("subtitle_selected", {
-                ...getPlaybackAnalyticsProps(),
-                ...getTrackAnalyticsProps(detail, "subtitles"),
-            });
-            subtitleTracks.update((tracks) =>
-                tracks.map((t) => ({
-                    ...t,
-                    selected: t.id === detail.id,
-                })),
-            );
-            currentSubtitleLabel.set(detail.label);
-            Subtitles.handleSubtitleSelect(
-                detail,
-                videoElem,
-                $currentTime,
-                $playbackOffset,
-                () => cueLinePercent,
-            );
-        }}
-        onSubtitleDelayChange={({ seconds }) => {
-            trackEvent("subtitle_delay_changed", {
-                ...getPlaybackAnalyticsProps(),
-                delay_seconds: seconds,
-            });
-            // Delay is stored in Subtitles module; re-apply current subtitle to rebuild cues.
-            const selected = $subtitleTracks.find((t) => t.selected);
-            if (selected && selected.id !== "off") {
-                Subtitles.handleSubtitleSelect(
-                    selected,
-                    videoElem,
-                    $currentTime,
-                    $playbackOffset,
-                    () => cueLinePercent,
-                );
-            }
-        }}
-        onAddLocalSubtitle={(track) => {
-            trackEvent("subtitle_local_added", {
-                ...getPlaybackAnalyticsProps(),
-                format: track?.format ?? null,
-            });
-            subtitleTracks.update((tracks) => {
-                const next = tracks
-                    .filter((t) => !(t.isLocal && String(t.id).startsWith("local:")))
-                    .map((t) => ({ ...t, selected: false }));
-                return [...next, { ...track, selected: true }];
-            });
-            currentSubtitleLabel.set(track.label);
-            Subtitles.handleSubtitleSelect(
-                track,
-                videoElem,
-                $currentTime,
-                $playbackOffset,
-                () => cueLinePercent,
-            );
-        }}
-        onErrorRetry={() => {
-            trackEvent("player_error_retry", getPlaybackAnalyticsProps());
-            showError.set(false);
-            errorMessage.set("");
-            errorDetails.set("");
-            if (videoSrc) loadVideo(videoSrc);
-        }}
-        onErrorBack={() => {
-            trackEvent("player_error_back", getPlaybackAnalyticsProps());
-            showError.set(false);
-            handleClose();
-        }}
-        onCloseAudio={() => showAudioSelection.set(false)}
-        onCloseSubtitle={() => showSubtitleSelection.set(false)}
-        onCloseWatchParty={() => showWatchPartyModal.set(false)}
+        onAudioSelect={modalHandlers.onAudioSelect}
+        onSubtitleSelect={modalHandlers.onSubtitleSelect}
+        onSubtitleDelayChange={modalHandlers.onSubtitleDelayChange}
+        onAddLocalSubtitle={modalHandlers.onAddLocalSubtitle}
+        onErrorRetry={modalHandlers.onErrorRetry}
+        onErrorBack={modalHandlers.onErrorBack}
+        onCloseAudio={modalHandlers.onCloseAudio}
+        onCloseSubtitle={modalHandlers.onCloseSubtitle}
+        onCloseWatchParty={modalHandlers.onCloseWatchParty}
         initialPartyCode={joinPartyId}
         autoJoin={autoJoin}
-        onFileSelected={(file) => {
-            // If the user selects a file in the watch party modal, load it
-            if (file && file.path) {
-                loadVideo(file.path);
-            }
-        }}
+        onFileSelected={modalHandlers.onFileSelected}
     />
 
     <PlayerWatchParty
