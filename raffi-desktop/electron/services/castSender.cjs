@@ -1,4 +1,4 @@
-function createCastSenderService({ logToFile, BrowserWindow, shell, path, baseDir }) {
+function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, baseDir }) {
   let senderWindow = null;
   let senderReadyPromise = null;
 
@@ -9,10 +9,16 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, path, baseDi
   const senderBridgeUrl = "https://raffi.al/cast/sender.html";
   const defaultReceiverAppId = "29330CDE";
 
+  function getWindowsChromiumCandidates() {
+    return [
+      "C:/Program Files/Google/Chrome/Application/chrome.exe",
+      "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
+      "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
+      "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+    ];
+  }
+
   async function openBrowserFallback({ appId, streamUrl, startTime, metadata, reason }) {
-    if (!shell?.openExternal) {
-      return false;
-    }
     const target = new URL(senderBridgeUrl);
     target.searchParams.set("mode", "standalone");
     target.searchParams.set("receiverAppId", String(appId || defaultReceiverAppId));
@@ -22,8 +28,37 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, path, baseDi
     target.searchParams.set("subtitle", String(metadata?.subtitle || ""));
     target.searchParams.set("cover", String(metadata?.cover || ""));
     target.searchParams.set("reason", String(reason || "electron_no_devices"));
-    await shell.openExternal(target.toString());
-    return true;
+    const targetUrl = target.toString();
+
+    if (process.platform === "win32" && fs?.existsSync) {
+      const { spawn } = require("child_process");
+      const candidates = getWindowsChromiumCandidates();
+      for (const executablePath of candidates) {
+        if (!fs.existsSync(executablePath)) {
+          continue;
+        }
+        try {
+          const child = spawn(executablePath, [targetUrl], {
+            detached: true,
+            stdio: "ignore",
+          });
+          child.unref();
+          return { opened: true, method: `chromium:${executablePath}` };
+        } catch (error) {
+          logToFile("Failed launching Chromium candidate for Cast fallback", {
+            executablePath,
+            error: String(error?.message || error || "unknown_error"),
+          });
+        }
+      }
+    }
+
+    if (!shell?.openExternal) {
+      return { opened: false, method: "none" };
+    }
+
+    await shell.openExternal(targetUrl);
+    return { opened: true, method: "shell_openExternal" };
   }
 
   function createSenderWindow() {
@@ -258,20 +293,23 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, path, baseDi
         }
 
         let browserFallbackOpened = false;
+        let browserFallbackMethod = "none";
         try {
-          browserFallbackOpened = await openBrowserFallback({
+          const fallbackResult = await openBrowserFallback({
             appId,
             streamUrl,
             startTime,
             metadata,
             reason: "no_devices_available_in_electron",
           });
+          browserFallbackOpened = Boolean(fallbackResult?.opened);
+          browserFallbackMethod = String(fallbackResult?.method || "none");
         } catch (fallbackError) {
           logToFile("Cast browser fallback open failed", fallbackError);
         }
 
         throw new Error(
-          `session_error (no Cast devices discovered after retry). custom_state=${customState}, fallback_state=${fallbackState}, custom_probe_error=${customProbeError || "none"}, fallback_probe_error=${fallbackProbeError || "none"}, browser_fallback_opened=${browserFallbackOpened}.`,
+          `session_error (no Cast devices discovered after retry). custom_state=${customState}, fallback_state=${fallbackState}, custom_probe_error=${customProbeError || "none"}, fallback_probe_error=${fallbackProbeError || "none"}, browser_fallback_opened=${browserFallbackOpened}, browser_fallback_method=${browserFallbackMethod}.`,
         );
       }
     }
