@@ -251,7 +251,11 @@
                   await context.requestSession();
                 } catch (error) {
                   setChooseButtonBusy(false);
-                  setStatus(`Session request failed: ${formatError(error)}`);
+                  const details = formatError(error);
+                  const hint = details === "session_error"
+                    ? " — app ID may be unavailable on this device."
+                    : "";
+                  setStatus(`Session request failed: ${details}${hint}`);
                 }
               };
             }
@@ -278,6 +282,12 @@
                 state === String(cast.framework.SessionState.SESSION_START_FAILED) ||
                 state === String(cast.framework.SessionState.SESSION_ENDED)
               ) {
+                if (state === String(cast.framework.SessionState.SESSION_ENDED)) {
+                  setStatus("Cast picker closed.");
+                  reject(new Error("interactive_session_cancelled"));
+                  clearInteractiveFlow();
+                  return;
+                }
                 const details = formatError(event?.errorCode || event?.error || event);
                 setStatus(`Session failed: ${details}`);
                 reject(new Error(`interactive_session_failed:${details}`));
