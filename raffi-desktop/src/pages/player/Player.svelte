@@ -83,7 +83,7 @@
     import { createPlayerSessionLoader } from "./playerSessionLoader";
     import { createPlayerModalHandlers } from "./playerModalHandlers";
     import { createPlayerCastController } from "./playerCastController";
-    import { getCastStatus, listCastDevices, type CastDevice } from "../../lib/cast";
+    import { getCastStatus, listCastDevices, reloadCastMedia, type CastDevice } from "../../lib/cast";
 
     import { serverUrl } from "../../lib/client";
 
@@ -361,10 +361,50 @@
         await castController.connectOrDisconnect("native", deviceId);
     };
 
+    let castDurationBackfillAttempts = 0;
+    const MAX_CAST_DURATION_BACKFILL_ATTEMPTS = 20;
+    let castKeepaliveCounter = 0;
+    let castDurationReloaded = false;
+
     const startCastStatusPolling = () => {
         if (castStatusInterval) {
             return;
         }
+        castDurationBackfillAttempts = 0;
+        castKeepaliveCounter = 0;
+        castDurationReloaded = false;
+
+        const tryBackfillDuration = async () => {
+            if (!sessionId) return;
+            try {
+                const res = await fetch(`${serverUrl}/sessions/${sessionId}`);
+                if (!res.ok) return;
+                const data = await res.json();
+                const dur = Number(data?.durationSeconds || 0);
+                if (Number.isFinite(dur) && dur > 0) {
+                    duration.set(dur);
+                    castDurationBackfillAttempts = MAX_CAST_DURATION_BACKFILL_ATTEMPTS;
+                    if (!castDurationReloaded) {
+                        castDurationReloaded = true;
+                        void reloadCastMedia(dur).catch(() => {});
+                    }
+                }
+            } catch {
+                // ignore
+            }
+        };
+
+        const keepServerBufferAlive = async () => {
+            if (!sessionId) return;
+            try {
+                await fetch(`${serverUrl}/sessions/${sessionId}/stream/child.m3u8`, {
+                    method: "GET",
+                    signal: AbortSignal.timeout(3000),
+                });
+            } catch {
+                // ignore
+            }
+        };
 
         const poll = async () => {
             if (!castActive) {
@@ -402,6 +442,28 @@
                     } else if (playerState.length > 0) {
                         isPlaying.set(true);
                     }
+
+                    if (status.duration != null) {
+                        const castDur = Number(status.duration);
+                        if (Number.isFinite(castDur) && castDur > 0 && $duration <= 0) {
+                            duration.set(castDur);
+                            castDurationBackfillAttempts = MAX_CAST_DURATION_BACKFILL_ATTEMPTS;
+                            castDurationReloaded = true;
+                        }
+                    }
+                }
+
+                if ($duration <= 0 && castDurationBackfillAttempts < MAX_CAST_DURATION_BACKFILL_ATTEMPTS) {
+                    castDurationBackfillAttempts++;
+                    void tryBackfillDuration();
+                } else if ($duration > 0 && !castDurationReloaded) {
+                    castDurationReloaded = true;
+                    void reloadCastMedia($duration).catch(() => {});
+                }
+
+                castKeepaliveCounter++;
+                if (castKeepaliveCounter % 5 === 0) {
+                    void keepServerBufferAlive();
                 }
             } catch {
                 // ignore transient status polling errors
