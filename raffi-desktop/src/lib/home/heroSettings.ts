@@ -1,4 +1,5 @@
 export const HOME_HERO_SOURCE_CINEMETA = "cinemeta";
+export const HOME_HERO_SOURCE_TRAKT_RECOMMENDATIONS = "trakt_recommendations";
 export const HOME_HERO_SOURCE_STORAGE_KEY = "raffi:home-hero-source";
 
 export function getStoredHomeHeroSource(): string {
