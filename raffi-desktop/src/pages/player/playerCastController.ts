@@ -100,6 +100,17 @@ export function createPlayerCastController(deps: CreatePlayerCastControllerDeps)
         } catch (error) {
             deps.hideDevicePicker();
             const details = error instanceof Error ? error.message : String(error);
+            const normalized = details.toLowerCase();
+            const isUserCancelled =
+                normalized.includes("cast_picker_cancelled") ||
+                normalized.includes("interactive_session_cancelled") ||
+                normalized.includes("cast_picker_closed");
+
+            if (isUserCancelled) {
+                deps.trackEvent("cast_picker_cancelled", deps.getPlaybackAnalyticsProps());
+                return;
+            }
+
             deps.trackEvent("cast_bootstrap_failed", {
                 reason: details,
                 ...deps.getPlaybackAnalyticsProps(),

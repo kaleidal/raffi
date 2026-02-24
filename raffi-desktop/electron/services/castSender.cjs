@@ -96,6 +96,8 @@ function createCastSenderService({ logToFile, BrowserWindow, path, baseDir }) {
       throw new Error("Cast sender window unavailable");
     }
 
+    const currentWindow = senderWindow;
+
     const bridgePayload = payload || {};
     const script = `(() => {
       const bridge = window.__raffiCastBridge;
@@ -107,7 +109,23 @@ function createCastSenderService({ logToFile, BrowserWindow, path, baseDir }) {
         .catch((error) => ({ ok: false, error: String(error && (error.message || error)) }));
     })();`;
 
-    const response = await senderWindow.webContents.executeJavaScript(script, withUserGesture);
+    const execPromise = currentWindow.webContents.executeJavaScript(script, withUserGesture);
+    const closePromise = new Promise((_, reject) => {
+      const onClosed = () => {
+        reject(new Error("cast_picker_closed"));
+      };
+      currentWindow.once("closed", onClosed);
+      execPromise.finally(() => {
+        currentWindow.removeListener("closed", onClosed);
+      });
+    });
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new Error("cast_bridge_timeout"));
+      }, 45000);
+    });
+
+    const response = await Promise.race([execPromise, closePromise, timeoutPromise]);
     if (!response?.ok) {
       throw new Error(String(response?.error || "cast_bridge_error"));
     }
@@ -140,20 +158,34 @@ function createCastSenderService({ logToFile, BrowserWindow, path, baseDir }) {
       senderWindow.focus();
     }
 
-    const status = await invokeBridge(
-      "loadMedia",
-      {
-        receiverAppId: appId,
-        streamUrl,
-        startTime: Math.max(0, Number(startTime || 0)),
-        metadata: {
-          title: String(metadata?.title || "Raffi"),
-          subtitle: String(metadata?.subtitle || ""),
-          cover: String(metadata?.cover || ""),
+    let status;
+    try {
+      status = await invokeBridge(
+        "loadMedia",
+        {
+          receiverAppId: appId,
+          streamUrl,
+          startTime: Math.max(0, Number(startTime || 0)),
+          metadata: {
+            title: String(metadata?.title || "Raffi"),
+            subtitle: String(metadata?.subtitle || ""),
+            cover: String(metadata?.cover || ""),
+          },
         },
-      },
-      true,
-    );
+        true,
+      );
+    } catch (error) {
+      const message = String(error?.message || error || "cast_connect_failed");
+      if (message.includes("cast_picker_closed") || message.includes("interactive_session_cancelled")) {
+        throw new Error("cast_picker_cancelled");
+      }
+      if (message.includes("session_error:session_error") || message.endsWith("session_error")) {
+        throw new Error(
+          "session_error (receiver app unavailable). Verify app ID 29330CDE is published, or register this Cast device in Cast Developer Console and wait ~15 minutes.",
+        );
+      }
+      throw error;
+    }
 
     activeMediaUrl = streamUrl;
     activeDeviceName = String(status?.deviceName || "Chromecast");
