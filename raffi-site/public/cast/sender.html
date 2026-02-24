@@ -109,11 +109,15 @@
         }
 
         window["__onGCastApiAvailable"] = function (isAvailable) {
+          console.log("Google Cast API availability:", isAvailable);
           if (isAvailable) {
             castFrameworkAvailable = true;
             try {
+              console.log("Initializing Cast API with default receiver app ID:", DEFAULT_RECEIVER_APP_ID);
               initializeCastApi(DEFAULT_RECEIVER_APP_ID);
-            } catch {
+            } catch (error) {
+              availableRejecter(new Error("Failed to initialize Google Cast API: " + String(error)));
+              return;
             }
             availableResolver(true);
           } else {
