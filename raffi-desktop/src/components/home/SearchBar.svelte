@@ -16,6 +16,7 @@
 	import PlayModal from "./modals/PlayModal.svelte";
 	import { trackEvent } from "../../lib/analytics";
 	import { currentUser, updateStatus } from "../../lib/stores/authStore";
+    import { userZoom } from "../../lib/stores/settingsStore";
     import {
         HOME_SEARCH_BAR_POSITION_AUTO,
         HOME_SEARCH_BAR_POSITION_BOTTOM,
@@ -367,6 +368,10 @@
     $: searchDockStyle = homeOverlayMode
         ? `top: ${searchDockBottom ? "calc(100vh - 24px - 86px)" : "50px"};`
         : "";
+    $: searchDockScaleStyle =
+        portalSearchDock && Number.isFinite($userZoom)
+            ? `transform: scale(${$userZoom}); transform-origin: top center;`
+            : "";
 
     $: if (searchBarPositionPreference === HOME_SEARCH_BAR_POSITION_AUTO) {
         $router.page;
@@ -489,53 +494,54 @@
                 : "absolute"
         }`}
     >
-        {#if searchDockBottom}
+        <div style={searchDockScaleStyle}>
+            {#if searchDockBottom}
+                <div
+                    class="pointer-events-none absolute -inset-x-6 -inset-y-4 -z-10 rounded-[48px] bg-white/[0.09] blur-2xl opacity-35"
+                ></div>
+            {/if}
             <div
-                class="pointer-events-none absolute -inset-x-6 -inset-y-4 -z-10 rounded-[48px] bg-white/[0.09] blur-2xl opacity-35"
-            ></div>
-        {/if}
-        <div
-            class={`flex flex-row gap-0 rounded-full overflow-clip w-[680px] max-w-[62vw] backdrop-blur-md z-20 transition-shadow duration-300 ${
-                searchDockBottom
-                    ? "shadow-[0_18px_54px_rgba(0,0,0,0.6)] ring-1 ring-white/12"
-                    : ""
-            }`}
-        >
-            <div class="p-[20px] bg-[#181818]/50">
-                <Search size={40} strokeWidth={2} color="#C3C3C3" />
+                class={`flex flex-row gap-0 rounded-full overflow-clip w-[680px] max-w-[62vw] backdrop-blur-md z-20 transition-shadow duration-300 ${
+                    searchDockBottom
+                        ? "shadow-[0_18px_54px_rgba(0,0,0,0.6)] ring-1 ring-white/12"
+                        : ""
+                }`}
+            >
+                <div class="p-[20px] bg-[#181818]/50">
+                    <Search size={40} strokeWidth={2} color="#C3C3C3" />
+                </div>
+
+                <input
+                    type="text"
+                    placeholder="search for anything"
+                    class="bg-[#000000]/50 text-[#D4D4D4] text-center py-[20px] px-[40px] w-full text-[28px] font-poppins font-normal outline-none focus:outline-none focus:ring-0"
+                    oninput={handleSearch}
+                    onkeydown={handleSearchKeydown}
+                    onfocus={() => {
+                        if (searchQuery) showSearchResults = true;
+                    }}
+                    onblur={closeSearch}
+                    value={searchQuery}
+                />
+
             </div>
 
-            <input
-                type="text"
-                placeholder="search for anything"
-                class="bg-[#000000]/50 text-[#D4D4D4] text-center py-[20px] px-[40px] w-full text-[28px] font-poppins font-normal outline-none focus:outline-none focus:ring-0"
-                oninput={handleSearch}
-                onkeydown={handleSearchKeydown}
-                onfocus={() => {
-                    if (searchQuery) showSearchResults = true;
-                }}
-                onblur={closeSearch}
-                value={searchQuery}
-            />
-
-        </div>
-
-        {#if commandHint}
-            <div
-                class={`absolute left-0 w-full bg-[#181818]/90 backdrop-blur-xl rounded-[24px] p-4 text-white/70 text-sm z-100 ${
-                    searchDockBottom ? "bottom-[90px]" : "top-[90px]"
-                }`}
-                transition:fade={{ duration: 200 }}
-            >
-                {commandHint}
-            </div>
-        {:else if showSearchResults && (totalSearchResults > 0 || loading)}
-            <div
-                class={`absolute left-1/2 -translate-x-1/2 w-[780px] max-w-[72vw] bg-[#181818]/90 backdrop-blur-xl rounded-[24px] p-4 z-100 ${
-                    searchDockBottom ? "bottom-[90px]" : "top-[90px]"
-                }`}
-                transition:fade={{ duration: 200 }}
-            >
+            {#if commandHint}
+                <div
+                    class={`absolute left-0 w-full bg-[#181818]/90 backdrop-blur-xl rounded-[24px] p-4 text-white/70 text-sm z-100 ${
+                        searchDockBottom ? "bottom-[90px]" : "top-[90px]"
+                    }`}
+                    transition:fade={{ duration: 200 }}
+                >
+                    {commandHint}
+                </div>
+            {:else if showSearchResults && (totalSearchResults > 0 || loading)}
+                <div
+                    class={`absolute left-1/2 -translate-x-1/2 w-[780px] max-w-[72vw] bg-[#181818]/90 backdrop-blur-xl rounded-[24px] p-4 z-100 ${
+                        searchDockBottom ? "bottom-[90px]" : "top-[90px]"
+                    }`}
+                    transition:fade={{ duration: 200 }}
+                >
                 {#if loading}
                     <div class="grid grid-cols-2 gap-4">
                         {#each ["Movies", "Series"] as label}
@@ -670,8 +676,9 @@
                         </div>
                     </div>
                 {/if}
-            </div>
-        {/if}
+                </div>
+            {/if}
+        </div>
     </div>
 
     {#if showContextMenu}
