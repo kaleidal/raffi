@@ -9,9 +9,7 @@ function createCastSenderService({ logToFile, BrowserWindow, path, baseDir }) {
   const senderBridgeUrl =
     String(process.env.RAFFI_CAST_SENDER_URL || "").trim() ||
     "https://raffi.al/cast/sender.html";
-  const defaultReceiverAppId =
-    String(process.env.RAFFI_CAST_RECEIVER_APP_ID || "").trim() ||
-    "29330CDE";
+  const defaultReceiverAppId = "29330CDE";
 
   function getLocalFallbackUrl() {
     return `file://${path.join(baseDir, "cast-sender-host.html")}`;
@@ -132,11 +130,6 @@ function createCastSenderService({ logToFile, BrowserWindow, path, baseDir }) {
     return response.result;
   }
 
-  function getReceiverAppId(overrideValue) {
-    const normalized = String(overrideValue || "").trim();
-    return normalized || defaultReceiverAppId;
-  }
-
   async function listDevices() {
     return [];
   }
@@ -145,17 +138,21 @@ function createCastSenderService({ logToFile, BrowserWindow, path, baseDir }) {
     streamUrl,
     startTime = 0,
     metadata,
-    receiverAppId,
   }) {
     if (!streamUrl || typeof streamUrl !== "string") {
       throw new Error("streamUrl is required");
     }
 
-    const appId = getReceiverAppId(receiverAppId);
+    const appId = defaultReceiverAppId;
 
+    await ensureSenderReady();
     if (senderWindow && !senderWindow.isDestroyed()) {
+      if (senderWindow.isMinimized()) {
+        senderWindow.restore();
+      }
       senderWindow.show();
       senderWindow.focus();
+      senderWindow.webContents.focus();
     }
 
     let status;
