@@ -296,6 +296,7 @@
         <div in:fade={{ duration: 300 }}>
             {#if showcasedTitle}
                 <Hero {showcasedTitle} on:logoError={refreshFeatured} />
+                <div class="w-full h-[6px] -mt-[3px] bg-[#090909] relative z-20"></div>
             {/if}
 
             <SearchBar
