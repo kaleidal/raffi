@@ -67,7 +67,9 @@ export const createTorrentStatusPoller = ({
                     const detailParts: string[] = [];
                     if (peers != null) detailParts.push(`Peers: ${peers}`);
                     if (piecesComplete != null && piecesTotal != null) {
-                        detailParts.push(`Pieces: ${piecesComplete}/${piecesTotal}`);
+                        detailParts.push(
+                            `Startup pieces: ${piecesComplete}/${piecesTotal}`,
+                        );
                     }
                     loadingDetails.set(detailParts.join(" • "));
                     loadingProgress.set(progress);

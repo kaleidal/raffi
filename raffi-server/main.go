@@ -274,8 +274,8 @@ func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request, id str
 			maxAttempts := 3
 			probeTimeout := 12 * time.Second
 			if sess.IsTorrent {
-				maxAttempts = 1
-				probeTimeout = 8 * time.Second
+				maxAttempts = 2
+				probeTimeout = 30 * time.Second
 			}
 
 			for attempt := 0; attempt < maxAttempts; attempt++ {
@@ -336,7 +336,7 @@ func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request, id str
 			} else if probeErr != nil {
 				if sess.IsTorrent {
 					s.probeMu.Lock()
-					s.probeCooldown[sess.ID] = time.Now().Add(10 * time.Second)
+					s.probeCooldown[sess.ID] = time.Now().Add(20 * time.Second)
 					s.probeMu.Unlock()
 				}
 				log.Printf("metadata probe failed for session %s: %v", sess.ID, probeErr)
@@ -575,5 +575,6 @@ func (s *Server) handleCleanup(w http.ResponseWriter, r *http.Request) {
 	if s.hlsController != nil {
 		_ = s.hlsController.StopSession(id)
 	}
+	_ = s.sessions.Delete(id)
 	w.WriteHeader(http.StatusOK)
 }

@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
-	"time"
 )
 
 type Metadata struct {
@@ -94,8 +93,6 @@ func ProbeDuration(ctx context.Context, source string) (*Metadata, string, error
 }
 
 func (c *Controller) ProbeMetadata(ctx context.Context, id, source string) (*Metadata, error) {
-	ctxProbe, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
-	meta, _, err := ProbeDuration(ctxProbe, source)
+	meta, _, err := ProbeDuration(ctx, source)
 	return meta, err
 }

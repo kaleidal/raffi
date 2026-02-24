@@ -30,9 +30,14 @@ type TorrentStream struct {
 	filePath string
 	fileIdx  *int
 
+	startupStartPiece int
+	startupEndPiece   int
+
 	readyOnce sync.Once
 	readyCh   chan struct{}
 	readyErr  error
+	stopCh    chan struct{}
+	stopOnce  sync.Once
 }
 
 type TorrentStatus struct {
@@ -103,6 +108,21 @@ func (ts *TorrentStream) status() TorrentStatus {
 			return
 		}
 
+		if ts.startupStartPiece >= 0 &&
+			ts.startupEndPiece >= ts.startupStartPiece &&
+			ts.startupEndPiece < ts.t.NumPieces() {
+			requiredTotal := ts.startupEndPiece - ts.startupStartPiece + 1
+			requiredComplete := 0
+			for i := ts.startupStartPiece; i <= ts.startupEndPiece; i++ {
+				if ts.t.Piece(i).State().Complete {
+					requiredComplete++
+				}
+			}
+			st.PiecesComplete = requiredComplete
+			st.PiecesTotal = requiredTotal
+			return
+		}
+
 		st.PiecesTotal = ts.t.NumPieces()
 	}()
 
@@ -116,10 +136,22 @@ func (ts *TorrentStream) status() TorrentStatus {
 
 func newTorrentStream(t *torrent.Torrent, fileIdx *int) *TorrentStream {
 	return &TorrentStream{
-		t:       t,
-		fileIdx: fileIdx,
-		readyCh: make(chan struct{}),
+		t:                 t,
+		fileIdx:           fileIdx,
+		startupStartPiece: -1,
+		startupEndPiece:   -1,
+		readyCh:           make(chan struct{}),
+		stopCh:            make(chan struct{}),
 	}
+}
+
+func (ts *TorrentStream) stop() {
+	if ts == nil {
+		return
+	}
+	ts.stopOnce.Do(func() {
+		close(ts.stopCh)
+	})
 }
 
 func (ts *TorrentStream) ensureReady() error {
@@ -140,7 +172,9 @@ func (ts *TorrentStream) prepare() error {
 	select {
 	case <-ts.t.GotInfo():
 		// ok
-	case <-time.After(20 * time.Second):
+	case <-ts.stopCh:
+		return errors.New("torrent stream canceled")
+	case <-time.After(90 * time.Second):
 		return fmt.Errorf("timeout waiting for torrent metadata")
 	}
 
@@ -203,6 +237,9 @@ func (ts *TorrentStream) prepare() error {
 	log.Printf("Streaming file %q (%d bytes), startPiece=%d endPiece=%d pieceLen=%d",
 		targetFile.Path(), targetFile.Length(), startPiece, endPiece, pl)
 
+	ts.startupStartPiece = startPiece
+	ts.startupEndPiece = endPiece
+
 	// Aggressively prioritize the first ~10MB for fast start
 	for i := startPiece; i <= endPiece; i++ {
 		p := ts.t.Piece(i)
@@ -232,7 +269,14 @@ func (ts *TorrentStream) prepare() error {
 
 	// Stats logger
 	go func(infoHash string) {
-		for range time.Tick(5 * time.Second) {
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ts.stopCh:
+				return
+			case <-ticker.C:
+			}
 			st := ts.t.Stats()
 			log.Printf("Torrent %s: peers=%d, have=%d/%d, downUseful=%dB, up=%dB",
 				infoHash,
@@ -248,8 +292,14 @@ func (ts *TorrentStream) prepare() error {
 	// Best-effort short wait for the first piece, but don't block forever
 	log.Printf("Waiting for first piece of torrent %s (piece %d)...",
 		ts.t.InfoHash().HexString(), startPiece)
-	deadline := time.Now().Add(15 * time.Second)
+	deadline := time.Now().Add(60 * time.Second)
 	for {
+		select {
+		case <-ts.stopCh:
+			return errors.New("torrent stream canceled")
+		default:
+		}
+
 		if ts.t.Piece(startPiece).State().Complete {
 			log.Printf("First piece ready, streaming can start")
 			break
@@ -392,6 +442,10 @@ func (s *TorrentStreamer) RemoveTorrent(infoHash string) {
 		delete(s.streams, infoHash)
 	}
 	s.mu.Unlock()
+
+	if ok && stream != nil {
+		stream.stop()
+	}
 
 	if ok && stream != nil && stream.t != nil {
 		log.Printf("Dropping torrent %s", infoHash)
