@@ -1,12 +1,93 @@
 import { actionGeneric, mutationGeneric, queryGeneric } from "convex/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery } from "./_generated/server";
 
 const getNowIso = () => new Date().toISOString();
 
+const isMissingIndexError = (error: unknown) => {
+    const message = String((error as any)?.message || error || "").toLowerCase();
+    return message.includes("index") && (
+        message.includes("not found") ||
+        message.includes("does not exist") ||
+        message.includes("unknown index")
+    );
+};
+
+const collectAll = async (db: any, table: string) => {
+    return db.query(table).collect();
+};
+
 const collectByUser = async (db: any, table: string, userId: string) => {
-    return db.query(table).withIndex("by_user", (q: any) => q.eq("user_id", userId)).collect();
+    try {
+        return await db.query(table).withIndex("by_user", (q: any) => q.eq("user_id", userId)).collect();
+    } catch (error) {
+        if (!isMissingIndexError(error)) throw error;
+        const rows = await collectAll(db, table);
+        return rows.filter((row: any) => row?.user_id === userId);
+    }
+};
+
+const collectListItemsByListId = async (db: any, listId: string) => {
+    try {
+        return await db.query("list_items").withIndex("by_list", (q: any) => q.eq("list_id", listId)).collect();
+    } catch (error) {
+        if (!isMissingIndexError(error)) throw error;
+        const rows = await collectAll(db, "list_items");
+        return rows.filter((row: any) => row?.list_id === listId);
+    }
+};
+
+const findAddonByUserTransport = async (db: any, userId: string, transportUrl: string) => {
+    try {
+        return await db
+            .query("addons")
+            .withIndex("by_user_transport", (q: any) => q.eq("user_id", userId).eq("transport_url", transportUrl))
+            .unique();
+    } catch (error) {
+        if (!isMissingIndexError(error)) throw error;
+        const rows = await collectByUser(db, "addons", userId);
+        return rows.find((row: any) => row?.transport_url === transportUrl) || null;
+    }
+};
+
+const findLibraryByUserImdb = async (db: any, userId: string, imdbId: string) => {
+    try {
+        return await db
+            .query("libraries")
+            .withIndex("by_user_imdb", (q: any) => q.eq("user_id", userId).eq("imdb_id", imdbId))
+            .unique();
+    } catch (error) {
+        if (!isMissingIndexError(error)) throw error;
+        const rows = await collectByUser(db, "libraries", userId);
+        return rows.find((row: any) => row?.imdb_id === imdbId) || null;
+    }
+};
+
+const findListByListId = async (db: any, listId: string) => {
+    try {
+        return await db
+            .query("lists")
+            .withIndex("by_list_id", (q: any) => q.eq("list_id", listId))
+            .unique();
+    } catch (error) {
+        if (!isMissingIndexError(error)) throw error;
+        const rows = await collectAll(db, "lists");
+        return rows.find((row: any) => row?.list_id === listId) || null;
+    }
+};
+
+const findListItemByListImdb = async (db: any, listId: string, imdbId: string) => {
+    try {
+        return await db
+            .query("list_items")
+            .withIndex("by_list_imdb", (q: any) => q.eq("list_id", listId).eq("imdb_id", imdbId))
+            .unique();
+    } catch (error) {
+        if (!isMissingIndexError(error)) throw error;
+        const rows = await collectListItemsByListId(db, listId);
+        return rows.find((row: any) => row?.imdb_id === imdbId) || null;
+    }
 };
 
 const uniqueBy = <T extends Record<string, any>>(items: T[], keyFn: (item: T) => string) => {
@@ -73,7 +154,7 @@ const requireAuthedUserId = async (ctx: any) => {
     const identity = await ctx.auth.getUserIdentity();
     const authedUserId = identity?.subject;
     if (!authedUserId) {
-        throw new Error("Not authenticated");
+        throw new ConvexError("Not authenticated");
     }
     return authedUserId;
 };
@@ -212,7 +293,7 @@ export const getState = queryGeneric({
         if (listIds.length > 0) {
             const rows = await Promise.all(
                 listIds.map((listId: string) =>
-                    ctx.db.query("list_items").withIndex("by_list", (q: any) => q.eq("list_id", listId)).collect(),
+                    collectListItemsByListId(ctx.db, listId),
                 ),
             );
             listItems = rows.flat();
@@ -236,12 +317,7 @@ export const ensureDefaultAddon = mutationGeneric({
     },
     handler: async (ctx, args) => {
         const userId = await requireAuthedUserId(ctx);
-        const existing = await ctx.db
-            .query("addons")
-            .withIndex("by_user_transport", (q: any) =>
-                q.eq("user_id", userId).eq("transport_url", args.addon.transportUrl),
-            )
-            .unique();
+        const existing = await findAddonByUserTransport(ctx.db, userId, args.addon.transportUrl);
         if (existing) return existing._id;
         return ctx.db.insert("addons", {
             user_id: userId,
@@ -266,12 +342,7 @@ export const importState = mutationGeneric({
         const addons = uniqueBy(args.addons || [], (item) => item.transport_url || "");
         assertImportCount("addons", addons.length);
         for (const addon of addons) {
-            const existing = await ctx.db
-                .query("addons")
-                .withIndex("by_user_transport", (q: any) =>
-                    q.eq("user_id", userId).eq("transport_url", addon.transport_url),
-                )
-                .unique();
+            const existing = await findAddonByUserTransport(ctx.db, userId, addon.transport_url);
             if (existing) {
                 await ctx.db.patch(existing._id, {
                     manifest: addon.manifest,
@@ -294,10 +365,7 @@ export const importState = mutationGeneric({
         const library = uniqueBy(args.library || [], (item) => item.imdb_id || "");
         assertImportCount("library", library.length);
         for (const row of library) {
-            const existing = await ctx.db
-                .query("libraries")
-                .withIndex("by_user_imdb", (q: any) => q.eq("user_id", userId).eq("imdb_id", row.imdb_id))
-                .unique();
+            const existing = await findLibraryByUserImdb(ctx.db, userId, row.imdb_id);
             if (existing) {
                 await ctx.db.patch(existing._id, {
                     progress: row.progress,
@@ -324,10 +392,7 @@ export const importState = mutationGeneric({
         const lists = uniqueBy(args.lists || [], (item) => item.list_id || "");
         assertImportCount("lists", lists.length);
         for (const list of lists) {
-            const existing = await ctx.db
-                .query("lists")
-                .withIndex("by_list_id", (q: any) => q.eq("list_id", list.list_id))
-                .unique();
+            const existing = await findListByListId(ctx.db, list.list_id);
             if (existing) {
                 await ctx.db.patch(existing._id, {
                     user_id: userId,
@@ -349,10 +414,7 @@ export const importState = mutationGeneric({
         const listItems = uniqueBy(args.listItems || [], (item) => `${item.list_id}:${item.imdb_id}`);
         assertImportCount("listItems", listItems.length);
         for (const item of listItems) {
-            const existing = await ctx.db
-                .query("list_items")
-                .withIndex("by_list_imdb", (q: any) => q.eq("list_id", item.list_id).eq("imdb_id", item.imdb_id))
-                .unique();
+            const existing = await findListItemByListImdb(ctx.db, item.list_id, item.imdb_id);
             if (existing) {
                 await ctx.db.patch(existing._id, {
                     position: item.position ?? 0,
@@ -378,12 +440,7 @@ export const addAddon = mutationGeneric({
     args: { addon: v.any() },
     handler: async (ctx, args) => {
         const userId = await requireAuthedUserId(ctx);
-        const existing = await ctx.db
-            .query("addons")
-            .withIndex("by_user_transport", (q: any) =>
-                q.eq("user_id", userId).eq("transport_url", args.addon.transport_url),
-            )
-            .unique();
+        const existing = await findAddonByUserTransport(ctx.db, userId, args.addon.transport_url);
         if (existing) return existing;
         const id = await ctx.db.insert("addons", {
             user_id: userId,
@@ -401,12 +458,7 @@ export const removeAddon = mutationGeneric({
     args: { transport_url: v.string() },
     handler: async (ctx, args) => {
         const userId = await requireAuthedUserId(ctx);
-        const existing = await ctx.db
-            .query("addons")
-            .withIndex("by_user_transport", (q: any) =>
-                q.eq("user_id", userId).eq("transport_url", args.transport_url),
-            )
-            .unique();
+        const existing = await findAddonByUserTransport(ctx.db, userId, args.transport_url);
         if (existing) await ctx.db.delete(existing._id);
         return { ok: true };
     },
@@ -416,10 +468,7 @@ export const hideFromContinueWatching = mutationGeneric({
     args: { imdb_id: v.string() },
     handler: async (ctx, args) => {
         const userId = await requireAuthedUserId(ctx);
-        const existing = await ctx.db
-            .query("libraries")
-            .withIndex("by_user_imdb", (q: any) => q.eq("user_id", userId).eq("imdb_id", args.imdb_id))
-            .unique();
+        const existing = await findLibraryByUserImdb(ctx.db, userId, args.imdb_id);
         if (existing) await ctx.db.patch(existing._id, { shown: false });
         return { ok: true };
     },
@@ -429,10 +478,7 @@ export const forgetProgress = mutationGeneric({
     args: { imdb_id: v.string() },
     handler: async (ctx, args) => {
         const userId = await requireAuthedUserId(ctx);
-        const existing = await ctx.db
-            .query("libraries")
-            .withIndex("by_user_imdb", (q: any) => q.eq("user_id", userId).eq("imdb_id", args.imdb_id))
-            .unique();
+        const existing = await findLibraryByUserImdb(ctx.db, userId, args.imdb_id);
         if (existing) await ctx.db.delete(existing._id);
         return { ok: true };
     },
@@ -449,10 +495,7 @@ export const updateLibraryProgress = mutationGeneric({
     handler: async (ctx, args) => {
         const userId = await requireAuthedUserId(ctx);
         const now = getNowIso();
-        const existing = await ctx.db
-            .query("libraries")
-            .withIndex("by_user_imdb", (q: any) => q.eq("user_id", userId).eq("imdb_id", args.imdb_id))
-            .unique();
+        const existing = await findLibraryByUserImdb(ctx.db, userId, args.imdb_id);
         const patch = {
             user_id: userId,
             imdb_id: args.imdb_id,
@@ -476,10 +519,7 @@ export const updateLibraryPoster = mutationGeneric({
     args: { imdb_id: v.string(), poster: v.string() },
     handler: async (ctx, args) => {
         const userId = await requireAuthedUserId(ctx);
-        const existing = await ctx.db
-            .query("libraries")
-            .withIndex("by_user_imdb", (q: any) => q.eq("user_id", userId).eq("imdb_id", args.imdb_id))
-            .unique();
+        const existing = await findLibraryByUserImdb(ctx.db, userId, args.imdb_id);
         if (existing) await ctx.db.patch(existing._id, { poster: args.poster });
         return { ok: true };
     },
@@ -507,10 +547,7 @@ export const updateList = mutationGeneric({
     args: { list_id: v.string(), updates: v.any() },
     handler: async (ctx, args) => {
         const userId = await requireAuthedUserId(ctx);
-        const existing = await ctx.db
-            .query("lists")
-            .withIndex("by_list_id", (q: any) => q.eq("list_id", args.list_id))
-            .unique();
+        const existing = await findListByListId(ctx.db, args.list_id);
         if (!existing || existing.user_id !== userId) return { ok: true };
         await ctx.db.patch(existing._id, args.updates || {});
         return { ok: true };
@@ -521,15 +558,9 @@ export const deleteList = mutationGeneric({
     args: { list_id: v.string() },
     handler: async (ctx, args) => {
         const userId = await requireAuthedUserId(ctx);
-        const existing = await ctx.db
-            .query("lists")
-            .withIndex("by_list_id", (q: any) => q.eq("list_id", args.list_id))
-            .unique();
+        const existing = await findListByListId(ctx.db, args.list_id);
         if (!existing || existing.user_id !== userId) return { ok: true };
-        const items = await ctx.db
-            .query("list_items")
-            .withIndex("by_list", (q: any) => q.eq("list_id", args.list_id))
-            .collect();
+        const items = await collectListItemsByListId(ctx.db, args.list_id);
         for (const item of items) {
             await ctx.db.delete(item._id);
         }
@@ -548,15 +579,9 @@ export const addToList = mutationGeneric({
     },
     handler: async (ctx, args) => {
         const userId = await requireAuthedUserId(ctx);
-        const list = await ctx.db
-            .query("lists")
-            .withIndex("by_list_id", (q: any) => q.eq("list_id", args.list_id))
-            .unique();
+        const list = await findListByListId(ctx.db, args.list_id);
         if (!list || list.user_id !== userId) throw new Error("List not found");
-        const existing = await ctx.db
-            .query("list_items")
-            .withIndex("by_list_imdb", (q: any) => q.eq("list_id", args.list_id).eq("imdb_id", args.imdb_id))
-            .unique();
+        const existing = await findListItemByListImdb(ctx.db, args.list_id, args.imdb_id);
         if (existing) {
             await ctx.db.patch(existing._id, {
                 position: args.position,
@@ -580,15 +605,9 @@ export const removeFromList = mutationGeneric({
     args: { list_id: v.string(), imdb_id: v.string() },
     handler: async (ctx, args) => {
         const userId = await requireAuthedUserId(ctx);
-        const list = await ctx.db
-            .query("lists")
-            .withIndex("by_list_id", (q: any) => q.eq("list_id", args.list_id))
-            .unique();
+        const list = await findListByListId(ctx.db, args.list_id);
         if (!list || list.user_id !== userId) return { ok: true };
-        const existing = await ctx.db
-            .query("list_items")
-            .withIndex("by_list_imdb", (q: any) => q.eq("list_id", args.list_id).eq("imdb_id", args.imdb_id))
-            .unique();
+        const existing = await findListItemByListImdb(ctx.db, args.list_id, args.imdb_id);
         if (existing) await ctx.db.delete(existing._id);
         return { ok: true };
     },
@@ -598,15 +617,9 @@ export const updateListItemPosition = mutationGeneric({
     args: { list_id: v.string(), imdb_id: v.string(), position: v.number() },
     handler: async (ctx, args) => {
         const userId = await requireAuthedUserId(ctx);
-        const list = await ctx.db
-            .query("lists")
-            .withIndex("by_list_id", (q: any) => q.eq("list_id", args.list_id))
-            .unique();
+        const list = await findListByListId(ctx.db, args.list_id);
         if (!list || list.user_id !== userId) return { ok: true };
-        const existing = await ctx.db
-            .query("list_items")
-            .withIndex("by_list_imdb", (q: any) => q.eq("list_id", args.list_id).eq("imdb_id", args.imdb_id))
-            .unique();
+        const existing = await findListItemByListImdb(ctx.db, args.list_id, args.imdb_id);
         if (existing) await ctx.db.patch(existing._id, { position: args.position });
         return { ok: true };
     },
@@ -616,15 +629,9 @@ export const updateListItemPoster = mutationGeneric({
     args: { list_id: v.string(), imdb_id: v.string(), poster: v.string() },
     handler: async (ctx, args) => {
         const userId = await requireAuthedUserId(ctx);
-        const list = await ctx.db
-            .query("lists")
-            .withIndex("by_list_id", (q: any) => q.eq("list_id", args.list_id))
-            .unique();
+        const list = await findListByListId(ctx.db, args.list_id);
         if (!list || list.user_id !== userId) return { ok: true };
-        const existing = await ctx.db
-            .query("list_items")
-            .withIndex("by_list_imdb", (q: any) => q.eq("list_id", args.list_id).eq("imdb_id", args.imdb_id))
-            .unique();
+        const existing = await findListItemByListImdb(ctx.db, args.list_id, args.imdb_id);
         if (existing) await ctx.db.patch(existing._id, { poster: args.poster });
         return { ok: true };
     },
