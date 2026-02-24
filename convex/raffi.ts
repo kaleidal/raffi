@@ -1159,3 +1159,171 @@ export const traktScrobble = actionGeneric({
         }
     },
 });
+
+export const getTraktRecommendations = actionGeneric({
+    args: {
+        limit: v.optional(v.number()),
+    },
+    handler: async (ctx, args) => {
+        try {
+            const userId = await requireAuthedUserId(ctx);
+            const config = getTraktConfig();
+            if (!config.clientId) {
+                return { ok: false, reason: "not_configured", recommendations: [] };
+            }
+
+            const integration = await getTraktIntegrationForUser(ctx, userId);
+            if (!integration?.access_token || !integration?.refresh_token) {
+                return { ok: true, connected: false, recommendations: [] };
+            }
+
+            const requestedLimit = Number(args.limit ?? 24);
+            const limit = Math.max(1, Math.min(80, Number.isFinite(requestedLimit) ? requestedLimit : 24));
+            const perType = Math.max(1, Math.ceil(limit / 2));
+
+            const fetchForToken = async (accessToken: string) => {
+                const [movieResponse, showResponse] = await Promise.all([
+                    fetch(
+                        `${TRAKT_API_BASE_URL}/recommendations/movies?limit=${perType}&ignore_collected=true`,
+                        {
+                            method: "GET",
+                            headers: buildTraktHeaders(config.clientId!, accessToken),
+                        },
+                    ),
+                    fetch(
+                        `${TRAKT_API_BASE_URL}/recommendations/shows?limit=${perType}&ignore_collected=true`,
+                        {
+                            method: "GET",
+                            headers: buildTraktHeaders(config.clientId!, accessToken),
+                        },
+                    ),
+                ]);
+
+                const moviePayload = await parseJsonSafe(movieResponse);
+                const showPayload = await parseJsonSafe(showResponse);
+
+                return {
+                    movieResponse,
+                    showResponse,
+                    moviePayload,
+                    showPayload,
+                };
+            };
+
+            let activeAccessToken = integration.access_token;
+            let result = await fetchForToken(activeAccessToken);
+
+            const unauthorized =
+                result.movieResponse.status === 401 || result.showResponse.status === 401;
+
+            if (unauthorized) {
+                if (!config.clientSecret) {
+                    return {
+                        ok: false,
+                        reason: "refresh_not_configured",
+                        recommendations: [],
+                    };
+                }
+                try {
+                    const tokenPayload = await exchangeOrRefreshTraktToken(
+                        {
+                            refresh_token: integration.refresh_token,
+                            grant_type: "refresh_token",
+                            redirect_uri: config.redirectUri,
+                        },
+                        {
+                            clientId: config.clientId,
+                            clientSecret: config.clientSecret,
+                        },
+                    );
+
+                    const refreshedAccess = optionalString(tokenPayload?.access_token);
+                    const refreshedRefresh = optionalString(tokenPayload?.refresh_token);
+                    if (refreshedAccess && refreshedRefresh) {
+                        activeAccessToken = refreshedAccess;
+                        await saveTraktIntegrationForUser(ctx, {
+                            userId,
+                            accessToken: refreshedAccess,
+                            refreshToken: refreshedRefresh,
+                            scope: optionalString(tokenPayload?.scope) || integration.scope,
+                            tokenType: optionalString(tokenPayload?.token_type) || integration.token_type,
+                            expiresAt: toExpiresAtMs(tokenPayload),
+                            username: integration.username,
+                            slug: integration.slug,
+                        });
+                        result = await fetchForToken(activeAccessToken);
+                    }
+                } catch {
+                    // Keep original result for error handling.
+                }
+            }
+
+            const failedMovie = !result.movieResponse.ok;
+            const failedShow = !result.showResponse.ok;
+            if (failedMovie && failedShow) {
+                return {
+                    ok: false,
+                    reason: "trakt_error",
+                    message: getTraktErrorMessage(
+                        result.movieResponse.status,
+                        result.moviePayload,
+                    ),
+                    recommendations: [],
+                };
+            }
+
+            const recommendations: Array<{
+                imdbId: string;
+                type: "movie" | "series";
+                title: string | null;
+                year: number | null;
+            }> = [];
+
+            const movieItems = Array.isArray(result.moviePayload) ? result.moviePayload : [];
+            for (const item of movieItems) {
+                const movie = item?.movie && typeof item.movie === "object" ? item.movie : item;
+                const imdbId = optionalString(movie?.ids?.imdb);
+                if (!imdbId) continue;
+                recommendations.push({
+                    imdbId,
+                    type: "movie",
+                    title: optionalString(movie?.title) ?? null,
+                    year: Number.isFinite(Number(movie?.year)) ? Number(movie?.year) : null,
+                });
+            }
+
+            const showItems = Array.isArray(result.showPayload) ? result.showPayload : [];
+            for (const item of showItems) {
+                const show = item?.show && typeof item.show === "object" ? item.show : item;
+                const imdbId = optionalString(show?.ids?.imdb);
+                if (!imdbId) continue;
+                recommendations.push({
+                    imdbId,
+                    type: "series",
+                    title: optionalString(show?.title) ?? null,
+                    year: Number.isFinite(Number(show?.year)) ? Number(show?.year) : null,
+                });
+            }
+
+            const deduped = new Map<string, (typeof recommendations)[number]>();
+            for (const item of recommendations) {
+                if (!deduped.has(item.imdbId)) {
+                    deduped.set(item.imdbId, item);
+                }
+            }
+
+            return {
+                ok: true,
+                connected: true,
+                recommendations: Array.from(deduped.values()).slice(0, limit),
+            };
+        } catch (error: any) {
+            return {
+                ok: false,
+                reason: "exception",
+                message: String(error?.message || error || "Unknown error"),
+                recommendations: [],
+            };
+        }
+    },
+});

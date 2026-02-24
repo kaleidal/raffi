@@ -13,13 +13,17 @@
     import type { PopularTitleMeta } from "../lib/library/types/popular_types";
     import {
         getAddons,
+        getTraktRecommendations,
+        getTraktStatus,
         getLibrary,
         updateLibraryPoster,
         type Addon,
+        type TraktRecommendation,
     } from "../lib/db/db";
     import {
         getStoredHomeHeroSource,
         HOME_HERO_SOURCE_CINEMETA,
+        HOME_HERO_SOURCE_TRAKT_RECOMMENDATIONS,
     } from "../lib/home/heroSettings";
 
     import Hero from "../components/home/Hero.svelte";
@@ -44,8 +48,137 @@
     let heroPoolTitles: PopularTitleMeta[] = [];
     let addonSections: { id: string; title: string; titles: PopularTitleMeta[] }[] =
         [];
+    let traktRecommendations: PopularTitleMeta[] = [];
+    let traktRecommendationsConnected = false;
     let addonSectionsLoading = false;
     const HOME_REFRESH_EVENT = "raffi:home-refresh";
+
+    function extractYouTubeId(value: unknown): string | null {
+        const raw = String(value || "").trim();
+        if (!raw) return null;
+        if (/^[A-Za-z0-9_-]{11}$/.test(raw)) return raw;
+
+        try {
+            const url = new URL(raw);
+            if (url.hostname.includes("youtube.com")) {
+                const id = url.searchParams.get("v");
+                if (id && /^[A-Za-z0-9_-]{11}$/.test(id)) return id;
+            }
+            if (url.hostname.includes("youtu.be")) {
+                const id = url.pathname.replace(/^\//, "");
+                if (id && /^[A-Za-z0-9_-]{11}$/.test(id)) return id;
+            }
+        } catch {
+            // ignore
+        }
+
+        return null;
+    }
+
+    function getTrailerStreamsFromMeta(meta: ShowResponse["meta"]) {
+        const richMeta = meta as any;
+        if (Array.isArray(richMeta?.trailerStreams) && richMeta.trailerStreams.length > 0) {
+            return richMeta.trailerStreams
+                .map((entry: any) => ({
+                    title: String(entry?.title || meta.name || "Trailer"),
+                    ytId: String(entry?.ytId || "").trim(),
+                }))
+                .filter((entry: any) => /^[A-Za-z0-9_-]{11}$/.test(entry.ytId));
+        }
+
+        const trailers = Array.isArray(meta.trailers) ? meta.trailers : [];
+        return trailers
+            .map((trailer) => {
+                const ytId = extractYouTubeId((trailer as any)?.source);
+                if (!ytId) return null;
+                return {
+                    title: String(meta.name || "Trailer"),
+                    ytId,
+                };
+            })
+            .filter((entry): entry is { title: string; ytId: string } => entry !== null);
+    }
+
+    function mapMetaToPopular(meta: ShowResponse["meta"]): PopularTitleMeta {
+        const normalizedType = meta.type === "series" ? "series" : "movie";
+        const richMeta = meta as any;
+        return {
+            imdb_id: meta.imdb_id,
+            id: meta.id || meta.imdb_id,
+            name: meta.name || "Unknown",
+            type: normalizedType,
+            popularities: { ...(meta.popularities ?? {}) },
+            description: meta.description || "",
+            poster: meta.poster || undefined,
+            genre: Array.isArray(meta.genre) ? meta.genre : undefined,
+            genres: Array.isArray(meta.genres) ? meta.genres : undefined,
+            imdbRating: meta.imdbRating || undefined,
+            released: meta.released || undefined,
+            slug: meta.slug || "",
+            year: meta.year || undefined,
+            director: Array.isArray(meta.director)
+                ? meta.director
+                : meta.director
+                    ? [meta.director]
+                    : null,
+            writer: Array.isArray(meta.writer) ? meta.writer : null,
+            trailers: Array.isArray(meta.trailers) ? meta.trailers : undefined,
+            status: meta.status || undefined,
+            background: meta.background || undefined,
+            logo: meta.logo || undefined,
+            popularity: meta.popularity,
+            releaseInfo: meta.releaseInfo || undefined,
+            trailerStreams: getTrailerStreamsFromMeta(meta),
+            links: Array.isArray(richMeta?.links) ? richMeta.links : undefined,
+            behaviorHints: richMeta?.behaviorHints,
+            awards: meta.awards || undefined,
+            runtime: meta.runtime || undefined,
+            dvdRelease: meta.dvdRelease || undefined,
+            cast: Array.isArray(meta.cast) ? meta.cast : undefined,
+        };
+    }
+
+    async function loadTraktRecommendations() {
+        try {
+            const status = await getTraktStatus();
+            traktRecommendationsConnected = Boolean(status.connected && status.configured);
+            if (!traktRecommendationsConnected) {
+                traktRecommendations = [];
+                return;
+            }
+
+            const traktItems: TraktRecommendation[] = await getTraktRecommendations(24);
+            if (!Array.isArray(traktItems) || traktItems.length === 0) {
+                traktRecommendations = [];
+                return;
+            }
+
+            const enriched = await Promise.all(
+                traktItems.map(async (item) => {
+                    try {
+                        const meta = await getCachedMetaData(item.imdbId, item.type);
+                        if (!meta?.meta) return null;
+                        return mapMetaToPopular(meta.meta);
+                    } catch {
+                        return null;
+                    }
+                }),
+            );
+
+            const deduped = new Map<string, PopularTitleMeta>();
+            for (const item of enriched) {
+                if (item && !deduped.has(item.imdb_id)) {
+                    deduped.set(item.imdb_id, item);
+                }
+            }
+
+            traktRecommendations = Array.from(deduped.values()).slice(0, 20);
+        } catch (error) {
+            console.error("Failed to load Trakt recommendations", error);
+            traktRecommendations = [];
+            traktRecommendationsConnected = false;
+        }
+    }
 
     function isHeroCandidate(title: PopularTitleMeta) {
         const year = parseInt(title.year ?? "");
@@ -63,6 +196,31 @@
     }
 
     function setFeaturedFromPool() {
+        const selectedSourceId = getStoredHomeHeroSource();
+
+        if (
+            selectedSourceId === HOME_HERO_SOURCE_TRAKT_RECOMMENDATIONS &&
+            heroPoolTitles.length > 0
+        ) {
+            const traktHeroCandidates = heroPoolTitles.filter(
+                (title) =>
+                    Array.isArray(title.trailerStreams) &&
+                    title.trailerStreams.length > 0,
+            );
+            const traktLogoCandidates = traktHeroCandidates.filter((title) => Boolean(title.logo));
+            const traktSelected = chooseRandom(
+                traktLogoCandidates.length > 0
+                    ? traktLogoCandidates
+                    : traktHeroCandidates.length > 0
+                        ? traktHeroCandidates
+                        : heroPoolTitles,
+            );
+            if (traktSelected) {
+                showcasedTitle = traktSelected;
+                return;
+            }
+        }
+
         const primaryCandidates = heroPoolTitles.filter(isHeroCandidate);
         if (primaryCandidates.length > 0) {
             const selected = chooseRandom(primaryCandidates);
@@ -190,6 +348,17 @@
             const heroOptions: HeroCatalogSourceOption[] =
                 getHeroCatalogSourceOptions(addons);
 
+            if (selectedSourceId === HOME_HERO_SOURCE_TRAKT_RECOMMENDATIONS) {
+                if (traktRecommendations.length === 0) {
+                    await loadTraktRecommendations();
+                }
+                if (traktRecommendations.length > 0) {
+                    heroPoolTitles = traktRecommendations;
+                    setFeaturedFromPool();
+                    return;
+                }
+            }
+
             if (selectedSourceId !== HOME_HERO_SOURCE_CINEMETA) {
                 const selectedOption = heroOptions.find(
                     (option) => option.id === selectedSourceId,
@@ -237,6 +406,7 @@
                 popularMeta = absolutePopularTitles;
             }
 
+            await loadTraktRecommendations();
             await refreshHeroSourcePool(installedAddons);
             await loadContinueWatching();
 
@@ -269,11 +439,12 @@
 
         const handleHomeRefresh = async () => {
             const installedAddons = await getAddons().catch(() => [] as Addon[]);
+            await loadTraktRecommendations();
             await Promise.all([
                 loadContinueWatching(),
                 refreshAddonSections(installedAddons),
-                refreshHeroSourcePool(installedAddons),
             ]);
+            await refreshHeroSourcePool(installedAddons);
         };
         window.addEventListener(HOME_REFRESH_EVENT, handleHomeRefresh);
 
@@ -311,6 +482,13 @@
             >
                 <ContinueWatching {continueWatchingMeta} />
                 <PopularSection {popularMeta} />
+
+                {#if traktRecommendationsConnected && traktRecommendations.length > 0}
+                    <GenreSection
+                        genre="Recommended for You (Trakt)"
+                        titles={traktRecommendations}
+                    />
+                {/if}
 
                 {#each addonSections as section (section.id)}
                     <GenreSection genre={section.title} titles={section.titles} />

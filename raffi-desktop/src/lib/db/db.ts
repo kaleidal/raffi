@@ -88,6 +88,13 @@ export interface TraktScrobbleArgs {
     appVersion?: string;
 }
 
+export interface TraktRecommendation {
+    imdbId: string;
+    type: "movie" | "series";
+    title?: string | null;
+    year?: number | null;
+}
+
 type RemoteState = {
     addons: Addon[];
     library: LibraryItem[];
@@ -269,26 +276,55 @@ export const syncLocalStateToUser = async (userId: string) => {
         return;
     }
 
+    const normalizedAddons = addons.map((addon) => {
+        const next: any = {
+            transport_url: addon.transport_url,
+            manifest: addon.manifest,
+        };
+        if (addon.flags != null) next.flags = addon.flags;
+        if (addon.addon_id) next.addon_id = addon.addon_id;
+        if (addon.added_at) next.added_at = addon.added_at;
+        return next;
+    });
+
     const normalizedLibrary = library.map((item) => {
-        const next: any = { ...item };
-        if (next.poster == null) {
-            delete next.poster;
-        }
+        const next: any = {
+            imdb_id: item.imdb_id,
+            progress: item.progress,
+        };
+        if (item.last_watched) next.last_watched = item.last_watched;
+        if (item.completed_at != null) next.completed_at = item.completed_at;
+        if (item.type) next.type = item.type;
+        if (typeof item.shown === "boolean") next.shown = item.shown;
+        if (item.poster != null) next.poster = item.poster;
+        return next;
+    });
+
+    const normalizedLists = lists.map((list) => {
+        const next: any = {
+            list_id: list.list_id,
+            name: list.name,
+        };
+        if (typeof list.position === "number") next.position = list.position;
+        if (list.created_at) next.created_at = list.created_at;
         return next;
     });
 
     const normalizedListItems = listItems.map((item) => {
-        const next: any = { ...item };
-        if (next.poster == null) {
-            delete next.poster;
-        }
+        const next: any = {
+            list_id: item.list_id,
+            imdb_id: item.imdb_id,
+        };
+        if (typeof item.position === "number") next.position = item.position;
+        if (item.type) next.type = item.type;
+        if (item.poster != null) next.poster = item.poster;
         return next;
     });
 
     await convexMutation("raffi:importState", {
-        addons,
+        addons: normalizedAddons,
         library: normalizedLibrary,
-        lists,
+        lists: normalizedLists,
         listItems: normalizedListItems,
     });
 
@@ -485,6 +521,18 @@ export const traktScrobble = async (args: TraktScrobbleArgs) => {
     if (isLocalModeActive()) return { ok: false, reason: "local_mode" };
     getRequiredUserId();
     return convexAction("raffi:traktScrobble", args as any);
+};
+
+export const getTraktRecommendations = async (limit = 24): Promise<TraktRecommendation[]> => {
+    if (isLocalModeActive()) return [];
+    getRequiredUserId();
+    const result = await convexAction<any>("raffi:getTraktRecommendations", {
+        limit,
+    });
+    if (!result?.ok) return [];
+    return Array.isArray(result?.recommendations)
+        ? result.recommendations
+        : [];
 };
 
 export const getLists = async () => {

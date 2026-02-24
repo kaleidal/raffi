@@ -4,14 +4,16 @@
 	import SearchBarPositionCard from "./SearchBarPositionCard.svelte";
 	import HeroSourceCard from "./HeroSourceCard.svelte";
 	import { enableRPC, disableRPC } from "../../../../lib/rpc";
-	import { getAddons } from "../../../../lib/db/db";
+	import { getAddons, getTraktStatus } from "../../../../lib/db/db";
 	import { trackEvent } from "../../../../lib/analytics";
+	import { currentUser, localMode } from "../../../../lib/stores/authStore";
 	import {
 		getHeroCatalogSourceOptions,
 		type HeroCatalogSourceOption,
 	} from "../../../../lib/library/addonCatalogs";
 	import {
 		HOME_HERO_SOURCE_CINEMETA,
+		HOME_HERO_SOURCE_TRAKT_RECOMMENDATIONS,
 		getStoredHomeHeroSource,
 		setStoredHomeHeroSource,
 	} from "../../../../lib/home/heroSettings";
@@ -31,6 +33,7 @@
 	let heroSource = HOME_HERO_SOURCE_CINEMETA;
 	let heroSourceOptions: HeroCatalogSourceOption[] = [];
 	let heroSourceLoading = false;
+	let traktHeroSourceAvailable = false;
 	const HOME_REFRESH_EVENT = "raffi:home-refresh";
 
 	onMount(() => {
@@ -40,6 +43,7 @@
 		seekBarStyle = storedSeek || "raffi";
 		heroSource = getStoredHomeHeroSource();
 		searchBarPosition = getStoredHomeSearchBarPosition();
+		void loadTraktHeroSourceAvailability();
 		void loadHeroSourceOptions();
 	});
 
@@ -67,9 +71,13 @@
 		try {
 			const addons = await getAddons();
 			heroSourceOptions = getHeroCatalogSourceOptions(addons);
+			const isAddonSource = heroSourceOptions.some((option) => option.id === heroSource);
+			const isValidBuiltin =
+				heroSource === HOME_HERO_SOURCE_CINEMETA ||
+				(heroSource === HOME_HERO_SOURCE_TRAKT_RECOMMENDATIONS && traktHeroSourceAvailable);
 			if (
-				heroSource !== HOME_HERO_SOURCE_CINEMETA &&
-				!heroSourceOptions.some((option) => option.id === heroSource)
+				!isValidBuiltin &&
+				!isAddonSource
 			) {
 				heroSource = HOME_HERO_SOURCE_CINEMETA;
 				setStoredHomeHeroSource(HOME_HERO_SOURCE_CINEMETA);
@@ -83,6 +91,31 @@
 		}
 	}
 
+	async function loadTraktHeroSourceAvailability() {
+		if ($localMode || !$currentUser) {
+			traktHeroSourceAvailable = false;
+			if (heroSource === HOME_HERO_SOURCE_TRAKT_RECOMMENDATIONS) {
+				heroSource = HOME_HERO_SOURCE_CINEMETA;
+				setStoredHomeHeroSource(HOME_HERO_SOURCE_CINEMETA);
+				emitHomeRefresh();
+			}
+			return;
+		}
+
+		try {
+			const status = await getTraktStatus();
+			traktHeroSourceAvailable = Boolean(status.connected && status.configured);
+		} catch {
+			traktHeroSourceAvailable = false;
+		}
+
+		if (!traktHeroSourceAvailable && heroSource === HOME_HERO_SOURCE_TRAKT_RECOMMENDATIONS) {
+			heroSource = HOME_HERO_SOURCE_CINEMETA;
+			setStoredHomeHeroSource(HOME_HERO_SOURCE_CINEMETA);
+			emitHomeRefresh();
+		}
+	}
+
 	function setHeroSource(sourceId: string) {
 		const next = sourceId && sourceId.length > 0 ? sourceId : HOME_HERO_SOURCE_CINEMETA;
 		if (next === heroSource) return;
@@ -90,7 +123,12 @@
 		setStoredHomeHeroSource(next);
 		emitHomeRefresh();
 		trackEvent("home_hero_source_changed", {
-			source: next === HOME_HERO_SOURCE_CINEMETA ? "cinemeta" : "addon_catalog",
+			source:
+				next === HOME_HERO_SOURCE_CINEMETA
+					? "cinemeta"
+					: next === HOME_HERO_SOURCE_TRAKT_RECOMMENDATIONS
+						? "trakt_recommendations"
+						: "addon_catalog",
 		});
 	}
 
@@ -185,6 +223,7 @@
 			{heroSource}
 			{heroSourceLoading}
 			{heroSourceOptions}
+			showTraktRecommendationsOption={traktHeroSourceAvailable}
 			onChange={setHeroSource}
 		/>
 	</div>
