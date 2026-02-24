@@ -82,6 +82,9 @@ func DefaultTranscoder(
 		"-map", fmt.Sprintf("0:a:%d", audioIndex),
 		"-c:v", videoCodec,
 	)
+	if videoCodec == "copy" {
+		args = append(args, "-bsf:v", "h264_mp4toannexb")
+	}
 	args = append(args, videoArgs...)
 	hlsFlags := "independent_segments+temp_file"
 	if appendMode {

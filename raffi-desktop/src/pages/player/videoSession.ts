@@ -201,6 +201,28 @@ export async function loadVideoSession(
         }
         setDuration(sessionData.durationSeconds || 0);
 
+        if (!sessionData.durationSeconds || sessionData.durationSeconds <= 0) {
+            const refreshDuration = async () => {
+                for (let attempt = 0; attempt < 18; attempt++) {
+                    await new Promise((resolve) => setTimeout(resolve, 1000));
+                    try {
+                        const nextRes = await fetch(`${serverUrl}/sessions/${sessionId}`);
+                        if (!nextRes.ok) continue;
+                        const nextData = await nextRes.json();
+                        const nextDuration = Number(nextData?.durationSeconds || 0);
+                        if (Number.isFinite(nextDuration) && nextDuration > 0) {
+                            setDuration(nextDuration);
+                            break;
+                        }
+                    } catch {
+                        continue;
+                    }
+                }
+            };
+
+            void refreshDuration();
+        }
+
         if (sessionData.availableStreams) {
             const audioTracks = sessionData.availableStreams
                 .filter((s: any) => s.type === "audio")

@@ -115,6 +115,7 @@ func (c *Controller) ensureCmdLocked(
 	sess.CmdCancel = cancel
 	sess.CurrentlyAt = seek
 	sess.Paused = false
+	sess.PausedByCap = false
 	sess.LastServedSeq = -1
 	sess.Finished = false
 

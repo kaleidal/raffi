@@ -244,18 +244,25 @@ func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request, id str
 			}
 		}
 
-		if !sess.IsTorrent && (sess.DurationSeconds == 0 || len(sess.Chapters) == 0 || len(sess.AvailableStreams) == 0) {
+		if sess.DurationSeconds == 0 || len(sess.Chapters) == 0 || len(sess.AvailableStreams) == 0 {
 			var meta *hls.Metadata
 			var probeErr error
-			for attempt := 0; attempt < 3; attempt++ {
+			maxAttempts := 3
+			probeTimeout := 12 * time.Second
+			if sess.IsTorrent {
+				maxAttempts = 1
+				probeTimeout = 8 * time.Second
+			}
+
+			for attempt := 0; attempt < maxAttempts; attempt++ {
 				ctx := r.Context()
-				ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
+				ctx, cancel := context.WithTimeout(ctx, probeTimeout)
 				meta, probeErr = s.hlsController.ProbeMetadata(ctx, sess.ID, sess.Source)
 				cancel()
 				if probeErr == nil && meta != nil {
 					break
 				}
-				if attempt < 2 {
+				if attempt < maxAttempts-1 {
 					select {
 					case <-time.After(time.Duration(200*(attempt+1)) * time.Millisecond):
 					case <-r.Context().Done():

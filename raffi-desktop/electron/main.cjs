@@ -1087,8 +1087,25 @@ async function startGoServer() {
   
   goServer.stderr.on("data", (d) => {
     const msg = d.toString();
-    console.error("[go err]", msg);
-    logToFile("[go stderr]", msg);
+    const lines = msg
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    const kept = lines.filter((line) => {
+      if (line.includes("h264 bitstream error, startcode missing")) return false;
+      if (line.includes("error flushing piece storage")) return false;
+      if (line.includes("torrent github.com/anacrolix/torrent torrent.go:")) return false;
+      if (line.includes("FlushFileBuffers: The handle is invalid")) return false;
+      if (line.includes("FlushFileBuffers: Incorrect function")) return false;
+      return true;
+    });
+
+    if (kept.length === 0) return;
+
+    const output = kept.join("\n");
+    console.error("[go err]", output);
+    logToFile("[go stderr]", output);
   });
 }
 
@@ -1106,6 +1123,75 @@ ipcMain.handle("SAVE_CLIP_DIALOG", async (_event, suggestedName) => {
     return { canceled: res.canceled, filePath: res.filePath || null };
   } catch (e) {
     return { canceled: true, filePath: null, error: String(e) };
+  }
+});
+
+ipcMain.handle("SHOW_CONFIRM_DIALOG", async (_event, payload) => {
+  try {
+    const message =
+      payload && typeof payload.message === "string" && payload.message.trim().length > 0
+        ? payload.message
+        : "Are you sure?";
+    const title =
+      payload && typeof payload.title === "string" && payload.title.trim().length > 0
+        ? payload.title
+        : "Confirm";
+
+    const result = await dialog.showMessageBox(mainWindow, {
+      type: "question",
+      title,
+      message,
+      buttons: ["Cancel", "OK"],
+      defaultId: 1,
+      cancelId: 0,
+      noLink: true,
+      normalizeAccessKeys: true,
+    });
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+      mainWindow.webContents.focus();
+    }
+
+    return result.response === 1;
+  } catch (error) {
+    logToFile("SHOW_CONFIRM_DIALOG failed", error);
+    return false;
+  }
+});
+
+ipcMain.handle("SHOW_ALERT_DIALOG", async (_event, payload) => {
+  try {
+    const message =
+      payload && typeof payload.message === "string" && payload.message.trim().length > 0
+        ? payload.message
+        : "";
+    const title =
+      payload && typeof payload.title === "string" && payload.title.trim().length > 0
+        ? payload.title
+        : "Raffi";
+
+    await dialog.showMessageBox(mainWindow, {
+      type: "info",
+      title,
+      message,
+      buttons: ["OK"],
+      defaultId: 0,
+      noLink: true,
+      normalizeAccessKeys: true,
+    });
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+      mainWindow.webContents.focus();
+    }
+
+    return true;
+  } catch (error) {
+    logToFile("SHOW_ALERT_DIALOG failed", error);
+    return false;
   }
 });
 
