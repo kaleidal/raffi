@@ -88,13 +88,36 @@ export function createPlayerCastController(deps: CreatePlayerCastControllerDeps)
             const absoluteCurrentTime = deps.getCurrentTime();
             const playbackOffset = Math.max(0, Number(deps.getPlaybackOffset() || 0));
             const streamRelativeStartTime = Math.max(0, absoluteCurrentTime - playbackOffset);
+            let metadata = deps.getMetadata();
+
+            if (!Number.isFinite(Number(metadata?.durationSeconds || 0)) || Number(metadata?.durationSeconds || 0) <= 0) {
+                try {
+                    for (let attempt = 0; attempt < 8; attempt += 1) {
+                        const res = await fetch(cast.sessionUrl);
+                        if (res.ok) {
+                            const sessionData = await res.json();
+                            const durationSeconds = Number(sessionData?.durationSeconds || 0);
+                            if (Number.isFinite(durationSeconds) && durationSeconds > 0) {
+                                metadata = {
+                                    ...metadata,
+                                    durationSeconds,
+                                };
+                                break;
+                            }
+                        }
+                        await new Promise((resolve) => setTimeout(resolve, 350));
+                    }
+                } catch {
+                    // ignore metadata duration backfill failures
+                }
+            }
 
             const connection = await connectAndLoadCast({
                 deviceId,
                 streamUrl: cast.streamUrl,
                 startTime: streamRelativeStartTime,
                 mode,
-                metadata: deps.getMetadata(),
+                metadata,
             });
 
             deps.setCastActive(true);
