@@ -75,8 +75,9 @@
     </div>
     <script>
       (() => {
-        const FALLBACK_RECEIVER_APP_ID = "CC1AD845";
+        const DEFAULT_RECEIVER_APP_ID = "29330CDE";
         let configuredReceiverAppId = null;
+        let castFrameworkAvailable = false;
         let interactiveTimeout = null;
         let interactiveContextListener = null;
         let availableResolver;
@@ -87,17 +88,13 @@
           setTimeout(() => reject(new Error("Google Cast SDK timed out")), 30000);
         });
 
-        window.__onGCastApiAvailable = function (isAvailable) {
-          if (isAvailable) {
-            availableResolver(true);
-          } else {
-            availableRejecter(new Error("Google Cast SDK unavailable"));
+        function initializeCastApi(receiverApplicationId) {
+          if (!castFrameworkAvailable) {
+            throw new Error("Google Cast SDK unavailable");
           }
-        };
 
-        async function ensureReady(payload) {
-          await castReady;
-          const requestedAppId = String(payload?.receiverAppId || "").trim() || "29330CDE";
+          const requestedAppId =
+            String(receiverApplicationId || "").trim() || DEFAULT_RECEIVER_APP_ID;
           if (configuredReceiverAppId === requestedAppId) {
             return true;
           }
@@ -109,6 +106,26 @@
           });
           configuredReceiverAppId = requestedAppId;
           return true;
+        }
+
+        window["__onGCastApiAvailable"] = function (isAvailable) {
+          if (isAvailable) {
+            castFrameworkAvailable = true;
+            try {
+              initializeCastApi(DEFAULT_RECEIVER_APP_ID);
+            } catch {
+            }
+            availableResolver(true);
+          } else {
+            availableRejecter(new Error("Google Cast SDK unavailable"));
+          }
+        };
+
+        async function ensureReady(payload) {
+          await castReady;
+          const requestedAppId =
+            String(payload?.receiverAppId || "").trim() || DEFAULT_RECEIVER_APP_ID;
+          initializeCastApi(requestedAppId);
         }
 
         function getCurrentSession() {
@@ -169,14 +186,6 @@
           } catch {
             return String(error);
           }
-        }
-
-        function shouldFallbackToDefault(details, requestedAppId) {
-          if (!details || requestedAppId === FALLBACK_RECEIVER_APP_ID) return false;
-          const normalized = String(details).toLowerCase();
-          if (normalized.includes("interactive_session_cancelled")) return false;
-          if (normalized.includes("cast_picker_closed")) return false;
-          return normalized.includes("session_error");
         }
 
         async function beginInteractiveSession(payload) {
@@ -252,7 +261,7 @@
 
         async function requestSession(payload) {
           const requestedAppId =
-            String(payload?.receiverAppId || "").trim() || "29330CDE";
+            String(payload?.receiverAppId || "").trim() || DEFAULT_RECEIVER_APP_ID;
           await ensureReady({ ...payload, receiverAppId: requestedAppId });
           const context = cast.framework.CastContext.getInstance();
           if (context.getCurrentSession()) {
@@ -267,20 +276,6 @@
             if (interactiveSession) return interactiveSession;
           } catch (error) {
             const details = formatError(error);
-            if (shouldFallbackToDefault(details, requestedAppId)) {
-              setStatus("Primary receiver unavailable. Retrying with default receiver...");
-              try {
-                const fallbackSession = await beginInteractiveSession({
-                  ...payload,
-                  receiverAppId: FALLBACK_RECEIVER_APP_ID,
-                });
-                if (fallbackSession) return fallbackSession;
-              } catch (fallbackError) {
-                throw new Error(
-                  `request_session_failed:${details}; fallback_failed:${formatError(fallbackError)}`,
-                );
-              }
-            }
             throw new Error(`request_session_failed:${details}`);
           }
 

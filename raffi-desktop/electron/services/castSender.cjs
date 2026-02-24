@@ -6,14 +6,8 @@ function createCastSenderService({ logToFile, BrowserWindow, path, baseDir }) {
   let activeDeviceName = "";
   let activeDeviceId = "google-cast";
 
-  const senderBridgeUrl =
-    String(process.env.RAFFI_CAST_SENDER_URL || "").trim() ||
-    "https://raffi.al/cast/sender.html";
+  const senderBridgeUrl = "https://raffi.al/cast/sender.html";
   const defaultReceiverAppId = "29330CDE";
-
-  function getLocalFallbackUrl() {
-    return `file://${path.join(baseDir, "cast-sender-host.html")}`;
-  }
 
   function createSenderWindow() {
     if (senderWindow && !senderWindow.isDestroyed()) {
@@ -52,31 +46,19 @@ function createCastSenderService({ logToFile, BrowserWindow, path, baseDir }) {
 
     senderReadyPromise = (async () => {
       const win = createSenderWindow();
-      const urlsToTry = [senderBridgeUrl, getLocalFallbackUrl()];
-      let lastError = null;
+      await win.loadURL(senderBridgeUrl);
 
-      for (const url of urlsToTry) {
-        try {
-          await win.loadURL(url);
+      const hasBridge = await win.webContents.executeJavaScript(
+        "Boolean(window.__raffiCastBridge)",
+        false,
+      );
 
-          const hasBridge = await win.webContents.executeJavaScript(
-            "Boolean(window.__raffiCastBridge)",
-            false,
-          );
-
-          if (!hasBridge) {
-            throw new Error("Cast bridge did not initialize");
-          }
-
-          logToFile("Cast sender bridge ready", { url });
-          return true;
-        } catch (error) {
-          lastError = error;
-          logToFile("Cast sender bridge load failed", { url, error: String(error) });
-        }
+      if (!hasBridge) {
+        throw new Error("Cast bridge did not initialize");
       }
 
-      throw lastError || new Error("Failed to load Cast sender bridge");
+      logToFile("Cast sender bridge ready", { url: senderBridgeUrl });
+      return true;
     })();
 
     try {
