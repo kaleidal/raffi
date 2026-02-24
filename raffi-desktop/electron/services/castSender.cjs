@@ -158,7 +158,12 @@ function createCastSenderService({ logToFile, BrowserWindow, path, baseDir }) {
       if (message.includes("cast_picker_closed") || message.includes("interactive_session_cancelled")) {
         throw new Error("cast_picker_cancelled");
       }
-      if (message.includes("session_error:session_error") || message.endsWith("session_error")) {
+      if (message.includes("NO_DEVICES_AVAILABLE") || message.includes("cast_state:NO_DEVICES_AVAILABLE")) {
+        throw new Error(
+          "session_error (no Cast devices discovered). Ensure Chromecast and this computer are on the same network/VLAN and not isolated by AP/client isolation.",
+        );
+      }
+      if (message.includes("app_id:29330CDE") && (message.includes("session_error") || message.includes("RECEIVER_UNAVAILABLE"))) {
         throw new Error(
           "session_error (receiver app unavailable). Verify app ID 29330CDE is published, or register this Cast device in Cast Developer Console and wait ~15 minutes.",
         );
