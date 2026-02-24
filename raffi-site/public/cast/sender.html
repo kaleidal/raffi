@@ -449,6 +449,32 @@
           return true;
         }
 
+        async function diagnoseEnvironment(payload) {
+          await ensureReady(payload);
+          const customAppId =
+            String(payload?.receiverAppId || "").trim() || DEFAULT_RECEIVER_APP_ID;
+          const fallbackAppId = "CC1AD845";
+          const context = cast.framework.CastContext.getInstance();
+
+          initializeCastApi(customAppId);
+          await new Promise((resolve) => window.setTimeout(resolve, 1200));
+          const customCastState = getCastStateName();
+
+          initializeCastApi(fallbackAppId);
+          await new Promise((resolve) => window.setTimeout(resolve, 1200));
+          const fallbackCastState = getCastStateName();
+
+          initializeCastApi(customAppId);
+
+          return {
+            customAppId,
+            customCastState,
+            fallbackAppId,
+            fallbackCastState,
+            hasSession: Boolean(context.getCurrentSession()),
+          };
+        }
+
         window.__raffiCastBridge = {
           ensureReady,
           beginInteractiveSession,
@@ -460,6 +486,7 @@
           setVolume,
           getStatus,
           endSession,
+          diagnoseEnvironment,
         };
       })();
     </script>
