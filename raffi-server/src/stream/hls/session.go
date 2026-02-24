@@ -25,6 +25,7 @@ type Session struct {
 
 	LastServedSeq int
 	Paused        bool
+	PausedByCap   bool
 
 	SliceIndex int
 	LastSeekID string

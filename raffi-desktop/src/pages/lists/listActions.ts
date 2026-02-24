@@ -4,10 +4,11 @@ import { lists, selectedListId, selectedItem, editingState, listItemsMap } from 
 import { get } from "svelte/store";
 import type { List } from "./types";
 import { trackEvent } from "../../lib/analytics";
+import { confirmDialog } from "../../lib/systemDialogs";
 
 
 export async function handleDeleteList(listId: string) {
-    if (!confirm("Are you sure you want to delete this list?")) return;
+    if (!(await confirmDialog("Are you sure you want to delete this list?", "Delete list"))) return;
     const beforeCount = get(lists).length;
     try {
         await deleteList(listId);
@@ -32,7 +33,7 @@ export async function handleRemoveFromList() {
     const currentSelectedListId = get(selectedListId);
 
     if (!currentSelectedItem || !currentSelectedListId) return;
-    if (!confirm("Remove this item from the list?")) return;
+    if (!(await confirmDialog("Remove this item from the list?", "Remove item"))) return;
 
     try {
         await dbRemoveFromList(currentSelectedListId, currentSelectedItem.imdb_id);

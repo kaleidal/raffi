@@ -51,9 +51,6 @@
       "package.json"
     ],
     "asar": true,
-    "asarUnpack": [
-      "node_modules/**/*"
-    ],
     "linux": {
       "target": [
         "deb",
@@ -127,6 +124,10 @@
         "name": "Video File",
         "role": "Viewer"
       }
+    ],
+    "asarUnpack": [
+      "node_modules/**/*.node",
+      "node_modules/**/prebuilds/**"
     ]
   },
   "dependencies": {
