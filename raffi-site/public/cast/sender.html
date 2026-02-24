@@ -75,6 +75,7 @@
     </div>
     <script>
       (() => {
+        const FALLBACK_RECEIVER_APP_ID = "CC1AD845";
         let configuredReceiverAppId = null;
         let interactiveTimeout = null;
         let interactiveContextListener = null;
@@ -170,6 +171,14 @@
           }
         }
 
+        function shouldFallbackToDefault(details, requestedAppId) {
+          if (!details || requestedAppId === FALLBACK_RECEIVER_APP_ID) return false;
+          const normalized = String(details).toLowerCase();
+          if (normalized.includes("interactive_session_cancelled")) return false;
+          if (normalized.includes("cast_picker_closed")) return false;
+          return normalized.includes("session_error");
+        }
+
         async function beginInteractiveSession(payload) {
           await ensureReady(payload);
           const context = cast.framework.CastContext.getInstance();
@@ -194,6 +203,8 @@
                     ? " — app ID may be unavailable on this device."
                     : "";
                   setStatus(`Session request failed: ${details}${hint}`);
+                  reject(new Error(`interactive_session_request_failed:${details}`));
+                  clearInteractiveFlow();
                 }
               };
             }
@@ -240,17 +251,37 @@
         }
 
         async function requestSession(payload) {
-          await ensureReady(payload);
+          const requestedAppId =
+            String(payload?.receiverAppId || "").trim() || "29330CDE";
+          await ensureReady({ ...payload, receiverAppId: requestedAppId });
           const context = cast.framework.CastContext.getInstance();
           if (context.getCurrentSession()) {
             return context.getCurrentSession();
           }
 
           try {
-            const interactiveSession = await beginInteractiveSession(payload);
+            const interactiveSession = await beginInteractiveSession({
+              ...payload,
+              receiverAppId: requestedAppId,
+            });
             if (interactiveSession) return interactiveSession;
           } catch (error) {
-            throw new Error(`request_session_failed:${formatError(error)}`);
+            const details = formatError(error);
+            if (shouldFallbackToDefault(details, requestedAppId)) {
+              setStatus("Primary receiver unavailable. Retrying with default receiver...");
+              try {
+                const fallbackSession = await beginInteractiveSession({
+                  ...payload,
+                  receiverAppId: FALLBACK_RECEIVER_APP_ID,
+                });
+                if (fallbackSession) return fallbackSession;
+              } catch (fallbackError) {
+                throw new Error(
+                  `request_session_failed:${details}; fallback_failed:${formatError(fallbackError)}`,
+                );
+              }
+            }
+            throw new Error(`request_session_failed:${details}`);
           }
 
           const session = context.getCurrentSession();
