@@ -1,4 +1,4 @@
-function createCastSenderService({ logToFile, BrowserWindow, path, baseDir }) {
+function createCastSenderService({ logToFile, BrowserWindow, shell, path, baseDir }) {
   let senderWindow = null;
   let senderReadyPromise = null;
 
@@ -8,6 +8,23 @@ function createCastSenderService({ logToFile, BrowserWindow, path, baseDir }) {
 
   const senderBridgeUrl = "https://raffi.al/cast/sender.html";
   const defaultReceiverAppId = "29330CDE";
+
+  async function openBrowserFallback({ appId, streamUrl, startTime, metadata, reason }) {
+    if (!shell?.openExternal) {
+      return false;
+    }
+    const target = new URL(senderBridgeUrl);
+    target.searchParams.set("mode", "standalone");
+    target.searchParams.set("receiverAppId", String(appId || defaultReceiverAppId));
+    target.searchParams.set("streamUrl", String(streamUrl || ""));
+    target.searchParams.set("startTime", String(Math.max(0, Number(startTime || 0))));
+    target.searchParams.set("title", String(metadata?.title || "Raffi"));
+    target.searchParams.set("subtitle", String(metadata?.subtitle || ""));
+    target.searchParams.set("cover", String(metadata?.cover || ""));
+    target.searchParams.set("reason", String(reason || "electron_no_devices"));
+    await shell.openExternal(target.toString());
+    return true;
+  }
 
   function createSenderWindow() {
     if (senderWindow && !senderWindow.isDestroyed()) {
@@ -217,14 +234,44 @@ function createCastSenderService({ logToFile, BrowserWindow, path, baseDir }) {
 
         const customState = String(diagnostics?.customCastState || "UNKNOWN");
         const fallbackState = String(diagnostics?.fallbackCastState || "UNKNOWN");
+        const customProbeError = String(diagnostics?.customDetails?.error || "").trim();
+        const fallbackProbeError = String(diagnostics?.fallbackDetails?.error || "").trim();
+        const sdkAvailability = {
+          custom: Boolean(diagnostics?.customDetails?.sdkAvailable),
+          fallback: Boolean(diagnostics?.fallbackDetails?.sdkAvailable),
+          customNamespace: Boolean(diagnostics?.customDetails?.castNamespaceAvailable),
+          fallbackNamespace: Boolean(diagnostics?.fallbackDetails?.castNamespaceAvailable),
+          customIsAvailable: Boolean(diagnostics?.customDetails?.castIsAvailable),
+          fallbackIsAvailable: Boolean(diagnostics?.fallbackDetails?.castIsAvailable),
+        };
+
+        if (customState === "UNKNOWN" && fallbackState === "UNKNOWN") {
+          throw new Error(
+            `session_error (cast state probe failed in sender runtime). custom_probe_error=${customProbeError || "none"}, fallback_probe_error=${fallbackProbeError || "none"}, sdk=${JSON.stringify(sdkAvailability)}`,
+          );
+        }
+
         if (fallbackState !== "NO_DEVICES_AVAILABLE" && customState === "NO_DEVICES_AVAILABLE") {
           throw new Error(
             `session_error (receiver app not available on discovered device). custom_state=${customState}, fallback_state=${fallbackState}, app_id=${appId}`,
           );
         }
 
+        let browserFallbackOpened = false;
+        try {
+          browserFallbackOpened = await openBrowserFallback({
+            appId,
+            streamUrl,
+            startTime,
+            metadata,
+            reason: "no_devices_available_in_electron",
+          });
+        } catch (fallbackError) {
+          logToFile("Cast browser fallback open failed", fallbackError);
+        }
+
         throw new Error(
-          `session_error (no Cast devices discovered after retry). custom_state=${customState}, fallback_state=${fallbackState}. Ensure Chromecast and this computer are on the same network/VLAN and AP/client isolation is disabled.`,
+          `session_error (no Cast devices discovered after retry). custom_state=${customState}, fallback_state=${fallbackState}, custom_probe_error=${customProbeError || "none"}, fallback_probe_error=${fallbackProbeError || "none"}, browser_fallback_opened=${browserFallbackOpened}.`,
         );
       }
     }
