@@ -476,6 +476,9 @@ func (s *Server) handleHLSSessionAsset(w http.ResponseWriter, r *http.Request, s
 
 		finalContent := strings.Join(lines, "\n")
 		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
+		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
 		http.ServeContent(w, r, asset, time.Now(), strings.NewReader(finalContent))
 		return
 	}

@@ -39,15 +39,24 @@ declare global {
                 }>;
                 listDevices?: (timeoutMs?: number) => Promise<Array<{ id: string; name: string; host: string }>>;
                 connectAndLoad?: (payload: {
-                    deviceId: string;
+                    deviceId?: string;
                     streamUrl: string;
                     startTime?: number;
+                    mode?: "native" | "chrome";
                     metadata?: {
                         title?: string;
                         subtitle?: string;
                         cover?: string;
+                        background?: string;
+                        durationSeconds?: number;
                     };
-                }) => Promise<{ active: boolean; deviceId: string; mediaUrl: string }>;
+                }) => Promise<{
+                    active: boolean;
+                    deviceId: string;
+                    mediaUrl: string;
+                    deviceName?: string;
+                    transport?: "native" | "chrome";
+                }>;
                 play?: () => Promise<void>;
                 pause?: () => Promise<void>;
                 seek?: (currentTime: number) => Promise<void>;
