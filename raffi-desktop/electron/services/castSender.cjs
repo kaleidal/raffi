@@ -70,6 +70,21 @@ function createCastSenderService({ logToFile, BrowserWindow, path, baseDir }) {
     }
   }
 
+  async function reloadSenderBridge() {
+    const win = createSenderWindow();
+    await win.loadURL(senderBridgeUrl);
+    const hasBridge = await win.webContents.executeJavaScript(
+      "Boolean(window.__raffiCastBridge)",
+      false,
+    );
+    if (!hasBridge) {
+      throw new Error("Cast bridge did not initialize after reload");
+    }
+    senderReadyPromise = Promise.resolve(true);
+    logToFile("Cast sender bridge reloaded", { url: senderBridgeUrl });
+    return true;
+  }
+
   async function invokeBridge(method, payload, withUserGesture = false) {
     await ensureSenderReady();
     if (!senderWindow || senderWindow.isDestroyed()) {
@@ -116,6 +131,19 @@ function createCastSenderService({ logToFile, BrowserWindow, path, baseDir }) {
     return [];
   }
 
+  function buildLoadPayload({ appId, streamUrl, startTime, metadata }) {
+    return {
+      receiverAppId: appId,
+      streamUrl,
+      startTime: Math.max(0, Number(startTime || 0)),
+      metadata: {
+        title: String(metadata?.title || "Raffi"),
+        subtitle: String(metadata?.subtitle || ""),
+        cover: String(metadata?.cover || ""),
+      },
+    };
+  }
+
   async function connectAndLoad({
     streamUrl,
     startTime = 0,
@@ -138,37 +166,71 @@ function createCastSenderService({ logToFile, BrowserWindow, path, baseDir }) {
     }
 
     let status;
-    try {
-      status = await invokeBridge(
-        "loadMedia",
-        {
-          receiverAppId: appId,
-          streamUrl,
-          startTime: Math.max(0, Number(startTime || 0)),
-          metadata: {
-            title: String(metadata?.title || "Raffi"),
-            subtitle: String(metadata?.subtitle || ""),
-            cover: String(metadata?.cover || ""),
-          },
-        },
-        true,
-      );
-    } catch (error) {
-      const message = String(error?.message || error || "cast_connect_failed");
-      if (message.includes("cast_picker_closed") || message.includes("interactive_session_cancelled")) {
-        throw new Error("cast_picker_cancelled");
-      }
-      if (message.includes("NO_DEVICES_AVAILABLE") || message.includes("cast_state:NO_DEVICES_AVAILABLE")) {
+    let lastError = null;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        status = await invokeBridge(
+          "loadMedia",
+          buildLoadPayload({ appId, streamUrl, startTime, metadata }),
+          true,
+        );
+        lastError = null;
+        break;
+      } catch (error) {
+        const message = String(error?.message || error || "cast_connect_failed");
+        lastError = error;
+
+        if (message.includes("cast_picker_closed") || message.includes("interactive_session_cancelled")) {
+          throw new Error("cast_picker_cancelled");
+        }
+
+        const noDevices = message.includes("NO_DEVICES_AVAILABLE") || message.includes("cast_state:NO_DEVICES_AVAILABLE");
+        if (!noDevices) {
+          if (message.includes("app_id:29330CDE") && (message.includes("session_error") || message.includes("RECEIVER_UNAVAILABLE"))) {
+            throw new Error(
+              "session_error (receiver app unavailable). Verify app ID 29330CDE is published, or register this Cast device in Cast Developer Console and wait ~15 minutes.",
+            );
+          }
+          throw error;
+        }
+
+        logToFile("Cast no-devices state during connectAndLoad", { attempt, message });
+        if (attempt === 0) {
+          await reloadSenderBridge();
+          if (senderWindow && !senderWindow.isDestroyed()) {
+            senderWindow.show();
+            senderWindow.focus();
+            senderWindow.webContents.focus();
+          }
+          continue;
+        }
+
+        let diagnostics = null;
+        try {
+          diagnostics = await invokeBridge("diagnoseEnvironment", { receiverAppId: appId }, false);
+        } catch (diagnosticError) {
+          diagnostics = {
+            failed: true,
+            reason: String(diagnosticError?.message || diagnosticError || "diagnostic_failed"),
+          };
+        }
+
+        const customState = String(diagnostics?.customCastState || "UNKNOWN");
+        const fallbackState = String(diagnostics?.fallbackCastState || "UNKNOWN");
+        if (fallbackState !== "NO_DEVICES_AVAILABLE" && customState === "NO_DEVICES_AVAILABLE") {
+          throw new Error(
+            `session_error (receiver app not available on discovered device). custom_state=${customState}, fallback_state=${fallbackState}, app_id=${appId}`,
+          );
+        }
+
         throw new Error(
-          "session_error (no Cast devices discovered). Ensure Chromecast and this computer are on the same network/VLAN and not isolated by AP/client isolation.",
+          `session_error (no Cast devices discovered after retry). custom_state=${customState}, fallback_state=${fallbackState}. Ensure Chromecast and this computer are on the same network/VLAN and AP/client isolation is disabled.`,
         );
       }
-      if (message.includes("app_id:29330CDE") && (message.includes("session_error") || message.includes("RECEIVER_UNAVAILABLE"))) {
-        throw new Error(
-          "session_error (receiver app unavailable). Verify app ID 29330CDE is published, or register this Cast device in Cast Developer Console and wait ~15 minutes.",
-        );
-      }
-      throw error;
+    }
+
+    if (!status) {
+      throw lastError || new Error("cast_connect_failed");
     }
 
     activeMediaUrl = streamUrl;
