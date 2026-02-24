@@ -15,6 +15,7 @@ import (
 	"raffi-server/src/session"
 	"raffi-server/src/stream"
 	"raffi-server/src/stream/hls"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,6 +32,8 @@ type Server struct {
 }
 
 func main() {
+	debug.SetTraceback("single")
+
 	srv := &Server{
 		sessions:        session.NewMemoryStore(),
 		torrentStreamer: stream.NewTorrentStreamer(filepath.Join(os.TempDir(), "raffi-torrents")),
