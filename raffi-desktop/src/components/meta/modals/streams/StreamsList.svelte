@@ -36,7 +36,11 @@
                 </span>
             </div>
             {#each localFilteredStreams as item (item.key)}
-                <StreamCard {item} on:click={() => onStreamClick(item.stream)} />
+                <StreamCard
+                    {item}
+                    disabled={item.isFailed}
+                    on:click={() => onStreamClick(item.stream)}
+                />
             {/each}
 
             {#if addonFilteredStreams.length}
@@ -51,7 +55,12 @@
                 </span>
             </div>
             {#each addonFilteredStreams as item (item.key)}
-                <StreamCard {item} showPeers on:click={() => onStreamClick(item.stream)} />
+                <StreamCard
+                    {item}
+                    showPeers
+                    disabled={item.isFailed}
+                    on:click={() => onStreamClick(item.stream)}
+                />
             {/each}
         {/if}
     {/if}

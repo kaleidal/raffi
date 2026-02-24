@@ -20,6 +20,8 @@ export interface ParsedStreamMetadata {
 
 export interface EnrichedStream {
     key: string;
+    failureKey: string | null;
+    isFailed: boolean;
     stream: any;
     meta: ParsedStreamMetadata;
 }

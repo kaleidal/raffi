@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 )
 
 func (c *Controller) StopSession(id string) error {
@@ -42,15 +43,6 @@ func (c *Controller) CleanupOrphanedSessions() {
 		return
 	}
 
-	raffiTorrentsTempDir := filepath.Join(os.TempDir(), "raffi-torrents")
-	torrents, err := os.ReadDir(raffiTorrentsTempDir)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			log.Printf("Failed to read temp directory: %v", err)
-		}
-		return
-	}
-
 	// Get active session IDs
 	c.mu.Lock()
 	activeIDs := make(map[string]bool)
@@ -58,6 +50,9 @@ func (c *Controller) CleanupOrphanedSessions() {
 		activeIDs[id] = true
 	}
 	c.mu.Unlock()
+
+	orphanGrace := 10 * time.Minute
+	now := time.Now()
 
 	// Remove directories for non-active sessions
 	for _, entry := range entries {
@@ -67,21 +62,14 @@ func (c *Controller) CleanupOrphanedSessions() {
 		sessionID := entry.Name()
 		if !activeIDs[sessionID] {
 			dirPath := filepath.Join(raffiTempDir, sessionID)
-			log.Printf("Removing orphaned session directory: %s", sessionID)
-			if err := os.RemoveAll(dirPath); err != nil {
-				log.Printf("Failed to remove orphaned directory %s: %v", dirPath, err)
+			info, statErr := os.Stat(dirPath)
+			if statErr != nil {
+				continue
 			}
-		}
-	}
-
-	for _, entry := range torrents {
-		if !entry.IsDir() {
-			continue
-		}
-		torrentID := entry.Name()
-		if !activeIDs[torrentID] {
-			dirPath := filepath.Join(raffiTorrentsTempDir, torrentID)
-			log.Printf("Removing orphaned torrent directory: %s", torrentID)
+			if now.Sub(info.ModTime()) < orphanGrace {
+				continue
+			}
+			log.Printf("Removing orphaned session directory: %s", sessionID)
 			if err := os.RemoveAll(dirPath); err != nil {
 				log.Printf("Failed to remove orphaned directory %s: %v", dirPath, err)
 			}

@@ -17,7 +17,8 @@
     import { ChevronLeft } from "lucide-svelte";
     import * as NavigationLogic from "../meta/navigationLogic";
     import * as ProgressLogic from "../meta/progressLogic";
-    import { progressMap as metaProgressMap } from "../meta/metaState";
+    import { progressMap as metaProgressMap, streamsPopupVisible } from "../meta/metaState";
+    import { markCurrentStreamAsFailed } from "../meta/streamLogic";
 
     import {
         isPlaying,
@@ -219,6 +220,7 @@
     let bufferingStartedAt = 0;
     let errorModalOpen = false;
     let reprobeAttempted = false;
+    let torrentFailureExitTimeout: ReturnType<typeof setTimeout> | null = null;
 
     const getTraktMediaType = (): "movie" | "episode" => {
         return metaData?.meta?.type === "series" ? "episode" : "movie";
@@ -258,8 +260,40 @@
 
     $: showNextEpisodeAllowed = $showNextEpisode && hasNextEpisode;
 
+    const handleTorrentError = (message: string) => {
+        if (torrentFailureExitTimeout) {
+            clearTimeout(torrentFailureExitTimeout);
+            torrentFailureExitTimeout = null;
+        }
+
+        const details = String(message || "").trim();
+        const reason = details
+            ? `Bad torrent stream: ${details}. Please select another stream.`
+            : "Bad torrent stream. Please select another stream.";
+
+        markCurrentStreamAsFailed(reason);
+        loading.set(false);
+        showCanvas.set(false);
+        showError.set(true);
+        errorMessage.set("Stream failed");
+        errorDetails.set(reason);
+        streamsPopupVisible.set(true);
+
+        trackEvent("torrent_stream_failed", {
+            reason: details || null,
+            ...getPlaybackAnalyticsProps(),
+        });
+
+        torrentFailureExitTimeout = setTimeout(() => {
+            showError.set(false);
+            handleClose();
+            torrentFailureExitTimeout = null;
+        }, 1400);
+    };
+
     const torrentStatusPoller = createTorrentStatusPoller({
         serverUrl,
+        onTorrentError: handleTorrentError,
     });
 
     let playPauseFeedback: { type: "play" | "pause"; id: number } | null = null;
@@ -422,6 +456,7 @@
         clearInterval(metadataCheckInterval);
         torrentStatusPoller.stop();
         if (playPauseFeedbackTimeout) clearTimeout(playPauseFeedbackTimeout);
+        if (torrentFailureExitTimeout) clearTimeout(torrentFailureExitTimeout);
         playerSessionLoader.clearLoadTimeout();
         Session.cleanupSession(
             hls,

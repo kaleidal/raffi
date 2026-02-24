@@ -85,7 +85,27 @@ func (ts *TorrentStream) status() TorrentStatus {
 	stats := ts.t.Stats()
 	st.Peers = stats.ActivePeers
 	st.PiecesComplete = stats.PiecesComplete
-	st.PiecesTotal = ts.t.NumPieces()
+
+	func() {
+		defer func() {
+			if recover() != nil {
+				st.PiecesTotal = 0
+			}
+		}()
+
+		if !infoReady {
+			st.PiecesTotal = 0
+			return
+		}
+
+		if ts.t.Info() == nil {
+			st.PiecesTotal = 0
+			return
+		}
+
+		st.PiecesTotal = ts.t.NumPieces()
+	}()
+
 	if st.PiecesTotal > 0 {
 		st.Progress = float64(st.PiecesComplete) / float64(st.PiecesTotal)
 	}
@@ -377,6 +397,16 @@ func (s *TorrentStreamer) RemoveTorrent(infoHash string) {
 		log.Printf("Dropping torrent %s", infoHash)
 		stream.t.Drop()
 	}
+}
+
+func (s *TorrentStreamer) GetStatus(infoHash string) (TorrentStatus, bool) {
+	s.mu.RLock()
+	stream, ok := s.streams[infoHash]
+	s.mu.RUnlock()
+	if !ok || stream == nil {
+		return TorrentStatus{}, false
+	}
+	return stream.status(), true
 }
 
 func (s *TorrentStreamer) Close() {

@@ -5,6 +5,7 @@ import {
     formatAvailability,
     parsePeerCount,
 } from "../../../../lib/streams/streamMetadata";
+import { getStreamFailureKey } from "../../../../pages/meta/streamFailures";
 import type {
     AudioFilter,
     EnrichedStream,
@@ -196,7 +197,11 @@ export function parseStreamMetadata(stream: any): ParsedStreamMetadata {
     };
 }
 
-export function buildEnrichedStreams(streams: any[]): EnrichedStream[] {
+export function buildEnrichedStreams(
+    streams: any[],
+    failedKeys: string[] = [],
+): EnrichedStream[] {
+    const failedSet = new Set(failedKeys);
     const keyCounts = new Map<string, number>();
 
     return streams.map((stream, index) => {
@@ -207,9 +212,12 @@ export function buildEnrichedStreams(streams: any[]): EnrichedStream[] {
         keyCounts.set(baseKey, seen + 1);
 
         const key = seen === 0 ? baseKey : `${baseKey}::dup-${seen}-${index}`;
+        const failureKey = getStreamFailureKey(stream);
 
         return {
             key,
+            failureKey,
+            isFailed: failureKey ? failedSet.has(failureKey) : false,
             stream,
             meta: parseStreamMetadata(stream),
         };
