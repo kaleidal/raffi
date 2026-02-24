@@ -17,6 +17,8 @@ export type CastDevice = {
 export type CastStatus = {
     active: boolean;
     deviceId?: string;
+    deviceName?: string;
+    transport?: "native" | "chrome";
     mediaUrl?: string;
     playerState?: string;
     currentTime?: number;
@@ -28,12 +30,15 @@ type CastMetadata = {
     title?: string;
     subtitle?: string;
     cover?: string;
+    background?: string;
+    durationSeconds?: number;
 };
 
 type CastConnectPayload = {
     deviceId?: string;
     streamUrl: string;
     startTime?: number;
+    mode?: "native" | "chrome";
     metadata?: CastMetadata;
 };
 
@@ -67,12 +72,24 @@ export async function listCastDevices(timeoutMs = 3000): Promise<CastDevice[]> {
     return api.listDevices(timeoutMs) as Promise<CastDevice[]>;
 }
 
-export async function connectAndLoadCast(payload: CastConnectPayload): Promise<{ active: boolean; deviceId: string; mediaUrl: string }> {
+export async function connectAndLoadCast(payload: CastConnectPayload): Promise<{
+    active: boolean;
+    deviceId: string;
+    mediaUrl: string;
+    deviceName?: string;
+    transport?: "native" | "chrome";
+}> {
     const api = getCastApi();
     if (!api.connectAndLoad) {
         throw new Error("Cast connect API unavailable");
     }
-    return api.connectAndLoad(payload) as Promise<{ active: boolean; deviceId: string; mediaUrl: string }>;
+    return api.connectAndLoad(payload) as Promise<{
+        active: boolean;
+        deviceId: string;
+        mediaUrl: string;
+        deviceName?: string;
+        transport?: "native" | "chrome";
+    }>;
 }
 
 export async function playCast(): Promise<void> {

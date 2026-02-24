@@ -14,6 +14,7 @@
     import type { ShowResponse } from "../../lib/library/types/meta_types";
     import { watchParty } from "../../lib/stores/watchPartyStore";
     import { localMode } from "../../lib/stores/authStore";
+    import { flushPendingLibraryProgress } from "../../lib/db/db";
     import { trackEvent } from "../../lib/analytics";
     import { ChevronLeft } from "lucide-svelte";
     import * as NavigationLogic from "../meta/navigationLogic";
@@ -82,6 +83,7 @@
     import { createPlayerSessionLoader } from "./playerSessionLoader";
     import { createPlayerModalHandlers } from "./playerModalHandlers";
     import { createPlayerCastController } from "./playerCastController";
+    import { getCastStatus, listCastDevices, type CastDevice } from "../../lib/cast";
 
     import { serverUrl } from "../../lib/client";
 
@@ -199,6 +201,9 @@
     };
 
     const handleClose = () => {
+        if (imdbID) {
+            void flushPendingLibraryProgress(imdbID);
+        }
         if (hasStarted && !traktScrobbler.isStopSent()) {
             void traktScrobbler.send("stop", true);
         }
@@ -225,18 +230,34 @@
     let torrentFailureExitTimeout: ReturnType<typeof setTimeout> | null = null;
     let castActive = false;
     let castBusy = false;
+    let castTransport: "native" | "chrome" | null = null;
     let castDeviceName = "";
     let showCastDeviceModal = false;
     let castDeviceModalLoading = false;
+    let castDeviceModalMode: "native" | "chrome" = "native";
+    let castModalStep: "mode" | "native-devices" = "mode";
+    let nativeCastDevices: CastDevice[] = [];
+    let castStatusInterval: ReturnType<typeof setInterval> | null = null;
 
-    const showCastDeviceScanLoading = () => {
+    const showCastDeviceScanLoading = (mode: "native" | "chrome") => {
         showCastDeviceModal = true;
         castDeviceModalLoading = true;
+        castDeviceModalMode = mode;
+    };
+
+    const showCastDeviceModePicker = () => {
+        showCastDeviceModal = true;
+        castDeviceModalLoading = false;
+        castDeviceModalMode = "native";
+        castModalStep = "mode";
+        nativeCastDevices = [];
     };
 
     const hideCastDevicePicker = () => {
         showCastDeviceModal = false;
         castDeviceModalLoading = false;
+        castModalStep = "mode";
+        nativeCastDevices = [];
     };
 
     const castController = createPlayerCastController({
@@ -252,7 +273,15 @@
         setCastDeviceName: (name) => {
             castDeviceName = name;
         },
+        setCastTransport: (mode) => {
+            castTransport = mode;
+        },
+        getCastTransport: () => castTransport,
+        setHasStarted: (started) => {
+            hasStarted = started;
+        },
         getCurrentTime: () => $currentTime,
+        getPlaybackOffset: () => $playbackOffset,
         setCurrentTime: currentTime.set,
         setVolumeLevel: volume.set,
         setIsPlaying: isPlaying.set,
@@ -285,11 +314,104 @@
                 metaData?.meta?.type === "series" && season != null && episode != null
                     ? `S${season} E${episode}`
                     : undefined,
+            cover: String((metaData as any)?.meta?.poster || (metaData as any)?.meta?.logo || ""),
+            background: String((metaData as any)?.meta?.background || ""),
+            durationSeconds: Number($duration || 0),
         }),
     });
 
     const openCastBootstrap = async () => {
-        await castController.connectOrDisconnect();
+        if (castBusy) return;
+        if (castActive) {
+            await castController.connectOrDisconnect(castTransport || "native");
+            return;
+        }
+        showCastDeviceModePicker();
+    };
+
+    const startCastWithMode = async (mode: "native" | "chrome") => {
+        await castController.connectOrDisconnect(mode);
+    };
+
+    const openNativeDeviceSelection = async () => {
+        castModalStep = "native-devices";
+        castDeviceModalMode = "native";
+        castDeviceModalLoading = true;
+        nativeCastDevices = [];
+        try {
+            const devices = await listCastDevices(5000);
+            nativeCastDevices = devices;
+            if (devices.length === 0) {
+                await ((window as any).electronAPI?.showAlertDialog?.(
+                    "No Chromecast devices found. Make sure your TV and computer are on the same LAN.",
+                    "No Cast Devices",
+                ) || Promise.resolve());
+            }
+        } catch (error) {
+            await ((window as any).electronAPI?.showAlertDialog?.(
+                error instanceof Error ? error.message : String(error),
+                "Native Cast Discovery Failed",
+            ) || Promise.resolve());
+        } finally {
+            castDeviceModalLoading = false;
+        }
+    };
+
+    const startNativeCastWithDevice = async (deviceId: string) => {
+        await castController.connectOrDisconnect("native", deviceId);
+    };
+
+    const startCastStatusPolling = () => {
+        if (castStatusInterval) {
+            return;
+        }
+
+        const poll = async () => {
+            if (!castActive) {
+                return;
+            }
+            try {
+                const status = await getCastStatus();
+                if (!status?.active) {
+                    castActive = false;
+                    castTransport = null;
+                    castDeviceName = "";
+                    return;
+                }
+
+                if (status.deviceName) {
+                    castDeviceName = status.deviceName;
+                }
+                if (status.transport) {
+                    castTransport = status.transport;
+                }
+
+                if (castTransport === "native" || castTransport === "chrome") {
+                    const castTime = Number(status.currentTime || 0);
+                    const playbackOffsetValue = get(playbackOffset);
+                    const playbackOffsetSeconds = Math.max(0, Number(playbackOffsetValue || 0));
+                    if (Number.isFinite(castTime) && castTime >= 0) {
+                        const absoluteCastTime = castTime + playbackOffsetSeconds;
+                        hasStarted = true;
+                        currentTime.set(absoluteCastTime);
+                        handleProgressInternal(absoluteCastTime, $duration);
+                    }
+                    const playerState = String(status.playerState || "").toUpperCase();
+                    if (playerState.includes("PAUSE") || playerState.includes("IDLE")) {
+                        isPlaying.set(false);
+                    } else if (playerState.length > 0) {
+                        isPlaying.set(true);
+                    }
+                }
+            } catch {
+                // ignore transient status polling errors
+            }
+        };
+
+        void poll();
+        castStatusInterval = setInterval(() => {
+            void poll();
+        }, 1000);
     };
 
     const getTraktMediaType = (): "movie" | "episode" => {
@@ -439,8 +561,10 @@
         if ($watchParty.isActive && !$watchParty.isHost) return;
 
         if (castActive) {
-            triggerPlayPauseFeedback($isPlaying ? "pause" : "play");
-            void castController.togglePlay($isPlaying);
+            if (castTransport === "native") {
+                triggerPlayPauseFeedback($isPlaying ? "pause" : "play");
+                void castController.togglePlay($isPlaying);
+            }
             return;
         }
 
@@ -530,6 +654,9 @@
     });
 
     onDestroy(() => {
+        if (imdbID) {
+            void flushPendingLibraryProgress(imdbID);
+        }
         if (hasStarted && !traktScrobbler.isStopSent()) {
             void traktScrobbler.send("stop", true);
         }
@@ -547,6 +674,10 @@
             $watchParty.isActive,
         );
         void castController.cleanup();
+        if (castStatusInterval) {
+            clearInterval(castStatusInterval);
+            castStatusInterval = null;
+        }
         resetPlayerState();
         hasStarted = false;
     });
@@ -754,6 +885,15 @@
         videoElem.muted = false;
     }
 
+    $: if (castActive) {
+        if (!castStatusInterval) {
+            startCastStatusPolling();
+        }
+    } else if (castStatusInterval) {
+        clearInterval(castStatusInterval);
+        castStatusInterval = null;
+    }
+
     $: {
         resizeCounter;
         cueLinePercent = Subtitles.computeCueLinePercent(
@@ -864,7 +1004,11 @@
         <div class="absolute inset-0 z-20 flex items-center justify-center bg-black text-white pointer-events-none">
             <div class="text-center">
                 <div class="text-2xl font-semibold">Casting to {castDeviceName || "Chromecast"}</div>
-                <div class="text-sm text-white/70 mt-2">Playback is running on your TV</div>
+                <div class="text-sm text-white/70 mt-2">
+                    {castTransport === "chrome"
+                        ? "Playback is running on your TV via Chrome"
+                        : "Playback is running on your TV"}
+                </div>
             </div>
         </div>
     {/if}
@@ -921,7 +1065,7 @@
                 onSeekChange={(e) =>
                     controlsManager.onSeekChange(e, $duration, seekToTime)}
                 onVolumeChange={(e) =>
-                    castActive
+                    castActive && castTransport === "native"
                         ? (() => {
                             const target = e.target as HTMLInputElement;
                             const nextVolume = Number(target?.value ?? $volume);
@@ -1003,6 +1147,22 @@
     <CastDeviceModal
         open={showCastDeviceModal}
         loading={castDeviceModalLoading}
+        loadingMode={castDeviceModalMode}
+        step={castModalStep}
+        nativeDevices={nativeCastDevices}
+        on:selectNativeDevice={(e) => {
+            void startNativeCastWithDevice((e as CustomEvent<{ deviceId: string }>).detail?.deviceId || "");
+        }}
+        onBackToMode={() => {
+            castModalStep = "mode";
+            castDeviceModalLoading = false;
+        }}
+        onNative={() => {
+            void openNativeDeviceSelection();
+        }}
+        onChrome={() => {
+            void startCastWithMode("chrome");
+        }}
         onCancel={hideCastDevicePicker}
     />
 </div>
