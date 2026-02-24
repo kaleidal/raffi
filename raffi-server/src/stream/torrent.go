@@ -189,6 +189,27 @@ func (ts *TorrentStream) prepare() error {
 		p.SetPriority(torrent.PiecePriorityNow)
 	}
 
+	if targetFile.Length() > 0 {
+		tailBytes := int64(64 * 1024 * 1024)
+		if targetFile.Length() < tailBytes {
+			tailBytes = targetFile.Length()
+		}
+		tailOffset := targetFile.Offset() + targetFile.Length() - tailBytes
+		tailStartPiece := int(tailOffset / pl)
+		tailEndPiece := int((targetFile.Offset() + targetFile.Length() - 1) / pl)
+		if tailStartPiece < 0 {
+			tailStartPiece = 0
+		}
+		if tailEndPiece >= ts.t.NumPieces() {
+			tailEndPiece = ts.t.NumPieces() - 1
+		}
+		for i := tailStartPiece; i <= tailEndPiece; i++ {
+			p := ts.t.Piece(i)
+			p.SetPriority(torrent.PiecePriorityNow)
+		}
+		log.Printf("Prioritized tail pieces for metadata: %d-%d", tailStartPiece, tailEndPiece)
+	}
+
 	// Stats logger
 	go func(infoHash string) {
 		for range time.Tick(5 * time.Second) {
@@ -207,7 +228,7 @@ func (ts *TorrentStream) prepare() error {
 	// Best-effort short wait for the first piece, but don't block forever
 	log.Printf("Waiting for first piece of torrent %s (piece %d)...",
 		ts.t.InfoHash().HexString(), startPiece)
-	deadline := time.Now().Add(90 * time.Second)
+	deadline := time.Now().Add(15 * time.Second)
 	for {
 		if ts.t.Piece(startPiece).State().Complete {
 			log.Printf("First piece ready, streaming can start")
@@ -334,7 +355,11 @@ func (s *TorrentStreamer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer tr.Close()
 
 	tr.SetResponsive()
-	tr.SetReadahead(10 * 1024 * 1024)
+	if r.URL.Query().Get("metadata") == "1" {
+		tr.SetReadahead(256 * 1024 * 1024)
+	} else {
+		tr.SetReadahead(16 * 1024 * 1024)
+	}
 	name := filepath.Base(stream.filePath)
 
 	http.ServeContent(w, r, name, time.Now(), tr)

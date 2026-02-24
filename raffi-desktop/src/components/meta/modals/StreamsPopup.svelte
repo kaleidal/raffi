@@ -356,14 +356,27 @@
         hasTrackedOpen = false;
     }
 
-    $: enrichedStreams = streams.map((stream, index) => ({
-        key:
-            stream?.url ||
-            stream?.infoHash ||
-            `${stream?.name ?? "stream"}-${index}`,
-        stream,
-        meta: parseStreamMetadata(stream),
-    }));
+    $: enrichedStreams = (() => {
+        const keyCounts = new Map<string, number>();
+
+        return streams.map((stream, index) => {
+            const baseKey =
+                stream?.url ||
+                stream?.infoHash ||
+                `${stream?.name ?? "stream"}-${stream?.fileIdx ?? "na"}`;
+
+            const seen = keyCounts.get(baseKey) ?? 0;
+            keyCounts.set(baseKey, seen + 1);
+
+            const key = seen === 0 ? baseKey : `${baseKey}::dup-${seen}-${index}`;
+
+            return {
+                key,
+                stream,
+                meta: parseStreamMetadata(stream),
+            };
+        });
+    })();
 
     $: filteredStreams = (() => {
         const filtered = enrichedStreams.filter(({ meta }) => {

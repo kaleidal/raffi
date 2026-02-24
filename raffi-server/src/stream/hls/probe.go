@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os/exec"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -46,13 +47,24 @@ type StreamInfo struct {
 }
 
 func ProbeDuration(ctx context.Context, source string) (*Metadata, string, error) {
+	probeSource := source
+	if strings.Contains(source, "/torrents/") {
+		if strings.Contains(source, "?") {
+			probeSource = source + "&metadata=1"
+		} else {
+			probeSource = source + "?metadata=1"
+		}
+	}
+
 	cmd := exec.CommandContext(ctx, "ffprobe",
 		"-v", "quiet",
+		"-analyzeduration", "200M",
+		"-probesize", "200M",
 		"-print_format", "json",
 		"-show_format",
 		"-show_streams",
 		"-show_chapters",
-		source,
+		probeSource,
 	)
 	out, err := cmd.Output()
 	if err != nil {
