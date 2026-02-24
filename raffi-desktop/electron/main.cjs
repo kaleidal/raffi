@@ -189,6 +189,7 @@ const castBootstrapService = createCastBootstrapService({
 const castSenderService = createCastSenderService({
   logToFile,
   BrowserWindow,
+  shell,
   path,
   baseDir: __dirname,
 });
