@@ -10,7 +10,6 @@ import {
 } from "../db/db";
 import {
     hasLegacySupabaseSession,
-    importLegacySupabaseSessionToLocal,
     clearLegacySupabaseSession,
 } from "../db/supabaseLegacy";
 import { setConvexAuthRefreshHandler, setConvexAuthToken } from "../db/convex";
@@ -27,7 +26,6 @@ export type UpdateStatus = {
 
 export const currentUser = writable<AppUser | null>(null);
 export const localMode = writable(false);
-export const legacyMigrationNeeded = writable(false);
 export const updateStatus = writable<UpdateStatus>({
     available: false,
     downloaded: false,
@@ -274,11 +272,6 @@ const resolveStartupSession = async (storedUser: AppUser): Promise<AppUser | nul
     return tryRefreshAveSession(storedUser);
 };
 
-const isInvalidLegacyRefreshError = (error: any) => {
-    const message = String(error?.message || "").toLowerCase();
-    return message.includes("invalid refresh token") || message.includes("refresh token not found");
-};
-
 export async function initAuth() {
     if (initialized) return;
     initialized = true;
@@ -309,6 +302,15 @@ export async function initAuth() {
         }
     }
 
+    const hadLegacySupabaseSession = hasLegacySupabaseSession();
+    if (hadLegacySupabaseSession) {
+        clearLegacySupabaseSession();
+        if (userCache) {
+            clearAveSession();
+        }
+        enableLocalMode();
+    }
+
     if (userCache) {
         if (hasLocalState()) {
             await syncLocalStateToUser(userCache.id);
@@ -321,9 +323,6 @@ export async function initAuth() {
         enableLocalMode();
         await ensureDefaultAddonsForLocal();
     }
-
-    legacyMigrationNeeded.set(!userCache && hasLegacySupabaseSession());
-
 }
 
 export async function signInWithAve() {
@@ -360,40 +359,6 @@ export function signOutToLocalMode() {
     enableLocalMode();
     emitHomeRefresh();
 }
-
-export const dismissLegacyMigrationPrompt = () => {
-    legacyMigrationNeeded.set(false);
-};
-
-export const migrateLegacySessionToLocal = async () => {
-    try {
-        const result = await importLegacySupabaseSessionToLocal();
-        clearLegacySupabaseSession();
-        enableLocalMode();
-        legacyMigrationNeeded.set(false);
-        emitHomeRefresh();
-        return result;
-    } catch (error) {
-        if (isInvalidLegacyRefreshError(error)) {
-            clearLegacySupabaseSession();
-            enableLocalMode();
-            legacyMigrationNeeded.set(false);
-            emitHomeRefresh();
-            return {
-                addons: 0,
-                library: 0,
-                lists: 0,
-                listItems: 0,
-            };
-        }
-        throw error;
-    }
-};
-
-export const migrateLegacySessionAndSignInAve = async () => {
-    await migrateLegacySessionToLocal();
-    await signInWithAve();
-};
 
 export function getCachedUser(): AppUser | null {
     return userCache;
