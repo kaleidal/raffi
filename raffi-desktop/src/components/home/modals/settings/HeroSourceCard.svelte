@@ -1,11 +1,15 @@
 <script lang="ts">
 	import { ChevronDown } from "lucide-svelte";
 	import type { HeroCatalogSourceOption } from "../../../../lib/library/addonCatalogs";
-	import { HOME_HERO_SOURCE_CINEMETA } from "../../../../lib/home/heroSettings";
+	import {
+		HOME_HERO_SOURCE_CINEMETA,
+		HOME_HERO_SOURCE_TRAKT_RECOMMENDATIONS,
+	} from "../../../../lib/home/heroSettings";
 
 	export let heroSource = HOME_HERO_SOURCE_CINEMETA;
 	export let heroSourceLoading = false;
 	export let heroSourceOptions: HeroCatalogSourceOption[] = [];
+	export let showTraktRecommendationsOption = false;
 	export let onChange: (value: string) => void = () => {};
 
 	function handleChange(event: Event) {
@@ -36,6 +40,11 @@
 				<option value={HOME_HERO_SOURCE_CINEMETA}>
 					Cinemeta (Default)
 				</option>
+				{#if showTraktRecommendationsOption}
+					<option value={HOME_HERO_SOURCE_TRAKT_RECOMMENDATIONS}>
+						Trakt Recommendations
+					</option>
+				{/if}
 				{#each heroSourceOptions as option}
 					<option value={option.id}>{option.label}</option>
 				{/each}

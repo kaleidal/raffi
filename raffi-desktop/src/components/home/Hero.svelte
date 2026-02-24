@@ -152,12 +152,18 @@
     <div
         class="absolute bottom-[100px] left-[100px] z-10 flex flex-col gap-[50px]"
     >
-        <img
-            src={showcasedTitle.logo ?? ""}
-            alt="Logo"
-            class="w-[600px] h-auto max-h-[220px] object-contain"
-            on:error={() => dispatch("logoError")}
-        />
+        {#if showcasedTitle.logo}
+            <img
+                src={showcasedTitle.logo}
+                alt="Logo"
+                class="w-[600px] h-auto max-h-[220px] object-contain"
+                on:error={() => dispatch("logoError")}
+            />
+        {:else}
+            <h1 class="text-white text-6xl font-poppins font-bold max-w-[700px] leading-[1.05]">
+                {showcasedTitle.name}
+            </h1>
+        {/if}
 
 
         <div class="flex flex-row gap-[10px] items-center">
