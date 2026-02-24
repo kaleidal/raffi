@@ -17,7 +17,6 @@
 		scanAndIndex,
 	} from "../../../lib/localLibrary/localLibrary";
 	import { clearLocalState, syncLocalStateToUser, syncUserStateToLocal } from "../../../lib/db/db";
-	import { importLegacySupabaseDataToLocal } from "../../../lib/db/supabaseLegacy";
 	import { signInWithTraktViaBrowser } from "../../../lib/auth/traktAuth";
 	import {
 		currentUser,
@@ -52,7 +51,9 @@
 		getStoredHomeSearchBarPosition,
 		setStoredHomeSearchBarPosition,
 	} from "../../../lib/home/searchBarSettings";
-	import { userZoom } from "../../../lib/stores/settingsStore";
+	import ActivitySection from "./settings/ActivitySection.svelte";
+	import UiScaleControl from "./settings/UiScaleControl.svelte";
+	import FeedbackSection from "./settings/FeedbackSection.svelte";
 
 	const portal = (node: HTMLElement) => {
 		if (typeof document === "undefined") {
@@ -87,12 +88,7 @@
 	let sessionReplayEnabled = false;
 	let analyticsAvailable = false;
 	let showUpdateNotes = false;
-	let legacyEmail = "";
-	let legacyPassword = "";
-	let loginMessage = "";
-	let loginError = "";
 	let aveLoading = false;
-	let legacyLoading = false;
 	let traktStatus: TraktStatus | null = null;
 	let traktLoading = false;
 	let traktBusy = false;
@@ -521,56 +517,26 @@
 
 
 	async function handleAveLogin() {
-		loginError = "";
-		loginMessage = "";
+		error = "";
+		message = "";
 		aveLoading = true;
 		try {
 			await signInWithAve();
 			await refreshStats();
 			trackEvent("ave_login_success", { source: "settings" });
-			loginMessage = "Signed in with Ave.";
+			message = "Signed in with Ave.";
 			setTimeout(() => {
 				close();
 				router.navigate("home");
 			}, 500);
 		} catch (e: any) {
 			console.error(e);
-			loginError = e?.message || "Failed to sign in with Ave";
+			error = e?.message || "Failed to sign in with Ave";
 			trackEvent("ave_login_failed", {
 				error_name: e instanceof Error ? e.name : "unknown",
 			});
 		} finally {
 			aveLoading = false;
-		}
-	}
-
-	async function importFromLegacySupabase() {
-		if (!legacyEmail || !legacyPassword) {
-			loginError = "Enter your old Supabase email and password";
-			return;
-		}
-		legacyLoading = true;
-		loginError = "";
-		loginMessage = "";
-		try {
-			const counts = await importLegacySupabaseDataToLocal(legacyEmail, legacyPassword);
-			if ($currentUser && !$localMode) {
-				await syncLocalStateToUser($currentUser.id);
-			}
-			await refreshStats();
-			loginMessage = $currentUser && !$localMode
-				? `Imported ${counts.addons} addons, ${counts.library} history items, ${counts.lists} lists and synced to your Ave account.`
-				: `Imported ${counts.addons} addons, ${counts.library} history items, ${counts.lists} lists.`;
-			emitHomeRefresh();
-			trackEvent("legacy_supabase_import_success", counts as any);
-			legacyPassword = "";
-		} catch (e: any) {
-			loginError = e?.message || "Failed to import from legacy Supabase";
-			trackEvent("legacy_supabase_import_failed", {
-				error_name: e instanceof Error ? e.name : "unknown",
-			});
-		} finally {
-			legacyLoading = false;
 		}
 	}
 
@@ -705,84 +671,10 @@
 						</section>
 					{/if}
 
-					<section class="rounded-[28px] bg-white/[0.04] p-6 flex flex-col gap-5">
-						<div>
-							<h3 class="text-white text-xl font-semibold">Legacy Supabase import</h3>
-							<p class="text-white/60 text-sm">
-								One-time import of your old Supabase data.
-								{#if $currentUser && !$localMode}
-									 Imported data will be synced to your Ave account.
-								{:else}
-									 Imported data will be stored in local mode.
-								{/if}
-							</p>
-						</div>
-						<div class="rounded-2xl bg-white/[0.08] p-5 space-y-4">
-							<div class="space-y-2">
-								<input
-									type="email"
-									placeholder="Old Supabase email"
-									bind:value={legacyEmail}
-									class="w-full bg-black/30 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/30 outline-none focus:border-white/40 transition-colors"
-								/>
-								<input
-									type="password"
-									placeholder="Old Supabase password"
-									bind:value={legacyPassword}
-									on:keydown={(e) => e.key === "Enter" && importFromLegacySupabase()}
-									class="w-full bg-black/30 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/30 outline-none focus:border-white/40 transition-colors"
-								/>
-							</div>
-
-							<button
-								class="w-full bg-white/10 text-white px-6 py-3 rounded-2xl font-semibold hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
-								on:click={importFromLegacySupabase}
-								disabled={!legacyEmail || !legacyPassword || legacyLoading}
-							>
-								{legacyLoading ? "Importing..." : "Import Legacy Data"}
-							</button>
-
-							{#if loginMessage}
-								<div class="p-3 rounded-2xl bg-green-500/10 border border-green-500/20 text-green-300 text-sm">
-									{loginMessage}
-								</div>
-							{/if}
-							{#if loginError}
-								<div class="p-3 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-300 text-sm">
-									{loginError}
-								</div>
-							{/if}
-						</div>
-					</section>
-
-					<section class="rounded-[28px] bg-white/[0.04] p-6 flex flex-col gap-5">
-						<div>
-							<h3 class="text-white text-xl font-semibold">
-								Activity
-							</h3>
-							<p class="text-white/60 text-sm">
-								Track how much you've finished recently.
-							</p>
-						</div>
-						<div class="grid gap-4 sm:grid-cols-2">
-							<div class="rounded-2xl bg-white/[0.08] p-4">
-								<p class="text-white/60 text-xs uppercase tracking-[0.3em]">
-									Movies
-								</p>
-								<p class="text-white text-4xl font-bold">
-									{stats.moviesWatched}
-								</p>
-							</div>
-							<div class="rounded-2xl bg-white/[0.08] p-4">
-								<p class="text-white/60 text-xs uppercase tracking-[0.3em]">
-									Shows
-								</p>
-								<p class="text-white text-4xl font-bold">
-									{stats.showsWatched}
-								</p>
-							</div>
-						</div>
-					</section>
+					<ActivitySection
+						moviesWatched={stats.moviesWatched}
+						showsWatched={stats.showsWatched}
+					/>
 
 					<section class="rounded-[28px] bg-white/[0.04] p-6 flex flex-col gap-5">
 						<div>
@@ -847,37 +739,7 @@
 							</button>
 						</div>
 
-						<div class="rounded-2xl bg-white/[0.08] p-4 flex flex-wrap items-center gap-4 justify-between">
-							<div>
-								<p class="text-white font-medium">
-									UI Scale
-								</p>
-								<p class="text-white/60 text-sm">
-									Adjust the size of the interface.
-								</p>
-							</div>
-							<div class="flex items-center gap-3">
-								<button
-									class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
-									on:click={() => userZoom.update(z => Math.max(z - 0.1, 0.5))}
-								>
-									-
-								</button>
-								<span class="text-white font-medium w-12 text-center">{Math.round($userZoom * 100)}%</span>
-								<button
-									class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
-									on:click={() => userZoom.update(z => Math.min(z + 0.1, 2.0))}
-								>
-									+
-								</button>
-								<button
-									class="ml-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/80 text-xs transition-colors"
-									on:click={() => userZoom.set(1.0)}
-								>
-									Reset
-								</button>
-							</div>
-						</div>
+						<UiScaleControl />
 
 						<div class="grid items-stretch gap-4 xl:grid-cols-2">
 							<div class="rounded-2xl bg-white/[0.08] p-4 flex flex-col gap-3 h-full">
@@ -1027,32 +889,7 @@
 						{/if}
 					</section>
 
-					<section class="rounded-[28px] bg-white/[0.04] p-6 flex flex-col gap-5">
-						<div>
-							<h3 class="text-white text-xl font-semibold">Feedback</h3>
-							<p class="text-white/60 text-sm">
-								Share bugs or feature ideas to improve Raffi.
-							</p>
-						</div>
-						<div class="grid gap-4 sm:grid-cols-2">
-							<button
-								type="button"
-								on:click={() => openExternalLink("https://stator.sh/lantharos/raffi/bugs")}
-								class="rounded-2xl bg-white/[0.08] p-4 text-white font-medium hover:bg-white/[0.14] transition-colors cursor-pointer text-left"
-							>
-								Report a bug
-								<span class="block text-white/50 text-sm mt-1">Open the bug tracker</span>
-							</button>
-							<button
-								type="button"
-								on:click={() => openExternalLink("https://stator.sh/lantharos/raffi/feedback")}
-								class="rounded-2xl bg-white/[0.08] p-4 text-white font-medium hover:bg-white/[0.14] transition-colors cursor-pointer text-left"
-							>
-								Request a feature
-								<span class="block text-white/50 text-sm mt-1">Share your ideas</span>
-							</button>
-						</div>
-					</section>
+					<FeedbackSection {openExternalLink} />
 
 					{#if localLibrarySupported}
 
