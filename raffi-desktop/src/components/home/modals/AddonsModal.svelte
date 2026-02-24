@@ -8,6 +8,7 @@
     import { serverUrl } from "../../../lib/client";
     import LoadingSpinner from "../../common/LoadingSpinner.svelte";
     import { trackEvent } from "../../../lib/analytics";
+    import { alertDialog, confirmDialog } from "../../../lib/systemDialogs";
 
     const portal = (node: HTMLElement) => {
         if (typeof document === "undefined") {
@@ -245,7 +246,7 @@
             if (newAddonUrl.startsWith("stremio://")) {
                 newAddonUrl = newAddonUrl.replace("stremio://", "https://");
             } else {
-                alert("Invalid URL");
+                await alertDialog("Invalid URL");
                 trackEvent("addon_custom_invalid_url");
                 return;
             }
@@ -258,7 +259,7 @@
         const response = await fetch(newAddonUrl);
         const manifest = await response.json();
         if (!manifest) {
-            alert("Invalid manifest");
+            await alertDialog("Invalid manifest");
             trackEvent("addon_custom_invalid_manifest");
             return;
         }
@@ -281,7 +282,7 @@
             });
         } catch (e) {
             console.error("Failed to add addon", e);
-            alert("Failed to add addon");
+            await alertDialog("Failed to add addon");
             trackEvent("addon_custom_add_failed", {
                 error_name: e instanceof Error ? e.name : "unknown",
             });
@@ -309,7 +310,7 @@
             });
         } catch (e) {
             console.error("Failed to install community addon", e);
-            alert("Failed to install addon");
+            await alertDialog("Failed to install addon");
             trackEvent("addon_community_install_failed", {
                 error_name: e instanceof Error ? e.name : "unknown",
             });
@@ -336,7 +337,7 @@
     }
 
     async function handleRemoveAddon(url: string) {
-        if (!confirm("Are you sure?")) return;
+        if (!(await confirmDialog("Are you sure?", "Remove addon"))) return;
         try {
             await removeAddon(url);
             await loadAddons();

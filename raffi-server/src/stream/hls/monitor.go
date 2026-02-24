@@ -8,6 +8,12 @@ import (
 	"time"
 )
 
+const (
+	throttleCycleWindow       = time.Second
+	throttleActivePortion     = 600 * time.Millisecond // ~60% active
+	throttleMinAheadToEngage  = 12 * time.Second
+)
+
 func (c *Controller) monitorBuffer(id string, ctx context.Context) {
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
@@ -50,9 +56,51 @@ func (c *Controller) adjustThrottleLocked(sess *Session) {
 
 	switch {
 	case aheadDuration >= MaxBufferAhead && !sess.Paused:
+		sess.PausedByCap = false
 		pauseProcess(sess)
 	case aheadDuration <= MaxBufferAhead/2 && sess.Paused:
+		sess.PausedByCap = false
 		resumeProcessPlatform(sess, c, sess.ID, sess.Source)
+	}
+
+	if aheadDuration >= MaxBufferAhead || aheadDuration <= MaxBufferAhead/2 {
+		return
+	}
+
+	// First startup buffer should run uncapped for fastest time-to-first-frame.
+	// We only cap after playback has started serving at least one segment.
+	if sess.LastServedSeq < 0 {
+		if sess.Paused && sess.PausedByCap {
+			sess.PausedByCap = false
+			resumeProcessPlatform(sess, c, sess.ID, sess.Source)
+		}
+		return
+	}
+
+	// Don't cap when the ahead buffer is still shallow to avoid rebuffer risk.
+	if aheadDuration < throttleMinAheadToEngage {
+		if sess.Paused && sess.PausedByCap {
+			sess.PausedByCap = false
+			resumeProcessPlatform(sess, c, sess.ID, sess.Source)
+		}
+		return
+	}
+
+	now := time.Now()
+	phase := time.Duration(now.UnixNano()) % throttleCycleWindow
+	allowWork := phase < throttleActivePortion
+
+	if allowWork {
+		if sess.Paused && sess.PausedByCap {
+			sess.PausedByCap = false
+			resumeProcessPlatform(sess, c, sess.ID, sess.Source)
+		}
+		return
+	}
+
+	if !sess.Paused {
+		sess.PausedByCap = true
+		pauseProcess(sess)
 	}
 }
 
