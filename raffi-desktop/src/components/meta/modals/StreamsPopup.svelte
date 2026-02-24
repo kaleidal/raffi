@@ -6,7 +6,7 @@
     import type { ProgressMap, ProgressItem } from "../../../pages/meta/types";
     import LoadingSpinner from "../../common/LoadingSpinner.svelte";
     import { trackEvent } from "../../../lib/analytics";
-    import { X, Link2 } from "lucide-svelte";
+    import { X, Link2, ChevronDown, ChevronUp } from "lucide-svelte";
     import {
         buildAudioLanguageBadge,
         detectProvider,
@@ -51,8 +51,14 @@
     ] as const;
 
     type ResolutionFilter = (typeof RESOLUTION_FILTERS)[number]["value"];
+    type AudioFilter = "all" | "dubbed" | "subbed";
 
     let resolutionFilter: ResolutionFilter = "all";
+    let providerFilter = "all";
+    let audioFilter: AudioFilter = "all";
+    let ignoreSubbed = true;
+    let excludeDubbed = false;
+    let filtersCollapsed = false;
     let excludeHDR = false;
     let hasTrackedOpen = false;
 
@@ -69,6 +75,10 @@
 
     function resetFilters() {
         resolutionFilter = "all";
+        providerFilter = "all";
+        audioFilter = "all";
+        ignoreSubbed = true;
+        excludeDubbed = false;
         excludeHDR = false;
         trackEvent("stream_filters_reset", getStreamCounts());
     }
@@ -88,6 +98,71 @@
         trackEvent("stream_filter_hdr", {
             excluded: excludeHDR,
             resolution_filter: resolutionFilter,
+            provider_filter: providerFilter,
+            audio_filter: audioFilter,
+            ignore_subbed: ignoreSubbed,
+            exclude_dubbed: excludeDubbed,
+            ...getStreamCounts(),
+        });
+    }
+
+    function toggleIgnoreSubbed() {
+        ignoreSubbed = !ignoreSubbed;
+        trackEvent("stream_filter_ignore_subbed", {
+            ignored: ignoreSubbed,
+            resolution_filter: resolutionFilter,
+            provider_filter: providerFilter,
+            audio_filter: audioFilter,
+            exclude_dubbed: excludeDubbed,
+            exclude_hdr: excludeHDR,
+            ...getStreamCounts(),
+        });
+    }
+
+    function toggleExcludeDubbed() {
+        excludeDubbed = !excludeDubbed;
+        trackEvent("stream_filter_exclude_dubbed", {
+            excluded: excludeDubbed,
+            resolution_filter: resolutionFilter,
+            provider_filter: providerFilter,
+            audio_filter: audioFilter,
+            ignore_subbed: ignoreSubbed,
+            exclude_hdr: excludeHDR,
+            ...getStreamCounts(),
+        });
+    }
+
+    function toggleFiltersCollapsed() {
+        filtersCollapsed = !filtersCollapsed;
+    }
+
+    function setProviderFilter(value: string) {
+        if (providerFilter === value) return;
+        providerFilter = value;
+        trackEvent("stream_filter_provider", {
+            value,
+            resolution_filter: resolutionFilter,
+            audio_filter: audioFilter,
+            ignore_subbed: ignoreSubbed,
+            exclude_dubbed: excludeDubbed,
+            exclude_hdr: excludeHDR,
+            ...getStreamCounts(),
+        });
+    }
+
+    function setAudioFilter(value: AudioFilter) {
+        if (audioFilter === value) return;
+        audioFilter = value;
+        if (value === "subbed") {
+            ignoreSubbed = false;
+        }
+        trackEvent("stream_filter_audio", {
+            value,
+            resolution_filter: resolutionFilter,
+            provider_filter: providerFilter,
+            ignore_subbed: ignoreSubbed,
+            exclude_dubbed: excludeDubbed,
+            exclude_hdr: excludeHDR,
             ...getStreamCounts(),
         });
     }
@@ -105,6 +180,10 @@
         trackEvent("stream_list_closed", {
             filters_active: filtersActive,
             resolution_filter: resolutionFilter,
+            provider_filter: providerFilter,
+            audio_filter: audioFilter,
+            ignore_subbed: ignoreSubbed,
+            exclude_dubbed: excludeDubbed,
             exclude_hdr: excludeHDR,
             ...getStreamCounts(),
         });
@@ -195,6 +274,8 @@
         resolution: string | null;
         resolutionLabel: string | null;
         isHDR: boolean;
+        isDubbed: boolean;
+        isSubbed: boolean;
         featureBadges: StreamBadge[];
         statusBadges: StreamBadge[];
         peerCount: number | null;
@@ -206,6 +287,17 @@
         percent: number;
         timeLeftLabel: string;
         watched: boolean;
+    }
+
+    function extractLanguageCodes(audioLanguagesLabel: string | null): string[] {
+        if (!audioLanguagesLabel) return [];
+        const matches = audioLanguagesLabel.match(/\b[A-Z]{2,3}\b/g) || [];
+        return Array.from(new Set(matches.map((code) => code.toUpperCase())));
+    }
+
+    function inferDubbedFromLanguages(codes: string[]): boolean {
+        if (!codes.length) return false;
+        return codes.some((code) => code !== "EN" && code !== "ENG");
     }
 
     function parseStreamMetadata(stream: any): ParsedStreamMetadata {
@@ -242,6 +334,11 @@
 
         const hasDolbyVision = /Dolby\s?Vision|\bDV\b/i.test(fullText);
         const hasHDR = /HDR/i.test(fullText) || hasDolbyVision;
+        const explicitDub =
+            /(dubbed|\bdub\b|dual\s*audio|multi\s*audio|multi-audio|\bdual\b)/i.test(
+                fullText,
+            );
+        const explicitSub = /(subbed|\bsubs?\b|softsub|hardsub|\bsub\b)/i.test(fullText);
         const codecLabel = /AV1/i.test(fullText)
             ? "AV1"
             : /(?:x265|H\.?(?:265)|HEVC)/i.test(fullText)
@@ -257,6 +354,12 @@
                     ? "DTS"
                     : null;
         const audioLanguagesLabel = buildAudioLanguageBadge(fullText);
+        const audioLanguageCodes = extractLanguageCodes(audioLanguagesLabel);
+        const inferredDubbedFromLanguage = inferDubbedFromLanguages(
+            audioLanguageCodes,
+        );
+        const isDubbed = explicitDub || inferredDubbedFromLanguage;
+        const isSubbed = explicitSub;
 
         const sizeMatch = fullText.match(/(\d+(?:\.\d+)?)\s?(GB|MB)/i);
         const sizeLabel = sizeMatch
@@ -309,6 +412,13 @@
             statusBadges.push({ label: "P2P", variant: "outline" });
         }
 
+        if (isDubbed) {
+            statusBadges.push({ label: "DUB", variant: "outline" });
+        }
+        if (isSubbed) {
+            statusBadges.push({ label: "SUB", variant: "outline" });
+        }
+
         addFeature(resolutionLabel);
         if (hasDolbyVision) {
             addFeature("Dolby Vision");
@@ -326,6 +436,8 @@
             resolution,
             resolutionLabel,
             isHDR: hasHDR,
+            isDubbed,
+            isSubbed,
             featureBadges,
             statusBadges,
             peerCount,
@@ -348,6 +460,10 @@
         trackEvent("stream_list_opened", {
             ...getStreamCounts(),
             resolution_filter: resolutionFilter,
+            provider_filter: providerFilter,
+            audio_filter: audioFilter,
+            ignore_subbed: ignoreSubbed,
+            exclude_dubbed: excludeDubbed,
             exclude_hdr: excludeHDR,
         });
     }
@@ -381,6 +497,17 @@
     $: filteredStreams = (() => {
         const filtered = enrichedStreams.filter(({ meta }) => {
             if (excludeHDR && meta.isHDR) return false;
+            if (providerFilter !== "all" && meta.providerLabel !== providerFilter) {
+                return false;
+            }
+            if (excludeDubbed && meta.isDubbed) {
+                return false;
+            }
+            if (ignoreSubbed && meta.isSubbed && !meta.isDubbed) {
+                return false;
+            }
+            if (audioFilter === "dubbed" && !meta.isDubbed) return false;
+            if (audioFilter === "subbed" && !meta.isSubbed) return false;
             if (resolutionFilter === "all") return true;
             if (resolutionFilter === "other") return !meta.resolution;
             return meta.resolution === resolutionFilter;
@@ -413,7 +540,30 @@
         (item) => item.stream?.raffiSource !== "local",
     );
 
-    $: filtersActive = resolutionFilter !== "all" || excludeHDR;
+    $: providerFilterOptions = (() => {
+        const providers = new Set<string>();
+        for (const item of enrichedStreams) {
+            if (item.meta.providerLabel) {
+                providers.add(item.meta.providerLabel);
+            }
+        }
+        return ["all", ...Array.from(providers).sort((a, b) => a.localeCompare(b))];
+    })();
+
+    $: if (
+        providerFilter !== "all" &&
+        !providerFilterOptions.includes(providerFilter)
+    ) {
+        providerFilter = "all";
+    }
+
+    $: filtersActive =
+        resolutionFilter !== "all" ||
+        providerFilter !== "all" ||
+        audioFilter !== "all" ||
+        !ignoreSubbed ||
+        excludeDubbed ||
+        excludeHDR;
 
     $: episodeTitle =
         selectedEpisode?.name ||
@@ -781,49 +931,147 @@
                     <div
                         class="bg-white/5 rounded-2xl border border-white/5 p-4 flex flex-col gap-3"
                     >
-                        <div class="flex flex-wrap items-center gap-2">
-                            <span class="text-white/70 text-sm font-semibold">
-                                Resolution
-                            </span>
-                            <div class="flex flex-wrap gap-2">
-                                {#each RESOLUTION_FILTERS as option}
-                                    <button
-                                        type="button"
-                                        class="px-3 py-1.5 rounded-full text-[11px] font-semibold tracking-wide uppercase transition-colors duration-200 {resolutionFilter ===
-                                        option.value
-                                            ? 'bg-white text-black shadow shadow-white/40'
-                                            : 'bg-white/10 text-white/70 hover:bg-white/20 cursor-pointer'}"
-                                        on:click={() =>
-                                            setResolutionFilter(option.value)}
-                                    >
-                                        {option.label}
-                                    </button>
-                                {/each}
-                            </div>
-                        </div>
-                        <div class="flex flex-wrap items-center gap-2">
-                            <span class="text-white/70 text-sm font-semibold">
-                                HDR
+                        <div class="flex items-center justify-between gap-3">
+                            <span class="text-white text-sm font-semibold">
+                                Filters • {filteredStreams.length}/{streams.length}
                             </span>
                             <button
                                 type="button"
-                                class="px-3 py-1.5 rounded-full text-[11px] font-semibold tracking-wide uppercase transition-colors duration-200 cursor-pointer {excludeHDR
-                                    ? 'bg-[#FFDD57] text-black'
-                                    : 'bg-white/10 text-white/70 hover:bg-white/20'}"
-                                on:click={toggleExcludeHDR}
+                                class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold tracking-wide uppercase bg-white/10 text-white/80 hover:bg-white/20 transition-colors duration-200 cursor-pointer"
+                                on:click={toggleFiltersCollapsed}
                             >
-                                {excludeHDR ? "Excluded" : "Include"}
+                                {filtersCollapsed ? "Expand" : "Collapse"}
+                                {#if filtersCollapsed}
+                                    <ChevronDown size={14} strokeWidth={2} />
+                                {:else}
+                                    <ChevronUp size={14} strokeWidth={2} />
+                                {/if}
                             </button>
-                            {#if filtersActive}
+                        </div>
+
+                        {#if !filtersCollapsed}
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="text-white/70 text-sm font-semibold">
+                                    Resolution
+                                </span>
+                                <div class="flex flex-wrap gap-2">
+                                    {#each RESOLUTION_FILTERS as option}
+                                        <button
+                                            type="button"
+                                            class="px-3 py-1.5 rounded-full text-[11px] font-semibold tracking-wide uppercase transition-colors duration-200 {resolutionFilter ===
+                                            option.value
+                                                ? 'bg-white text-black shadow shadow-white/40'
+                                                : 'bg-white/10 text-white/70 hover:bg-white/20 cursor-pointer'}"
+                                            on:click={() =>
+                                                setResolutionFilter(option.value)}
+                                        >
+                                            {option.label}
+                                        </button>
+                                    {/each}
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="text-white/70 text-sm font-semibold">
+                                    Provider
+                                </span>
+                                <div class="flex flex-wrap gap-2">
+                                    {#each providerFilterOptions as option}
+                                        <button
+                                            type="button"
+                                            class="px-3 py-1.5 rounded-full text-[11px] font-semibold tracking-wide uppercase transition-colors duration-200 {providerFilter ===
+                                            option
+                                                ? 'bg-white text-black shadow shadow-white/40'
+                                                : 'bg-white/10 text-white/70 hover:bg-white/20 cursor-pointer'}"
+                                            on:click={() => setProviderFilter(option)}
+                                        >
+                                            {option === "all" ? "All" : option}
+                                        </button>
+                                    {/each}
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="text-white/70 text-sm font-semibold">
+                                    Audio
+                                </span>
+                                <div class="flex flex-wrap gap-2">
+                                    <button
+                                        type="button"
+                                        class="px-3 py-1.5 rounded-full text-[11px] font-semibold tracking-wide uppercase transition-colors duration-200 {audioFilter ===
+                                        'all'
+                                            ? 'bg-white text-black shadow shadow-white/40'
+                                            : 'bg-white/10 text-white/70 hover:bg-white/20 cursor-pointer'}"
+                                        on:click={() => setAudioFilter("all")}
+                                    >
+                                        All
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="px-3 py-1.5 rounded-full text-[11px] font-semibold tracking-wide uppercase transition-colors duration-200 {audioFilter ===
+                                        'dubbed'
+                                            ? 'bg-white text-black shadow shadow-white/40'
+                                            : 'bg-white/10 text-white/70 hover:bg-white/20 cursor-pointer'}"
+                                        on:click={() => setAudioFilter("dubbed")}
+                                    >
+                                        Dubbed
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="px-3 py-1.5 rounded-full text-[11px] font-semibold tracking-wide uppercase transition-colors duration-200 {audioFilter ===
+                                        'subbed'
+                                            ? 'bg-white text-black shadow shadow-white/40'
+                                            : 'bg-white/10 text-white/70 hover:bg-white/20 cursor-pointer'}"
+                                        on:click={() => setAudioFilter("subbed")}
+                                    >
+                                        Subbed
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="px-3 py-1.5 rounded-full text-[11px] font-semibold tracking-wide uppercase transition-colors duration-200 cursor-pointer {ignoreSubbed
+                                            ? 'bg-[#FFDD57] text-black'
+                                            : 'bg-white/10 text-white/70 hover:bg-white/20'}"
+                                        on:click={toggleIgnoreSubbed}
+                                    >
+                                        {ignoreSubbed
+                                            ? 'Ignoring subbed'
+                                            : 'Include subbed'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="px-3 py-1.5 rounded-full text-[11px] font-semibold tracking-wide uppercase transition-colors duration-200 cursor-pointer {excludeDubbed
+                                            ? 'bg-[#FFDD57] text-black'
+                                            : 'bg-white/10 text-white/70 hover:bg-white/20'}"
+                                        on:click={toggleExcludeDubbed}
+                                    >
+                                        {excludeDubbed
+                                            ? 'Excluding dubbed'
+                                            : 'Include dubbed'}
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="text-white/70 text-sm font-semibold">
+                                    HDR
+                                </span>
                                 <button
                                     type="button"
-                                    class="ml-auto text-xs text-white/50 hover:text-white/80 underline decoration-dotted cursor-pointer"
-                                    on:click={resetFilters}
+                                    class="px-3 py-1.5 rounded-full text-[11px] font-semibold tracking-wide uppercase transition-colors duration-200 cursor-pointer {excludeHDR
+                                        ? 'bg-[#FFDD57] text-black'
+                                        : 'bg-white/10 text-white/70 hover:bg-white/20'}"
+                                    on:click={toggleExcludeHDR}
                                 >
-                                    Reset filters
+                                    {excludeHDR ? "Excluded" : "Include"}
                                 </button>
-                            {/if}
-                        </div>
+                                {#if filtersActive}
+                                    <button
+                                        type="button"
+                                        class="ml-auto text-xs text-white/50 hover:text-white/80 underline decoration-dotted cursor-pointer"
+                                        on:click={resetFilters}
+                                    >
+                                        Reset filters
+                                    </button>
+                                {/if}
+                            </div>
+                        {/if}
                     </div>
 
                     <div

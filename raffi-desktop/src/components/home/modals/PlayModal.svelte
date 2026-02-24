@@ -198,13 +198,18 @@
 
     function joinParty() {
         if (!partyDetails) return;
-        
-        router.navigate("player", {
-            joinPartyId: partyCode,
+
+        const normalizedPartyCode = partyCode.trim();
+        const inferredType = partyDetails.season ? "series" : "movie";
+
+        router.navigate("meta", {
             imdbId: partyDetails.imdb_id || "",
-            season: partyDetails.season,
-            episode: partyDetails.episode,
-            autoJoin: true
+            type: inferredType,
+            joinPartyId: normalizedPartyCode,
+            autoJoin: true,
+            openStreamsPopup: true,
+            partySeason: partyDetails.season ?? null,
+            partyEpisode: partyDetails.episode ?? null,
         });
         onClose();
     }
