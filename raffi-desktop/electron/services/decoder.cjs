@@ -94,7 +94,13 @@ function createDecoderService({ isDev, path, fs, spawn, logToFile, baseDir }) {
     await ensureDecoderExecutable(binPath);
 
     logToFile("Spawning decoder process");
-    goServer = spawn(binPath, [], { stdio: "pipe" });
+    goServer = spawn(binPath, [], {
+      stdio: "pipe",
+      env: {
+        ...process.env,
+        RAFFI_SERVER_ADDR: process.env.RAFFI_SERVER_ADDR || "0.0.0.0:6969",
+      },
+    });
     logToFile(`Decoder process spawned, pid: ${goServer.pid}`);
 
     goServer.on("error", (err) => {

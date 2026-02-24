@@ -29,6 +29,8 @@ type Server struct {
 	hlsController   *hls.Controller
 	probeMu         sync.Mutex
 	probeCooldown   map[string]time.Time
+	castMu          sync.RWMutex
+	castTokens      map[string]CastToken
 }
 
 func main() {
@@ -39,6 +41,7 @@ func main() {
 		torrentStreamer: stream.NewTorrentStreamer(filepath.Join(os.TempDir(), "raffi-torrents")),
 		hlsController:   hls.NewController(),
 		probeCooldown:   make(map[string]time.Time),
+		castTokens:      make(map[string]CastToken),
 	}
 
 	// Set up cleanup on exit
@@ -80,23 +83,32 @@ func main() {
 		defer ticker.Stop()
 		for range ticker.C {
 			srv.hlsController.CleanupOrphanedSessions()
+			srv.cleanupExpiredCastTokens()
 		}
 	}()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/sessions", srv.handleSessions)
 	mux.HandleFunc("/sessions/", srv.handleSessionByID)
+	mux.HandleFunc("/cast/token", srv.handleCastToken)
 	mux.HandleFunc("/cleanup", srv.handleCleanup)
 	mux.HandleFunc("/torrents/", srv.torrentStreamer.ServeHTTP)
 	mux.HandleFunc("/community-addons", srv.handleCommunityAddons)
 
-	addr := "127.0.0.1:6969"
+	addr := strings.TrimSpace(os.Getenv("RAFFI_SERVER_ADDR"))
+	if addr == "" {
+		addr = "127.0.0.1:6969"
+	}
 	listener, err := net.Listen("tcp4", addr)
 	if err != nil {
 		log.Fatalf("failed to bind to %s: %v", addr, err)
 	}
-	log.Printf("Server listening on http://%s (loopback only)\n", listener.Addr().String())
-	if err := http.Serve(listener, withCORS(mux)); err != nil {
+	if strings.HasPrefix(addr, "127.") {
+		log.Printf("Server listening on http://%s (loopback only)\n", listener.Addr().String())
+	} else {
+		log.Printf("Server listening on http://%s (LAN mode with cast token guard)\n", listener.Addr().String())
+	}
+	if err := http.Serve(listener, withCORS(withLANGuard(srv, mux))); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -391,6 +403,7 @@ func (s *Server) handleHLSSessionAsset(w http.ResponseWriter, r *http.Request, s
 		http.Error(w, "failed to prepare stream", http.StatusInternalServerError)
 		return
 	}
+	castToken := castTokenFromRequest(r)
 
 	if asset == "child.m3u8" {
 		start := r.URL.Query().Get("seek")
@@ -422,40 +435,49 @@ func (s *Server) handleHLSSessionAsset(w http.ResponseWriter, r *http.Request, s
 
 		w.Header().Set("X-Raffi-Slice-Start", fmt.Sprintf("%.3f", sliceStart))
 
+		sliceDir := s.hlsController.CurrentSliceDir(sess.ID)
+		if sliceDir == "" {
+			http.Error(w, "no active slice", http.StatusInternalServerError)
+			return
+		}
+		fullPath := filepath.Clean(filepath.Join(sliceDir, asset))
+
+		content, err := os.ReadFile(fullPath)
+		if err != nil {
+			http.Error(w, "failed to read playlist", http.StatusInternalServerError)
+			return
+		}
+
+		lines := strings.Split(string(content), "\n")
 		if start != "" {
 			if val, err := strconv.ParseFloat(start, 64); err == nil && val >= 0 {
 				offset := val - sliceStart
 				if offset < 0 {
 					offset = 0
 				}
-
-				sliceDir := s.hlsController.CurrentSliceDir(sess.ID)
-				if sliceDir == "" {
-					http.Error(w, "no active slice", http.StatusInternalServerError)
-					return
-				}
-				fullPath := filepath.Clean(filepath.Join(sliceDir, asset))
-
-				content, err := os.ReadFile(fullPath)
-				if err != nil {
-					http.Error(w, "failed to read playlist", http.StatusInternalServerError)
-					return
-				}
-
-				tag := fmt.Sprintf("#EXT-X-START:TIME-OFFSET=%.3f,PRECISE=YES\n", offset)
-				lines := strings.Split(string(content), "\n")
+				tag := fmt.Sprintf("#EXT-X-START:TIME-OFFSET=%.3f,PRECISE=YES", offset)
 				if len(lines) > 0 && strings.HasPrefix(lines[0], "#EXTM3U") {
-					lines[0] = lines[0] + "\n" + tag
+					if len(lines) > 1 {
+						lines = append(lines[:1], append([]string{tag}, lines[1:]...)...)
+					} else {
+						lines = append(lines, tag)
+					}
 				} else {
 					lines = append([]string{tag}, lines...)
 				}
-
-				finalContent := strings.Join(lines, "\n")
-				w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
-				http.ServeContent(w, r, asset, time.Now(), strings.NewReader(finalContent))
-				return
 			}
 		}
+
+		if castToken != "" {
+			for i, line := range lines {
+				lines[i] = rewritePlaylistLineWithCastToken(line, castToken)
+			}
+		}
+
+		finalContent := strings.Join(lines, "\n")
+		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
+		http.ServeContent(w, r, asset, time.Now(), strings.NewReader(finalContent))
+		return
 	}
 
 	sliceDir := s.hlsController.CurrentSliceDir(sess.ID)
@@ -522,6 +544,49 @@ func waitForFile(ctx context.Context, p string, timeout time.Duration) error {
 		case <-ticker.C:
 		}
 	}
+}
+
+func addCastTokenToURL(rawURL string, castToken string) string {
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" || castToken == "" {
+		return rawURL
+	}
+	if strings.Contains(rawURL, "cast_token=") {
+		return rawURL
+	}
+	sep := "?"
+	if strings.Contains(rawURL, "?") {
+		sep = "&"
+	}
+	return rawURL + sep + "cast_token=" + castToken
+}
+
+func rewritePlaylistLineWithCastToken(line string, castToken string) string {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" || castToken == "" {
+		return line
+	}
+
+	if strings.HasPrefix(trimmed, "#") {
+		uriStart := strings.Index(line, "URI=\"")
+		if uriStart == -1 {
+			return line
+		}
+		valueStart := uriStart + len("URI=\"")
+		valueEndRel := strings.Index(line[valueStart:], "\"")
+		if valueEndRel == -1 {
+			return line
+		}
+		valueEnd := valueStart + valueEndRel
+		uriValue := line[valueStart:valueEnd]
+		patched := addCastTokenToURL(uriValue, castToken)
+		if patched == uriValue {
+			return line
+		}
+		return line[:valueStart] + patched + line[valueEnd:]
+	}
+
+	return addCastTokenToURL(trimmed, castToken)
 }
 
 func writeJSON(w http.ResponseWriter, v any) {

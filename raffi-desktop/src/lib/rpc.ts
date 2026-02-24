@@ -19,6 +19,51 @@ declare global {
             disableRPC: () => void;
             getFilePath?: (file: any) => string;
             saveClipPath?: (suggestedName?: string) => Promise<{ canceled: boolean; filePath: string | null; error?: string }>;
+            showSelectDialog?: (
+                message: string,
+                title: string,
+                options: string[],
+            ) => Promise<{ canceled: boolean; selectedIndex: number }>;
+            cast?: {
+                createBootstrap?: (
+                    sessionId: string,
+                    ttlSeconds?: number,
+                ) => Promise<{
+                    sessionId: string;
+                    localIp: string;
+                    port: number;
+                    token: string;
+                    expiresAt: string;
+                    streamUrl: string;
+                    sessionUrl: string;
+                }>;
+                listDevices?: (timeoutMs?: number) => Promise<Array<{ id: string; name: string; host: string }>>;
+                connectAndLoad?: (payload: {
+                    deviceId: string;
+                    streamUrl: string;
+                    startTime?: number;
+                    metadata?: {
+                        title?: string;
+                        subtitle?: string;
+                        cover?: string;
+                    };
+                }) => Promise<{ active: boolean; deviceId: string; mediaUrl: string }>;
+                play?: () => Promise<void>;
+                pause?: () => Promise<void>;
+                seek?: (currentTime: number) => Promise<void>;
+                setVolume?: (level: number) => Promise<void>;
+                stop?: () => Promise<void>;
+                disconnect?: () => Promise<void>;
+                status?: () => Promise<{
+                    active: boolean;
+                    deviceId?: string;
+                    mediaUrl?: string;
+                    playerState?: string;
+                    currentTime?: number;
+                    volumeLevel?: number;
+                    raw?: unknown;
+                }>;
+            };
         };
     }
 }

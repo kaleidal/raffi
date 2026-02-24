@@ -3,11 +3,12 @@
     export let canvasElem: HTMLCanvasElement | undefined = undefined;
     export let objectFit: "contain" | "cover";
     export let showCanvas: boolean;
+    export let hidden: boolean = false;
 </script>
 
 <video
     bind:this={videoElem}
-    class="absolute top-0 left-0 w-full h-full bg-black {objectFit === 'contain'
+    class="absolute top-0 left-0 w-full h-full bg-black {hidden ? 'hidden' : 'block'} {objectFit === 'contain'
         ? 'object-contain'
         : 'object-cover'}"
     crossorigin="anonymous"
@@ -29,7 +30,7 @@
     bind:this={canvasElem}
     class="absolute top-0 left-0 w-full h-full bg-black {objectFit === 'contain'
         ? 'object-contain'
-        : 'object-cover'} {showCanvas ? 'block' : 'hidden'}"
+        : 'object-cover'} {showCanvas && !hidden ? 'block' : 'hidden'}"
 ></canvas>
 
 <style>

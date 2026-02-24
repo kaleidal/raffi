@@ -646,6 +646,28 @@ export function cleanupSession(
     }
 }
 
+export function detachLocalPlayback(
+    hls: Hls | null,
+    videoElem: HTMLVideoElement | null,
+) {
+    if (hls) {
+        hls.destroy();
+    }
+    if (videoElem) {
+        try {
+            videoElem.pause();
+        } catch {
+            // ignore
+        }
+        videoElem.removeAttribute("src");
+        try {
+            videoElem.load();
+        } catch {
+            // ignore
+        }
+    }
+}
+
 export async function handleAudioSelect(
     track: Track,
     audioTracks: Track[],
