@@ -192,17 +192,75 @@
           }
         }
 
-        function getCastStateName() {
+        function getCastStateDetails() {
           if (!castFrameworkAvailable) {
-            return "SDK_UNAVAILABLE";
+            return {
+              state: "SDK_UNAVAILABLE",
+              error: null,
+              sdkAvailable: false,
+              castNamespaceAvailable: Boolean(window.chrome?.cast),
+              castIsAvailable: Boolean(window.chrome?.cast?.isAvailable),
+            };
           }
+
           try {
             const context = cast.framework.CastContext.getInstance();
             const state = context.getCastState();
-            return String(state || "UNKNOWN");
-          } catch {
-            return "UNKNOWN";
+            return {
+              state: String(state || "UNKNOWN"),
+              error: null,
+              sdkAvailable: true,
+              castNamespaceAvailable: Boolean(window.chrome?.cast),
+              castIsAvailable: Boolean(window.chrome?.cast?.isAvailable),
+            };
+          } catch (error) {
+            return {
+              state: "UNKNOWN",
+              error: formatError(error),
+              sdkAvailable: true,
+              castNamespaceAvailable: Boolean(window.chrome?.cast),
+              castIsAvailable: Boolean(window.chrome?.cast?.isAvailable),
+            };
           }
+        }
+
+        function getCastStateName() {
+          return getCastStateDetails().state;
+        }
+
+        async function waitForCastStateSettle(timeoutMs = 4000) {
+          const context = cast.framework.CastContext.getInstance();
+          let latest = getCastStateDetails();
+
+          if (latest.state !== "UNKNOWN") {
+            return latest;
+          }
+
+          return new Promise((resolve) => {
+            const done = (value) => {
+              context.removeEventListener(
+                cast.framework.CastContextEventType.CAST_STATE_CHANGED,
+                listener,
+              );
+              resolve(value);
+            };
+
+            const listener = () => {
+              latest = getCastStateDetails();
+              if (latest.state !== "UNKNOWN") {
+                done(latest);
+              }
+            };
+
+            context.addEventListener(
+              cast.framework.CastContextEventType.CAST_STATE_CHANGED,
+              listener,
+            );
+
+            window.setTimeout(() => {
+              done(getCastStateDetails());
+            }, Math.max(200, Number(timeoutMs || 0)));
+          });
         }
 
         async function beginInteractiveSession(payload) {
@@ -457,20 +515,22 @@
           const context = cast.framework.CastContext.getInstance();
 
           initializeCastApi(customAppId);
-          await new Promise((resolve) => window.setTimeout(resolve, 1200));
-          const customCastState = getCastStateName();
+          const customDetails = await waitForCastStateSettle(4000);
+          const customCastState = String(customDetails?.state || "UNKNOWN");
 
           initializeCastApi(fallbackAppId);
-          await new Promise((resolve) => window.setTimeout(resolve, 1200));
-          const fallbackCastState = getCastStateName();
+          const fallbackDetails = await waitForCastStateSettle(4000);
+          const fallbackCastState = String(fallbackDetails?.state || "UNKNOWN");
 
           initializeCastApi(customAppId);
 
           return {
             customAppId,
             customCastState,
+            customDetails,
             fallbackAppId,
             fallbackCastState,
+            fallbackDetails,
             hasSession: Boolean(context.getCurrentSession()),
           };
         }
