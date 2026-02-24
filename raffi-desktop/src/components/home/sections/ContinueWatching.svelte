@@ -12,6 +12,7 @@
 
     import { onMount, onDestroy, tick } from "svelte";
     import { Play, ChevronDown, ChevronLeft, ChevronRight } from "lucide-svelte";
+    import PosterImage from "./PosterImage.svelte";
  
     export let continueWatchingMeta: (ShowResponse & { libraryItem: any })[] =
         [];
@@ -276,7 +277,7 @@
                             movieProgress.time > 0}
 
                         <button
-                            class="w-[var(--cw-card-w)] h-fit rounded-[16px] hover:opacity-90 transition-all duration-200 ease-out cursor-pointer overflow-clip relative flex-shrink-0 hover:-translate-y-1.5 hover:shadow-[0_14px_30px_rgba(0,0,0,0.35)]"
+                            class="w-[var(--cw-card-w)] aspect-[2/3] h-fit rounded-[16px] hover:opacity-90 transition-all duration-200 ease-out cursor-pointer overflow-clip relative flex-shrink-0 hover:-translate-y-1.5 hover:shadow-[0_14px_30px_rgba(0,0,0,0.35)]"
 
                             on:click={() =>
                                 navigateToMeta(
@@ -290,11 +291,11 @@
                                     title.meta.type,
                                 )}
                         >
-                            <img
+                            <PosterImage
                                 src={title.libraryItem.poster ||
                                     title.meta.poster}
-                                alt=""
-                                class="w-full h-full object-cover"
+                                title={title.meta.name}
+                                alt={title.meta.name || "Continue Watching poster"}
                             />
                             {#if isMovieResumable}
                                 <div
