@@ -364,6 +364,89 @@
           return session;
         }
 
+        async function requestSessionDirectFromUserGesture(payload, triggerElement) {
+          const requestedAppId =
+            String(payload?.receiverAppId || "").trim() || DEFAULT_RECEIVER_APP_ID;
+          await ensureReady({ ...payload, receiverAppId: requestedAppId });
+          const context = cast.framework.CastContext.getInstance();
+          const existing = context.getCurrentSession();
+          if (existing) {
+            return existing;
+          }
+
+          return new Promise((resolve, reject) => {
+            let settled = false;
+            let timeoutId = null;
+
+            const cleanup = () => {
+              if (timeoutId) {
+                window.clearTimeout(timeoutId);
+                timeoutId = null;
+              }
+              context.removeEventListener(
+                cast.framework.CastContextEventType.SESSION_STATE_CHANGED,
+                onSessionStateChanged,
+              );
+            };
+
+            const finishResolve = (value) => {
+              if (settled) return;
+              settled = true;
+              cleanup();
+              resolve(value);
+            };
+
+            const finishReject = (error) => {
+              if (settled) return;
+              settled = true;
+              cleanup();
+              reject(error);
+            };
+
+            const onSessionStateChanged = (event) => {
+              const state = String(event?.sessionState || "");
+              if (
+                state === String(cast.framework.SessionState.SESSION_STARTED) ||
+                state === String(cast.framework.SessionState.SESSION_RESUMED)
+              ) {
+                finishResolve(context.getCurrentSession());
+                return;
+              }
+
+              if (state === String(cast.framework.SessionState.SESSION_ENDED)) {
+                finishReject(new Error("interactive_session_cancelled"));
+                return;
+              }
+
+              if (state === String(cast.framework.SessionState.SESSION_START_FAILED)) {
+                const details = formatError(event?.errorCode || event?.error || event);
+                const castState = getCastStateName();
+                finishReject(new Error(`interactive_session_failed:${details}|cast_state:${castState}`));
+              }
+            };
+
+            context.addEventListener(
+              cast.framework.CastContextEventType.SESSION_STATE_CHANGED,
+              onSessionStateChanged,
+            );
+
+            timeoutId = window.setTimeout(() => {
+              finishReject(new Error("interactive_session_timeout"));
+            }, 90000);
+
+            window.focus();
+            if (triggerElement && typeof triggerElement.focus === "function") {
+              triggerElement.focus();
+            }
+
+            Promise.resolve(context.requestSession()).catch((error) => {
+              const details = formatError(error);
+              const castState = getCastStateName();
+              finishReject(new Error(`interactive_session_request_failed:${details}|cast_state:${castState}`));
+            });
+          });
+        }
+
         function getSessionDeviceName(session) {
           try {
             return String(
@@ -480,7 +563,7 @@
             setStatus("Opening Cast picker...");
             try {
               await ensureReady(payload);
-              const session = await beginInteractiveSession(payload);
+              const session = await requestSessionDirectFromUserGesture(payload, chooseButton);
               const result = await loadMediaOnSession(session, payload);
               setStatus(`Casting on ${String(result?.deviceName || "Chromecast")}.`);
             } catch (error) {

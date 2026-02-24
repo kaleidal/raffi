@@ -185,11 +185,13 @@ const decoderServerAddr = process.env.RAFFI_SERVER_ADDR || "0.0.0.0:6969";
 const castBootstrapService = createCastBootstrapService({
   logToFile,
   serverAddr: decoderServerAddr,
+  castHost: process.env.RAFFI_CAST_HOST || "",
 });
 const castSenderService = createCastSenderService({
   logToFile,
   BrowserWindow,
   shell,
+  fs,
   path,
   baseDir: __dirname,
 });
