@@ -2,7 +2,8 @@ import { get } from "svelte/store";
 import {
     loadingStreams, streams, streamsPopupVisible, selectedEpisode,
     selectedAddon, metaData, selectedStreamUrl,
-    selectedStream, selectedFileIdx, showTorrentWarning, pendingTorrentStream
+    selectedStream, selectedFileIdx, showTorrentWarning, pendingTorrentStream,
+    streamFailureMessage,
 } from "./metaState";
 import { router } from "../../lib/stores/router";
 
@@ -10,6 +11,11 @@ import type { Stream } from "./types";
 import { getLocalStreamsFor } from "../../lib/localLibrary/localLibrary";
 import { trackEvent } from "../../lib/analytics";
 import * as ProgressLogic from "./progressLogic";
+import {
+    clearStreamFailureMessage,
+    isStreamFailed,
+    markStreamFailed,
+} from "./streamFailures";
 
 const getStreamAnalyticsProps = (stream: Stream) => {
     const isTorrent = Boolean(
@@ -127,6 +133,7 @@ export const playStream = (stream: Stream, progressMap: any, options?: { replace
     }
 
     if (url) {
+        clearStreamFailureMessage();
         selectedStream.set(stream);
         selectedStreamUrl.set(url);
         selectedFileIdx.set(fileIdx);
@@ -173,6 +180,12 @@ export const playStream = (stream: Stream, progressMap: any, options?: { replace
 };
 
 export const onStreamClick = (stream: Stream, progressMap: any) => {
+    if (isStreamFailed(stream)) {
+        trackEvent("stream_blocked_failed", getStreamAnalyticsProps(stream));
+        streamFailureMessage.set("This stream failed previously. Please select another stream.");
+        return;
+    }
+
     trackEvent("stream_selected", getStreamAnalyticsProps(stream));
 
     // Check if it's a torrent
@@ -209,6 +222,15 @@ export const handleTorrentWarningCancel = () => {
     }
     showTorrentWarning.set(false);
     pendingTorrentStream.set(null);
+};
+
+export const markCurrentStreamAsFailed = (reason?: string) => {
+    const stream = get(selectedStream);
+    if (!stream) return;
+    markStreamFailed(
+        stream,
+        reason || "Bad torrent stream detected. Please select another stream.",
+    );
 };
 
 

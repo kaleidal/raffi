@@ -5,13 +5,20 @@
 
     export let item: EnrichedStream;
     export let showPeers = false;
+    export let disabled = false;
 
     const dispatch = createEventDispatcher();
 </script>
 
 <button
-    class="w-full bg-[#1A1A1A] hover:bg-[#222] p-5 rounded-2xl flex flex-col gap-3 text-left transition-all duration-200 cursor-pointer"
-    on:click={() => dispatch("click")}
+    class="w-full p-5 rounded-2xl flex flex-col gap-3 text-left transition-all duration-200 {disabled
+        ? 'bg-[#141414] opacity-45 cursor-not-allowed'
+        : 'bg-[#1A1A1A] hover:bg-[#222] cursor-pointer'}"
+    disabled={disabled}
+    on:click={() => {
+        if (disabled) return;
+        dispatch("click");
+    }}
 >
     <div class="flex flex-row justify-between items-start w-full gap-4">
         <div class="flex flex-col gap-1">
@@ -23,6 +30,10 @@
                 <span class="text-[10px] uppercase tracking-[0.4em] text-white/40">
                     {item.meta.infoLine}
                 </span>
+            {/if}
+
+            {#if disabled}
+                <span class="text-xs text-red-200/80">Bad stream • select another</span>
             {/if}
 
             {#if showPeers && item.meta.isP2P && item.meta.peerCount != null}

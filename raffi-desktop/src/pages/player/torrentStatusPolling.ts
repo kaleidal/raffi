@@ -3,11 +3,14 @@ import { loading, loadingDetails, loadingProgress, loadingStage } from "./player
 
 export const createTorrentStatusPoller = ({
     serverUrl,
+    onTorrentError,
 }: {
     serverUrl: string;
+    onTorrentError?: (message: string) => void;
 }) => {
     let intervalRef: ReturnType<typeof setInterval> | null = null;
     let statusHash: string | null = null;
+    let fatalHandled = false;
 
     const stop = () => {
         if (intervalRef) {
@@ -15,6 +18,7 @@ export const createTorrentStatusPoller = ({
             intervalRef = null;
         }
         statusHash = null;
+        fatalHandled = false;
     };
 
     const start = (hash: string) => {
@@ -23,6 +27,7 @@ export const createTorrentStatusPoller = ({
 
         stop();
         statusHash = hash;
+        fatalHandled = false;
 
         const poll = async () => {
             try {
@@ -43,6 +48,10 @@ export const createTorrentStatusPoller = ({
                     loadingStage.set("Torrent error");
                     loadingDetails.set(error);
                     loadingProgress.set(null);
+                    if (!fatalHandled) {
+                        fatalHandled = true;
+                        onTorrentError?.(error);
+                    }
                     return;
                 }
 
