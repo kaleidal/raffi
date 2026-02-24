@@ -1,0 +1,410 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Raffi Cast Sender Bridge</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Inter, Segoe UI, Arial, sans-serif;
+      }
+      body {
+        margin: 0;
+        background: #111111;
+        color: #e8e8e8;
+      }
+      #interactive-shell {
+        min-height: 100vh;
+        display: none;
+        align-items: center;
+        justify-content: center;
+      }
+      #interactive-shell.open {
+        display: flex;
+      }
+      .card {
+        width: 360px;
+        border-radius: 16px;
+        padding: 20px;
+        background: #1a1a1a;
+      }
+      .title {
+        font-size: 16px;
+        font-weight: 600;
+        margin: 0 0 8px;
+      }
+      .subtitle {
+        font-size: 13px;
+        opacity: 0.86;
+        margin: 0 0 16px;
+      }
+      #choose-device {
+        width: 100%;
+        height: 40px;
+        border-radius: 10px;
+        border: none;
+        background: #2a2a2a;
+        color: #f0f0f0;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      #choose-device:hover {
+        background: #333333;
+      }
+      #status {
+        margin-top: 12px;
+        min-height: 16px;
+        font-size: 12px;
+        opacity: 0.8;
+      }
+      #cast-launch {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="interactive-shell">
+      <div class="card">
+        <p class="title">Cast to TV</p>
+        <p class="subtitle">Click below to choose your Chromecast device.</p>
+        <button id="choose-device" type="button">Choose Device</button>
+        <google-cast-launcher id="cast-launch"></google-cast-launcher>
+        <div id="status"></div>
+      </div>
+    </div>
+    <script>
+      (() => {
+        let configuredReceiverAppId = null;
+        let interactiveTimeout = null;
+        let interactiveContextListener = null;
+        let availableResolver;
+        let availableRejecter;
+        const castReady = new Promise((resolve, reject) => {
+          availableResolver = resolve;
+          availableRejecter = reject;
+          setTimeout(() => reject(new Error("Google Cast SDK timed out")), 30000);
+        });
+
+        window.__onGCastApiAvailable = function (isAvailable) {
+          if (isAvailable) {
+            availableResolver(true);
+          } else {
+            availableRejecter(new Error("Google Cast SDK unavailable"));
+          }
+        };
+
+        async function ensureReady(payload) {
+          await castReady;
+          const requestedAppId = String(payload?.receiverAppId || "").trim() || "29330CDE";
+          if (configuredReceiverAppId === requestedAppId) {
+            return true;
+          }
+
+          const context = cast.framework.CastContext.getInstance();
+          context.setOptions({
+            receiverApplicationId: requestedAppId,
+            autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED,
+          });
+          configuredReceiverAppId = requestedAppId;
+          return true;
+        }
+
+        function getCurrentSession() {
+          return cast.framework.CastContext.getInstance().getCurrentSession();
+        }
+
+        function setInteractiveOpen(isOpen) {
+          const shell = document.getElementById("interactive-shell");
+          if (!shell) return;
+          shell.classList.toggle("open", Boolean(isOpen));
+        }
+
+        function setStatus(text) {
+          const status = document.getElementById("status");
+          if (!status) return;
+          status.textContent = String(text || "");
+        }
+
+        function clearInteractiveFlow() {
+          if (interactiveTimeout) {
+            window.clearTimeout(interactiveTimeout);
+            interactiveTimeout = null;
+          }
+          if (interactiveContextListener) {
+            const context = cast.framework.CastContext.getInstance();
+            context.removeEventListener(
+              cast.framework.CastContextEventType.SESSION_STATE_CHANGED,
+              interactiveContextListener,
+            );
+            interactiveContextListener = null;
+          }
+          setInteractiveOpen(false);
+          setStatus("");
+          const chooseButton = document.getElementById("choose-device");
+          if (chooseButton) {
+            chooseButton.disabled = false;
+            chooseButton.textContent = "Choose Device";
+          }
+        }
+
+        function setChooseButtonBusy(isBusy) {
+          const chooseButton = document.getElementById("choose-device");
+          if (!chooseButton) return;
+          chooseButton.disabled = Boolean(isBusy);
+          chooseButton.textContent = isBusy ? "Opening device picker..." : "Choose Device";
+        }
+
+        function formatError(error) {
+          if (!error) return "unknown_error";
+          if (typeof error === "string") return error;
+          const code = String(error.code || error.errorCode || "").trim();
+          const description = String(error.description || error.message || "").trim();
+          if (code && description) return `${code}: ${description}`;
+          if (code) return code;
+          if (description) return description;
+          try {
+            return JSON.stringify(error);
+          } catch {
+            return String(error);
+          }
+        }
+
+        async function beginInteractiveSession(payload) {
+          await ensureReady(payload);
+          const context = cast.framework.CastContext.getInstance();
+          const existing = context.getCurrentSession();
+          if (existing) return existing;
+
+          setInteractiveOpen(true);
+          setStatus("Click Choose Device to open the Cast picker.");
+
+          return new Promise((resolve, reject) => {
+            const chooseButton = document.getElementById("choose-device");
+            if (chooseButton) {
+              chooseButton.onclick = async () => {
+                setChooseButtonBusy(true);
+                setStatus("Waiting for device selection...");
+                try {
+                  await context.requestSession();
+                } catch (error) {
+                  setChooseButtonBusy(false);
+                  setStatus(`Session request failed: ${formatError(error)}`);
+                }
+              };
+            }
+
+            interactiveTimeout = window.setTimeout(() => {
+              reject(new Error("interactive_session_timeout"));
+              clearInteractiveFlow();
+            }, 90000);
+
+            interactiveContextListener = (event) => {
+              const state = String(event?.sessionState || "");
+              if (
+                state === String(cast.framework.SessionState.SESSION_STARTED) ||
+                state === String(cast.framework.SessionState.SESSION_RESUMED)
+              ) {
+                const session = context.getCurrentSession();
+                resolve(session);
+                clearInteractiveFlow();
+                return;
+              }
+
+              if (
+                state === String(cast.framework.SessionState.SESSION_START_FAILED) ||
+                state === String(cast.framework.SessionState.SESSION_ENDED)
+              ) {
+                const details = formatError(event?.errorCode || event?.error || event);
+                setStatus(`Session failed: ${details}`);
+                reject(new Error(`interactive_session_failed:${details}`));
+                clearInteractiveFlow();
+              }
+            };
+
+            context.addEventListener(
+              cast.framework.CastContextEventType.SESSION_STATE_CHANGED,
+              interactiveContextListener,
+            );
+          });
+        }
+
+        async function requestSession(payload) {
+          await ensureReady(payload);
+          const context = cast.framework.CastContext.getInstance();
+          if (context.getCurrentSession()) {
+            return context.getCurrentSession();
+          }
+
+          try {
+            const interactiveSession = await beginInteractiveSession(payload);
+            if (interactiveSession) return interactiveSession;
+          } catch (error) {
+            throw new Error(`request_session_failed:${formatError(error)}`);
+          }
+
+          const session = context.getCurrentSession();
+          if (!session) throw new Error("no_cast_session_started");
+          return session;
+        }
+
+        function getSessionDeviceName(session) {
+          try {
+            return String(
+              session?.getCastDevice?.().friendlyName ||
+                session?.getCastDevice?.().displayName ||
+                "Chromecast",
+            );
+          } catch {
+            return "Chromecast";
+          }
+        }
+
+        async function loadMedia(payload) {
+          let session = null;
+          try {
+            session = await requestSession(payload);
+          } catch (error) {
+            throw new Error(`session_error:${formatError(error)}`);
+          }
+          const streamUrl = String(payload?.streamUrl || "").trim();
+          if (!streamUrl) throw new Error("streamUrl is required");
+          const startTime = Number(payload?.startTime || 0);
+
+          const mediaInfo = new chrome.cast.media.MediaInfo(
+            streamUrl,
+            "application/vnd.apple.mpegurl",
+          );
+          mediaInfo.streamType = chrome.cast.media.StreamType.BUFFERED;
+
+          const title = String(payload?.metadata?.title || "").trim();
+          const subtitle = String(payload?.metadata?.subtitle || "").trim();
+          const cover = String(payload?.metadata?.cover || "").trim();
+
+          if (title || subtitle || cover) {
+            const metadata = new chrome.cast.media.GenericMediaMetadata();
+            metadata.title = title || "Raffi";
+            if (subtitle) metadata.subtitle = subtitle;
+            if (cover) metadata.images = [{ url: cover }];
+            mediaInfo.metadata = metadata;
+          }
+
+          const request = new chrome.cast.media.LoadRequest(mediaInfo);
+          request.autoplay = true;
+          request.currentTime = Number.isFinite(startTime) && startTime > 0 ? startTime : 0;
+
+          let media = null;
+          try {
+            media = await session.loadMedia(request);
+          } catch (error) {
+            throw new Error(`load_media_failed:${formatError(error)}`);
+          }
+
+          return {
+            active: true,
+            currentTime: Number(media?.getEstimatedTime?.() || 0),
+            playerState: String(media?.playerState || "UNKNOWN"),
+            deviceName: getSessionDeviceName(session),
+          };
+        }
+
+        async function getMediaOrThrow() {
+          const session = getCurrentSession();
+          if (!session) throw new Error("No active cast session");
+          const media = await session.getMediaSession();
+          if (!media) throw new Error("No active media session");
+          return { session, media };
+        }
+
+        async function play() {
+          const { media } = await getMediaOrThrow();
+          await media.play();
+          return true;
+        }
+
+        async function pause() {
+          const { media } = await getMediaOrThrow();
+          await media.pause();
+          return true;
+        }
+
+        async function stop() {
+          try {
+            const { media } = await getMediaOrThrow();
+            await media.stop();
+          } catch (error) {
+            const message = String(error?.message || error || "").toUpperCase();
+            if (!message.includes("INVALID_MEDIA_SESSION_ID")) {
+              throw error;
+            }
+          }
+          return true;
+        }
+
+        async function seek(payload) {
+          const { media } = await getMediaOrThrow();
+          const request = new chrome.cast.media.SeekRequest();
+          request.currentTime = Math.max(0, Number(payload?.currentTime || 0));
+          request.resumeState = chrome.cast.media.ResumeState.PLAYBACK_START;
+          await media.seek(request);
+          return true;
+        }
+
+        async function setVolume(payload) {
+          const session = await requestSession(payload);
+          const level = Math.max(0, Math.min(1, Number(payload?.level || 0)));
+          const request = new chrome.cast.VolumeRequest();
+          request.volume = new chrome.cast.Volume(level, false);
+          await session.setVolume(request);
+          return true;
+        }
+
+        async function getStatus(payload) {
+          await ensureReady(payload);
+          const session = getCurrentSession();
+          if (!session) {
+            return { active: false };
+          }
+
+          let media = null;
+          try {
+            media = await session.getMediaSession();
+          } catch {
+            media = null;
+          }
+
+          const volume = session.getVolume();
+          return {
+            active: true,
+            currentTime: Number(media?.getEstimatedTime?.() || 0),
+            playerState: String(media?.playerState || "UNKNOWN"),
+            volumeLevel: Number(volume?.level || 0),
+            deviceName: getSessionDeviceName(session),
+          };
+        }
+
+        async function endSession(payload) {
+          await ensureReady(payload);
+          const context = cast.framework.CastContext.getInstance();
+          const stopCasting = Boolean(payload?.stopCasting ?? true);
+          context.endCurrentSession(stopCasting);
+          return true;
+        }
+
+        window.__raffiCastBridge = {
+          ensureReady,
+          beginInteractiveSession,
+          loadMedia,
+          play,
+          pause,
+          stop,
+          seek,
+          setVolume,
+          getStatus,
+          endSession,
+        };
+      })();
+    </script>
+    <script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"></script>
+  </body>
+</html>

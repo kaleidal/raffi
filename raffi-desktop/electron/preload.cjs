@@ -25,9 +25,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.invoke('SHOW_CONFIRM_DIALOG', { message, title }),
     showAlertDialog: (message, title) =>
         ipcRenderer.invoke('SHOW_ALERT_DIALOG', { message, title }),
+    showSelectDialog: (message, title, options) =>
+        ipcRenderer.invoke('SHOW_SELECT_DIALOG', { message, title, options }),
     localLibrary: {
         pickFolder: () => ipcRenderer.invoke('LOCAL_LIBRARY_PICK_FOLDER'),
         scan: (roots) => ipcRenderer.invoke('LOCAL_LIBRARY_SCAN', roots),
+    },
+    cast: {
+        createBootstrap: (sessionId, ttlSeconds) =>
+            ipcRenderer.invoke('CAST_CREATE_BOOTSTRAP', { sessionId, ttlSeconds }),
+        listDevices: (timeoutMs) =>
+            ipcRenderer.invoke('CAST_LIST_DEVICES', { timeoutMs }),
+        connectAndLoad: (payload) =>
+            ipcRenderer.invoke('CAST_CONNECT_AND_LOAD', payload),
+        play: () => ipcRenderer.invoke('CAST_PLAY'),
+        pause: () => ipcRenderer.invoke('CAST_PAUSE'),
+        seek: (currentTime) => ipcRenderer.invoke('CAST_SEEK', { currentTime }),
+        setVolume: (level) => ipcRenderer.invoke('CAST_SET_VOLUME', { level }),
+        stop: () => ipcRenderer.invoke('CAST_STOP'),
+        disconnect: () => ipcRenderer.invoke('CAST_DISCONNECT'),
+        status: () => ipcRenderer.invoke('CAST_STATUS'),
     },
     windowControls: {
         minimize: () => ipcRenderer.send('WINDOW_MINIMIZE'),

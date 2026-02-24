@@ -10,6 +10,7 @@
     import PlayerLoadingScreen from "./components/PlayerLoadingScreen.svelte";
     import PlayerModals from "./components/PlayerModals.svelte";
     import PlayerWatchParty from "./components/PlayerWatchParty.svelte";
+    import CastDeviceModal from "../../components/player/CastDeviceModal.svelte";
     import type { ShowResponse } from "../../lib/library/types/meta_types";
     import { watchParty } from "../../lib/stores/watchPartyStore";
     import { localMode } from "../../lib/stores/authStore";
@@ -80,6 +81,7 @@
     import { createNextEpisodeHandler } from "./playerNextEpisode";
     import { createPlayerSessionLoader } from "./playerSessionLoader";
     import { createPlayerModalHandlers } from "./playerModalHandlers";
+    import { createPlayerCastController } from "./playerCastController";
 
     import { serverUrl } from "../../lib/client";
 
@@ -221,6 +223,74 @@
     let errorModalOpen = false;
     let reprobeAttempted = false;
     let torrentFailureExitTimeout: ReturnType<typeof setTimeout> | null = null;
+    let castActive = false;
+    let castBusy = false;
+    let castDeviceName = "";
+    let showCastDeviceModal = false;
+    let castDeviceModalLoading = false;
+
+    const showCastDeviceScanLoading = () => {
+        showCastDeviceModal = true;
+        castDeviceModalLoading = true;
+    };
+
+    const hideCastDevicePicker = () => {
+        showCastDeviceModal = false;
+        castDeviceModalLoading = false;
+    };
+
+    const castController = createPlayerCastController({
+        getSessionId: () => sessionId,
+        isCastActive: () => castActive,
+        isCastBusy: () => castBusy,
+        setCastBusy: (busy) => {
+            castBusy = busy;
+        },
+        setCastActive: (active) => {
+            castActive = active;
+        },
+        setCastDeviceName: (name) => {
+            castDeviceName = name;
+        },
+        getCurrentTime: () => $currentTime,
+        setCurrentTime: currentTime.set,
+        setVolumeLevel: volume.set,
+        setIsPlaying: isPlaying.set,
+        setPendingSeek: pendingSeek.set,
+        pauseLocalVideo: () => {
+            if (videoElem && !videoElem.paused) {
+                videoElem.pause();
+            }
+            if (videoElem) {
+                videoElem.muted = true;
+            }
+            if (hls) {
+                Session.detachLocalPlayback(hls, videoElem);
+                hls = null;
+            }
+        },
+        showDeviceScanLoading: showCastDeviceScanLoading,
+        hideDevicePicker: hideCastDevicePicker,
+        showAlert: async (message: string, title: string) => {
+            const electronApi = (window as any).electronAPI;
+            if (electronApi?.showAlertDialog) {
+                await electronApi.showAlertDialog(message, title);
+            }
+        },
+        trackEvent,
+        getPlaybackAnalyticsProps,
+        getMetadata: () => ({
+            title: metaData?.meta?.name,
+            subtitle:
+                metaData?.meta?.type === "series" && season != null && episode != null
+                    ? `S${season} E${episode}`
+                    : undefined,
+        }),
+    });
+
+    const openCastBootstrap = async () => {
+        await castController.connectOrDisconnect();
+    };
 
     const getTraktMediaType = (): "movie" | "episode" => {
         return metaData?.meta?.type === "series" ? "episode" : "movie";
@@ -328,6 +398,10 @@
     const loadVideo = playerSessionLoader.loadVideo;
 
     const seekToTime = (targetTime: number) => {
+        if (castActive) {
+            void castController.seek(targetTime);
+            return;
+        }
         if (!videoElem) return;
         performSeekWithEffects({
             targetTime,
@@ -362,8 +436,15 @@
     };
 
     const togglePlayWithFeedback = () => {
-        if (!videoElem) return;
         if ($watchParty.isActive && !$watchParty.isHost) return;
+
+        if (castActive) {
+            triggerPlayPauseFeedback($isPlaying ? "pause" : "play");
+            void castController.togglePlay($isPlaying);
+            return;
+        }
+
+        if (!videoElem) return;
 
         if ($showSeekStyleModal) return;
 
@@ -465,11 +546,13 @@
             WatchParty.leaveWatchParty,
             $watchParty.isActive,
         );
+        void castController.cleanup();
         resetPlayerState();
         hasStarted = false;
     });
 
     const handleTimeUpdate = () => {
+        if (castActive) return;
         if (!videoElem) return;
         const time = $playbackOffset + videoElem.currentTime;
         currentTime.set(time);
@@ -497,6 +580,7 @@
     };
 
     const handlePlay = () => {
+        if (castActive) return;
         isPlaying.set(true);
         hasStarted = true;
         void traktScrobbler.send("start");
@@ -518,6 +602,7 @@
     };
 
     const handlePause = () => {
+        if (castActive) return;
         isPlaying.set(false);
         if (
             !traktScrobbler.isStopSent() &&
@@ -665,6 +750,10 @@
         loadVideo(videoSrc);
     }
 
+    $: if (!castActive && videoElem) {
+        videoElem.muted = false;
+    }
+
     $: {
         resizeCounter;
         cueLinePercent = Subtitles.computeCueLinePercent(
@@ -727,6 +816,7 @@
             bind:canvasElem
             objectFit={$objectFit}
             showCanvas={$showCanvas}
+            hidden={castActive}
             on:timeupdate={handleTimeUpdate}
             on:play={handlePlay}
             on:pause={handlePause}
@@ -769,6 +859,15 @@
         details={$loadingDetails}
         progress={$loadingProgress}
     />
+
+    {#if castActive}
+        <div class="absolute inset-0 z-20 flex items-center justify-center bg-black text-white pointer-events-none">
+            <div class="text-center">
+                <div class="text-2xl font-semibold">Casting to {castDeviceName || "Chromecast"}</div>
+                <div class="text-sm text-white/70 mt-2">Playback is running on your TV</div>
+            </div>
+        </div>
+    {/if}
 
     {#if !$loading}
         <div
@@ -822,12 +921,23 @@
                 onSeekChange={(e) =>
                     controlsManager.onSeekChange(e, $duration, seekToTime)}
                 onVolumeChange={(e) =>
-                    controlsManager.onVolumeChange(e, volume.set)}
+                    castActive
+                        ? (() => {
+                            const target = e.target as HTMLInputElement;
+                            const nextVolume = Number(target?.value ?? $volume);
+                            if (!Number.isFinite(nextVolume)) return;
+                            void castController.setVolume(nextVolume);
+                        })()
+                        : controlsManager.onVolumeChange(e, volume.set)}
                 toggleFullscreen={handleToggleFullscreen}
                 objectFit={$objectFit}
                 toggleObjectFit={handleToggleObjectFit}
                 onNextEpisode={handleNextEpisodeClick}
+                {castActive}
+                {castBusy}
+                {castDeviceName}
                 on:audioClick={openAudioSelection}
+                on:castClick={openCastBootstrap}
                 on:subtitleClick={openSubtitleSelection}
                 on:watchPartyClick={() => {
                     if (!$localMode) {
@@ -888,5 +998,11 @@
             showPartyEndModal.set(false);
             handleClose();
         }}
+    />
+
+    <CastDeviceModal
+        open={showCastDeviceModal}
+        loading={castDeviceModalLoading}
+        onCancel={hideCastDevicePicker}
     />
 </div>
