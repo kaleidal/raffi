@@ -37,25 +37,20 @@ func (c *Controller) monitorBuffer(id string, ctx context.Context) {
 }
 
 func (c *Controller) adjustThrottleLocked(sess *Session) {
-	// Local files (non-HTTP sources) should not be treated like a live stream.
-	// Throttling/pause-resume keeps HLS in a "live edge" state and makes small seeks snap back.
+	isHTTPSource := false
 	if sess != nil {
 		src := sess.Source
-		if src != "" && !strings.HasPrefix(src, "http://") && !strings.HasPrefix(src, "https://") {
-			return
-		}
-	}
-
-	if !sess.DemandResumeUntil.IsZero() && time.Now().Before(sess.DemandResumeUntil) {
-		if sess.Paused && sess.PausedByCap {
-			sess.PausedByCap = false
-			resumeProcessPlatform(sess, c, sess.ID, sess.Source)
-		}
-		return
+		isHTTPSource = strings.HasPrefix(src, "http://") || strings.HasPrefix(src, "https://")
 	}
 
 	mediaSeq, segCount, err := readPlaylistState(filepath.Join(sess.WorkDir, fmt.Sprintf("slice_%03d", sess.SliceIndex), "child.m3u8"))
 	if err != nil || segCount == 0 {
+		if !sess.DemandResumeUntil.IsZero() && time.Now().Before(sess.DemandResumeUntil) {
+			if sess.Paused && sess.PausedByCap {
+				sess.PausedByCap = false
+				resumeProcessPlatform(sess, c, sess.ID, sess.Source)
+			}
+		}
 		return
 	}
 
@@ -63,11 +58,19 @@ func (c *Controller) adjustThrottleLocked(sess *Session) {
 	aheadSegments := max(highest-sess.LastServedSeq, 0)
 	aheadDuration := time.Duration(aheadSegments) * DefaultSegmentDuration
 
+	if !sess.DemandResumeUntil.IsZero() && time.Now().Before(sess.DemandResumeUntil) {
+		if aheadDuration < MaxBufferAhead {
+			if sess.Paused && sess.PausedByCap {
+				sess.PausedByCap = false
+				resumeProcessPlatform(sess, c, sess.ID, sess.Source)
+			}
+			return
+		}
+	}
+
 	switch {
 	case aheadDuration >= MaxBufferAhead && !sess.Paused:
-		// For HTTP sources, permanent pause causes connection drops.
-		// We will handle them with duty-cycle throttling below.
-		if src := sess.Source; src == "" || (!strings.HasPrefix(src, "http://") && !strings.HasPrefix(src, "https://")) {
+		if !isHTTPSource {
 			sess.PausedByCap = true
 			pauseProcess(sess)
 		}
@@ -77,12 +80,13 @@ func (c *Controller) adjustThrottleLocked(sess *Session) {
 	}
 
 	if aheadDuration >= MaxBufferAhead {
-		// If it's a local file, it's already paused permanently above.
-		// If it's an HTTP source, we apply a very strict duty cycle to keep the connection alive
-		// without buffering too much.
+		// Local files are already fully paused above; only HTTP sources need the
+		// duty-cycle approach to keep the remote connection alive.
+		if !isHTTPSource {
+			return
+		}
 		now := time.Now()
 		phase := time.Duration(now.UnixNano()) % throttleCycleWindow
-		// 2% active portion (20ms per second) to keep connection alive but barely generate segments
 		allowWork := phase < (20 * time.Millisecond)
 
 		if allowWork {

@@ -403,9 +403,6 @@ func (s *Server) handleHLSSessionAsset(w http.ResponseWriter, r *http.Request, s
 		http.Error(w, "failed to prepare stream", http.StatusInternalServerError)
 		return
 	}
-	if s.hlsController != nil {
-		s.hlsController.NotifyClientAssetRequest(sess.ID)
-	}
 	castToken := castTokenFromRequest(r)
 
 	if asset == "child.m3u8" {
@@ -496,6 +493,13 @@ func (s *Server) handleHLSSessionAsset(w http.ResponseWriter, r *http.Request, s
 	if !strings.HasPrefix(fullPath, sliceDir) {
 		http.Error(w, "invalid path", http.StatusBadRequest)
 		return
+	}
+
+	if s.hlsController != nil {
+		ext := strings.ToLower(filepath.Ext(fullPath))
+		if ext == ".ts" {
+			s.hlsController.NotifyClientAssetRequest(sess.ID)
+		}
 	}
 
 	if err := waitForFile(r.Context(), fullPath, 20*time.Second); err != nil {
