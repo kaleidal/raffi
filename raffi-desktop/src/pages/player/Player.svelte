@@ -363,7 +363,6 @@
 
     let castDurationBackfillAttempts = 0;
     const MAX_CAST_DURATION_BACKFILL_ATTEMPTS = 20;
-    let castKeepaliveCounter = 0;
     let castDurationReloaded = false;
 
     const startCastStatusPolling = () => {
@@ -371,7 +370,6 @@
             return;
         }
         castDurationBackfillAttempts = 0;
-        castKeepaliveCounter = 0;
         castDurationReloaded = false;
 
         const tryBackfillDuration = async () => {
@@ -389,18 +387,6 @@
                         void reloadCastMedia(dur).catch(() => {});
                     }
                 }
-            } catch {
-                // ignore
-            }
-        };
-
-        const keepServerBufferAlive = async () => {
-            if (!sessionId) return;
-            try {
-                await fetch(`${serverUrl}/sessions/${sessionId}/stream/child.m3u8`, {
-                    method: "GET",
-                    signal: AbortSignal.timeout(3000),
-                });
             } catch {
                 // ignore
             }
@@ -459,11 +445,6 @@
                 } else if ($duration > 0 && !castDurationReloaded) {
                     castDurationReloaded = true;
                     void reloadCastMedia($duration).catch(() => {});
-                }
-
-                castKeepaliveCounter++;
-                if (castKeepaliveCounter % 5 === 0) {
-                    void keepServerBufferAlive();
                 }
             } catch {
                 // ignore transient status polling errors
