@@ -9,7 +9,7 @@ import {
 import type { AppUser } from "./types";
 
 const AVE_CLIENT_ID = "app_13afc5b8884e9985d89eac0f4ca4b5af";
-const AVE_ISSUER = "https://api.aveid.net";
+const AVE_ISSUER = "https://aveid.net";
 const AVE_SIGNIN_URL = "https://aveid.net/signin";
 const AVE_REDIRECT_URI = "raffi://auth/callback";
 
