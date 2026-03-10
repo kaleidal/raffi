@@ -83,7 +83,12 @@
     import { createPlayerSessionLoader } from "./playerSessionLoader";
     import { createPlayerModalHandlers } from "./playerModalHandlers";
     import { createPlayerCastController } from "./playerCastController";
-    import { getCastStatus, listCastDevices, reloadCastMedia, type CastDevice } from "../../lib/cast";
+    import {
+        createPlayerCastRuntime,
+        type CastDevice,
+        type CastModalStep,
+        type CastMode,
+    } from "./playerCastRuntime";
 
     import { serverUrl } from "../../lib/client";
 
@@ -230,35 +235,61 @@
     let torrentFailureExitTimeout: ReturnType<typeof setTimeout> | null = null;
     let castActive = false;
     let castBusy = false;
-    let castTransport: "native" | "chrome" | null = null;
+    let castTransport: CastMode | null = null;
     let castDeviceName = "";
     let showCastDeviceModal = false;
     let castDeviceModalLoading = false;
-    let castDeviceModalMode: "native" | "chrome" = "native";
-    let castModalStep: "mode" | "native-devices" = "mode";
+    let castDeviceModalMode: CastMode = "native";
+    let castModalStep: CastModalStep = "mode";
     let nativeCastDevices: CastDevice[] = [];
-    let castStatusInterval: ReturnType<typeof setInterval> | null = null;
 
-    const showCastDeviceScanLoading = (mode: "native" | "chrome") => {
-        showCastDeviceModal = true;
-        castDeviceModalLoading = true;
-        castDeviceModalMode = mode;
+    const showCastAlert = async (message: string, title: string) => {
+        const electronApi = (window as any).electronAPI;
+        if (electronApi?.showAlertDialog) {
+            await electronApi.showAlertDialog(message, title);
+        }
     };
 
-    const showCastDeviceModePicker = () => {
-        showCastDeviceModal = true;
-        castDeviceModalLoading = false;
-        castDeviceModalMode = "native";
-        castModalStep = "mode";
-        nativeCastDevices = [];
-    };
-
-    const hideCastDevicePicker = () => {
-        showCastDeviceModal = false;
-        castDeviceModalLoading = false;
-        castModalStep = "mode";
-        nativeCastDevices = [];
-    };
+    const castRuntime = createPlayerCastRuntime({
+        getSessionId: () => sessionId,
+        getServerUrl: () => serverUrl,
+        isCastActive: () => castActive,
+        setCastActive: (active) => {
+            castActive = active;
+        },
+        getCastTransport: () => castTransport,
+        setCastTransport: (mode) => {
+            castTransport = mode;
+        },
+        setCastDeviceName: (name) => {
+            castDeviceName = name;
+        },
+        setCastModalOpen: (open) => {
+            showCastDeviceModal = open;
+        },
+        setCastModalLoading: (loading) => {
+            castDeviceModalLoading = loading;
+        },
+        setCastModalMode: (mode) => {
+            castDeviceModalMode = mode;
+        },
+        setCastModalStep: (step) => {
+            castModalStep = step;
+        },
+        setNativeCastDevices: (devices) => {
+            nativeCastDevices = devices;
+        },
+        setHasStarted: (started) => {
+            hasStarted = started;
+        },
+        getPlaybackOffset: () => $playbackOffset,
+        setCurrentTime: currentTime.set,
+        handleProgress: handleProgressInternal,
+        getDuration: () => $duration,
+        setDuration: duration.set,
+        setIsPlaying: isPlaying.set,
+        showAlert: showCastAlert,
+    });
 
     const castController = createPlayerCastController({
         getSessionId: () => sessionId,
@@ -298,14 +329,9 @@
                 hls = null;
             }
         },
-        showDeviceScanLoading: showCastDeviceScanLoading,
-        hideDevicePicker: hideCastDevicePicker,
-        showAlert: async (message: string, title: string) => {
-            const electronApi = (window as any).electronAPI;
-            if (electronApi?.showAlertDialog) {
-                await electronApi.showAlertDialog(message, title);
-            }
-        },
+        showDeviceScanLoading: castRuntime.showDeviceScanLoading,
+        hideDevicePicker: castRuntime.hideDevicePicker,
+        showAlert: showCastAlert,
         trackEvent,
         getPlaybackAnalyticsProps,
         getMetadata: () => ({
@@ -326,7 +352,7 @@
             await castController.connectOrDisconnect(castTransport || "native");
             return;
         }
-        showCastDeviceModePicker();
+        castRuntime.showDeviceModePicker();
     };
 
     const startCastWithMode = async (mode: "native" | "chrome") => {
@@ -334,127 +360,11 @@
     };
 
     const openNativeDeviceSelection = async () => {
-        castModalStep = "native-devices";
-        castDeviceModalMode = "native";
-        castDeviceModalLoading = true;
-        nativeCastDevices = [];
-        try {
-            const devices = await listCastDevices(5000);
-            nativeCastDevices = devices;
-            if (devices.length === 0) {
-                await ((window as any).electronAPI?.showAlertDialog?.(
-                    "No Chromecast devices found. Make sure your TV and computer are on the same LAN.",
-                    "No Cast Devices",
-                ) || Promise.resolve());
-            }
-        } catch (error) {
-            await ((window as any).electronAPI?.showAlertDialog?.(
-                error instanceof Error ? error.message : String(error),
-                "Native Cast Discovery Failed",
-            ) || Promise.resolve());
-        } finally {
-            castDeviceModalLoading = false;
-        }
+        await castRuntime.openNativeDeviceSelection();
     };
 
     const startNativeCastWithDevice = async (deviceId: string) => {
         await castController.connectOrDisconnect("native", deviceId);
-    };
-
-    let castDurationBackfillAttempts = 0;
-    const MAX_CAST_DURATION_BACKFILL_ATTEMPTS = 20;
-    let castDurationReloaded = false;
-
-    const startCastStatusPolling = () => {
-        if (castStatusInterval) {
-            return;
-        }
-        castDurationBackfillAttempts = 0;
-        castDurationReloaded = false;
-
-        const tryBackfillDuration = async () => {
-            if (!sessionId) return;
-            try {
-                const res = await fetch(`${serverUrl}/sessions/${sessionId}`);
-                if (!res.ok) return;
-                const data = await res.json();
-                const dur = Number(data?.durationSeconds || 0);
-                if (Number.isFinite(dur) && dur > 0) {
-                    duration.set(dur);
-                    castDurationBackfillAttempts = MAX_CAST_DURATION_BACKFILL_ATTEMPTS;
-                    if (!castDurationReloaded) {
-                        castDurationReloaded = true;
-                        void reloadCastMedia(dur).catch(() => {});
-                    }
-                }
-            } catch {
-                // ignore
-            }
-        };
-
-        const poll = async () => {
-            if (!castActive) {
-                return;
-            }
-            try {
-                const status = await getCastStatus();
-                if (!status?.active) {
-                    castActive = false;
-                    castTransport = null;
-                    castDeviceName = "";
-                    return;
-                }
-
-                if (status.deviceName) {
-                    castDeviceName = status.deviceName;
-                }
-                if (status.transport) {
-                    castTransport = status.transport;
-                }
-
-                if (castTransport === "native" || castTransport === "chrome") {
-                    const castTime = Number(status.currentTime || 0);
-                    const playbackOffsetValue = get(playbackOffset);
-                    const playbackOffsetSeconds = Math.max(0, Number(playbackOffsetValue || 0));
-                    if (Number.isFinite(castTime) && castTime >= 0) {
-                        const absoluteCastTime = castTime + playbackOffsetSeconds;
-                        hasStarted = true;
-                        currentTime.set(absoluteCastTime);
-                        handleProgressInternal(absoluteCastTime, $duration);
-                    }
-                    const playerState = String(status.playerState || "").toUpperCase();
-                    if (playerState.includes("PAUSE") || playerState.includes("IDLE")) {
-                        isPlaying.set(false);
-                    } else if (playerState.length > 0) {
-                        isPlaying.set(true);
-                    }
-
-                    if (status.duration != null) {
-                        const castDur = Number(status.duration);
-                        if (Number.isFinite(castDur) && castDur > 0 && $duration <= 0) {
-                            duration.set(castDur);
-                            castDurationBackfillAttempts = MAX_CAST_DURATION_BACKFILL_ATTEMPTS;
-                            castDurationReloaded = true;
-                        }
-                    }
-                }
-
-                if ($duration <= 0 && castDurationBackfillAttempts < MAX_CAST_DURATION_BACKFILL_ATTEMPTS) {
-                    castDurationBackfillAttempts++;
-                    void tryBackfillDuration();
-                } else if ($duration > 0 && !castDurationReloaded) {
-                    castDurationReloaded = true;
-                    void reloadCastMedia($duration).catch(() => {});
-                }
-            } catch {
-                // ignore transient status polling errors
-            }
-        };
-
-        void poll();
-        castStatusInterval = setInterval(() => {
-            void poll();
-        }, 1000);
     };
 
     const getTraktMediaType = (): "movie" | "episode" => {
@@ -717,10 +627,7 @@
             $watchParty.isActive,
         );
         void castController.cleanup();
-        if (castStatusInterval) {
-            clearInterval(castStatusInterval);
-            castStatusInterval = null;
-        }
+        castRuntime.cleanup();
         resetPlayerState();
         hasStarted = false;
     });
@@ -929,12 +836,9 @@
     }
 
     $: if (castActive) {
-        if (!castStatusInterval) {
-            startCastStatusPolling();
-        }
-    } else if (castStatusInterval) {
-        clearInterval(castStatusInterval);
-        castStatusInterval = null;
+        castRuntime.startStatusPolling();
+    } else {
+        castRuntime.stopStatusPolling();
     }
 
     $: {
@@ -1196,16 +1100,13 @@
         on:selectNativeDevice={(e) => {
             void startNativeCastWithDevice((e as CustomEvent<{ deviceId: string }>).detail?.deviceId || "");
         }}
-        onBackToMode={() => {
-            castModalStep = "mode";
-            castDeviceModalLoading = false;
-        }}
+        onBackToMode={castRuntime.showDeviceModePicker}
         onNative={() => {
             void openNativeDeviceSelection();
         }}
         onChrome={() => {
             void startCastWithMode("chrome");
         }}
-        onCancel={hideCastDevicePicker}
+        onCancel={castRuntime.hideDevicePicker}
     />
 </div>
