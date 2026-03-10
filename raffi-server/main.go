@@ -404,6 +404,9 @@ func (s *Server) handleHLSSessionAsset(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 	castToken := castTokenFromRequest(r)
+	if s.hlsController != nil {
+		s.hlsController.NotifyClientAssetRequest(sess.ID)
+	}
 
 	if asset == "child.m3u8" {
 		start := r.URL.Query().Get("seek")

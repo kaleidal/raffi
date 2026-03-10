@@ -40,6 +40,7 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, ba
   let nativeLastKnownAtMs = 0;
   let nativeIsPlaying = false;
   let nativeDurationSeconds = 0;
+  let nativePendingStartTimeSeconds = 0;
   let activeMetadata = null;
   let chromeLastKnownTimeSeconds = 0;
   let chromeLastKnownAtMs = 0;
@@ -346,6 +347,7 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, ba
     nativeLastKnownAtMs = Date.now();
     nativeIsPlaying = true;
     nativeDurationSeconds = Number(media.duration || 0);
+    nativePendingStartTimeSeconds = startAt;
     activeMetadata = metadata || null;
 
     return {
@@ -553,6 +555,7 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, ba
   }
 
   function buildLoadPayload({ appId, streamUrl, startTime, metadata }) {
+    const durationSeconds = Number(metadata?.durationSeconds || 0);
     return {
       receiverAppId: appId,
       streamUrl,
@@ -562,6 +565,9 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, ba
         subtitle: String(metadata?.subtitle || ""),
         cover: String(metadata?.cover || ""),
         background: String(metadata?.background || ""),
+        durationSeconds: Number.isFinite(durationSeconds) && durationSeconds > 0
+          ? durationSeconds
+          : undefined,
       },
     };
   }
@@ -762,6 +768,7 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, ba
       nativeLastKnownAtMs = 0;
       nativeIsPlaying = false;
       nativeDurationSeconds = 0;
+      nativePendingStartTimeSeconds = 0;
       activeMetadata = null;
       return;
     }
@@ -789,6 +796,7 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, ba
       nativeLastKnownAtMs = 0;
       nativeIsPlaying = false;
       nativeDurationSeconds = 0;
+      nativePendingStartTimeSeconds = 0;
       activeMetadata = null;
       return;
     }
@@ -815,6 +823,7 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, ba
       await callNativePlayer("seek", target);
       nativeLastKnownTimeSeconds = target;
       nativeLastKnownAtMs = Date.now();
+      nativePendingStartTimeSeconds = target;
       return;
     }
     if (activeTransport === "chrome") {
@@ -879,6 +888,14 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, ba
         nativeDurationSeconds = reportedDuration;
       }
 
+      if (
+        nativePendingStartTimeSeconds > 0 &&
+        Number.isFinite(Number(current)) &&
+        Number(current) + 1 >= nativePendingStartTimeSeconds
+      ) {
+        nativePendingStartTimeSeconds = 0;
+      }
+
       const pausedState = playerState.includes("PAUSE") || playerState.includes("IDLE");
       const playingState = playerState.includes("PLAYING") || playerState.includes("BUFFER");
       if (pausedState) {
@@ -894,6 +911,14 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, ba
 
       if (current == null) {
         current = estimatedFromClock;
+      }
+
+      if (
+        nativePendingStartTimeSeconds > 0 &&
+        Number.isFinite(Number(current)) &&
+        Number(current) < nativePendingStartTimeSeconds
+      ) {
+        current = Math.max(Number(current), nativePendingStartTimeSeconds);
       }
 
       if (nativeIsPlaying && Number.isFinite(Number(current))) {
@@ -985,7 +1010,12 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, ba
       return false;
     }
 
-    const currentPos = Math.max(0, nativeLastKnownTimeSeconds);
+    const currentPos = Math.max(
+      0,
+      nativePendingStartTimeSeconds > 0
+        ? Math.max(nativeLastKnownTimeSeconds, nativePendingStartTimeSeconds)
+        : nativeLastKnownTimeSeconds,
+    );
     const wasPlaying = nativeIsPlaying;
 
     const updatedMetadata = { ...(activeMetadata || {}), durationSeconds: dur };
@@ -1016,6 +1046,7 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, ba
       nativeLastKnownTimeSeconds = currentPos;
       nativeLastKnownAtMs = Date.now();
       nativeIsPlaying = wasPlaying;
+      nativePendingStartTimeSeconds = 0;
 
       logToFile("Cast media reloaded with duration", { durationSeconds: dur, currentPos });
       return true;
