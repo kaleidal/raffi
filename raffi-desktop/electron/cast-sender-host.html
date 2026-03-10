@@ -74,7 +74,6 @@
     </div>
     <script>
       (() => {
-        const FALLBACK_RECEIVER_APP_ID = "CC1AD845";
         let configuredReceiverAppId = null;
         let pendingInteractiveResolver = null;
         let pendingInteractiveRejecter = null;
@@ -172,14 +171,6 @@
           } catch {
             return String(error);
           }
-        }
-
-        function shouldFallbackToDefault(details, requestedAppId) {
-          if (!details || requestedAppId === FALLBACK_RECEIVER_APP_ID) return false;
-          const normalized = String(details).toLowerCase();
-          if (normalized.includes("interactive_session_cancelled")) return false;
-          if (normalized.includes("cast_picker_closed")) return false;
-          return normalized.includes("session_error");
         }
 
         function waitForSessionStart(context, timeoutMs = 20000) {
@@ -330,20 +321,6 @@
             if (interactiveSession) return interactiveSession;
           } catch (error) {
             const details = formatError(error);
-            if (shouldFallbackToDefault(details, requestedAppId)) {
-              setStatus("Primary receiver unavailable. Retrying with default receiver...");
-              try {
-                const fallbackSession = await beginInteractiveSession({
-                  ...payload,
-                  receiverAppId: FALLBACK_RECEIVER_APP_ID,
-                });
-                if (fallbackSession) return fallbackSession;
-              } catch (fallbackError) {
-                throw new Error(
-                  `request_session_failed:${details}; fallback_failed:${formatError(fallbackError)}`,
-                );
-              }
-            }
             throw new Error(`request_session_failed:${details}`);
           }
 

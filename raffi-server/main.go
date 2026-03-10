@@ -404,11 +404,11 @@ func (s *Server) handleHLSSessionAsset(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 	castToken := castTokenFromRequest(r)
-	if s.hlsController != nil {
-		s.hlsController.NotifyClientAssetRequest(sess.ID)
-	}
 
 	if asset == "child.m3u8" {
+		if s.hlsController != nil {
+			s.hlsController.NotifyClientPlaylistRequest(sess.ID)
+		}
 		start := r.URL.Query().Get("seek")
 		seekID := r.URL.Query().Get("seek_id")
 		forceSlice := r.URL.Query().Get("force_slice") == "1"

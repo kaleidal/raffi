@@ -11,7 +11,7 @@
         margin: 0;
         width: 100%;
         height: 100%;
-        background: #000;
+        background: transparent;
         color: #fff;
         font-family: Inter, Segoe UI, sans-serif;
         overflow: hidden;
@@ -20,13 +20,16 @@
         position: relative;
         width: 100%;
         height: 100%;
-        background: #000;
+        background: transparent;
       }
       #media {
+        position: absolute;
+        inset: 0;
         width: 100%;
         height: 100%;
         object-fit: contain;
-        background: #000;
+        background: transparent;
+        z-index: 0;
       }
       #hud {
         position: absolute;
@@ -37,6 +40,7 @@
         background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.72) 42%, rgba(0, 0, 0, 0.9) 100%);
         pointer-events: none;
         box-sizing: border-box;
+        z-index: 1;
       }
       #meta {
         display: flex;
@@ -101,6 +105,7 @@
         letter-spacing: 0.02em;
         text-transform: uppercase;
         backdrop-filter: blur(12px);
+        z-index: 1;
       }
     </style>
   </head>
@@ -156,10 +161,21 @@
         const metadata = mediaInformation?.metadata || {};
         const title = String(metadata?.title || mediaInformation?.contentId || "Raffi");
         const subtitle = String(metadata?.subtitle || "");
-        const currentTime = Number(playerManager.getCurrentTimeSec() || mediaElement?.currentTime || 0);
-        const activeDuration = Number(
-          playerManager.getDurationSec() || mediaInformation?.duration || knownDurationSeconds || 0,
-        );
+        const mediaCurrentTime = Number(mediaElement?.currentTime || 0);
+        const playerCurrentTime = Number(playerManager.getCurrentTimeSec() || 0);
+        const currentTime = Number.isFinite(mediaCurrentTime) && mediaCurrentTime > 0
+          ? mediaCurrentTime
+          : (Number.isFinite(playerCurrentTime) ? playerCurrentTime : 0);
+        const mediaElementDuration = Number(mediaElement?.duration || 0);
+        const playerDuration = Number(playerManager.getDurationSec() || 0);
+        const mediaInfoDuration = Number(mediaInformation?.duration || 0);
+        const activeDuration = Number.isFinite(mediaElementDuration) && mediaElementDuration > 0
+          ? mediaElementDuration
+          : Number.isFinite(playerDuration) && playerDuration > 0
+            ? playerDuration
+            : Number.isFinite(mediaInfoDuration) && mediaInfoDuration > 0
+              ? mediaInfoDuration
+              : knownDurationSeconds;
         const durationSeconds = Number.isFinite(activeDuration) && activeDuration > 0
           ? activeDuration
           : 0;
@@ -269,6 +285,8 @@
           syncHud();
         });
       });
+
+      mediaElement.style.backgroundColor = "transparent";
 
       context.start({
         disableIdleTimeout: true,

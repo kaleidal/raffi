@@ -9,10 +9,12 @@ import (
 )
 
 const (
-	throttleCycleWindow      = time.Second
-	throttleActivePortion    = 600 * time.Millisecond // ~60% active
-	throttleMinAheadToEngage = 12 * time.Second
-	clientDemandResumeGrace  = 4 * time.Second
+	throttleCycleWindow       = time.Second
+	throttleActivePortion     = 600 * time.Millisecond // ~60% active
+	throttleMinAheadToEngage  = 12 * time.Second
+	clientDemandResumeGrace   = 4 * time.Second
+	playlistDemandResumeGrace = 1200 * time.Millisecond
+	playlistDemandNudgeMinGap = 2 * time.Second
 )
 
 func (c *Controller) monitorBuffer(id string, ctx context.Context) {
@@ -183,5 +185,33 @@ func (c *Controller) NotifyClientAssetRequest(id string) {
 	}
 
 	// Re-evaluate cap state after the resume signal.
+	c.adjustThrottleLocked(sess)
+}
+
+func (c *Controller) NotifyClientPlaylistRequest(id string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	sess := c.sessions[id]
+	if sess == nil {
+		return
+	}
+
+	now := time.Now()
+	if !sess.LastPlaylistNudge.IsZero() && now.Sub(sess.LastPlaylistNudge) < playlistDemandNudgeMinGap {
+		return
+	}
+	sess.LastPlaylistNudge = now
+
+	resumeUntil := now.Add(playlistDemandResumeGrace)
+	if resumeUntil.After(sess.DemandResumeUntil) {
+		sess.DemandResumeUntil = resumeUntil
+	}
+
+	if sess.Paused && sess.PausedByCap {
+		sess.PausedByCap = false
+		resumeProcessPlatform(sess, c, id, sess.Source)
+	}
+
 	c.adjustThrottleLocked(sess)
 }

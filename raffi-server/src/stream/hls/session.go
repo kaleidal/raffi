@@ -27,6 +27,7 @@ type Session struct {
 	Paused            bool
 	PausedByCap       bool
 	DemandResumeUntil time.Time
+	LastPlaylistNudge time.Time
 
 	SliceIndex int
 	LastSeekID string
