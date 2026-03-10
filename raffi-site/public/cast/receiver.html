@@ -29,23 +29,104 @@
     <script>
       const context = cast.framework.CastReceiverContext.getInstance();
       const playerManager = context.getPlayerManager();
+      const supportedCommands =
+        cast.framework.messages.Command.PAUSE |
+        cast.framework.messages.Command.SEEK;
+      let knownDurationSeconds = 0;
+      let appliedDurationSeconds = 0;
+
+      const syncDuration = (nextDurationSeconds) => {
+        const normalizedDuration = Number(nextDurationSeconds || 0);
+        if (!Number.isFinite(normalizedDuration) || normalizedDuration <= 0) {
+          return;
+        }
+
+        knownDurationSeconds = normalizedDuration;
+        const mediaInformation = playerManager.getMediaInformation();
+        if (!mediaInformation) {
+          return;
+        }
+
+        const currentMediaDuration = Number(mediaInformation.duration || 0);
+        if (
+          Math.abs(normalizedDuration - currentMediaDuration) < 0.01 &&
+          Math.abs(normalizedDuration - appliedDurationSeconds) < 0.01
+        ) {
+          return;
+        }
+
+        mediaInformation.streamType = cast.framework.messages.StreamType.BUFFERED;
+        mediaInformation.duration = normalizedDuration;
+        mediaInformation.customData = {
+          ...(mediaInformation.customData || {}),
+          durationSeconds: normalizedDuration,
+        };
+        appliedDurationSeconds = normalizedDuration;
+        playerManager.setMediaInformation(mediaInformation, true);
+        playerManager.broadcastStatus(true);
+      };
+
+      const basePlaybackConfig = Object.assign(
+        new cast.framework.PlaybackConfig(),
+        playerManager.getPlaybackConfig() || {},
+      );
+      basePlaybackConfig.autoResumeNumberOfSegments = 2;
+      playerManager.setPlaybackConfig(basePlaybackConfig);
 
       playerManager.setMessageInterceptor(
         cast.framework.messages.MessageType.LOAD,
         (request) => {
           if (request.media) {
             request.media.streamType = cast.framework.messages.StreamType.BUFFERED;
-            if (request.media.customData && request.media.customData.durationSeconds) {
-              request.media.duration = request.media.customData.durationSeconds;
+            const requestedDuration = Number(
+              request.media.customData?.durationSeconds || request.media.duration || 0,
+            );
+            if (Number.isFinite(requestedDuration) && requestedDuration > 0) {
+              knownDurationSeconds = requestedDuration;
+              request.media.duration = requestedDuration;
+              request.media.customData = {
+                ...(request.media.customData || {}),
+                durationSeconds: requestedDuration,
+              };
             }
           }
           return request;
         },
       );
 
+      playerManager.setMessageInterceptor(
+        cast.framework.messages.MessageType.SEEK,
+        (request) => request,
+      );
+
+      playerManager.addEventListener(
+        cast.framework.events.EventType.MEDIA_STATUS,
+        () => {
+          const mediaDuration = Number(playerManager.getDurationSec() || 0);
+          if (Number.isFinite(mediaDuration) && mediaDuration > 0) {
+            syncDuration(mediaDuration);
+            return;
+          }
+          syncDuration(knownDurationSeconds);
+        },
+      );
+
       context.start({
         disableIdleTimeout: true,
+        enforceSupportedCommands: true,
+        supportedCommands,
       });
+
+      playerManager.setSupportedMediaCommands(supportedCommands, true);
+
+      setInterval(() => {
+        const mediaDuration = Number(playerManager.getDurationSec() || 0);
+        if (Number.isFinite(mediaDuration) && mediaDuration > 0) {
+          syncDuration(mediaDuration);
+          return;
+        }
+        syncDuration(knownDurationSeconds);
+      }, 1000);
     </script>
   </body>
 </html>

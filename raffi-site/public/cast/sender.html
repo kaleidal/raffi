@@ -471,6 +471,7 @@
           const durationSeconds = Number(payload?.metadata?.durationSeconds || 0);
           if (Number.isFinite(durationSeconds) && durationSeconds > 0) {
             mediaInfo.duration = durationSeconds;
+            mediaInfo.customData = { durationSeconds };
           }
 
           const title = String(payload?.metadata?.title || "").trim();
@@ -505,6 +506,7 @@
             active: true,
             currentTime: Number(media?.getEstimatedTime?.() || 0),
             playerState: String(media?.playerState || "UNKNOWN"),
+            duration: Number(media?.media?.duration || media?.duration || payload?.metadata?.durationSeconds || 0),
             deviceName: getSessionDeviceName(session),
           };
         }
@@ -649,6 +651,7 @@
             active: true,
             currentTime: Number(media?.getEstimatedTime?.() || 0),
             playerState: String(media?.playerState || "UNKNOWN"),
+            duration: Number(media?.media?.duration || media?.duration || 0),
             volumeLevel: Number(volume?.level || 0),
             deviceName: getSessionDeviceName(session),
           };
