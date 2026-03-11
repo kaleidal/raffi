@@ -80,6 +80,35 @@ export function shouldBypassServerForHttpStream(
     return supportsEac3Playback(videoElem);
 }
 
+function applyAudioTrackState(
+    sessionData: any,
+    setAudioTracks: (tracks: Track[]) => void,
+    setCurrentAudioLabel: (label: string) => void,
+): boolean {
+    const streams = Array.isArray(sessionData?.availableStreams)
+        ? sessionData.availableStreams
+        : [];
+
+    const nextAudioTracks = streams
+        .filter((stream: any) => stream?.type === "audio")
+        .map((stream: any) => ({
+            id: stream.index,
+            label: stream.title || stream.language || `Audio ${stream.index}`,
+            selected: stream.index === (sessionData.audioIndex || 0),
+            group: "Embedded",
+        }));
+
+    if (nextAudioTracks.length === 0) {
+        return false;
+    }
+
+    setAudioTracks(nextAudioTracks);
+
+    const selectedAudio = nextAudioTracks.find((track) => track.selected);
+    setCurrentAudioLabel(selectedAudio?.label || nextAudioTracks[0].label);
+    return true;
+}
+
 export async function loadVideoSession(
     src: string,
     fileIdx: number | null,
@@ -108,6 +137,7 @@ export async function loadVideoSession(
         setSubtitleTracks: (tracks: Track[]) => void;
         setCurrentAudioLabel: (label: string) => void;
         setCurrentSubtitleLabel: (label: string) => void;
+        setSessionData?: (sessionData: SessionData) => void;
     },
     fetchAddonSubtitles: () => Promise<void>
 ): Promise<{ sessionId: string; sessionData: any }> {
@@ -135,6 +165,7 @@ export async function loadVideoSession(
         setSubtitleTracks,
         setCurrentAudioLabel,
         setCurrentSubtitleLabel,
+        setSessionData,
     } = setStates;
 
     try {
@@ -199,19 +230,49 @@ export async function loadVideoSession(
         if (sessionData.chapters) {
             console.log("Loaded chapters:", sessionData.chapters);
         }
-        setDuration(sessionData.durationSeconds || 0);
 
-        if (!sessionData.durationSeconds || sessionData.durationSeconds <= 0) {
-            const refreshDuration = async () => {
+        const applySessionMetadata = (nextSessionData: any) => {
+            setSessionData?.(nextSessionData as SessionData);
+
+            const nextDuration = Number(nextSessionData?.durationSeconds || 0);
+            const hasDuration = Number.isFinite(nextDuration) && nextDuration > 0;
+            if (hasDuration) {
+                setDuration(nextDuration);
+            }
+
+            const hasAudioTracks = applyAudioTrackState(
+                nextSessionData,
+                setAudioTracks,
+                setCurrentAudioLabel,
+            );
+
+            return { hasDuration, hasAudioTracks };
+        };
+
+        const subtitleTracks = [
+            { id: "off", label: "Off", selected: true, group: "None" },
+        ];
+        setSubtitleTracks(subtitleTracks);
+
+        let { hasDuration, hasAudioTracks } = applySessionMetadata(sessionData);
+
+        if (!hasDuration || !hasAudioTracks) {
+            const refreshSessionMetadata = async () => {
                 for (let attempt = 0; attempt < 18; attempt++) {
                     await new Promise((resolve) => setTimeout(resolve, 1000));
+
                     try {
-                        const nextRes = await fetch(`${serverUrl}/sessions/${sessionId}`);
-                        if (!nextRes.ok) continue;
+                        const nextRes = await fetch(getSessionUrl(sessionId));
+                        if (!nextRes.ok) {
+                            continue;
+                        }
+
                         const nextData = await nextRes.json();
-                        const nextDuration = Number(nextData?.durationSeconds || 0);
-                        if (Number.isFinite(nextDuration) && nextDuration > 0) {
-                            setDuration(nextDuration);
+                        const nextState = applySessionMetadata(nextData);
+                        hasDuration = hasDuration || nextState.hasDuration;
+                        hasAudioTracks = hasAudioTracks || nextState.hasAudioTracks;
+
+                        if (hasDuration && hasAudioTracks) {
                             break;
                         }
                     } catch {
@@ -220,28 +281,7 @@ export async function loadVideoSession(
                 }
             };
 
-            void refreshDuration();
-        }
-
-        if (sessionData.availableStreams) {
-            const audioTracks = sessionData.availableStreams
-                .filter((s: any) => s.type === "audio")
-                .map((s: any) => ({
-                    id: s.index,
-                    label: s.title || s.language || `Audio ${s.index}`,
-                    selected: s.index === (sessionData.audioIndex || 0),
-                    group: "Embedded",
-                }));
-
-            const subtitleTracks = [
-                { id: "off", label: "Off", selected: true, group: "None" },
-            ];
-
-            setAudioTracks(audioTracks);
-            setSubtitleTracks(subtitleTracks);
-
-            const selectedAudio = audioTracks.find((t: Track) => t.selected);
-            if (selectedAudio) setCurrentAudioLabel(selectedAudio.label);
+            void refreshSessionMetadata();
         }
 
 		setLoadingStage?.("Loading subtitles");

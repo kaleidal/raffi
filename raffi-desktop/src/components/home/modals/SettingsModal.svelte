@@ -9,7 +9,6 @@
 	import {
 		clearLocalState,
 		syncCloudBackupNow,
-		syncLocalStateToUser,
 		syncUserStateToLocal,
 	} from "../../../lib/db/db";
 	import {
