@@ -5,11 +5,12 @@ export function extractYouTubeId(value: unknown): string | null {
 
     try {
         const url = new URL(raw);
-        if (url.hostname.includes("youtube.com")) {
+        const hostname = url.hostname.toLowerCase();
+        if (hostname === "youtube.com" || hostname.endsWith(".youtube.com")) {
             const id = url.searchParams.get("v");
             if (id && /^[A-Za-z0-9_-]{11}$/.test(id)) return id;
         }
-        if (url.hostname.includes("youtu.be")) {
+        if (hostname === "youtu.be") {
             const id = url.pathname.replace(/^\//, "");
             if (id && /^[A-Za-z0-9_-]{11}$/.test(id)) return id;
         }
