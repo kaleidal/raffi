@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { createEventDispatcher } from "svelte";
     import { fade, scale } from "svelte/transition";
 
     const portal = (node: HTMLElement) => {
@@ -21,14 +20,15 @@
     export let errorMessage: string = "Stream failed to load";
     export let errorDetails: string = "";
 
-    const dispatch = createEventDispatcher();
+    export let onRetry: () => void = () => {};
+    export let onBack: () => void = () => {};
 
     function retry() {
-        dispatch("retry");
+        onRetry();
     }
 
     function goBack() {
-        dispatch("back");
+        onBack();
     }
 </script>
 

@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { createEventDispatcher } from "svelte";
     import { fade, scale } from "svelte/transition";
 
     const portal = (node: HTMLElement) => {
@@ -16,15 +15,15 @@
         };
     };
 
-
-    const dispatch = createEventDispatcher();
+    export let onConfirm: () => void = () => {};
+    export let onCancel: () => void = () => {};
 
     function confirm() {
-        dispatch("confirm");
+        onConfirm();
     }
 
     function cancel() {
-        dispatch("cancel");
+        onCancel();
     }
 </script>
 

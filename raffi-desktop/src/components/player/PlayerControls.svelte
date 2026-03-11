@@ -3,7 +3,6 @@
     import ExpandingButton from "../common/ExpandingButton.svelte";
     import { slide } from "svelte/transition";
     import type { ShowResponse } from "../../lib/library/types/meta_types";
-    import { createEventDispatcher } from "svelte";
     import ClipPanel from "./ClipPanel.svelte";
     import { formatTime } from "../../lib/time";
     import { CirclePause, CirclePlay, Maximize, ZoomIn, ZoomOut, AudioWaveform, Subtitles, Users, SkipForward, Download, Scissors, Cast } from "lucide-svelte";
@@ -38,7 +37,11 @@
     export let toggleObjectFit: () => void;
     export let onNextEpisode: () => void;
 
-    const dispatch = createEventDispatcher();
+    export let onAudioClick: () => void = () => {};
+    export let onCastClick: () => void = () => {};
+    export let onSubtitleClick: () => void = () => {};
+    export let onWatchPartyClick: () => void = () => {};
+    export let onClipPanelOpenChange: (detail: { open: boolean }) => void = () => {};
 
     $: displayedTime = pendingSeek ?? currentTime;
     $: remainingTime = Math.max(0, duration - displayedTime);
@@ -82,7 +85,7 @@
 
     const setClipPanelOpen = (open: boolean) => {
         showClipPanel = open;
-        dispatch("clipPanelOpenChange", { open });
+        onClipPanelOpenChange({ open });
     };
 </script>
 
@@ -206,7 +209,7 @@
             {#if !isWatchPartyMember}
                 <ExpandingButton
                     label={currentAudioLabel || "Audio"}
-                    onClick={() => dispatch("audioClick")}
+                    onClick={onAudioClick}
                 >
                     <AudioWaveform size={20} color="#E9E9E9" strokeWidth={2} />
                 </ExpandingButton>
@@ -220,7 +223,7 @@
                       : "Cast"}
                 onClick={() => {
                     if (castBusy) return;
-                    dispatch("castClick");
+                    onCastClick();
                 }}
             >
                 <Cast size={20} color="#E9E9E9" strokeWidth={2} />
@@ -228,7 +231,7 @@
 
             <ExpandingButton
                 label={currentSubtitleLabel || "Subtitles: Off"}
-                onClick={() => dispatch("subtitleClick")}
+                onClick={onSubtitleClick}
             >
                 <Subtitles size={20} color="#E9E9E9" strokeWidth={2} />
             </ExpandingButton>
@@ -236,7 +239,7 @@
             {#if metaData && showWatchParty}
                 <ExpandingButton
                     label={"Watch Party"}
-                    onClick={() => dispatch("watchPartyClick")}
+                    onClick={onWatchPartyClick}
                 >
                     <Users size={20} color="#E9E9E9" strokeWidth={2} />
                 </ExpandingButton>
@@ -289,7 +292,7 @@
             currentTime={displayedTime}
             inverted={seekBarStyle !== "normal"}
             {isWatchPartyMember}
-            on:close={() => setClipPanelOpen(false)}
+            onClose={() => setClipPanelOpen(false)}
         />
     </div>
 {/if}

@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { createEventDispatcher } from "svelte";
     import { fade, scale } from "svelte/transition";
     import { AlertTriangle } from "lucide-svelte";
 
@@ -20,14 +19,15 @@
     export let title: string = "Unsupported Title";
     export let message: string = "This title is not currently supported.";
 
-    const dispatch = createEventDispatcher();
+    export let onBack: () => void = () => {};
+    export let onRetry: () => void = () => {};
 
     function goBack() {
-        dispatch("back");
+        onBack();
     }
 
     function retry() {
-        dispatch("retry");
+        onRetry();
     }
 </script>
 
