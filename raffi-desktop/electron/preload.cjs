@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
     getFilePath: (file) => webUtils.getPathForFile(file),
     saveClipPath: (suggestedName) => ipcRenderer.invoke('SAVE_CLIP_DIALOG', suggestedName),
+    persistClipFile: (sourcePath, targetPath) =>
+        ipcRenderer.invoke('PERSIST_CLIP_FILE', { sourcePath, targetPath }),
     showConfirmDialog: (message, title) =>
         ipcRenderer.invoke('SHOW_CONFIRM_DIALOG', { message, title }),
     showAlertDialog: (message, title) =>

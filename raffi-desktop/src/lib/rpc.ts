@@ -19,6 +19,10 @@ declare global {
             disableRPC: () => void;
             getFilePath?: (file: any) => string;
             saveClipPath?: (suggestedName?: string) => Promise<{ canceled: boolean; filePath: string | null; error?: string }>;
+            persistClipFile?: (
+                sourcePath: string,
+                targetPath: string,
+            ) => Promise<{ ok: boolean; filePath: string | null; error?: string }>;
             showSelectDialog?: (
                 message: string,
                 title: string,

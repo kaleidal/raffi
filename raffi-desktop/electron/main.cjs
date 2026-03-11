@@ -327,6 +327,7 @@ registerMainIpcHandlers({
   ipcMain,
   dialog,
   shell,
+  fs,
   autoUpdater,
   isAllowedExternalUrl,
   cleanup,
