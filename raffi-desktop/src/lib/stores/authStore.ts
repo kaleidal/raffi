@@ -4,10 +4,13 @@ import {
     ensureDefaultAddonsForUser,
     ensureDefaultAddonsForLocal,
     flushPendingLibraryProgress,
+    hasLocalState,
+    hydrateLocalBackupFromCloud,
     resetRemoteStateCache,
+    startCloudReconciliationLoop,
+    stopCloudReconciliationLoop,
     syncLocalStateToUser,
     warmRemoteStateCache,
-    hasLocalState,
 } from "../db/db";
 import {
     hasLegacySupabaseSession,
@@ -70,6 +73,7 @@ const persistLocalMode = (enabled: boolean) => {
 
 export const enableLocalMode = () => {
     clearSessionRefreshTimer();
+    stopCloudReconciliationLoop();
     localMode.set(true);
     persistLocalMode(true);
     setConvexAuthToken(null);
@@ -313,14 +317,18 @@ export async function initAuth() {
     }
 
     if (userCache) {
-        if (hasLocalState()) {
-            await syncLocalStateToUser(userCache.id);
-        }
         disableLocalMode();
         resetRemoteStateCache();
-        await flushPendingLibraryProgress();
+        startCloudReconciliationLoop();
         await seedDefaultsIfNeeded(userCache);
-        await warmRemoteStateCache();
+        if (!hasLocalState()) {
+            await hydrateLocalBackupFromCloud();
+        }
+        void syncLocalStateToUser(userCache.id);
+        void flushPendingLibraryProgress();
+        if (hasLocalState()) {
+            void warmRemoteStateCache();
+        }
     } else {
         enableLocalMode();
         await ensureDefaultAddonsForLocal();
@@ -337,24 +345,29 @@ export async function signInWithAve() {
 
     disableLocalMode();
     resetRemoteStateCache();
+    startCloudReconciliationLoop();
 
     try {
-        if (hasLocalState()) {
-            await syncLocalStateToUser(user.id);
-        }
-        await flushPendingLibraryProgress();
         await seedDefaultsIfNeeded(user);
+        if (!hasLocalState()) {
+            await hydrateLocalBackupFromCloud();
+        }
     } catch (error) {
         console.error("Ave sign-in sync failed", error);
     }
 
-    await warmRemoteStateCache();
+    void syncLocalStateToUser(user.id);
+    void flushPendingLibraryProgress();
+    if (hasLocalState()) {
+        void warmRemoteStateCache();
+    }
 
     emitHomeRefresh();
 }
 
 export function signOutToLocalMode() {
     clearSessionRefreshTimer();
+    stopCloudReconciliationLoop();
     userCache = null;
     currentUser.set(null);
     persistAveSession(null);

@@ -14,7 +14,7 @@
     import type { ShowResponse } from "../../lib/library/types/meta_types";
     import { watchParty } from "../../lib/stores/watchPartyStore";
     import { localMode } from "../../lib/stores/authStore";
-    import { flushPendingLibraryProgress } from "../../lib/db/db";
+    import { cloudSyncStatus, flushPendingLibraryProgress } from "../../lib/db/db";
     import { trackEvent } from "../../lib/analytics";
     import { ChevronLeft } from "lucide-svelte";
     import * as NavigationLogic from "../meta/navigationLogic";
@@ -197,7 +197,7 @@
     };
 
     const openWatchPartyModal = () => {
-        if ($localMode) {
+        if ($localMode || !$cloudSyncStatus.cloudFeaturesAvailable) {
             showWatchPartyModal.set(false);
             return;
         }
@@ -552,16 +552,13 @@
     onMount(() => {
         resetPlayerState();
         hasStarted = false;
+        pendingAutoJoin = Boolean(joinPartyId && autoJoin);
 
         loadingStage.set("Loading...");
         loadingDetails.set("");
         loadingProgress.set(null);
 
         seekBarStyle = getSeekBarStyleFromStorage();
-
-        if (joinPartyId && autoJoin && !$localMode) {
-            showWatchPartyModal.set(true);
-        }
 
         WatchParty.setupWatchPartySync(
             videoElem,
@@ -803,6 +800,7 @@
     let resizeCounter = 0;
     let cueRecalcTimeout: number | null = null;
     let lastControlsVisible: boolean | null = null;
+    let pendingAutoJoin = false;
 
     const SUBTITLE_CONTROLS_MARGIN_PX = 26;
 
@@ -833,6 +831,15 @@
 
     $: if (!castActive && videoElem) {
         videoElem.muted = false;
+    }
+
+    $: if (pendingAutoJoin && joinPartyId && autoJoin && !$localMode && $cloudSyncStatus.cloudFeaturesAvailable) {
+        showWatchPartyModal.set(true);
+        pendingAutoJoin = false;
+    }
+
+    $: if ($showWatchPartyModal && !$cloudSyncStatus.cloudFeaturesAvailable) {
+        showWatchPartyModal.set(false);
     }
 
     $: if (castActive) {
@@ -1027,11 +1034,12 @@
                 {castActive}
                 {castBusy}
                 {castDeviceName}
+                showWatchParty={!$localMode && $cloudSyncStatus.cloudFeaturesAvailable}
                 on:audioClick={openAudioSelection}
                 on:castClick={openCastBootstrap}
                 on:subtitleClick={openSubtitleSelection}
                 on:watchPartyClick={() => {
-                    if (!$localMode) {
+                    if (!$localMode && $cloudSyncStatus.cloudFeaturesAvailable) {
                         openWatchPartyModal();
                     } else {
                         showWatchPartyModal.set(false);
@@ -1053,7 +1061,7 @@
         showAudioSelection={$showAudioSelection}
         showSubtitleSelection={$showSubtitleSelection}
         showError={$showError}
-        showWatchPartyModal={$showWatchPartyModal && !$localMode}
+        showWatchPartyModal={$showWatchPartyModal && !$localMode && $cloudSyncStatus.cloudFeaturesAvailable}
         showSeekStyleModal={$showSeekStyleModal}
         audioTracks={$audioTracks}
         subtitleTracks={$subtitleTracks}

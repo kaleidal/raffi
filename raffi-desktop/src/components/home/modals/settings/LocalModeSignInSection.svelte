@@ -7,7 +7,7 @@
 	<div>
 		<h3 class="text-white text-xl font-semibold">Sign In With Ave</h3>
 		<p class="text-white/60 text-sm">
-			Use your Ave account to sync your library and lists across devices.
+			Use your Ave account to back up and sync your local library across devices when cloud access is available.
 		</p>
 	</div>
 	<div class="rounded-2xl bg-white/[0.08] p-5 space-y-4">
