@@ -71,7 +71,7 @@ export const createPlayerModalHandlers = ({
                         Session.createSeekHandler(
                             videoElem,
                             getHls,
-                            sid,
+                            () => sid,
                             () => get(pendingSeek),
                             () => get(seekGuard),
                             () => get(playbackOffset),
