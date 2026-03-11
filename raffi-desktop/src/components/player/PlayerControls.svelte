@@ -3,6 +3,7 @@
     import ExpandingButton from "../common/ExpandingButton.svelte";
     import { slide } from "svelte/transition";
     import type { ShowResponse } from "../../lib/library/types/meta_types";
+    import type { Chapter } from "../../pages/player/types";
     import ClipPanel from "./ClipPanel.svelte";
     import { formatTime } from "../../lib/time";
     import { CirclePause, CirclePlay, Maximize, ZoomIn, ZoomOut, AudioWaveform, Subtitles, Users, SkipForward, Download, Scissors, Cast } from "lucide-svelte";
@@ -26,6 +27,7 @@
     export let castBusy = false;
     export let castDeviceName: string = "";
     export let showWatchParty = true;
+    export let chapterMarkers: Chapter[] = [];
 
     export let seekBarStyle: "raffi" | "normal" = "raffi";
 
@@ -52,8 +54,13 @@
             : duration > 0
               ? duration - displayedTime
               : 0;
-    $: hasHourFormat = duration >= 3600;
-    $: timeLabelWidth = hasHourFormat ? "6ch" : "4ch";
+    $: leftVisibleTime = seekBarStyle === "normal" ? displayedTime : remainingTime;
+    $: leftHasHourFormat = leftVisibleTime >= 3600;
+    $: rightHasHourFormat = duration >= 3600;
+    $: leftTimeLabelWidth = leftHasHourFormat ? "6ch" : "4ch";
+    $: rightTimeLabelWidth = rightHasHourFormat ? "6ch" : "4ch";
+    $: leftTimeLabelStyle = `width:${leftTimeLabelWidth};min-width:${leftTimeLabelWidth};max-width:${leftTimeLabelWidth};flex:0 0 ${leftTimeLabelWidth};font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1, "lnum" 1;`;
+    $: rightTimeLabelStyle = `width:${rightTimeLabelWidth};min-width:${rightTimeLabelWidth};max-width:${rightTimeLabelWidth};flex:0 0 ${rightTimeLabelWidth};font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1, "lnum" 1;`;
 
     let showClipPanel = false;
 
@@ -87,6 +94,44 @@
         showClipPanel = open;
         onClipPanelOpenChange({ open });
     };
+
+    const getMarkerLeft = (chapter: Chapter) => {
+        if (duration <= 0) return 0;
+        const endTime = chapter.kind === "outro" ? duration : chapter.endTime;
+        if (seekBarStyle === "normal") {
+            return (chapter.startTime / duration) * 100;
+        }
+        return ((duration - endTime) / duration) * 100;
+    };
+
+    const getMarkerWidth = (chapter: Chapter) => {
+        if (duration <= 0) return 0;
+        const endTime = chapter.kind === "outro" ? duration : chapter.endTime;
+        return ((endTime - chapter.startTime) / duration) * 100;
+    };
+
+    $: chapterSliderMarkers = duration > 0
+        ? chapterMarkers
+            .map((chapter) => {
+                const rawLeft = Math.max(0, Math.min(100, getMarkerLeft(chapter)));
+                const rawWidth = Math.max(0, Math.min(100, getMarkerWidth(chapter)));
+                const rawRight = rawLeft + rawWidth;
+                const left = rawLeft <= 0.5 ? 0 : rawLeft;
+                const right = rawRight >= 99.5 ? 100 : rawRight;
+                const width = Math.max(0, right - left);
+                const touchesStart = left <= 0.05;
+                const touchesEnd = right >= 99.95;
+
+                return {
+                    left,
+                    width,
+                    color: "rgba(87,87,87,0.85)",
+                    roundStart: touchesStart || !touchesEnd,
+                    roundEnd: touchesEnd || !touchesStart,
+                };
+            })
+            .filter((marker) => marker.width > 0)
+        : [];
 </script>
 
 {#if controlsVisible && !loading}
@@ -133,7 +178,7 @@
 
             <span
                 class="inline-block tabular-nums text-[22px] font-poppins font-medium text-[#D3D3D3] text-center"
-                style={`min-width:${timeLabelWidth};`}
+                style={leftTimeLabelStyle}
                 >{formatTime(
                     seekBarStyle === "normal" ? displayedTime : remainingTime,
                 )}</span
@@ -155,6 +200,7 @@
                     widthGrey={seekBarStyle === "normal"
                         ? 100 - progress
                         : progress}
+                    markers={chapterSliderMarkers}
                     onInput={onSeekInput}
                     onChange={onSeekChange}
                     value={sliderValue}
@@ -179,7 +225,7 @@
             {#if seekBarStyle === "normal"}
                 <span
                     class="inline-block tabular-nums text-[22px] font-poppins font-medium text-[#D3D3D3] text-center"
-                    style={`min-width:${timeLabelWidth};`}
+                    style={rightTimeLabelStyle}
                     >{formatTime(duration)}</span
                 >
             {/if}

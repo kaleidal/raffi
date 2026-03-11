@@ -16,6 +16,7 @@
     import { localMode } from "../../lib/stores/authStore";
     import { cloudSyncStatus, flushPendingLibraryProgress } from "../../lib/db/db";
     import { trackEvent } from "../../lib/analytics";
+    import { autoSkipIntros } from "../../lib/stores/playbackPreferences";
     import { ChevronLeft } from "lucide-svelte";
     import * as NavigationLogic from "../meta/navigationLogic";
     import * as ProgressLogic from "../meta/progressLogic";
@@ -63,6 +64,7 @@
     import * as Controls from "./playerControls";
     import * as Subtitles from "./subtitles";
     import * as Chapters from "./chapters";
+    import * as IntroDb from "./introdb";
     import * as Discord from "./discord";
     import * as WatchParty from "./watchParty";
     import { getPlaybackAnalyticsProps as buildPlaybackAnalyticsProps } from "./playerAnalytics";
@@ -91,6 +93,7 @@
     } from "./playerCastRuntime";
 
     import { serverUrl } from "../../lib/client";
+    import type { Chapter } from "./types";
 
     // Props
     export let videoSrc: string | null = null;
@@ -105,6 +108,7 @@
     export let episode: number | null = null;
     export let joinPartyId: string | null = null;
     export let autoJoin: boolean = false;
+    export let autoSkipFromNextEpisode: boolean = false;
 
     const imdbID = metaData?.meta?.imdb_id || null;
 
@@ -127,6 +131,9 @@
 
     let seekBarStyle: SeekBarStyle = "raffi";
     let pendingStartAfterSeekStyleModal = false;
+    let introDbChapters: Chapter[] = [];
+    let effectiveChapterMarkers: Chapter[] = [];
+    let skipButtonLabel = "Skip Intro";
 
     const handleSeekStyleChange = (style: SeekBarStyle) => {
         seekBarStyle = style;
@@ -491,6 +498,38 @@
             pendingStartAfterSeekStyleModal = value;
         },
         setHasStarted: (value) => (hasStarted = value),
+        setIntroDbChapters: (chapters) => {
+            introDbChapters = chapters;
+        },
+        resolvePlaybackStart: async ({ sessionData, startTime, metaData, season, episode }) => {
+            let nextIntroDbChapters: Chapter[] = [];
+
+            if (metaData?.meta?.type === "series" && metaData.meta.imdb_id && season != null && episode != null) {
+                try {
+                    nextIntroDbChapters = await IntroDb.fetchIntroDbChapters(
+                        metaData.meta.imdb_id,
+                        season,
+                        episode,
+                    );
+                } catch (error) {
+                    console.warn("Failed to fetch IntroDB chapters", error);
+                }
+            }
+
+            const effectiveChapters = Chapters.getEffectiveChapterSegments(
+                sessionData,
+                nextIntroDbChapters,
+            );
+            const effectiveStartTime = Chapters.getStartupSkipTarget(startTime, effectiveChapters, {
+                autoSkipIntros: $autoSkipIntros || autoSkipFromNextEpisode,
+                autoSkipRecap: autoSkipFromNextEpisode,
+            });
+
+            return {
+                effectiveStartTime,
+                introDbChapters: nextIntroDbChapters,
+            };
+        },
         startTorrentStatusPolling: torrentStatusPoller.start,
         stopTorrentStatusPolling: torrentStatusPoller.stop,
         awaitDomUpdate: tick,
@@ -677,10 +716,12 @@
                 $sessionData,
                 $duration,
                 metaData,
+                introDbChapters,
             );
             currentChapter.set(result.currentChapter);
             showSkipIntro.set(result.showSkipIntro);
             showNextEpisode.set(result.showNextEpisode);
+            skipButtonLabel = result.skipButtonLabel;
         }
     };
 
@@ -791,7 +832,11 @@
     };
 
     const handleSkipIntro = () => {
-        trackEvent("skip_intro_clicked", getPlaybackAnalyticsProps());
+        trackEvent("skip_chapter_clicked", {
+            chapter_kind: $currentChapter?.kind || null,
+            chapter_source: $currentChapter?.source || null,
+            ...getPlaybackAnalyticsProps(),
+        });
         Chapters.skipChapter($currentChapter, seekToTime);
     };
 
@@ -842,6 +887,9 @@
     };
 
     $: if (videoSrc && videoSrc !== currentVideoSrc) {
+        introDbChapters = [];
+        effectiveChapterMarkers = [];
+        skipButtonLabel = "Skip Intro";
         currentVideoSrc = videoSrc;
         hasStarted = false;
         playbackStartTracked = false;
@@ -855,6 +903,8 @@
         );
         loadVideo(videoSrc);
     }
+
+    $: effectiveChapterMarkers = Chapters.getEffectiveChapterSegments($sessionData, introDbChapters);
 
     $: if (!castActive && videoElem) {
         videoElem.muted = false;
@@ -1010,77 +1060,82 @@
         </div>
 
         <div
-            class="absolute left-1/2 -translate-x-1/2 bottom-12.5 z-50 flex flex-col gap-2.5 transition-all duration-300 ease-in-out transform {$controlsVisible
-                ? 'translate-y-0 opacity-100'
-                : 'translate-y-10 opacity-0 pointer-events-none'}"
-            bind:this={controlsOverlayElem}
+            class="absolute left-1/2 -translate-x-1/2 bottom-12.5 z-50 flex flex-col gap-2.5"
         >
-        <PlayerOverlays
-            showSkipIntro={$showSkipIntro}
-            showNextEpisode={showNextEpisodeAllowed}
-            isWatchPartyMember={!$localMode && $watchParty.isActive && !$watchParty.isHost}
-            skipChapter={handleSkipIntro}
-            nextEpisode={handleNextEpisodeClick}
-        />
-
-
-            <PlayerControls
-                isPlaying={$isPlaying}
-                duration={$duration}
-                currentTime={$currentTime}
-                pendingSeek={$pendingSeek}
-                volume={$volume}
-                controlsVisible={$controlsVisible}
-                loading={$loading}
-                {seekBarStyle}
-                {sessionId}
-                {videoSrc}
-                {metaData}
-                {hasNextEpisode}
-                currentAudioLabel={$currentAudioLabel}
-                currentSubtitleLabel={$currentSubtitleLabel}
+            <PlayerOverlays
+                showSkipIntro={$showSkipIntro}
+                showNextEpisode={showNextEpisodeAllowed}
                 isWatchPartyMember={!$localMode && $watchParty.isActive && !$watchParty.isHost}
-                togglePlay={togglePlayWithFeedback}
-                onSeekInput={(e) =>
-                    controlsManager.onSeekInput(e, $duration, pendingSeek.set)}
-                onSeekChange={(e) =>
-                    controlsManager.onSeekChange(e, $duration, seekToTime)}
-                onVolumeChange={(e) =>
-                    castActive && castTransport === "native"
-                        ? (() => {
-                            const target = e.target as HTMLInputElement;
-                            const nextVolume = Number(target?.value ?? $volume);
-                            if (!Number.isFinite(nextVolume)) return;
-                            void castController.setVolume(nextVolume);
-                        })()
-                        : controlsManager.onVolumeChange(e, volume.set)}
-                toggleFullscreen={handleToggleFullscreen}
-                objectFit={$objectFit}
-                toggleObjectFit={handleToggleObjectFit}
-                onNextEpisode={handleNextEpisodeClick}
-                {castActive}
-                {castBusy}
-                {castDeviceName}
-                showWatchParty={!$localMode && $cloudSyncStatus.cloudFeaturesAvailable}
-                onAudioClick={openAudioSelection}
-                onCastClick={openCastBootstrap}
-                onSubtitleClick={openSubtitleSelection}
-                onWatchPartyClick={() => {
-                    if (!$localMode && $cloudSyncStatus.cloudFeaturesAvailable) {
-                        openWatchPartyModal();
-                    } else {
-                        showWatchPartyModal.set(false);
-                    }
-                }}
-                onClipPanelOpenChange={(detail) => {
-                    clipPanelOpen = !!detail?.open;
-                    controlsManager?.setPinned?.(clipPanelOpen, controlsVisible.set);
-                    trackEvent("clip_panel_toggled", {
-                        open: clipPanelOpen,
-                        ...getPlaybackAnalyticsProps(),
-                    });
-                }}
+                skipLabel={skipButtonLabel}
+                skipChapter={handleSkipIntro}
+                nextEpisode={handleNextEpisodeClick}
             />
+
+            <div
+                class="transition-all duration-300 ease-in-out transform {$controlsVisible
+                    ? 'translate-y-0 opacity-100'
+                    : 'translate-y-10 opacity-0 pointer-events-none'}"
+                bind:this={controlsOverlayElem}
+            >
+                <PlayerControls
+                    isPlaying={$isPlaying}
+                    duration={$duration}
+                    currentTime={$currentTime}
+                    pendingSeek={$pendingSeek}
+                    volume={$volume}
+                    controlsVisible={$controlsVisible}
+                    loading={$loading}
+                    {seekBarStyle}
+                    chapterMarkers={effectiveChapterMarkers}
+                    {sessionId}
+                    {videoSrc}
+                    {metaData}
+                    {hasNextEpisode}
+                    currentAudioLabel={$currentAudioLabel}
+                    currentSubtitleLabel={$currentSubtitleLabel}
+                    isWatchPartyMember={!$localMode && $watchParty.isActive && !$watchParty.isHost}
+                    togglePlay={togglePlayWithFeedback}
+                    onSeekInput={(e) =>
+                        controlsManager.onSeekInput(e, $duration, pendingSeek.set)}
+                    onSeekChange={(e) =>
+                        controlsManager.onSeekChange(e, $duration, seekToTime)}
+                    onVolumeChange={(e) =>
+                        castActive && castTransport === "native"
+                            ? (() => {
+                                const target = e.target as HTMLInputElement;
+                                const nextVolume = Number(target?.value ?? $volume);
+                                if (!Number.isFinite(nextVolume)) return;
+                                void castController.setVolume(nextVolume);
+                            })()
+                            : controlsManager.onVolumeChange(e, volume.set)}
+                    toggleFullscreen={handleToggleFullscreen}
+                    objectFit={$objectFit}
+                    toggleObjectFit={handleToggleObjectFit}
+                    onNextEpisode={handleNextEpisodeClick}
+                    {castActive}
+                    {castBusy}
+                    {castDeviceName}
+                    showWatchParty={!$localMode && $cloudSyncStatus.cloudFeaturesAvailable}
+                    onAudioClick={openAudioSelection}
+                    onCastClick={openCastBootstrap}
+                    onSubtitleClick={openSubtitleSelection}
+                    onWatchPartyClick={() => {
+                        if (!$localMode && $cloudSyncStatus.cloudFeaturesAvailable) {
+                            openWatchPartyModal();
+                        } else {
+                            showWatchPartyModal.set(false);
+                        }
+                    }}
+                    onClipPanelOpenChange={(detail) => {
+                        clipPanelOpen = !!detail?.open;
+                        controlsManager?.setPinned?.(clipPanelOpen, controlsVisible.set);
+                        trackEvent("clip_panel_toggled", {
+                            open: clipPanelOpen,
+                            ...getPlaybackAnalyticsProps(),
+                        });
+                    }}
+                />
+            </div>
         </div>
     {/if}
 
