@@ -43,7 +43,7 @@ export const createPlayerModalHandlers = ({
     getPlaybackAnalyticsProps: () => Record<string, any>;
     getVideoSrc: () => string | null;
     loadVideo: (src: string) => void | Promise<void>;
-    handleClose: () => void;
+    handleClose: () => void | Promise<void>;
 }) => {
     const onAudioSelect = (detail: any) => {
         trackEvent("audio_track_selected", {
@@ -202,7 +202,7 @@ export const createPlayerModalHandlers = ({
     const onErrorBack = () => {
         trackEvent("player_error_back", getPlaybackAnalyticsProps());
         showError.set(false);
-        handleClose();
+        void handleClose();
     };
 
     const onCloseAudio = () => showAudioSelection.set(false);
