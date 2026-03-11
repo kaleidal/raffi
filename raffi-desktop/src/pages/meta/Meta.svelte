@@ -40,6 +40,7 @@
     import * as StreamLogic from "./streamLogic";
     import * as ProgressLogic from "./progressLogic";
     import { hydrateStreamFailures } from "./streamFailures";
+    import { getFirstStandardEpisode, getSeriesResumeEpisode } from "./episodeSelection";
     import ActionButtons from "../../components/meta/ActionButtons.svelte";
     import MetaInfo from "./components/MetaInfo.svelte";
     import UnsupportedTitleModal from "../../components/meta/modals/UnsupportedTitleModal.svelte";
@@ -220,7 +221,7 @@
                 matched ||
                 (partySeasonParam != null && partyEpisodeParam != null
                     ? { season: partySeasonParam, episode: partyEpisodeParam }
-                    : videos[0] || { season: 1, episode: 1 });
+                    : getFirstStandardEpisode(videos) || { season: 1, episode: 1 });
         }
 
         partyJoinStreamPromptHandled = true;
@@ -305,6 +306,12 @@
                             $progressMap,
                             lastEpKey,
                         )}
+                        {@const resumeEpisode =
+                            getSeriesResumeEpisode(
+                                $metaData.meta.videos,
+                                $lastWatched,
+                                lastEpProgress,
+                            ) || { season: 1, episode: 1 }}
                         {@const isResumable =
                             lastEpProgress &&
                             !lastEpProgress.watched &&
@@ -313,47 +320,11 @@
                         <div class="relative rounded-[50px] resume-button-shell">
                             <button
                                 class="bg-[#FFFFFF]/80 hover:bg-[#D3D3D3]/80 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-5 text-black font-poppins font-medium w-full transition-colors duration-200 relative z-10 resume-button"
-                                on:click={() => {
-                                    const nextEpIndex =
-                                        $metaData.meta.videos.findIndex(
-                                            (v) =>
-                                                v.season ===
-                                                    $lastWatched.season &&
-                                                v.episode ===
-                                                    $lastWatched.episode,
-                                        );
-                                    if (
-                                        nextEpIndex !== -1 &&
-                                        nextEpIndex <
-                                            $metaData.meta.videos.length - 1
-                                    ) {
-                                        if (
-                                            lastEpProgress &&
-                                            lastEpProgress.watched
-                                        ) {
-                                            const nextEp =
-                                                $metaData.meta.videos[
-                                                    nextEpIndex + 1
-                                                ];
-                                            StreamLogic.episodeClicked(
-                                                nextEp,
-                                                imdbID,
-                                            );
-                                        } else {
-                                            StreamLogic.episodeClicked(
-                                                $metaData.meta.videos[
-                                                    nextEpIndex
-                                                ],
-                                                imdbID,
-                                            );
-                                        }
-                                    } else {
-                                        StreamLogic.episodeClicked(
-                                            $metaData.meta.videos[0],
-                                            imdbID,
-                                        );
-                                    }
-                                }}
+                                on:click={() =>
+                                    StreamLogic.episodeClicked(
+                                        resumeEpisode,
+                                        imdbID,
+                                    )}
                             >
                                 <div class="resume-button__icon flex items-center justify-center">
                                     <Play size={48} strokeWidth={2} color="black" fill="black" />
@@ -362,27 +333,8 @@
                                 <span class="resume-button__label">
                                     {#if isResumable}
                                         Resume S{$lastWatched.season}E{$lastWatched.episode}
-                                    {:else if lastEpProgress && lastEpProgress.watched}
-                                    {@const nextEpIndex =
-                                        $metaData.meta.videos.findIndex(
-                                            (v) =>
-                                                v.season ===
-                                                    $lastWatched.season &&
-                                                v.episode ===
-                                                    $lastWatched.episode,
-                                        )}
-                                        {#if nextEpIndex !== -1 && nextEpIndex < $metaData.meta.videos.length - 1}
-                                            {@const nextEp =
-                                                $metaData.meta.videos[
-                                                    nextEpIndex + 1
-                                                ]}
-                                            Watch S{nextEp.season}E{nextEp.episode}
-                                        {:else}
-                                            Watch S1E1
-                                        {/if}
                                     {:else}
-                                        Watch S{$lastWatched.season}E{$lastWatched.episode ||
-                                            1}
+                                        Watch S{resumeEpisode.season}E{resumeEpisode.episode}
                                     {/if}
                                 </span>
                             </button>
