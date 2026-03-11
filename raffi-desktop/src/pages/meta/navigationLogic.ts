@@ -71,7 +71,10 @@ export const handleNextEpisode = async (imdbID: string, progressMap: any) => {
                 router.back();
             } else {
                 selectedEpisode.set(nextEp);
-                playStream(match, progressMap, { replace: true });
+                playStream(match, progressMap, {
+                    replace: true,
+                    autoSkipFromNextEpisode: true,
+                });
             }
         } else {
             selectedStreamUrl.set(null);

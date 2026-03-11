@@ -1,6 +1,6 @@
 import { get } from "svelte/store";
 import type { ShowResponse } from "../../lib/library/types/meta_types";
-import type { Track } from "./types";
+import type { Chapter, Track } from "./types";
 import * as Session from "./videoSession";
 import * as Subtitles from "./subtitles";
 import * as Discord from "./discord";
@@ -49,6 +49,17 @@ export type PlayerSessionLoaderDeps = {
     shouldShowSeekStyleInfoModal: () => boolean;
     setPendingStartAfterSeekStyleModal: (value: boolean) => void;
     setHasStarted: (value: boolean) => void;
+    setIntroDbChapters: (chapters: Chapter[]) => void;
+    resolvePlaybackStart: (context: {
+        sessionData: any;
+        startTime: number;
+        metaData: ShowResponse | null;
+        season: number | null;
+        episode: number | null;
+    }) => Promise<{
+        effectiveStartTime: number;
+        introDbChapters: Chapter[];
+    }>;
     startTorrentStatusPolling: (torrentInfoHash: string) => void;
     stopTorrentStatusPolling: () => void;
     awaitDomUpdate: () => Promise<void>;
@@ -120,6 +131,16 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
 
             deps.setSessionId(result.sessionId);
             sessionData.set(result.sessionData);
+
+            const playbackStart = await deps.resolvePlaybackStart({
+                sessionData: result.sessionData,
+                startTime,
+                metaData,
+                season,
+                episode,
+            });
+            const effectiveStartTime = playbackStart.effectiveStartTime;
+            deps.setIntroDbChapters(playbackStart.introDbChapters);
 
             if (result.sessionData?.isTorrent && result.sessionData?.torrentInfoHash) {
                 deps.startTorrentStatusPolling(result.sessionData.torrentInfoHash);
@@ -204,9 +225,9 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                         duration.set(currentVideo.duration);
                     }
 
-                    if (startTime > 0) {
+                    if (effectiveStartTime > 0) {
                         try {
-                            currentVideo.currentTime = startTime;
+                            currentVideo.currentTime = effectiveStartTime;
                         } catch {
                             // ignore
                         }
@@ -257,7 +278,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
             const hlsInstance = Session.initHLS(
                 videoElem,
                 sessionId,
-                startTime,
+                effectiveStartTime,
                 needsSeekStyleModal ? false : deps.autoPlay,
                 Session.createSeekHandler(
                     videoElem,
@@ -293,6 +314,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                     setErrorMessage: errorMessage.set,
                     setErrorDetails: errorDetails.set,
                 },
+                effectiveStartTime !== startTime ? effectiveStartTime : null,
             );
             deps.setHls(hlsInstance);
 

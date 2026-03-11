@@ -2,6 +2,7 @@
     export let showSkipIntro = false;
     export let showNextEpisode = false;
     export let isWatchPartyMember = false;
+    export let skipLabel = "Skip Intro";
     export let skipChapter: () => void;
     export let nextEpisode: () => void;
 </script>
@@ -36,7 +37,7 @@
                     stroke-linejoin="round"
                 />
             </svg>
-            Skip Intro
+            {skipLabel}
         </button>
     {/if}
 
