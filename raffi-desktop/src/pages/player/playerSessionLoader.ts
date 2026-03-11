@@ -34,16 +34,17 @@ import {
 } from "./playerState";
 
 export type PlayerSessionLoaderDeps = {
-    fileIdx: number | null;
-    startTime: number;
+    getFileIdx: () => number | null;
+    getStartTime: () => number;
     autoPlay: boolean;
-    metaData: ShowResponse | null;
-    season: number | null;
-    episode: number | null;
+    getMetaData: () => ShowResponse | null;
+    getSeason: () => number | null;
+    getEpisode: () => number | null;
     getVideoElem: () => HTMLVideoElement | undefined;
     getHls: () => any;
     setHls: (value: any) => void;
     setSessionId: (value: string) => void;
+    getSessionId: () => string;
     getCueLinePercent: () => number;
     shouldShowSeekStyleInfoModal: () => boolean;
     setPendingStartAfterSeekStyleModal: (value: boolean) => void;
@@ -68,10 +69,16 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
             loadingDetails.set("");
             loadingProgress.set(null);
 
+            const fileIdx = deps.getFileIdx();
+            const startTime = deps.getStartTime();
+            const metaData = deps.getMetaData();
+            const season = deps.getSeason();
+            const episode = deps.getEpisode();
+
             const result = await Session.loadVideoSession(
                 src,
-                deps.fileIdx,
-                deps.startTime,
+                fileIdx,
+                startTime,
                 {
                     setLoading: loading.set,
                     setLoadingStage: loadingStage.set,
@@ -100,9 +107,9 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                 },
                 () =>
                     Subtitles.fetchAddonSubtitles(
-                        deps.metaData,
-                        deps.season,
-                        deps.episode,
+                        metaData,
+                        season,
+                        episode,
                     ).then((tracks) => {
                         subtitleTracks.update((current) => [
                             ...current,
@@ -136,9 +143,9 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
             }
 
             Discord.updateDiscordActivity(
-                deps.metaData,
-                deps.season,
-                deps.episode,
+                metaData,
+                season,
+                episode,
                 get(duration),
                 0,
                 false,
@@ -197,9 +204,9 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                         duration.set(currentVideo.duration);
                     }
 
-                    if (deps.startTime > 0) {
+                    if (startTime > 0) {
                         try {
-                            currentVideo.currentTime = deps.startTime;
+                            currentVideo.currentTime = startTime;
                         } catch {
                             // ignore
                         }
@@ -250,12 +257,12 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
             const hlsInstance = Session.initHLS(
                 videoElem,
                 sessionId,
-                deps.startTime,
+                startTime,
                 needsSeekStyleModal ? false : deps.autoPlay,
                 Session.createSeekHandler(
                     videoElem,
                     deps.getHls,
-                    sessionId,
+                    deps.getSessionId,
                     () => get(pendingSeek),
                     () => get(seekGuard),
                     () => get(playbackOffset),
