@@ -9,6 +9,7 @@
  */
 
 import { NativeEventEmitter, NativeModules } from 'react-native';
+import * as Crypto from 'expo-crypto';
 
 // Types
 export interface TorrentFile {
@@ -270,7 +271,9 @@ class TorrentStreamerClass {
   }
 
   private generateSessionId(): string {
-    return `ts_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const bytes = Crypto.getRandomBytes(12);
+    const suffix = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+    return `ts_${Date.now()}_${suffix}`;
   }
 
   /**
