@@ -7,7 +7,9 @@
     import { Flame, ChevronLeft, ChevronRight } from "lucide-svelte";
     import TitleContextMenu from "../context_menus/TitleContextMenu.svelte";
     import ListsPopup from "../../meta/modals/ListsPopup.svelte";
+    import TrailerModal from "../../meta/modals/TrailerModal.svelte";
     import PosterImage from "./PosterImage.svelte";
+    import { getPrimaryTrailerId } from "../../../lib/trailers";
 
     export let popularMeta: PopularTitleMeta[] = [];
 
@@ -22,7 +24,9 @@
     let contextMenuY = 0;
     let selectedImdbId = "";
     let selectedType = "";
+    let selectedTrailerId = "";
     let showListsPopup = false;
+    let showTrailerModal = false;
 
     function updateScrollButtons() {
         if (scrollContainer) {
@@ -44,18 +48,25 @@
         }
     }
 
-    function handleContextMenu(e: MouseEvent, imdbId: string, type: string) {
+    function handleContextMenu(e: MouseEvent, imdbId: string, type: string, trailerId: string | null) {
         e.preventDefault();
         contextMenuX = e.clientX;
         contextMenuY = e.clientY;
         selectedImdbId = imdbId;
         selectedType = type;
+        selectedTrailerId = trailerId || "";
         showContextMenu = true;
     }
 
     function handleAddToList() {
         showContextMenu = false;
         showListsPopup = true;
+    }
+
+    function handleViewTrailer() {
+        if (!selectedTrailerId) return;
+        showContextMenu = false;
+        showTrailerModal = true;
     }
 
     onMount(() => {
@@ -69,8 +80,10 @@
     <TitleContextMenu
         x={contextMenuX}
         y={contextMenuY}
+        showTrailer={Boolean(selectedTrailerId)}
         on:close={() => (showContextMenu = false)}
         on:addToList={handleAddToList}
+        on:viewTrailer={handleViewTrailer}
     />
 {/if}
 
@@ -80,6 +93,14 @@
     type={selectedType}
     on:close={() => (showListsPopup = false)}
 />
+
+{#if selectedTrailerId}
+    <TrailerModal
+        bind:visible={showTrailerModal}
+        ytId={selectedTrailerId}
+        on:close={() => (showTrailerModal = false)}
+    />
+{/if}
 
 {#if popularMeta.length > 0}
     <div class="w-full h-fit flex flex-col gap-4 relative group overflow-visible">
@@ -115,7 +136,12 @@
                         on:click={() =>
                             navigateToMeta(title.imdb_id, title.type)}
                         on:contextmenu={(e) =>
-                            handleContextMenu(e, title.imdb_id, title.type)}
+                            handleContextMenu(
+                                e,
+                                title.imdb_id,
+                                title.type,
+                                getPrimaryTrailerId(title),
+                            )}
                     >
                         <PosterImage
                             src={title.poster}

@@ -1,12 +1,13 @@
 <script lang="ts">
     import { createEventDispatcher, onMount } from "svelte";
     import { fade } from "svelte/transition";
-    import { Plus } from "lucide-svelte";
+    import { Film, Plus } from "lucide-svelte";
 
 
 
     export let x: number;
     export let y: number;
+    export let showTrailer = false;
 
     const dispatch = createEventDispatcher();
 
@@ -35,6 +36,11 @@
         close();
     }
 
+    function handleViewTrailer() {
+        dispatch("viewTrailer");
+        close();
+    }
+
     function handleClickOutside(event: MouseEvent) {
         const target = event.target as HTMLElement;
         if (!target.closest(".context-menu")) {
@@ -59,6 +65,15 @@
     role="menu"
     tabindex="-1"
 >
+    {#if showTrailer}
+        <button
+            class="text-left px-4 py-2 text-white/80 hover:text-white hover:bg-white/10 transition-colors font-poppins text-sm flex flex-row gap-2 items-center cursor-pointer"
+            on:click={handleViewTrailer}
+        >
+            <Film size={16} strokeWidth={2} />
+            View Trailer
+        </button>
+    {/if}
     <button
         class="text-left px-4 py-2 text-white/80 hover:text-white hover:bg-white/10 transition-colors font-poppins text-sm flex flex-row gap-2 items-center cursor-pointer"
         on:click={handleAddToList}

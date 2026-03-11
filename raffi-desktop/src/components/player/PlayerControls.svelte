@@ -129,8 +129,8 @@
             {/if}
 
             <span
-                class="text-[22px] font-poppins font-medium text-[#D3D3D3] text-center"
-                style={`min-width:${timeLabelWidth}; display:inline-block; font-variant-numeric: tabular-nums; font-feature-settings:'tnum';`}
+                class="inline-block tabular-nums text-[22px] font-poppins font-medium text-[#D3D3D3] text-center"
+                style={`min-width:${timeLabelWidth};`}
                 >{formatTime(
                     seekBarStyle === "normal" ? displayedTime : remainingTime,
                 )}</span
@@ -166,8 +166,7 @@
                         style={`left: ${seekHoverLeftPct}%; transform: translateX(-50%);`}
                     >
                         <div
-                            class="bg-[#000000]/60 backdrop-blur-md text-white text-[12px] px-2 py-1 rounded-md"
-                            style="font-variant-numeric: tabular-nums; font-feature-settings:'tnum';"
+                            class="tabular-nums bg-[#000000]/60 backdrop-blur-md text-white text-[12px] px-2 py-1 rounded-md"
                         >
                             {formatTime(seekHoverTime)}
                         </div>
@@ -176,8 +175,8 @@
             </div>            
             {#if seekBarStyle === "normal"}
                 <span
-                    class="text-[22px] font-poppins font-medium text-[#D3D3D3] text-center"
-                    style={`min-width:${timeLabelWidth}; display:inline-block; font-variant-numeric: tabular-nums; font-feature-settings:'tnum';`}
+                    class="inline-block tabular-nums text-[22px] font-poppins font-medium text-[#D3D3D3] text-center"
+                    style={`min-width:${timeLabelWidth};`}
                     >{formatTime(duration)}</span
                 >
             {/if}

@@ -205,7 +205,31 @@
         showWatchPartyModal.set(true);
     };
 
-    const handleClose = () => {
+    let fullscreenCleanupDone = false;
+
+    const exitFullscreenIfNeeded = async () => {
+        if (fullscreenCleanupDone) return;
+        fullscreenCleanupDone = true;
+
+        try {
+            const electronApi = (window as any).electronAPI;
+            if (electronApi?.isFullscreen) {
+                const isFullscreen = await electronApi.isFullscreen();
+                if (isFullscreen) {
+                    electronApi.toggleFullscreen?.();
+                    return;
+                }
+            }
+
+            if (typeof document !== "undefined" && document.fullscreenElement) {
+                await document.exitFullscreen();
+            }
+        } catch (error) {
+            console.error("Failed to exit fullscreen", error);
+        }
+    };
+
+    const handleClose = async () => {
         if (imdbID) {
             void flushPendingLibraryProgress(imdbID);
         }
@@ -213,6 +237,7 @@
             void traktScrobbler.send("stop", true);
         }
         trackPlaybackClosed();
+        await exitFullscreenIfNeeded();
         if (!router.back()) {
             router.navigate("home");
         }
@@ -611,6 +636,7 @@
             void traktScrobbler.send("stop", true);
         }
         trackPlaybackClosed();
+        void exitFullscreenIfNeeded();
         clearInterval(metadataCheckInterval);
         torrentStatusPoller.stop();
         if (playPauseFeedbackTimeout) clearTimeout(playPauseFeedbackTimeout);
@@ -1095,7 +1121,7 @@
         onContinue={() => showPartyEndModal.set(false)}
         onLeave={() => {
             showPartyEndModal.set(false);
-            handleClose();
+            void handleClose();
         }}
     />
 

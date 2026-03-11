@@ -9,6 +9,8 @@
         updateLibraryProgress,
     } from "../../../lib/db/db";
     import ListsPopup from "../../meta/modals/ListsPopup.svelte";
+    import TrailerModal from "../../meta/modals/TrailerModal.svelte";
+    import { getPrimaryTrailerId } from "../../../lib/trailers";
 
     import { onMount, onDestroy, tick } from "svelte";
     import { Play, ChevronDown, ChevronLeft, ChevronRight } from "lucide-svelte";
@@ -53,7 +55,9 @@
     let contextMenuY = 0;
     let selectedImdbId = "";
     let selectedType = "";
+    let selectedTrailerId = "";
     let showListsPopup = false;
+    let showTrailerModal = false;
     let isExpanded = false;
     let resizeObserver: ResizeObserver | null = null;
 
@@ -108,12 +112,13 @@
         );
     }
 
-    function handleContextMenu(e: MouseEvent, imdbId: string, type: string) {
+    function handleContextMenu(e: MouseEvent, imdbId: string, type: string, trailerId: string | null) {
         e.preventDefault();
         contextMenuX = e.clientX;
         contextMenuY = e.clientY;
         selectedImdbId = imdbId;
         selectedType = type;
+        selectedTrailerId = trailerId || "";
         showContextMenu = true;
     }
 
@@ -144,6 +149,12 @@
     function handleAddToList() {
         showContextMenu = false;
         showListsPopup = true;
+    }
+
+    function handleViewTrailer() {
+        if (!selectedTrailerId) return;
+        showContextMenu = false;
+        showTrailerModal = true;
     }
 
     function updateScrollButtons() {
@@ -212,10 +223,12 @@
     <WatchingContextMenu
         x={contextMenuX}
         y={contextMenuY}
+        showTrailer={Boolean(selectedTrailerId)}
         on:close={() => (showContextMenu = false)}
         on:remove={handleRemove}
         on:forget={handleForget}
         on:addToList={handleAddToList}
+        on:viewTrailer={handleViewTrailer}
     />
 {/if}
 
@@ -225,6 +238,14 @@
     type={selectedType}
     on:close={() => (showListsPopup = false)}
 />
+
+{#if selectedTrailerId}
+    <TrailerModal
+        bind:visible={showTrailerModal}
+        ytId={selectedTrailerId}
+        on:close={() => (showTrailerModal = false)}
+    />
+{/if}
 
 {#if continueWatchingMeta.length > 0}
     <div class="w-full h-fit flex flex-col gap-4 relative group overflow-visible">
@@ -289,6 +310,7 @@
                                     e,
                                     title.meta.imdb_id,
                                     title.meta.type,
+                                    getPrimaryTrailerId(title.meta),
                                 )}
                         >
                             <PosterImage
