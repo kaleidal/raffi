@@ -120,7 +120,16 @@ func (s *Server) handleClip(w http.ResponseWriter, r *http.Request, id string) {
 	outputPath = absOutputPath
 
 	outDir := filepath.Dir(outputPath)
-	if err := os.MkdirAll(outDir, 0o755); err != nil {
+	absOutDir, err := filepath.Abs(outDir)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to resolve output dir: %v", err), http.StatusBadRequest)
+		return
+	}
+	if absOutDir == absClipsDir || !strings.HasPrefix(absOutDir+string(os.PathSeparator), absClipsDir+string(os.PathSeparator)) {
+		http.Error(w, "invalid output path", http.StatusBadRequest)
+		return
+	}
+	if err := os.MkdirAll(absOutDir, 0o755); err != nil {
 		http.Error(w, fmt.Sprintf("failed to create output dir: %v", err), http.StatusInternalServerError)
 		return
 	}
