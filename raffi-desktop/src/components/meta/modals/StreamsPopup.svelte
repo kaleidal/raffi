@@ -54,7 +54,7 @@
     let audioFilter: AudioFilter = "all";
     let ignoreSubbed = true;
     let excludeDubbed = false;
-    let filtersCollapsed = false;
+    let filtersCollapsed = true;
     let excludeHDR = false;
     let hasTrackedOpen = false;
 
@@ -220,6 +220,7 @@
     $: progressDetails = computeProgressDetails(episodeProgressEntry);
 
     $: if (streamsPopupVisible && !hasTrackedOpen) {
+        filtersCollapsed = true;
         hasTrackedOpen = true;
         trackEvent("stream_list_opened", {
             ...getStreamCountsNow(),
