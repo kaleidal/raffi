@@ -2,7 +2,6 @@
     import { slide } from "svelte/transition";
     import { createClip } from "../../lib/client";
     import { formatTime } from "../../lib/time";
-    import { createEventDispatcher } from "svelte";
 
     export let open = false;
     export let sessionId: string;
@@ -11,7 +10,7 @@
     export let isWatchPartyMember = false;
     export let inverted = false;
 
-    const dispatch = createEventDispatcher();
+    export let onClose: () => void = () => {};
 
     let clipStart = 0;
     let clipEnd = 0;
@@ -117,7 +116,7 @@
 
     const close = () => {
         if (clipBusy) return;
-        dispatch("close");
+        onClose();
     };
 
     const onClipStartInput = (e: Event) => {

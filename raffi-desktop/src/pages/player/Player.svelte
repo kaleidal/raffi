@@ -1061,18 +1061,18 @@
                 {castBusy}
                 {castDeviceName}
                 showWatchParty={!$localMode && $cloudSyncStatus.cloudFeaturesAvailable}
-                on:audioClick={openAudioSelection}
-                on:castClick={openCastBootstrap}
-                on:subtitleClick={openSubtitleSelection}
-                on:watchPartyClick={() => {
+                onAudioClick={openAudioSelection}
+                onCastClick={openCastBootstrap}
+                onSubtitleClick={openSubtitleSelection}
+                onWatchPartyClick={() => {
                     if (!$localMode && $cloudSyncStatus.cloudFeaturesAvailable) {
                         openWatchPartyModal();
                     } else {
                         showWatchPartyModal.set(false);
                     }
                 }}
-                on:clipPanelOpenChange={(e) => {
-                    clipPanelOpen = !!e.detail?.open;
+                onClipPanelOpenChange={(detail) => {
+                    clipPanelOpen = !!detail?.open;
                     controlsManager?.setPinned?.(clipPanelOpen, controlsVisible.set);
                     trackEvent("clip_panel_toggled", {
                         open: clipPanelOpen,
@@ -1131,8 +1131,8 @@
         loadingMode={castDeviceModalMode}
         step={castModalStep}
         nativeDevices={nativeCastDevices}
-        on:selectNativeDevice={(e) => {
-            void startNativeCastWithDevice((e as CustomEvent<{ deviceId: string }>).detail?.deviceId || "");
+        onSelectNativeDevice={(detail) => {
+            void startNativeCastWithDevice(detail?.deviceId || "");
         }}
         onBackToMode={castRuntime.showDeviceModePicker}
         onNative={() => {

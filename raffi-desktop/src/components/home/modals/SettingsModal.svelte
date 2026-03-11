@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { createEventDispatcher, onDestroy, onMount } from "svelte";
+	import { onDestroy, onMount } from "svelte";
 	import { X } from "lucide-svelte";
     import { fade, scale } from "svelte/transition";
 	import {
@@ -49,8 +49,6 @@
 
 
 	export let showSettings = false;
-
-	const dispatch = createEventDispatcher();
 
 	let stats = {
 		moviesWatched: 0,
@@ -146,7 +144,6 @@
 
 	function close() {
 		showSettings = false;
-		dispatch("close");
 	}
 
 	function openExternalLink(url: string) {

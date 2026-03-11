@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { createEventDispatcher, onMount } from "svelte";
+    import { onMount } from "svelte";
     import { Search, Link, Blocks, Library, Settings } from "lucide-svelte";
     import {
         searchAddonTitlesSplit,
@@ -27,7 +27,8 @@
     } from "../../lib/home/searchBarSettings";
 
 
-    const dispatch = createEventDispatcher();
+    export let onOpenAddons: () => void = () => {};
+    export let onOpenSettings: () => void = () => {};
 
     let searchQuery = "";
     let searchResults: SplitSearchResults = { movies: [], series: [] };
@@ -311,7 +312,7 @@
 
 	function openAddons() {
 		trackEvent("addons_opened", { source: "search_bar" });
-		dispatch("openAddons");
+        onOpenAddons();
 	}
 
 	function openLists() {
@@ -321,7 +322,7 @@
 
 	function openSettings() {
 		trackEvent("settings_opened", { source: "search_bar" });
-		dispatch("openSettings");
+        onOpenSettings();
 	}
 
 	$: {
@@ -685,8 +686,8 @@
         <TitleContextMenu
             x={contextMenuX}
             y={contextMenuY}
-            onclose={() => (showContextMenu = false)}
-            onaddToList={handleAddToList}
+            onClose={() => (showContextMenu = false)}
+            onAddToList={handleAddToList}
         />
     {/if}
 
@@ -699,7 +700,6 @@
         bind:visible={showListsPopup}
         imdbId={selectedImdbId}
         type={selectedType}
-        onclose={() => (showListsPopup = false)}
     />
 
     <div class="flex flex-row items-start gap-[10px]">

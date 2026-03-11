@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { createEventDispatcher } from "svelte";
     import type { ShowResponse } from "../../lib/library/types/meta_types";
     import { FileVideo, Eye } from "lucide-svelte";
 
@@ -7,7 +6,8 @@
     export let currentSeason: number;
     export let progressMap: any = {};
 
-    const dispatch = createEventDispatcher();
+    export let onEpisodeClick: (episode: any) => void = () => {};
+    export let onEpisodeContextMenu: (detail: { event: MouseEvent; episode: any }) => void = () => {};
 
     function truncateWords(text: string, maxWords: number) {
         if (!text) return "";
@@ -17,7 +17,7 @@
     }
 
     function handleEpisodeClick(episode: any) {
-        dispatch("episodeClick", episode);
+        onEpisodeClick(episode);
     }
 
     let failedImages = new Set<string>();
@@ -41,7 +41,7 @@
 
             on:click={() => handleEpisodeClick(episode)}
             on:contextmenu|preventDefault={(e) =>
-                dispatch("episodeContextMenu", { event: e, episode })}
+                onEpisodeContextMenu({ event: e as MouseEvent, episode })}
         >
             <div
                 class="w-full h-[150px] bg-gradient-to-t from-[#090909] to-transparent absolute bottom-0 left-0 z-10"
