@@ -325,7 +325,8 @@ export function initHLS(
         setShowError: (show: boolean) => void;
         setErrorMessage: (msg: string) => void;
         setErrorDetails: (details: string) => void;
-    }
+    },
+    initialSeekTime: number | null = null,
 ): Hls | null {
     const { setLoading, setShowCanvas, setPlaybackOffset, setShowError, setErrorMessage, setErrorDetails } = setStates;
 
@@ -348,6 +349,10 @@ export function initHLS(
     };
 
     let baseManifest = `${getStreamUrl(sessionId)}/child.m3u8`;
+    if (initialSeekTime != null && Number.isFinite(initialSeekTime) && initialSeekTime > 0) {
+        const seekId = Math.random().toString(36).substring(7);
+        baseManifest = `${baseManifest}?seek=${Math.floor(initialSeekTime)}&seek_id=${seekId}&force_slice=1`;
+    }
     setPlaybackOffset(startOffset);
     
     if (startOffset === 0) {

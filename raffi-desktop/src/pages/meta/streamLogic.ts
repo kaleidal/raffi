@@ -124,7 +124,11 @@ export const episodeClicked = async (episode: any, imdbID: string) => {
     await fetchStreams(episode, false, true, imdbID);
 };
 
-export const playStream = (stream: Stream, progressMap: any, options?: { replace?: boolean }) => {
+export const playStream = (
+    stream: Stream,
+    progressMap: any,
+    options?: { replace?: boolean; autoSkipFromNextEpisode?: boolean },
+) => {
     let url = stream.url;
     const fileIdx = stream.infoHash ? (stream.fileIdx ?? null) : null;
 
@@ -173,6 +177,7 @@ export const playStream = (stream: Stream, progressMap: any, options?: { replace
             episode: episode?.episode ?? null,
             joinPartyId: routeJoinPartyId,
             autoJoin: routeJoinPartyId ? routeAutoJoin : false,
+            autoSkipFromNextEpisode: Boolean(options?.autoSkipFromNextEpisode),
         }, { replace: options?.replace });
     } else {
         console.warn("Stream has no URL", stream);
