@@ -13,6 +13,79 @@ import (
 	"time"
 )
 
+func isPathWithinBase(basePath, candidatePath string) bool {
+	rel, err := filepath.Rel(basePath, candidatePath)
+	if err != nil {
+		return false
+	}
+	if rel == "." {
+		return true
+	}
+	if rel == ".." {
+		return false
+	}
+	return !strings.HasPrefix(rel, ".."+string(os.PathSeparator))
+}
+
+func resolveClipOutputPath(clipsDir, requestedPath, fallbackName string) (string, bool, error) {
+	absClipsDir, err := filepath.Abs(clipsDir)
+	if err != nil {
+		return "", false, err
+	}
+
+	trimmedPath := strings.TrimSpace(requestedPath)
+	if trimmedPath == "" {
+		baseName := strings.TrimSpace(fallbackName)
+		if baseName == "" {
+			baseName = fmt.Sprintf("clip_%s", time.Now().Format("20060102_150405"))
+		}
+		baseName = sanitizeFilename(baseName)
+		if !strings.HasSuffix(strings.ToLower(baseName), ".mp4") {
+			baseName += ".mp4"
+		}
+		return filepath.Join(absClipsDir, baseName), true, nil
+	}
+
+	var resolvedPath string
+	if filepath.IsAbs(trimmedPath) || filepath.VolumeName(trimmedPath) != "" {
+		resolvedPath, err = filepath.Abs(trimmedPath)
+		if err != nil {
+			return "", false, err
+		}
+
+		homeDir, homeErr := os.UserHomeDir()
+		if homeErr != nil || homeDir == "" {
+			return "", false, fmt.Errorf("failed to resolve home dir: %w", homeErr)
+		}
+		absHomeDir, homeErr := filepath.Abs(homeDir)
+		if homeErr != nil {
+			return "", false, homeErr
+		}
+		if !isPathWithinBase(absHomeDir, resolvedPath) {
+			return "", false, fmt.Errorf("output path must stay within the user home directory")
+		}
+	} else {
+		cleanRel := filepath.Clean(trimmedPath)
+		if cleanRel == ".." || strings.HasPrefix(cleanRel, ".."+string(os.PathSeparator)) {
+			return "", false, fmt.Errorf("relative output path escapes clips dir")
+		}
+		resolvedPath = filepath.Join(absClipsDir, cleanRel)
+		resolvedPath, err = filepath.Abs(resolvedPath)
+		if err != nil {
+			return "", false, err
+		}
+		if !isPathWithinBase(absClipsDir, resolvedPath) {
+			return "", false, fmt.Errorf("relative output path escapes clips dir")
+		}
+	}
+
+	if !strings.HasSuffix(strings.ToLower(resolvedPath), ".mp4") {
+		resolvedPath += ".mp4"
+	}
+
+	return resolvedPath, false, nil
+}
+
 func (s *Server) handleClip(w http.ResponseWriter, r *http.Request, id string) {
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusNoContent)
@@ -76,48 +149,12 @@ func (s *Server) handleClip(w http.ResponseWriter, r *http.Request, id string) {
 		return
 	}
 
-	if outputPath == "" {
-		baseName := strings.TrimSpace(req.Name)
-		if baseName == "" {
-			baseName = fmt.Sprintf("clip_%s", time.Now().Format("20060102_150405"))
-		}
-		baseName = sanitizeFilename(baseName)
-		if !strings.HasSuffix(strings.ToLower(baseName), ".mp4") {
-			baseName += ".mp4"
-		}
-		outputPath = filepath.Join(clipsDir, baseName)
-	} else {
-		// Treat user-provided outputPath as a relative path within clipsDir and validate it.
-		cleanRel := filepath.Clean(outputPath)
-		// Prevent absolute paths and parent directory traversal.
-		if strings.HasPrefix(cleanRel, string(os.PathSeparator)) || strings.HasPrefix(cleanRel, ".."+string(os.PathSeparator)) || cleanRel == ".." {
-			http.Error(w, "invalid output path", http.StatusBadRequest)
-			return
-		}
-
-		outputPath = filepath.Join(clipsDir, cleanRel)
-	}
-
-	// Ensure the final outputPath is within the clipsDir and has the correct extension.
-	absClipsDir, err := filepath.Abs(clipsDir)
+	resolvedOutputPath, serverManagedDir, err := resolveClipOutputPath(clipsDir, outputPath, req.Name)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("failed to resolve clips dir: %v", err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("invalid output path: %v", err), http.StatusBadRequest)
 		return
 	}
-	absOutputPath, err := filepath.Abs(outputPath)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("failed to resolve output path: %v", err), http.StatusBadRequest)
-		return
-	}
-	if absOutputPath == absClipsDir || !strings.HasPrefix(absOutputPath+string(os.PathSeparator), absClipsDir+string(os.PathSeparator)) {
-		http.Error(w, "invalid output path", http.StatusBadRequest)
-		return
-	}
-
-	if !strings.HasSuffix(strings.ToLower(absOutputPath), ".mp4") {
-		absOutputPath += ".mp4"
-	}
-	outputPath = absOutputPath
+	outputPath = resolvedOutputPath
 
 	outDir := filepath.Dir(outputPath)
 	absOutDir, err := filepath.Abs(outDir)
@@ -125,13 +162,17 @@ func (s *Server) handleClip(w http.ResponseWriter, r *http.Request, id string) {
 		http.Error(w, fmt.Sprintf("failed to resolve output dir: %v", err), http.StatusBadRequest)
 		return
 	}
-	if absOutDir == absClipsDir || !strings.HasPrefix(absOutDir+string(os.PathSeparator), absClipsDir+string(os.PathSeparator)) {
-		http.Error(w, "invalid output path", http.StatusBadRequest)
-		return
-	}
-	if err := os.MkdirAll(absOutDir, 0o755); err != nil {
-		http.Error(w, fmt.Sprintf("failed to create output dir: %v", err), http.StatusInternalServerError)
-		return
+	if serverManagedDir {
+		if err := os.MkdirAll(absOutDir, 0o755); err != nil {
+			http.Error(w, fmt.Sprintf("failed to create output dir: %v", err), http.StatusInternalServerError)
+			return
+		}
+	} else {
+		info, statErr := os.Stat(absOutDir)
+		if statErr != nil || !info.IsDir() {
+			http.Error(w, "invalid output path", http.StatusBadRequest)
+			return
+		}
 	}
 
 	// Timeout: duration-scaled but capped.

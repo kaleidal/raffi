@@ -68,6 +68,18 @@ export function parseSRTTime(timeStr: string): number | null {
     return seconds;
 }
 
+function toPlainCueText(text: string): string {
+    if (typeof DOMParser !== "undefined") {
+        const doc = new DOMParser().parseFromString(
+            `<body>${text}</body>`,
+            "text/html",
+        );
+        return doc.body.textContent || "";
+    }
+
+    return text.replace(/[<>]/g, "");
+}
+
 export function parseAndAddCue(track: TextTrack, block: string, getCurrentCueLine: () => number) {
     const lines = block
         .split("\n")
@@ -98,7 +110,7 @@ export function parseAndAddCue(track: TextTrack, block: string, getCurrentCueLin
         parsedCues.push({ start, end, text });
 
         try {
-            const cleanText = text.replace(/<[^>]+>/g, "");
+            const cleanText = toPlainCueText(text);
 
             const cue = new VTTCue(
                 start + subtitleDelaySeconds,
@@ -160,13 +172,8 @@ export function parseAndAddSRTCue(
 
         parsedCues.push({ start: adjustedStart, end: adjustedEnd, text });
         try {
-            const cleanText = text.replace(/<[^>]*>/g, "");
-
-            const decodedText = cleanText
-                .replace(/&nbsp;/g, " ")
-                .replace(/&amp;/g, "&")
-                .replace(/&lt;/g, "<")
-                .replace(/&gt;/g, ">");
+            const decodedText = toPlainCueText(text)
+                .replace(/\u00A0/g, " ");
 
             const cue = new VTTCue(adjustedStart, adjustedEnd, decodedText);
             cue.snapToLines = false;

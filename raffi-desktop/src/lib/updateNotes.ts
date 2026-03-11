@@ -14,6 +14,87 @@ const sanitizeUrl = (url: string) => {
     return "#";
 };
 
+const BLOCKED_HTML_TAGS = new Set([
+    "script",
+    "style",
+    "iframe",
+    "object",
+    "embed",
+    "link",
+    "meta",
+]);
+
+const ALLOWED_HTML_TAGS = new Set([
+    "a",
+    "p",
+    "br",
+    "ul",
+    "ol",
+    "li",
+    "blockquote",
+    "hr",
+    "strong",
+    "em",
+    "code",
+    "pre",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+]);
+
+const sanitizeHtmlElement = (
+    element: Element,
+    doc: Document,
+): Node | DocumentFragment | null => {
+    const tagName = element.tagName.toLowerCase();
+
+    if (BLOCKED_HTML_TAGS.has(tagName)) {
+        return null;
+    }
+
+    if (!ALLOWED_HTML_TAGS.has(tagName)) {
+        const fragment = doc.createDocumentFragment();
+        for (const child of Array.from(element.childNodes)) {
+            const next = sanitizeHtmlNode(child, doc);
+            if (next) fragment.appendChild(next);
+        }
+        return fragment;
+    }
+
+    const cleanElement = doc.createElement(tagName);
+    if (tagName === "a") {
+        const href = element.getAttribute("href");
+        cleanElement.setAttribute("href", sanitizeUrl(href || "#"));
+        cleanElement.setAttribute("target", "_blank");
+        cleanElement.setAttribute("rel", "noreferrer noopener");
+    }
+
+    for (const child of Array.from(element.childNodes)) {
+        const next = sanitizeHtmlNode(child, doc);
+        if (next) cleanElement.appendChild(next);
+    }
+
+    return cleanElement;
+};
+
+const sanitizeHtmlNode = (
+    node: Node,
+    doc: Document,
+): Node | DocumentFragment | null => {
+    if (node.nodeType === Node.TEXT_NODE) {
+        return doc.createTextNode(node.textContent || "");
+    }
+
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+        return null;
+    }
+
+    return sanitizeHtmlElement(node as Element, doc);
+};
+
 const formatInlineMarkdown = (value: string) => {
     let output = escapeHtml(value);
 
@@ -29,14 +110,21 @@ const formatInlineMarkdown = (value: string) => {
     return output;
 };
 
-const sanitizeHtmlNotes = (value: string) =>
-    value
-        .replace(
-            /<\s*(script|style|iframe|object|embed|link|meta)[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi,
-            "",
-        )
-        .replace(/\son\w+=(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
-        .replace(/\shref=(['"])\s*javascript:[\s\S]*?\1/gi, ' href="#"');
+const sanitizeHtmlNotes = (value: string) => {
+    if (typeof DOMParser === "undefined" || typeof document === "undefined") {
+        return escapeHtml(value);
+    }
+
+    const parsed = new DOMParser().parseFromString(value, "text/html");
+    const container = document.createElement("div");
+
+    for (const child of Array.from(parsed.body.childNodes)) {
+        const cleanNode = sanitizeHtmlNode(child, document);
+        if (cleanNode) container.appendChild(cleanNode);
+    }
+
+    return container.innerHTML;
+};
 
 const markdownToHtml = (value: string) => {
     const lines = value.replace(/\r\n/g, "\n").split("\n");

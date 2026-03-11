@@ -46,7 +46,17 @@ const generateSessionId = () => {
     if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
         return crypto.randomUUID();
     }
-    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+    if (typeof crypto !== "undefined" && "getRandomValues" in crypto) {
+        const bytes = new Uint8Array(16);
+        crypto.getRandomValues(bytes);
+        const hex = Array.from(bytes, (byte) =>
+            byte.toString(16).padStart(2, "0"),
+        ).join("");
+        return `${Date.now()}-${hex}`;
+    }
+
+    return `${Date.now()}-session`;
 };
 
 const ensureAppSessionId = () => {
