@@ -12,10 +12,6 @@ import {
     syncLocalStateToUser,
     warmRemoteStateCache,
 } from "../db/db";
-import {
-    hasLegacySupabaseSession,
-    clearLegacySupabaseSession,
-} from "../db/supabaseLegacy";
 import { setConvexAuthRefreshHandler, setConvexAuthToken } from "../db/convex";
 import { writable } from "svelte/store";
 
@@ -305,15 +301,6 @@ export async function initAuth() {
             setConvexAuthToken(activeUser.token);
             scheduleSessionRefresh(activeUser);
         }
-    }
-
-    const hadLegacySupabaseSession = hasLegacySupabaseSession();
-    if (hadLegacySupabaseSession) {
-        clearLegacySupabaseSession();
-        if (userCache) {
-            clearAveSession();
-        }
-        enableLocalMode();
     }
 
     if (userCache) {
