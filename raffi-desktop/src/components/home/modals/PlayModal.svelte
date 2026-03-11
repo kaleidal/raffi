@@ -4,7 +4,7 @@
     import { fade, scale } from "svelte/transition";
     import { router } from "../../../lib/stores/router";
     import { getCachedMetaData } from "../../../lib/library/metaCache";
-    import { getWatchPartyInfo } from "../../../lib/db/db";
+    import { cloudSyncStatus, getWatchPartyInfo } from "../../../lib/db/db";
     import { localMode } from "../../../lib/stores/authStore";
 
     const portal = (node: HTMLElement) => {
@@ -300,7 +300,7 @@
                         </div>
                     </button>
 
-                    {#if !$localMode}
+                    {#if !$localMode && $cloudSyncStatus.cloudFeaturesAvailable}
                         <button
                             class="bg-white/5 hover:bg-white/10 text-white p-4 rounded-2xl flex items-center gap-4 transition-colors text-left group cursor-pointer"
                             on:click={() => mode = "join"}
@@ -350,7 +350,7 @@
                     </div>
                 </div>
 
-            {:else if mode === "join" && !$localMode}
+            {:else if mode === "join" && !$localMode && $cloudSyncStatus.cloudFeaturesAvailable}
                 <div class="flex flex-col gap-4">
 
                     <div>
