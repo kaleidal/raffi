@@ -20,18 +20,18 @@
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^6.2.4",
-    "@tsconfig/svelte": "^5.0.7",
-    "@types/node": "^25.2.2",
+    "@tsconfig/svelte": "^5.0.8",
+    "@types/node": "^25.4.0",
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
-    "electron": "^40.2.1",
-    "electron-builder": "^26.7.0",
+    "electron": "^40.8.0",
+    "electron-builder": "^26.8.1",
     "png-to-ico": "^3.0.1",
-    "svelte": "^5.50.0",
-    "svelte-check": "^4.3.6",
+    "svelte": "^5.53.10",
+    "svelte-check": "^4.4.5",
     "typescript": "~5.9.3",
     "vite": "^7.3.1",
-    "wait-on": "^9.0.3"
+    "wait-on": "^9.0.4"
   },
   "build": {
     "appId": "al.kaleid.raffi",
@@ -131,18 +131,18 @@
     ]
   },
   "dependencies": {
-    "@ave-id/sdk": "^0.2.2",
+    "@ave-id/sdk": "^0.3.4",
     "@ryuziii/discord-rpc": "^1.0.1-rc.1",
-    "@tailwindcss/vite": "^4.1.18",
+    "@tailwindcss/vite": "^4.2.1",
     "chromecast-api": "^0.4.2",
-    "convex": "^1.31.7",
-    "electron-updater": "^6.7.3",
+    "convex": "^1.32.0",
+    "electron-updater": "^6.8.3",
     "eventemitter3": "^5.0.4",
     "express": "^5.2.1",
     "hls.js": "^1.6.15",
-    "lucide-svelte": "^0.563.0",
-    "posthog-js": "^1.342.1",
-    "tailwindcss": "^4.1.18"
+    "lucide-svelte": "^0.577.0",
+    "posthog-js": "^1.360.0",
+    "tailwindcss": "^4.2.1"
   },
   "trustedDependencies": [
     "core-js",

@@ -12,19 +12,19 @@
 	<div class="grid gap-4 sm:grid-cols-2">
 		<button
 			type="button"
-			on:click={() => openExternalLink("https://stator.sh/lantharos/raffi/bugs")}
+			on:click={() => openExternalLink("https://github.com/kaleidal/raffi/issues")}
 			class="rounded-2xl bg-white/[0.08] p-4 text-white font-medium hover:bg-white/[0.14] transition-colors cursor-pointer text-left"
 		>
-			Report a bug
-			<span class="block text-white/50 text-sm mt-1">Open the bug tracker</span>
+			Report an issue
+			<span class="block text-white/50 text-sm mt-1">Open the issue tracker</span>
 		</button>
 		<button
 			type="button"
-			on:click={() => openExternalLink("https://stator.sh/lantharos/raffi/feedback")}
+			on:click={() => openExternalLink("https://github.com/kaleidal/raffi/discussions")}
 			class="rounded-2xl bg-white/[0.08] p-4 text-white font-medium hover:bg-white/[0.14] transition-colors cursor-pointer text-left"
 		>
-			Request a feature
-			<span class="block text-white/50 text-sm mt-1">Share your ideas</span>
+			Start a discussion
+			<span class="block text-white/50 text-sm mt-1">Open the discussions</span>
 		</button>
 	</div>
 </section>

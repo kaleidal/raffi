@@ -96,6 +96,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                     setSubtitleTracks: subtitleTracks.set,
                     setCurrentAudioLabel: currentAudioLabel.set,
                     setCurrentSubtitleLabel: currentSubtitleLabel.set,
+                    setSessionData: sessionData.set,
                 },
                 () =>
                     Subtitles.fetchAddonSubtitles(
