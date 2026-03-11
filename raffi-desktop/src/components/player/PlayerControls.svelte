@@ -26,6 +26,7 @@
     export let castActive = false;
     export let castBusy = false;
     export let castDeviceName: string = "";
+    export let showWatchParty = true;
 
     export let seekBarStyle: "raffi" | "normal" = "raffi";
 
@@ -233,7 +234,7 @@
                 <Subtitles size={20} color="#E9E9E9" strokeWidth={2} />
             </ExpandingButton>
 
-            {#if metaData}
+            {#if metaData && showWatchParty}
                 <ExpandingButton
                     label={"Watch Party"}
                     onClick={() => dispatch("watchPartyClick")}

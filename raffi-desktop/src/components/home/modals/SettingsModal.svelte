@@ -6,7 +6,12 @@
 		getLibrary,
 		getListsWithItems,
 	} from "../../../lib/db/db";
-	import { clearLocalState, syncLocalStateToUser, syncUserStateToLocal } from "../../../lib/db/db";
+	import {
+		clearLocalState,
+		syncCloudBackupNow,
+		syncLocalStateToUser,
+		syncUserStateToLocal,
+	} from "../../../lib/db/db";
 	import {
 		currentUser,
 		signInWithAve,
@@ -210,7 +215,9 @@
 			signOutToLocalMode();
 			await refreshStats();
 			trackEvent("local_mode_switched", { keep_data: keepData });
-			message = "Switched to local mode.";
+			message = keepData
+				? "Switched to local mode. Your device data stays available offline."
+				: "Switched to local mode with a fresh local library.";
 			router.navigate("home");
 		} catch (e: any) {
 			console.error("Failed to switch to local mode", e);
@@ -236,7 +243,7 @@
 			await signInWithAve();
 			await refreshStats();
 			trackEvent("ave_login_success", { source: "settings" });
-			message = "Signed in with Ave.";
+			message = "Signed in with Ave. Local data will keep working and sync in the background.";
 			setTimeout(() => {
 				close();
 				router.navigate("home");
@@ -249,6 +256,23 @@
 			});
 		} finally {
 			aveLoading = false;
+		}
+	}
+
+	async function syncNow() {
+		message = "";
+		error = "";
+		try {
+			const result = await syncCloudBackupNow();
+			if (result?.ok) {
+				message = "Cloud backup synced successfully.";
+				await refreshStats();
+			} else {
+				error = "Cloud backup is currently unavailable.";
+			}
+		} catch (e: any) {
+			console.error("Failed to sync cloud backup", e);
+			error = e?.message || "Failed to sync cloud backup";
 		}
 	}
 
@@ -339,7 +363,7 @@
 
 					{#if !$localMode && $currentUser}
 						<div class="grid gap-6 lg:grid-cols-[1fr,1.2fr]">
-							<DataBackupsSection onDownloadData={downloadData} />
+							<DataBackupsSection onDownloadData={downloadData} onSyncNow={syncNow} />
 							<AccountSection
 								{message}
 								{error}

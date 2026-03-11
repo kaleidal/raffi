@@ -2,6 +2,7 @@
 	import { onMount } from "svelte";
 	import { currentUser, localMode } from "../../../../lib/stores/authStore";
 	import {
+		cloudSyncStatus,
 		type TraktStatus,
 		getTraktStatus,
 		disconnectTrakt as disconnectTraktFromDb,
@@ -21,24 +22,24 @@
 	export let onSwitchToLocalMode: (keepData: boolean) => void = () => {};
 
 	onMount(() => {
-		if (!$localMode && $currentUser && !traktStatusRequested) {
+		if (!$localMode && $currentUser && $cloudSyncStatus.cloudFeaturesAvailable && !traktStatusRequested) {
 			traktStatusRequested = true;
 			void loadTraktStatus();
 		}
 	});
 
-	$: if ($localMode) {
+	$: if ($localMode || !$cloudSyncStatus.cloudFeaturesAvailable) {
 		traktStatusRequested = false;
 		traktStatus = null;
 	}
 
-	$: if (!$localMode && $currentUser && !traktStatusRequested) {
+	$: if (!$localMode && $currentUser && $cloudSyncStatus.cloudFeaturesAvailable && !traktStatusRequested) {
 		traktStatusRequested = true;
 		void loadTraktStatus();
 	}
 
 	async function loadTraktStatus() {
-		if ($localMode || !$currentUser) {
+		if ($localMode || !$currentUser || !$cloudSyncStatus.cloudFeaturesAvailable) {
 			traktStatus = null;
 			return;
 		}
@@ -133,7 +134,11 @@
 				</p>
 			</div>
 
-			{#if traktLoading}
+			{#if !$cloudSyncStatus.cloudFeaturesAvailable}
+				<p class="text-white/60 text-sm">
+					Cloud backup is offline, so Trakt and watch party features are temporarily hidden.
+				</p>
+			{:else if traktLoading}
 				<p class="text-white/60 text-sm">Loading Trakt status...</p>
 			{:else if traktStatus?.connected}
 				<div class="rounded-2xl bg-white/[0.04] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
@@ -192,7 +197,7 @@
 			<div>
 				<p class="text-white font-medium">Log out</p>
 				<p class="text-white/60 text-sm">
-					Sign out and switch to local mode. Choose whether to keep your synced data locally.
+					Sign out and keep using your device data offline, or clear it and start fresh.
 				</p>
 			</div>
 			<div class="flex flex-col gap-2 sm:flex-row">
@@ -200,7 +205,7 @@
 					class="flex-1 bg-white text-black px-4 py-2 rounded-2xl font-semibold hover:bg-white/90 transition-colors cursor-pointer"
 					on:click={() => onSwitchToLocalMode(true)}
 				>
-					Keep synced data
+					Keep local data
 				</button>
 				<button
 					class="flex-1 bg-white/10 text-white px-4 py-2 rounded-2xl font-semibold hover:bg-white/20 transition-colors cursor-pointer"
