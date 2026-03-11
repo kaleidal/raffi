@@ -2,6 +2,7 @@ function registerMainIpcHandlers({
   ipcMain,
   dialog,
   shell,
+  fs,
   autoUpdater,
   isAllowedExternalUrl,
   cleanup,
@@ -84,6 +85,33 @@ function registerMainIpcHandlers({
       return { canceled: res.canceled, filePath: res.filePath || null };
     } catch (e) {
       return { canceled: true, filePath: null, error: String(e) };
+    }
+  });
+
+  ipcMain.handle("PERSIST_CLIP_FILE", async (_event, payload) => {
+    try {
+      const path = require("path");
+      const sourcePath = typeof payload?.sourcePath === "string" ? payload.sourcePath.trim() : "";
+      const targetPath = typeof payload?.targetPath === "string" ? payload.targetPath.trim() : "";
+
+      if (!sourcePath || !targetPath) {
+        throw new Error("Invalid clip file paths");
+      }
+
+      const targetDir = path.dirname(targetPath);
+      await fs.promises.mkdir(targetDir, { recursive: true });
+
+      try {
+        await fs.promises.rename(sourcePath, targetPath);
+      } catch {
+        await fs.promises.copyFile(sourcePath, targetPath);
+        await fs.promises.unlink(sourcePath).catch(() => {});
+      }
+
+      return { ok: true, filePath: targetPath };
+    } catch (error) {
+      logToFile("PERSIST_CLIP_FILE failed", error);
+      return { ok: false, filePath: null, error: String(error) };
     }
   });
 

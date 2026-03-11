@@ -280,7 +280,7 @@
         const end = Math.max(start + minGap, clipEnd);
 
         // Optional Save-As prompt (Electron). Browser builds fall back to server default dir.
-        let outputPath: string | undefined = undefined;
+        let targetPath: string | null = null;
         if (window.electronAPI?.saveClipPath) {
             const suggested = `clip_${new Date().toISOString().replaceAll(":", "-").replaceAll(".", "-")}.mp4`;
             const res = await window.electronAPI.saveClipPath(suggested);
@@ -288,14 +288,29 @@
                 return;
             }
             if (res?.filePath) {
-                outputPath = res.filePath;
+                targetPath = res.filePath;
             }
         }
 
         clipBusy = true;
         try {
-            const res = await createClip(sessionId, { start, end, outputPath });
-            clipOutputPath = res.outputPath;
+            const clipName = targetPath
+                ? targetPath.split(/[\\/]/).pop() || undefined
+                : undefined;
+            const res = await createClip(sessionId, { start, end, name: clipName });
+
+            if (targetPath && window.electronAPI?.persistClipFile) {
+                const persisted = await window.electronAPI.persistClipFile(
+                    res.outputPath,
+                    targetPath,
+                );
+                if (!persisted?.ok || !persisted.filePath) {
+                    throw new Error(persisted?.error || "Failed to save clip");
+                }
+                clipOutputPath = persisted.filePath;
+            } else {
+                clipOutputPath = res.outputPath;
+            }
         } catch (err) {
             clipError = err instanceof Error ? err.message : String(err);
         } finally {
