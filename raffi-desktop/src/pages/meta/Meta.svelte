@@ -493,12 +493,12 @@
                     metaData={$metaData}
                     currentSeason={$currentSeason}
                     progressMap={$progressMap}
-                    on:episodeClick={(e) =>
-                        StreamLogic.episodeClicked(e.detail, imdbID)}
-                    on:episodeContextMenu={(e) =>
+                    onEpisodeClick={(episode) =>
+                        StreamLogic.episodeClicked(episode, imdbID)}
+                    onEpisodeContextMenu={(detail) =>
                         ProgressLogic.handleEpisodeContextMenu(
-                            e.detail.event,
-                            e.detail.episode,
+                            detail.event,
+                            detail.episode,
                         )}
                 />
             </div>
@@ -509,8 +509,8 @@
         <UnsupportedTitleModal
             title="Unsupported Title"
             message={unsupportedReason}
-            on:back={() => router.navigate("home")}
-            on:retry={() => window.location.reload()}
+            onBack={() => router.navigate("home")}
+            onRetry={() => window.location.reload()}
         />
     {/if}
 
@@ -537,20 +537,20 @@
         <EpisodeContextMenu
             x={$contextMenuPos.x}
             y={$contextMenuPos.y}
-            on:close={() => showEpisodeContextMenu.set(false)}
-            on:watch={() => {
+            onClose={() => showEpisodeContextMenu.set(false)}
+            onWatch={() => {
                 if ($contextEpisode)
                     StreamLogic.episodeClicked($contextEpisode, imdbID);
             }}
-            on:markWatched={() =>
+            onMarkWatched={() =>
                 ProgressLogic.handleContextMarkWatched(imdbID)}
-            on:markUnwatched={() =>
+            onMarkUnwatched={() =>
                 ProgressLogic.handleContextMarkUnwatched(imdbID)}
-            on:resetProgress={() =>
+            onResetProgress={() =>
                 ProgressLogic.handleContextResetProgress(imdbID)}
-            on:markSeasonWatched={() =>
+            onMarkSeasonWatched={() =>
                 ProgressLogic.handleContextMarkSeasonWatched(imdbID)}
-            on:markSeasonUnwatched={() =>
+            onMarkSeasonUnwatched={() =>
                 ProgressLogic.handleContextMarkSeasonUnwatched(imdbID)}
         />
     {/if}
@@ -559,8 +559,8 @@
         <UnsupportedTitleModal
             title="Unsupported Title"
             message={unsupportedReason}
-            on:back={() => router.navigate("home")}
-            on:retry={() => window.location.reload()}
+            onBack={() => router.navigate("home")}
+            onRetry={() => window.location.reload()}
         />
     {:else}
         <div

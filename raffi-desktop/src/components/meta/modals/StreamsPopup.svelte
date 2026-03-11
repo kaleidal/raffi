@@ -1,6 +1,5 @@
 <script lang="ts">
     import { fade } from "svelte/transition";
-    import { createEventDispatcher } from "svelte";
     import { X } from "lucide-svelte";
     import { failedStreamKeys, streamFailureMessage } from "../../../pages/meta/metaState";
     import { trackEvent } from "../../../lib/analytics";
@@ -33,7 +32,8 @@
     export let progressMap: ProgressMap | null = null;
     export let progressSignature: string | number | null = null;
 
-    const dispatch = createEventDispatcher();
+    export let onClose: () => void = () => {};
+    export let onStreamClick: (stream: any) => void = () => {};
 
     export const portal = (node: HTMLElement) => {
         if (typeof document === "undefined") {
@@ -165,6 +165,7 @@
     }
 
     function close() {
+        streamsPopupVisible = false;
         trackEvent("stream_list_closed", {
             filters_active: filtersActive,
             resolution_filter: resolutionFilter,
@@ -175,11 +176,11 @@
             exclude_hdr: excludeHDR,
             ...getStreamCountsNow(),
         });
-        dispatch("close");
+        onClose();
     }
 
-    function onStreamClick(stream: any) {
-        dispatch("streamClick", stream);
+    function handleStreamClick(stream: any) {
+        onStreamClick(stream);
     }
 
     $: filterState = {
@@ -314,14 +315,14 @@
                         {filtersActive}
                         {providerFilterOptions}
                         resolutionFilters={RESOLUTION_FILTERS}
-                        on:toggleFiltersCollapsed={() => (filtersCollapsed = !filtersCollapsed)}
-                        on:setResolutionFilter={(e) => setResolutionFilter(e.detail)}
-                        on:setProviderFilter={(e) => setProviderFilter(e.detail)}
-                        on:setAudioFilter={(e) => setAudioFilter(e.detail)}
-                        on:toggleIgnoreSubbed={toggleIgnoreSubbed}
-                        on:toggleExcludeDubbed={toggleExcludeDubbed}
-                        on:toggleExcludeHDR={toggleExcludeHDR}
-                        on:resetFilters={resetFilters}
+                        onToggleFiltersCollapsed={() => (filtersCollapsed = !filtersCollapsed)}
+                        onSetResolutionFilter={setResolutionFilter}
+                        onSetProviderFilter={setProviderFilter}
+                        onSetAudioFilter={setAudioFilter}
+                        onToggleIgnoreSubbed={toggleIgnoreSubbed}
+                        onToggleExcludeDubbed={toggleExcludeDubbed}
+                        onToggleExcludeHDR={toggleExcludeHDR}
+                        onResetFilters={resetFilters}
                     />
 
                     <StreamsList
@@ -330,7 +331,7 @@
                         {filteredStreams}
                         {localFilteredStreams}
                         {addonFilteredStreams}
-                        on:streamClick={(e) => onStreamClick(e.detail)}
+                        onStreamClick={handleStreamClick}
                     />
                 </section>
             </div>

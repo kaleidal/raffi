@@ -1,6 +1,4 @@
 <script lang="ts">
-    import { createEventDispatcher } from "svelte";
-
     type CastDevice = {
         id: string;
         name: string;
@@ -16,8 +14,7 @@
     export let onNative: () => void;
     export let onChrome: () => void;
     export let onBackToMode: () => void;
-
-    const dispatch = createEventDispatcher<{ selectNativeDevice: { deviceId: string } }>();
+    export let onSelectNativeDevice: (detail: { deviceId: string }) => void = () => {};
 </script>
 
 {#if open}
@@ -81,7 +78,7 @@
                         {#each nativeDevices as device}
                             <button
                                 class="w-full rounded-[14px] border border-white/10 bg-[#2a2a2a]/80 px-4 py-3 text-left hover:bg-[#343434]/90 transition-colors"
-                                on:click={() => dispatch("selectNativeDevice", { deviceId: device.id })}
+                                on:click={() => onSelectNativeDevice({ deviceId: device.id })}
                                 disabled={loading}
                             >
                                 <p class="text-sm font-medium text-white">{device.name || "Chromecast"}</p>

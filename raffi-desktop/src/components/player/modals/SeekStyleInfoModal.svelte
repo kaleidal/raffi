@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { createEventDispatcher } from "svelte";
     import { fade, scale } from "svelte/transition";
 
     const portal = (node: HTMLElement) => {
@@ -21,11 +20,8 @@
     type SeekBarStyle = "raffi" | "normal";
 
     export let seekBarStyle: SeekBarStyle = "raffi";
-
-    const dispatch = createEventDispatcher<{
-        styleChange: { style: SeekBarStyle };
-        acknowledge: void;
-    }>();
+    export let onStyleChange: (detail: { style: SeekBarStyle }) => void = () => {};
+    export let onAcknowledge: () => void = () => {};
 
     let localStyle: SeekBarStyle = seekBarStyle;
 
@@ -35,11 +31,11 @@
 
     function toggleSeekStyle() {
         localStyle = localStyle === "raffi" ? "normal" : "raffi";
-        dispatch("styleChange", { style: localStyle });
+        onStyleChange({ style: localStyle });
     }
 
     function acknowledge() {
-        dispatch("acknowledge");
+        onAcknowledge();
     }
 </script>
 

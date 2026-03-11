@@ -31,13 +31,13 @@
     {selectedEpisode}
     {progressMap}
     {progressSignature}
-    on:close={onCloseStreamsPopup}
-    on:streamClick={(e) => onStreamClick(e.detail)}
+    onClose={onCloseStreamsPopup}
+    onStreamClick={onStreamClick}
 />
 
 {#if showTorrentWarning}
     <TorrentWarningModal
-        on:confirm={onTorrentConfirm}
-        on:cancel={onTorrentCancel}
+        onConfirm={onTorrentConfirm}
+        onCancel={onTorrentCancel}
     />
 {/if}

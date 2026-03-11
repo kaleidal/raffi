@@ -42,8 +42,8 @@
     <TrackSelectionModal
         title="Audio"
         tracks={audioTracks}
-        on:select={(e) => onAudioSelect(e.detail)}
-        on:close={onCloseAudio}
+        onSelect={onAudioSelect}
+        onClose={onCloseAudio}
     />
 {/if}
 
@@ -52,10 +52,10 @@
         title="Subtitles"
         kind="subtitles"
         tracks={subtitleTracks}
-        on:select={(e) => onSubtitleSelect(e.detail)}
-        on:delayChange={(e) => onSubtitleDelayChange(e.detail)}
-        on:addLocalSubtitle={(e) => onAddLocalSubtitle(e.detail)}
-        on:close={onCloseSubtitle}
+        onSelect={onSubtitleSelect}
+        onDelayChange={onSubtitleDelayChange}
+        onAddLocalSubtitle={onAddLocalSubtitle}
+        onClose={onCloseSubtitle}
     />
 {/if}
 
@@ -63,16 +63,16 @@
     <PlayerErrorModal
         {errorMessage}
         {errorDetails}
-        on:retry={onErrorRetry}
-        on:back={onErrorBack}
+        onRetry={onErrorRetry}
+        onBack={onErrorBack}
     />
 {/if}
 
 {#if showSeekStyleModal}
     <SeekStyleInfoModal
         {seekBarStyle}
-        on:styleChange={(e) => onSeekStyleChange(e.detail.style)}
-        on:acknowledge={onSeekStyleAcknowledge}
+        onStyleChange={(detail) => onSeekStyleChange(detail.style)}
+        onAcknowledge={onSeekStyleAcknowledge}
     />
 {/if}
 

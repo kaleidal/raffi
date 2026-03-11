@@ -1,12 +1,18 @@
 <script lang="ts">
-    import { createEventDispatcher, onMount } from "svelte";
+    import { onMount } from "svelte";
     import { fade } from "svelte/transition";
     import { Play, Check, CircleX, CheckCircle, Ban, Trash } from "lucide-svelte";
 
     export let x: number;
     export let y: number;
 
-    const dispatch = createEventDispatcher();
+    export let onClose: () => void = () => {};
+    export let onWatch: () => void = () => {};
+    export let onMarkWatched: () => void = () => {};
+    export let onMarkUnwatched: () => void = () => {};
+    export let onResetProgress: () => void = () => {};
+    export let onMarkSeasonWatched: () => void = () => {};
+    export let onMarkSeasonUnwatched: () => void = () => {};
 
     export const portal = (node: HTMLElement) => {
         if (typeof document === "undefined") {
@@ -23,26 +29,26 @@
     };
 
     function close() {
-        dispatch("close");
+        onClose();
     }
 
     function handleWatch() {
-        dispatch("watch");
+        onWatch();
         close();
     }
 
     function handleMarkWatched() {
-        dispatch("markWatched");
+        onMarkWatched();
         close();
     }
 
     function handleMarkUnwatched() {
-        dispatch("markUnwatched");
+        onMarkUnwatched();
         close();
     }
 
     function handleResetProgress() {
-        dispatch("resetProgress");
+        onResetProgress();
         close();
     }
 
@@ -94,7 +100,7 @@
     <button
         class="text-left px-4 py-2 text-white/80 hover:text-white hover:bg-white/10 transition-colors font-poppins text-sm flex flex-row gap-2 items-center cursor-pointer"
         on:click={() => {
-            dispatch("markSeasonWatched");
+            onMarkSeasonWatched();
             close();
         }}
     >
@@ -104,7 +110,7 @@
     <button
         class="text-left px-4 py-2 text-white/80 hover:text-white hover:bg-white/10 transition-colors font-poppins text-sm flex flex-row gap-2 items-center cursor-pointer"
         on:click={() => {
-            dispatch("markSeasonUnwatched");
+            onMarkSeasonUnwatched();
             close();
         }}
     >
