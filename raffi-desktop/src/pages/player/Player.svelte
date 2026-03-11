@@ -470,12 +470,12 @@
     let playPauseFeedbackTimeout: ReturnType<typeof setTimeout> | null = null;
 
     const playerSessionLoader = createPlayerSessionLoader({
-        fileIdx,
-        startTime,
+        getFileIdx: () => fileIdx,
+        getStartTime: () => startTime,
         autoPlay,
-        metaData,
-        season,
-        episode,
+        getMetaData: () => metaData,
+        getSeason: () => season,
+        getEpisode: () => episode,
         getVideoElem: () => videoElem,
         getHls: () => hls,
         setHls: (value) => {
@@ -484,6 +484,7 @@
         setSessionId: (value) => {
             sessionId = value;
         },
+        getSessionId: () => sessionId,
         getCueLinePercent: () => cueLinePercent,
         shouldShowSeekStyleInfoModal,
         setPendingStartAfterSeekStyleModal: (value) => {
