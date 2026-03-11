@@ -8,9 +8,8 @@
     <style>
       :root {
         color-scheme: dark;
-        --panel-bg: rgba(11, 14, 18, 0.54);
-        --panel-border: rgba(255, 255, 255, 0.12);
-        --panel-highlight: rgba(255, 255, 255, 0.1);
+        --panel-bg: rgba(12, 14, 18, 0.78);
+        --panel-border: rgba(255, 255, 255, 0.1);
         --text-primary: rgba(255, 255, 255, 0.97);
         --text-secondary: rgba(234, 239, 245, 0.68);
         --text-muted: rgba(234, 239, 245, 0.46);
@@ -53,45 +52,20 @@
         --buffering-image: none;
         --progress-color: rgba(255, 255, 255, 0.88);
       }
-      #ambient {
-        position: absolute;
-        inset: 0;
-        z-index: 0;
-        pointer-events: none;
-        background:
-          radial-gradient(circle at 20% 18%, rgba(111, 168, 255, 0.16), transparent 28%),
-          radial-gradient(circle at 76% 22%, rgba(255, 255, 255, 0.09), transparent 24%),
-          linear-gradient(180deg, rgba(6, 8, 11, 0.04) 0%, rgba(6, 8, 11, 0.28) 100%);
-      }
-      #vignette {
-        position: absolute;
-        inset: 0;
-        z-index: 1;
-        pointer-events: none;
-        background:
-          linear-gradient(180deg, rgba(5, 7, 10, 0.08) 0%, rgba(5, 7, 10, 0) 22%, rgba(5, 7, 10, 0.3) 100%),
-          radial-gradient(circle at center, rgba(0, 0, 0, 0) 44%, rgba(0, 0, 0, 0.32) 100%);
-      }
       #hud {
         position: absolute;
         left: 50%;
         bottom: 34px;
         transform: translateX(-50%);
-        width: min(880px, calc(100vw - 56px));
-        padding: 22px 24px 20px;
-        border-radius: 34px;
+        width: min(980px, calc(100vw - 64px));
+        padding: 20px 22px 18px;
+        border-radius: 28px;
         border: 1px solid var(--panel-border);
-        background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.03) 16%, rgba(255, 255, 255, 0) 100%),
-          var(--panel-bg);
-        box-shadow:
-          0 28px 90px rgba(0, 0, 0, 0.42),
-          inset 0 1px 0 var(--panel-highlight),
-          inset 0 -1px 0 rgba(255, 255, 255, 0.04);
-        backdrop-filter: blur(28px) saturate(145%);
+        background: var(--panel-bg);
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
         pointer-events: none;
         box-sizing: border-box;
-        z-index: 3;
+        z-index: 2;
       }
       #panelTop {
         display: flex;
@@ -113,10 +87,9 @@
         min-width: 0;
       }
       #eyebrow {
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 0.18em;
-        text-transform: uppercase;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
         color: var(--text-muted);
         white-space: nowrap;
       }
@@ -128,15 +101,14 @@
         flex: 0 0 auto;
       }
       #mediaType {
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
         color: var(--text-muted);
         white-space: nowrap;
       }
       #title {
-        font-size: 31px;
+        font-size: 29px;
         font-weight: 700;
         line-height: 1.08;
         letter-spacing: -0.03em;
@@ -163,16 +135,14 @@
       }
       #statusBadge {
         position: static;
-        padding: 10px 14px;
+        padding: 9px 13px;
         border-radius: 999px;
         background: rgba(255, 255, 255, 0.1);
         border: 1px solid rgba(255, 255, 255, 0.08);
         color: var(--text-primary);
         font-size: 12px;
-        font-weight: 700;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        backdrop-filter: blur(14px);
+        font-weight: 600;
+        letter-spacing: 0.01em;
       }
       #statusBadge[data-state="buffering"] {
         background: rgba(255, 211, 102, 0.14);
@@ -186,23 +156,10 @@
         background: rgba(134, 239, 172, 0.12);
         color: rgba(214, 255, 224, 0.98);
       }
-      #floatingPanelGlow {
-        position: absolute;
-        inset: -1px;
-        border-radius: inherit;
-        pointer-events: none;
-        background: linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0));
-        opacity: 0.55;
-        mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-        -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-        padding: 1px;
-        mask-composite: exclude;
-        -webkit-mask-composite: xor;
-      }
       #timeline {
         display: flex;
         flex-direction: column;
-        gap: 12px;
+        gap: 10px;
       }
       #progressTrack {
         width: 100%;
@@ -248,7 +205,7 @@
         #hud {
           width: calc(100vw - 36px);
           padding: 18px 18px 16px;
-          border-radius: 28px;
+          border-radius: 24px;
           bottom: 18px;
         }
         #panelTop {
@@ -268,15 +225,12 @@
   </head>
   <body>
     <div id="app">
-      <div id="ambient"></div>
       <cast-media-player></cast-media-player>
-      <div id="vignette"></div>
       <div id="hud">
-        <div id="floatingPanelGlow"></div>
         <div id="panelTop">
           <div id="meta">
             <div id="eyebrowRow">
-              <div id="eyebrow">Casting</div>
+              <div id="eyebrow">Casting to TV</div>
               <div id="dot"></div>
               <div id="mediaType">Video</div>
             </div>
@@ -319,6 +273,7 @@
       let lastProgressAtMs = 0;
       let lastWaitingAtMs = 0;
       let lastSmoothedState = "loading";
+      let hasPlaybackStarted = false;
 
       const formatTime = (value) => {
         const totalSeconds = Math.max(0, Math.floor(Number(value || 0)));
@@ -337,8 +292,18 @@
         if (isAdvancing && normalizedTime > lastDisplayTimeSeconds + 0.05) {
           lastProgressAtMs = now;
         }
-        lastDisplayTimeSeconds = normalizedTime;
+        if (
+          normalizedTime > lastDisplayTimeSeconds + 0.05 ||
+          normalizedTime < lastDisplayTimeSeconds - 2 ||
+          !hasPlaybackStarted ||
+          !isAdvancing
+        ) {
+          lastDisplayTimeSeconds = normalizedTime;
+        }
         lastDisplayTimeAtMs = now;
+        if (normalizedTime > 0.05) {
+          hasPlaybackStarted = true;
+        }
       };
 
       const getSmoothedState = (playerState, currentTime) => {
@@ -395,12 +360,19 @@
 
         updateDisplayClock(currentTime, smoothedState === "playing");
 
+        const displayedTime = smoothedState === "playing" && hasPlaybackStarted
+          ? Math.max(lastDisplayTimeSeconds, currentTime)
+          : currentTime;
+        const displayedRatio = durationSeconds > 0
+          ? Math.max(0, Math.min(1, displayedTime / durationSeconds))
+          : ratio;
+
         titleElement.textContent = title;
         subtitleElement.textContent = subtitle;
         mediaTypeElement.textContent = subtitle ? "Episode" : "Movie";
-        currentTimeElement.textContent = formatTime(currentTime);
+        currentTimeElement.textContent = formatTime(displayedTime);
         durationElement.textContent = formatTime(durationSeconds);
-        progressFillElement.style.width = `${ratio * 100}%`;
+        progressFillElement.style.width = `${displayedRatio * 100}%`;
         statusBadgeElement.dataset.state = smoothedState;
         statusBadgeElement.textContent =
           smoothedState === "buffering" ? "Buffering" :
