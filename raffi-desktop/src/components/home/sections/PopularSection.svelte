@@ -81,9 +81,9 @@
         x={contextMenuX}
         y={contextMenuY}
         showTrailer={Boolean(selectedTrailerId)}
-        on:close={() => (showContextMenu = false)}
-        on:addToList={handleAddToList}
-        on:viewTrailer={handleViewTrailer}
+        onClose={() => (showContextMenu = false)}
+        onAddToList={handleAddToList}
+        onViewTrailer={handleViewTrailer}
     />
 {/if}
 
@@ -91,14 +91,12 @@
     bind:visible={showListsPopup}
     imdbId={selectedImdbId}
     type={selectedType}
-    on:close={() => (showListsPopup = false)}
 />
 
 {#if selectedTrailerId}
     <TrailerModal
         bind:visible={showTrailerModal}
         ytId={selectedTrailerId}
-        on:close={() => (showTrailerModal = false)}
     />
 {/if}
 

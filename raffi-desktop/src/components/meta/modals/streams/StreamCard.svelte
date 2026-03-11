@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { createEventDispatcher } from "svelte";
     import { Link2 } from "lucide-svelte";
     import type { EnrichedStream } from "./types";
 
@@ -7,7 +6,7 @@
     export let showPeers = false;
     export let disabled = false;
 
-    const dispatch = createEventDispatcher();
+    export let onClick: () => void = () => {};
 </script>
 
 <button
@@ -17,7 +16,7 @@
     disabled={disabled}
     on:click={() => {
         if (disabled) return;
-        dispatch("click");
+        onClick();
     }}
 >
     <div class="flex flex-row justify-between items-start w-full gap-4">

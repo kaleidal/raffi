@@ -27,8 +27,8 @@
 >
     <SearchBar
         absolute={false}
-        on:openAddons={() => ($showAddonsModal = true)}
-        on:openSettings={() => ($showSettingsModal = true)}
+        onOpenAddons={() => ($showAddonsModal = true)}
+        onOpenSettings={() => ($showSettingsModal = true)}
     />
 
     {#if $loaded}

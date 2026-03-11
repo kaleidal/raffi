@@ -1,6 +1,5 @@
 <script lang="ts">
     import { fade } from "svelte/transition";
-    import { createEventDispatcher, onMount } from "svelte";
     import {
         getLists,
         addToList,
@@ -31,7 +30,7 @@
     export let imdbId: string;
     export let type: string;
 
-    const dispatch = createEventDispatcher();
+    export let onClose: () => void = () => {};
 
     let lists: List[] = [];
     let memberOf: Set<string> = new Set();
@@ -61,7 +60,8 @@
         trackEvent("list_modal_closed", {
             list_count: lists.length,
         });
-        dispatch("close");
+        visible = false;
+        onClose();
     }
 
     async function loadLists() {

@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { createEventDispatcher, onMount } from "svelte";
+    import { onMount } from "svelte";
     import { fade } from "svelte/transition";
     import { Film, X, Plus, Trash } from "lucide-svelte";
 
@@ -7,7 +7,11 @@
     export let y: number;
     export let showTrailer = false;
 
-    const dispatch = createEventDispatcher();
+    export let onClose: () => void = () => {};
+    export let onRemove: () => void = () => {};
+    export let onForget: () => void = () => {};
+    export let onAddToList: () => void = () => {};
+    export let onViewTrailer: () => void = () => {};
 
     const portal = (node: HTMLElement) => {
         if (typeof document === "undefined") {
@@ -25,26 +29,26 @@
 
 
     function close() {
-        dispatch("close");
+        onClose();
     }
 
     function handleRemove() {
-        dispatch("remove");
+        onRemove();
         close();
     }
 
     function handleForget() {
-        dispatch("forget");
+        onForget();
         close();
     }
 
     function handleAddToList() {
-        dispatch("addToList");
+        onAddToList();
         close();
     }
 
     function handleViewTrailer() {
-        dispatch("viewTrailer");
+        onViewTrailer();
         close();
     }
 

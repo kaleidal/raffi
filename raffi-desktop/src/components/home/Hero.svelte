@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { createEventDispatcher, onMount } from "svelte";
+    import { onMount } from "svelte";
     import { Info, Play, Pause, VolumeX, Volume2 } from "lucide-svelte";
     import type { PopularTitleMeta } from "../../lib/library/types/popular_types";
     import { router } from "../../lib/stores/router";
@@ -7,7 +7,7 @@
 
     export let showcasedTitle: PopularTitleMeta;
 
-    const dispatch = createEventDispatcher();
+    export let onLogoError: () => void = () => {};
 
     let playerIframe: HTMLIFrameElement;
     let container: HTMLDivElement;
@@ -157,7 +157,7 @@
                 src={showcasedTitle.logo}
                 alt="Logo"
                 class="w-[600px] h-auto max-h-[220px] object-contain"
-                on:error={() => dispatch("logoError")}
+                on:error={onLogoError}
             />
         {:else}
             <h1 class="text-white text-6xl font-poppins font-bold max-w-[700px] leading-[1.05]">

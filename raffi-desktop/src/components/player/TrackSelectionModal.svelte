@@ -1,6 +1,6 @@
 <script lang="ts">
     import { fade, scale } from "svelte/transition";
-    import { createEventDispatcher, onMount } from "svelte";
+    import { onMount } from "svelte";
 
     import * as Subtitles from "../../pages/player/subtitles";
 
@@ -34,19 +34,22 @@
         format?: "vtt" | "srt";
     }[];
 
-    const dispatch = createEventDispatcher();
+    export let onSelect: (track: any) => void = () => {};
+    export let onClose: () => void = () => {};
+    export let onDelayChange: (detail: { seconds: number }) => void = () => {};
+    export let onAddLocalSubtitle: (track: any) => void = () => {};
 
     function select(track: any) {
-        dispatch("select", track);
-        dispatch("close");
+        onSelect(track);
+        onClose();
     }
 
     function selectWithoutClose(track: any) {
-        dispatch("select", track);
+        onSelect(track);
     }
 
     function close() {
-        dispatch("close");
+        onClose();
     }
 
     // Group tracks if needed
@@ -129,7 +132,7 @@
         const clamped = Math.max(-30, Math.min(30, Number(next)));
         delaySeconds = Number.isFinite(clamped) ? clamped : 0;
         Subtitles.setSubtitleDelaySeconds(delaySeconds);
-        dispatch("delayChange", { seconds: delaySeconds });
+        onDelayChange({ seconds: delaySeconds });
     }
 
     function onUploadSrt(e: Event) {
@@ -150,7 +153,7 @@
             format: "srt" as const,
         };
 
-        dispatch("addLocalSubtitle", track);
+        onAddLocalSubtitle(track);
         // Immediately select it.
         select(track);
 

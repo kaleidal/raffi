@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { createEventDispatcher } from "svelte";
     import LoadingSpinner from "../../../common/LoadingSpinner.svelte";
     import StreamCard from "./StreamCard.svelte";
     import type { EnrichedStream } from "./types";
@@ -10,10 +9,10 @@
     export let localFilteredStreams: EnrichedStream[] = [];
     export let addonFilteredStreams: EnrichedStream[] = [];
 
-    const dispatch = createEventDispatcher();
+    export let onStreamClick: (stream: any) => void = () => {};
 
-    const onStreamClick = (stream: any) => {
-        dispatch("streamClick", stream);
+    const handleStreamClick = (stream: any) => {
+        onStreamClick(stream);
     };
 </script>
 
@@ -39,7 +38,7 @@
                 <StreamCard
                     {item}
                     disabled={item.isFailed}
-                    on:click={() => onStreamClick(item.stream)}
+                    onClick={() => handleStreamClick(item.stream)}
                 />
             {/each}
 
@@ -59,7 +58,7 @@
                     {item}
                     showPeers
                     disabled={item.isFailed}
-                    on:click={() => onStreamClick(item.stream)}
+                    onClick={() => handleStreamClick(item.stream)}
                 />
             {/each}
         {/if}

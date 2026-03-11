@@ -466,14 +466,13 @@
     {#if fetchedTitles}
         <div in:fade={{ duration: 300 }}>
             {#if showcasedTitle}
-                <Hero {showcasedTitle} on:logoError={refreshFeatured} />
+                <Hero {showcasedTitle} onLogoError={refreshFeatured} />
                 <div class="w-full h-[6px] -mt-[3px] bg-[#090909] relative z-20"></div>
             {/if}
 
             <SearchBar
-                on:openAddons={handleOpenAddons}
-                on:openSettings={handleOpenSettings}
-                on:openProfile={() => {}}
+                onOpenAddons={handleOpenAddons}
+                onOpenSettings={handleOpenSettings}
                 onLogoClick={refreshFeatured}
             />
 

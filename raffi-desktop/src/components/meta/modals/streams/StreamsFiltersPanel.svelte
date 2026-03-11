@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { createEventDispatcher } from "svelte";
     import { ChevronDown, ChevronUp } from "lucide-svelte";
     import type { AudioFilter, ResolutionFilter } from "./types";
 
@@ -16,7 +15,14 @@
     export let providerFilterOptions: string[] = ["all"];
     export let resolutionFilters: Array<{ label: string; value: ResolutionFilter }> = [];
 
-    const dispatch = createEventDispatcher();
+    export let onToggleFiltersCollapsed: () => void = () => {};
+    export let onSetResolutionFilter: (value: ResolutionFilter) => void = () => {};
+    export let onSetProviderFilter: (value: string) => void = () => {};
+    export let onSetAudioFilter: (value: AudioFilter) => void = () => {};
+    export let onToggleIgnoreSubbed: () => void = () => {};
+    export let onToggleExcludeDubbed: () => void = () => {};
+    export let onToggleExcludeHDR: () => void = () => {};
+    export let onResetFilters: () => void = () => {};
 </script>
 
 <div class="bg-white/5 rounded-2xl border border-white/5 p-4 flex flex-col gap-3">
@@ -27,7 +33,7 @@
         <button
             type="button"
             class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold tracking-wide uppercase bg-white/10 text-white/80 hover:bg-white/20 transition-colors duration-200 cursor-pointer"
-            on:click={() => dispatch("toggleFiltersCollapsed")}
+            on:click={onToggleFiltersCollapsed}
         >
             {filtersCollapsed ? "Expand" : "Collapse"}
             {#if filtersCollapsed}
@@ -49,7 +55,7 @@
                         option.value
                             ? 'bg-white text-black shadow shadow-white/40'
                             : 'bg-white/10 text-white/70 hover:bg-white/20 cursor-pointer'}"
-                        on:click={() => dispatch("setResolutionFilter", option.value)}
+                        on:click={() => onSetResolutionFilter(option.value)}
                     >
                         {option.label}
                     </button>
@@ -67,7 +73,7 @@
                         option
                             ? 'bg-white text-black shadow shadow-white/40'
                             : 'bg-white/10 text-white/70 hover:bg-white/20 cursor-pointer'}"
-                        on:click={() => dispatch("setProviderFilter", option)}
+                        on:click={() => onSetProviderFilter(option)}
                     >
                         {option === "all" ? "All" : option}
                     </button>
@@ -84,7 +90,7 @@
                     'all'
                         ? 'bg-white text-black shadow shadow-white/40'
                         : 'bg-white/10 text-white/70 hover:bg-white/20 cursor-pointer'}"
-                    on:click={() => dispatch("setAudioFilter", "all")}
+                    on:click={() => onSetAudioFilter("all")}
                 >
                     All
                 </button>
@@ -94,7 +100,7 @@
                     'dubbed'
                         ? 'bg-white text-black shadow shadow-white/40'
                         : 'bg-white/10 text-white/70 hover:bg-white/20 cursor-pointer'}"
-                    on:click={() => dispatch("setAudioFilter", "dubbed")}
+                    on:click={() => onSetAudioFilter("dubbed")}
                 >
                     Dubbed
                 </button>
@@ -104,7 +110,7 @@
                     'subbed'
                         ? 'bg-white text-black shadow shadow-white/40'
                         : 'bg-white/10 text-white/70 hover:bg-white/20 cursor-pointer'}"
-                    on:click={() => dispatch("setAudioFilter", "subbed")}
+                    on:click={() => onSetAudioFilter("subbed")}
                 >
                     Subbed
                 </button>
@@ -113,7 +119,7 @@
                     class="px-3 py-1.5 rounded-full text-[11px] font-semibold tracking-wide uppercase transition-colors duration-200 cursor-pointer {ignoreSubbed
                         ? 'bg-[#FFDD57] text-black'
                         : 'bg-white/10 text-white/70 hover:bg-white/20'}"
-                    on:click={() => dispatch("toggleIgnoreSubbed")}
+                    on:click={onToggleIgnoreSubbed}
                 >
                     {ignoreSubbed ? "Ignoring subbed" : "Include subbed"}
                 </button>
@@ -122,7 +128,7 @@
                     class="px-3 py-1.5 rounded-full text-[11px] font-semibold tracking-wide uppercase transition-colors duration-200 cursor-pointer {excludeDubbed
                         ? 'bg-[#FFDD57] text-black'
                         : 'bg-white/10 text-white/70 hover:bg-white/20'}"
-                    on:click={() => dispatch("toggleExcludeDubbed")}
+                    on:click={onToggleExcludeDubbed}
                 >
                     {excludeDubbed ? "Excluding dubbed" : "Include dubbed"}
                 </button>
@@ -136,7 +142,7 @@
                 class="px-3 py-1.5 rounded-full text-[11px] font-semibold tracking-wide uppercase transition-colors duration-200 cursor-pointer {excludeHDR
                     ? 'bg-[#FFDD57] text-black'
                     : 'bg-white/10 text-white/70 hover:bg-white/20'}"
-                on:click={() => dispatch("toggleExcludeHDR")}
+                on:click={onToggleExcludeHDR}
             >
                 {excludeHDR ? "Excluded" : "Include"}
             </button>
@@ -144,7 +150,7 @@
                 <button
                     type="button"
                     class="ml-auto text-xs text-white/50 hover:text-white/80 underline decoration-dotted cursor-pointer"
-                    on:click={() => dispatch("resetFilters")}
+                    on:click={onResetFilters}
                 >
                     Reset filters
                 </button>

@@ -1,6 +1,5 @@
 <script lang="ts">
     import { fade, scale } from "svelte/transition";
-    import { createEventDispatcher } from "svelte";
 
     const portal = (node: HTMLElement) => {
         if (typeof document === "undefined") {
@@ -20,11 +19,11 @@
     export let visible = false;
     export let ytId: string;
 
-    const dispatch = createEventDispatcher();
+    export let onClose: () => void = () => {};
 
     function close() {
         visible = false;
-        dispatch("close");
+        onClose();
     }
 </script>
 

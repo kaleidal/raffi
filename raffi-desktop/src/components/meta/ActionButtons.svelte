@@ -43,7 +43,6 @@
         bind:visible={listsPopupVisible}
         imdbId={metaData.meta.imdb_id}
         type={metaData.meta.type}
-        on:close={() => (listsPopupVisible = false)}
     />
 
     <button
@@ -62,7 +61,6 @@
         <TrailerModal
             bind:visible={trailerVisible}
             ytId={metaData.meta.trailers[0].source}
-            on:close={() => (trailerVisible = false)}
         />
     {/if}
 </div>

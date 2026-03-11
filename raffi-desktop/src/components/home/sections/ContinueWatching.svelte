@@ -224,11 +224,11 @@
         x={contextMenuX}
         y={contextMenuY}
         showTrailer={Boolean(selectedTrailerId)}
-        on:close={() => (showContextMenu = false)}
-        on:remove={handleRemove}
-        on:forget={handleForget}
-        on:addToList={handleAddToList}
-        on:viewTrailer={handleViewTrailer}
+        onClose={() => (showContextMenu = false)}
+        onRemove={handleRemove}
+        onForget={handleForget}
+        onAddToList={handleAddToList}
+        onViewTrailer={handleViewTrailer}
     />
 {/if}
 
@@ -236,14 +236,12 @@
     bind:visible={showListsPopup}
     imdbId={selectedImdbId}
     type={selectedType}
-    on:close={() => (showListsPopup = false)}
 />
 
 {#if selectedTrailerId}
     <TrailerModal
         bind:visible={showTrailerModal}
         ytId={selectedTrailerId}
-        on:close={() => (showTrailerModal = false)}
     />
 {/if}
 
