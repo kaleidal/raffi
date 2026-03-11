@@ -64,17 +64,19 @@ func (s *Server) handleClip(w http.ResponseWriter, r *http.Request, id string) {
 	}
 
 	outputPath := strings.TrimSpace(req.OutputPath)
-	if outputPath == "" {
-		clipsDir, derr := defaultClipsDir()
-		if derr != nil {
-			http.Error(w, fmt.Sprintf("failed to resolve clips dir: %v", derr), http.StatusInternalServerError)
-			return
-		}
-		if err := os.MkdirAll(clipsDir, 0o755); err != nil {
-			http.Error(w, fmt.Sprintf("failed to create clips dir: %v", err), http.StatusInternalServerError)
-			return
-		}
 
+	// Resolve and ensure the base clips directory exists.
+	clipsDir, derr := defaultClipsDir()
+	if derr != nil {
+		http.Error(w, fmt.Sprintf("failed to resolve clips dir: %v", derr), http.StatusInternalServerError)
+		return
+	}
+	if err := os.MkdirAll(clipsDir, 0o755); err != nil {
+		http.Error(w, fmt.Sprintf("failed to create clips dir: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	if outputPath == "" {
 		baseName := strings.TrimSpace(req.Name)
 		if baseName == "" {
 			baseName = fmt.Sprintf("clip_%s", time.Now().Format("20060102_150405"))
@@ -85,15 +87,42 @@ func (s *Server) handleClip(w http.ResponseWriter, r *http.Request, id string) {
 		}
 		outputPath = filepath.Join(clipsDir, baseName)
 	} else {
-		// Ensure directory exists when a full path is provided.
-		if !strings.HasSuffix(strings.ToLower(outputPath), ".mp4") {
-			outputPath += ".mp4"
-		}
-		outDir := filepath.Dir(outputPath)
-		if err := os.MkdirAll(outDir, 0o755); err != nil {
-			http.Error(w, fmt.Sprintf("failed to create output dir: %v", err), http.StatusInternalServerError)
+		// Treat user-provided outputPath as a relative path within clipsDir and validate it.
+		cleanRel := filepath.Clean(outputPath)
+		// Prevent absolute paths and parent directory traversal.
+		if strings.HasPrefix(cleanRel, string(os.PathSeparator)) || strings.HasPrefix(cleanRel, ".."+string(os.PathSeparator)) || cleanRel == ".." {
+			http.Error(w, "invalid output path", http.StatusBadRequest)
 			return
 		}
+
+		outputPath = filepath.Join(clipsDir, cleanRel)
+	}
+
+	// Ensure the final outputPath is within the clipsDir and has the correct extension.
+	absClipsDir, err := filepath.Abs(clipsDir)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to resolve clips dir: %v", err), http.StatusInternalServerError)
+		return
+	}
+	absOutputPath, err := filepath.Abs(outputPath)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to resolve output path: %v", err), http.StatusBadRequest)
+		return
+	}
+	if absOutputPath == absClipsDir || !strings.HasPrefix(absOutputPath+string(os.PathSeparator), absClipsDir+string(os.PathSeparator)) {
+		http.Error(w, "invalid output path", http.StatusBadRequest)
+		return
+	}
+
+	if !strings.HasSuffix(strings.ToLower(absOutputPath), ".mp4") {
+		absOutputPath += ".mp4"
+	}
+	outputPath = absOutputPath
+
+	outDir := filepath.Dir(outputPath)
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		http.Error(w, fmt.Sprintf("failed to create output dir: %v", err), http.StatusInternalServerError)
+		return
 	}
 
 	// Timeout: duration-scaled but capped.
