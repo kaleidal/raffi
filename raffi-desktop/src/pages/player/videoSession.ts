@@ -560,7 +560,7 @@ export function performSeek(
 export function createSeekHandler(
     videoElem: HTMLVideoElement,
     getHls: () => Hls | null,
-    sessionId: string,
+    getSessionId: () => string,
     getPendingSeek: () => number | null,
     getSeekGuard: () => boolean,
     getPlaybackOffset: () => number,
@@ -597,6 +597,13 @@ export function createSeekHandler(
         setLoading(true);
         setShowCanvas(true);
         setFirstSeekLoad(true);
+        const sessionId = getSessionId();
+        if (!sessionId) {
+            setSeekGuard(false);
+            setLoading(false);
+            setShowCanvas(false);
+            return;
+        }
         const seekId = Math.random().toString(36).substring(7);
         const url = `${getStreamUrl(sessionId)}/child.m3u8?seek=${Math.floor(desiredGlobal)}&seek_id=${seekId}&force_slice=1`;
         console.log("Hard seek to", desiredGlobal, "->", url);
