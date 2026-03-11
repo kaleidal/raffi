@@ -4,7 +4,14 @@ export interface Chapter {
     startTime: number;
     endTime: number;
     title: string;
+    kind?: ChapterKind;
+    source?: ChapterSource;
+    confidence?: number | null;
+    submissionCount?: number | null;
 }
+
+export type ChapterKind = "intro" | "recap" | "outro" | "chapter";
+export type ChapterSource = "native" | "introdb" | "fallback";
 
 export interface Track {
     id: string | number;
