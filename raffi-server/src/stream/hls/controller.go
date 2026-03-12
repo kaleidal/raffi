@@ -26,11 +26,11 @@ type Controller struct {
 	startCmd  TranscoderFunc
 }
 
-func NewController() *Controller {
+func NewController(ffmpegPath, ffprobePath string) *Controller {
 	return &Controller{
 		sessions:  make(map[string]*Session),
-		ffprobeFn: ProbeDuration,
-		startCmd:  DefaultTranscoder,
+		ffprobeFn: NewProbeDuration(ffprobePath),
+		startCmd:  NewTranscoder(ffmpegPath),
 	}
 }
 

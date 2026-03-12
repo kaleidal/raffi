@@ -28,6 +28,8 @@
     "cross-env": "^10.1.0",
     "electron": "^40.8.0",
     "electron-builder": "^26.8.1",
+    "ffmpeg-static": "^5.3.0",
+    "ffprobe-static": "^3.1.0",
     "png-to-ico": "^3.0.1",
     "svelte": "^5.53.10",
     "svelte-check": "^4.4.5",
@@ -65,6 +67,14 @@
         {
           "from": "electron/decoder-x86_64-unknown-linux-gnu",
           "to": "decoder-x86_64-unknown-linux-gnu"
+        },
+        {
+          "from": "electron/ffmpeg",
+          "to": "ffmpeg"
+        },
+        {
+          "from": "electron/ffprobe",
+          "to": "ffprobe"
         }
       ]
     },
@@ -84,6 +94,14 @@
         {
           "from": "electron/decoder-x86_64-apple-darwin",
           "to": "decoder-x86_64-apple-darwin"
+        },
+        {
+          "from": "electron/ffmpeg",
+          "to": "ffmpeg"
+        },
+        {
+          "from": "electron/ffprobe",
+          "to": "ffprobe"
         }
       ]
     },
@@ -97,6 +115,14 @@
         {
           "from": "electron/decoder-windows-amd64.exe",
           "to": "decoder-windows-amd64.exe"
+        },
+        {
+          "from": "electron/ffmpeg.exe",
+          "to": "ffmpeg.exe"
+        },
+        {
+          "from": "electron/ffprobe.exe",
+          "to": "ffprobe.exe"
         }
       ]
     },
@@ -148,6 +174,7 @@
   "trustedDependencies": [
     "core-js",
     "electron",
+    "ffmpeg-static",
     "protobufjs"
   ]
 }
