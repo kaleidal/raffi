@@ -16,12 +16,14 @@
     "electron:dev:only": "cross-env ELECTRON_DISABLE_SANDBOX=1 electron .",
     "build": "vite build",
     "server:build": "node build_binary.cjs",
-    "dist": "npm run server:build && npm run build && electron-builder"
+    "dist": "npm run server:build && npm run build && electron-builder",
+    "check": "svelte-check --tsconfig ./tsconfig.json"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^6.2.4",
     "@tsconfig/svelte": "^5.0.8",
     "@types/node": "^25.4.0",
+    "@typescript-eslint/types": "^8.57.0",
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
     "electron": "^40.8.0",
@@ -134,7 +136,6 @@
     "@ave-id/sdk": "^0.3.4",
     "@ryuziii/discord-rpc": "^1.0.1-rc.1",
     "@tailwindcss/vite": "^4.2.1",
-    "chromecast-api": "^0.4.2",
     "convex": "^1.32.0",
     "electron-updater": "^6.8.3",
     "eventemitter3": "^5.0.4",

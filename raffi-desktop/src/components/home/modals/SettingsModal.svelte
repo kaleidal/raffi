@@ -345,7 +345,6 @@
 									<LocalModeSignInSection aveLoading={aveLoading} onAveLogin={handleAveLogin} />
 								{:else if $currentUser}
 									<AccountSection
-										{message}
 										{error}
 										onSyncNow={syncNow}
 										onDownloadData={downloadData}
@@ -355,7 +354,7 @@
 									<AccountStateMismatchSection onRecoverToLocalMode={recoverToLocalMode} />
 								{/if}
 
-											<PrivacySection />
+								<PrivacySection />
 
 								<UpdateSection
 									available={$updateStatus.available}
