@@ -53,19 +53,7 @@
         --progress-color: rgba(255, 255, 255, 0.88);
       }
       #hud {
-        position: absolute;
-        left: 50%;
-        bottom: 34px;
-        transform: translateX(-50%);
-        width: min(980px, calc(100vw - 64px));
-        padding: 20px 22px 18px;
-        border-radius: 28px;
-        border: 1px solid var(--panel-border);
-        background: var(--panel-bg);
-        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
-        pointer-events: none;
-        box-sizing: border-box;
-        z-index: 2;
+        display: none !important;
       }
       #panelTop {
         display: flex;
@@ -202,12 +190,6 @@
         transform: translateY(0);
       }
       @media (max-width: 900px) {
-        #hud {
-          width: calc(100vw - 36px);
-          padding: 18px 18px 16px;
-          border-radius: 24px;
-          bottom: 18px;
-        }
         #panelTop {
           gap: 14px;
         }
