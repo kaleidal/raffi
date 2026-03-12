@@ -19,7 +19,7 @@
 
 {#if open}
     <div
-        class="fixed inset-0 z-[220] bg-black/80 backdrop-blur-sm flex items-center justify-center"
+        class="fixed inset-0 z-[220] bg-[#101010]/58 backdrop-blur-xl flex items-center justify-center p-5"
         role="dialog"
         aria-modal="true"
         tabindex="0"
@@ -28,42 +28,63 @@
             if (e.key === "Escape") onCancel();
         }}
     >
-        <div class="w-[720px] max-w-[86vw] max-h-[82vh] rounded-[24px] border border-white/10 bg-[#181818]/90 backdrop-blur-xl text-white shadow-2xl p-6 flex flex-col gap-5">
-            <div class="flex items-center justify-between">
-                <h2 class="text-[28px] font-poppins font-medium">Cast to a device</h2>
+        <div class="w-full max-w-[760px] max-h-[82vh] rounded-4xl bg-[#2b2b2b]/56 backdrop-blur-[40px] text-white shadow-[0_40px_160px_rgba(0,0,0,0.45)] p-6 md:p-8 flex flex-col gap-6 overflow-hidden">
+            <div class="flex items-start justify-between gap-4">
+                <div class="space-y-2">
+                    <p class="text-[12px] uppercase tracking-[0.18em] text-white/42 font-semibold">Chromecast</p>
+                    <h2 class="text-[30px] leading-none font-poppins font-semibold">Cast to a device</h2>
+                    <p class="text-sm text-white/58 max-w-[420px]">
+                        Pick the cast flow that fits this session, then hand playback off without losing your place.
+                    </p>
+                </div>
                 <button
-                    class="bg-[#2C2C2C]/80 p-[12px] rounded-[14px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer text-sm"
+                    class="rounded-2xl bg-white/8 px-4 py-2.5 text-sm font-medium text-white/82 hover:bg-white/14 transition-colors cursor-pointer shrink-0"
                     on:click={onCancel}
                 >
-                    Cancel
+                    Close
                 </button>
             </div>
 
             {#if step === "mode"}
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid gap-4 md:grid-cols-2">
                     <button
-                        class="rounded-[20px] border border-white/15 bg-[#242424]/80 px-5 py-5 text-left transition-colors duration-200 hover:bg-[#2b2b2b]/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                        class="rounded-[28px] bg-white/[0.07] px-6 py-6 text-left transition-colors duration-200 hover:bg-white/[0.1] disabled:opacity-50 disabled:cursor-not-allowed min-h-[220px] flex flex-col justify-between"
                         on:click={onChrome}
                         disabled={loading}
                     >
-                        <p class="text-base font-semibold text-white">Cast via Chrome</p>
-                        <p class="text-sm text-white/70 mt-2">Opens Chrome/Edge and starts casting with reliable device discovery.</p>
+                        <div class="space-y-3">
+                            <p class="text-[11px] uppercase tracking-[0.18em] text-white/40 font-semibold">Recommended</p>
+                            <p class="text-xl font-semibold text-white">Browser Cast</p>
+                            <p class="text-sm text-white/65 leading-relaxed">
+                                Opens Chrome or Edge for the most reliable device picker and Chromecast session handoff.
+                            </p>
+                        </div>
+                        <p class="text-sm font-medium text-white/72">Best when device discovery is flaky.</p>
                     </button>
 
                     <button
-                        class="rounded-[20px] border border-white/15 bg-[#242424]/80 px-5 py-5 text-left transition-colors duration-200 hover:bg-[#2b2b2b]/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                        class="rounded-[28px] bg-white/[0.07] px-6 py-6 text-left transition-colors duration-200 hover:bg-white/[0.1] disabled:opacity-50 disabled:cursor-not-allowed min-h-[220px] flex flex-col justify-between"
                         on:click={onNative}
                         disabled={loading}
                     >
-                        <p class="text-base font-semibold text-white">Attempt Native</p>
-                        <p class="text-sm text-white/70 mt-2">Use in-app native casting with direct device selection.</p>
+                        <div class="space-y-3">
+                            <p class="text-[11px] uppercase tracking-[0.18em] text-white/40 font-semibold">In App</p>
+                            <p class="text-xl font-semibold text-white">Native Cast</p>
+                            <p class="text-sm text-white/65 leading-relaxed">
+                                Stays inside Raffi and connects directly to Chromecast devices we discover on your LAN.
+                            </p>
+                        </div>
+                        <p class="text-sm font-medium text-white/72">Faster when native discovery works cleanly.</p>
                     </button>
                 </div>
             {:else}
-                <div class="flex items-center justify-between">
-                    <p class="text-sm text-white/70">Select a Chromecast device</p>
+                <div class="flex items-center justify-between gap-3">
+                    <div>
+                        <p class="text-lg font-semibold text-white">Choose a Chromecast</p>
+                        <p class="text-sm text-white/58">Available devices on your local network.</p>
+                    </div>
                     <button
-                        class="rounded-[12px] bg-[#2C2C2C]/80 px-3 py-1.5 text-sm hover:bg-[#2C2C2C]/50"
+                        class="rounded-2xl bg-white/8 px-4 py-2 text-sm font-medium text-white/82 hover:bg-white/14 transition-colors"
                         on:click={onBackToMode}
                         disabled={loading}
                     >
@@ -71,18 +92,27 @@
                     </button>
                 </div>
 
-                <div class="max-h-[300px] overflow-y-auto rounded-[20px] border border-white/10 bg-[#202020]/70 p-3 flex flex-col gap-2">
+                <div class="max-h-[360px] overflow-y-auto rounded-[28px] bg-black/18 p-3 flex flex-col gap-2">
                     {#if nativeDevices.length === 0 && !loading}
-                        <p class="text-sm text-white/60 px-2 py-3">No devices found yet. Keep this open and try again.</p>
+                        <div class="rounded-[22px] bg-white/[0.05] px-4 py-5 text-sm text-white/58">
+                            No devices found yet. Keep this open for a moment or switch to Browser Cast.
+                        </div>
                     {:else}
                         {#each nativeDevices as device}
                             <button
-                                class="w-full rounded-[14px] border border-white/10 bg-[#2a2a2a]/80 px-4 py-3 text-left hover:bg-[#343434]/90 transition-colors"
+                                class="w-full rounded-[22px] bg-white/[0.06] px-4 py-4 text-left hover:bg-white/[0.1] transition-colors"
                                 on:click={() => onSelectNativeDevice({ deviceId: device.id })}
                                 disabled={loading}
                             >
-                                <p class="text-sm font-medium text-white">{device.name || "Chromecast"}</p>
-                                <p class="text-xs text-white/60 mt-1">{device.host}</p>
+                                <div class="flex items-center justify-between gap-4">
+                                    <div class="min-w-0">
+                                        <p class="text-base font-medium text-white truncate">{device.name || "Chromecast"}</p>
+                                        <p class="text-xs text-white/50 mt-1 truncate">{device.host}</p>
+                                    </div>
+                                    <span class="rounded-full bg-white/8 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/52 shrink-0">
+                                        Cast
+                                    </span>
+                                </div>
                             </button>
                         {/each}
                     {/if}
@@ -90,10 +120,10 @@
             {/if}
 
             {#if loading}
-                <div class="flex items-center gap-3 rounded-[20px] border border-white/10 bg-[#242424]/80 px-5 py-4">
-                    <div class="h-5 w-5 rounded-full border-2 border-white/30 border-t-white animate-spin"></div>
-                    <p class="text-sm text-white/80">
-                        {loadingMode === "chrome" ? "Opening Chrome casting flow…" : "Opening native Cast picker…"}
+                <div class="flex items-center gap-3 rounded-[24px] bg-white/[0.07] px-5 py-4">
+                    <div class="h-5 w-5 rounded-full border-2 border-white/26 border-t-white animate-spin"></div>
+                    <p class="text-sm text-white/78">
+                        {loadingMode === "chrome" ? "Opening browser cast flow..." : "Scanning for Chromecast devices..."}
                     </p>
                 </div>
             {/if}
