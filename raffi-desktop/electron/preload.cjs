@@ -29,6 +29,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.invoke('SHOW_ALERT_DIALOG', { message, title }),
     showSelectDialog: (message, title, options) =>
         ipcRenderer.invoke('SHOW_SELECT_DIALOG', { message, title, options }),
+    fetchIntroDbSegments: (imdbId, season, episode) =>
+        ipcRenderer.invoke('INTRODB_FETCH_SEGMENTS', { imdbId, season, episode }),
     localLibrary: {
         pickFolder: () => ipcRenderer.invoke('LOCAL_LIBRARY_PICK_FOLDER'),
         scan: (roots) => ipcRenderer.invoke('LOCAL_LIBRARY_SCAN', roots),
@@ -54,10 +56,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
         toggleMaximize: () => ipcRenderer.send('WINDOW_TOGGLE_MAXIMIZE'),
         close: () => ipcRenderer.send('WINDOW_CLOSE'),
         isMaximized: () => ipcRenderer.invoke('WINDOW_IS_MAXIMIZED'),
+        syncMiniPlayerState: (state) => ipcRenderer.send('WINDOW_SYNC_MINI_PLAYER_STATE', state),
+        exitMiniPlayer: () => ipcRenderer.send('WINDOW_EXIT_MINI_PLAYER'),
+        isMiniPlayer: () => ipcRenderer.invoke('WINDOW_IS_MINI_PLAYER'),
         onMaximizedChanged: (callback) => {
             const handler = (_event, value) => callback(value);
             ipcRenderer.on('WINDOW_MAXIMIZED_CHANGED', handler);
             return () => ipcRenderer.removeListener('WINDOW_MAXIMIZED_CHANGED', handler);
+        },
+        onMiniPlayerChanged: (callback) => {
+            const handler = (_event, value) => callback(value);
+            ipcRenderer.on('WINDOW_MINI_PLAYER_CHANGED', handler);
+            return () => ipcRenderer.removeListener('WINDOW_MINI_PLAYER_CHANGED', handler);
         },
     },
     onDisplayZoom: (callback) => {

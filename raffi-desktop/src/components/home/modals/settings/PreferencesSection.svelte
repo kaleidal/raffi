@@ -6,7 +6,10 @@
 	import { enableRPC, disableRPC } from "../../../../lib/rpc";
 	import { getAddons, getTraktStatus } from "../../../../lib/db/db";
 	import { trackEvent } from "../../../../lib/analytics";
-	import { autoSkipIntros } from "../../../../lib/stores/playbackPreferences";
+	import {
+		autoSkipIntros,
+		miniPlayerOnMinimize,
+	} from "../../../../lib/stores/playbackPreferences";
 	import { currentUser, localMode } from "../../../../lib/stores/authStore";
 	import {
 		getHeroCatalogSourceOptions,
@@ -30,6 +33,7 @@
 
 	let discordRpcEnabled = true;
 	let seekBarStyle = "raffi";
+	let miniPlayerEnabled = true;
 	let searchBarPosition: HomeSearchBarPosition = HOME_SEARCH_BAR_POSITION_AUTO;
 	let heroSource = HOME_HERO_SOURCE_CINEMETA;
 	let heroSourceOptions: HeroCatalogSourceOption[] = [];
@@ -42,6 +46,7 @@
 		discordRpcEnabled = storedRpc !== null ? storedRpc === "true" : true;
 		const storedSeek = localStorage.getItem("seek_bar_style");
 		seekBarStyle = storedSeek || "raffi";
+		miniPlayerEnabled = $miniPlayerOnMinimize;
 		heroSource = getStoredHomeHeroSource();
 		searchBarPosition = getStoredHomeSearchBarPosition();
 		void loadTraktHeroSourceAvailability();
@@ -71,6 +76,15 @@
 		autoSkipIntros.update((value) => {
 			const nextValue = !value;
 			trackEvent("auto_skip_intros_toggled", { enabled: nextValue });
+			return nextValue;
+		});
+	}
+
+	function toggleMiniPlayer() {
+		miniPlayerOnMinimize.update((value) => {
+			const nextValue = !value;
+			miniPlayerEnabled = nextValue;
+			trackEvent("mini_player_on_minimize_toggled", { enabled: nextValue });
 			return nextValue;
 		});
 	}
@@ -161,7 +175,7 @@
 	}
 </script>
 
-<section class="rounded-[28px] bg-white/[0.04] p-6 flex flex-col gap-5">
+<section class="rounded-[28px] bg-white/4 p-6 flex flex-col gap-5">
 	<div>
 		<h3 class="text-white text-xl font-semibold">
 			Preferences
@@ -170,7 +184,7 @@
 			Control connected experiences and integrations.
 		</p>
 	</div>
-	<div class="rounded-2xl bg-white/[0.08] p-4 flex flex-wrap items-center gap-4 justify-between">
+	<div class="rounded-2xl bg-white/8 p-4 flex flex-wrap items-center gap-4 justify-between">
 		<div>
 			<p class="text-white font-medium">
 				Discord Rich Presence
@@ -200,7 +214,7 @@
 		</button>
 	</div>
 
-	<div class="rounded-2xl bg-white/[0.08] p-4 flex flex-wrap items-center gap-4 justify-between">
+	<div class="rounded-2xl bg-white/8 p-4 flex flex-wrap items-center gap-4 justify-between">
 		<div>
 			<p class="text-white font-medium">
 				Seek Bar Style
@@ -210,7 +224,7 @@
 			</p>
 		</div>
 		<button
-			class="relative h-9 w-[160px] rounded-full border border-white/10 transition-colors duration-200 cursor-pointer bg-white/10 p-1"
+			class="relative h-9 w-40 rounded-full border border-white/10 transition-colors duration-200 cursor-pointer bg-white/10 p-1"
 			on:click={toggleSeekBar}
 			aria-label="Toggle Seek Bar Style"
 		>
@@ -224,7 +238,37 @@
 		</button>
 	</div>
 
-	<div class="rounded-2xl bg-white/[0.08] p-4 flex flex-wrap items-center gap-4 justify-between">
+	<div class="rounded-2xl bg-white/8 p-4 flex flex-wrap items-center gap-4 justify-between">
+		<div>
+			<p class="text-white font-medium">
+				Mini Player on Minimize
+			</p>
+			<p class="text-white/60 text-sm">
+				Keep playback visible in a floating always-on-top window while Raffi is minimized.
+			</p>
+		</div>
+		<button
+			class={`relative w-16 h-9 rounded-full border border-white/10 transition-colors duration-200 cursor-pointer ${
+				miniPlayerEnabled ? "bg-white" : "bg-white/10"
+			}`}
+			on:click={toggleMiniPlayer}
+			aria-label="Toggle mini player on minimize"
+			role="switch"
+			aria-checked={miniPlayerEnabled}
+		>
+			<span
+				class={`absolute top-1 left-1 w-7 h-7 rounded-full text-[10px] font-semibold tracking-[0.2em] flex items-center justify-center transition-all duration-200 ${
+					miniPlayerEnabled
+						? "translate-x-7 bg-black text-white/90"
+						: "translate-x-0 bg-white/80 text-black"
+				}`}
+			>
+				{miniPlayerEnabled ? "ON" : "OFF"}
+			</span>
+		</button>
+	</div>
+
+	<div class="rounded-2xl bg-white/8 p-4 flex flex-wrap items-center gap-4 justify-between">
 		<div>
 			<p class="text-white font-medium">
 				Auto-skip Intros
