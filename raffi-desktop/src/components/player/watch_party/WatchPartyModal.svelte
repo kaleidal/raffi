@@ -7,6 +7,7 @@
         getWatchPartyInfo,
     } from "../../../lib/stores/watchPartyStore";
     import { fade, scale } from "svelte/transition";
+    import { overlayZoomStyle } from "../../../lib/overlayZoom";
 
     const portal = (node: HTMLElement) => {
         if (typeof document === "undefined") {
@@ -291,6 +292,7 @@
 <div
     use:portal
     class="fixed inset-0 z-[300] flex items-center justify-center bg-black/90 backdrop-blur-sm"
+    style={overlayZoomStyle}
     transition:fade={{ duration: 200 }}
     on:click|self={onClose}
     on:keydown={(e) => e.key === "Escape" && onClose()}

@@ -1,6 +1,4 @@
 <script lang="ts">
-    import { fade } from "svelte/transition";
-
     export let type: "play" | "pause";
     export let id: number;
 
@@ -21,9 +19,8 @@
 <div
     class="absolute left-1/2 top-1/2 z-40 pointer-events-none"
     style="transform: translate(-50%, -50%) scale({scale});"
-    transition:fade={{ duration: 200 }}
 >
-    <div class="backdrop-blur-md rounded-full p-6 flex items-center justify-center">
+    <div class="bg-black/18 backdrop-blur-md rounded-full p-6 flex items-center justify-center play-pause-feedback-shell">
         {#if type === "pause"}
             <svg
                 width="80"
@@ -53,3 +50,20 @@
         {/if}
     </div>
 </div>
+
+<style>
+    .play-pause-feedback-shell {
+        animation: play-pause-feedback-fade 200ms ease-out;
+        will-change: opacity, transform, backdrop-filter;
+    }
+
+    @keyframes play-pause-feedback-fade {
+        from {
+            opacity: 0;
+        }
+
+        to {
+            opacity: 1;
+        }
+    }
+</style>

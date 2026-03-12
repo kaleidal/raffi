@@ -4,6 +4,7 @@
     import { X } from "lucide-svelte";
 
     import { trackEvent } from "../../../lib/analytics";
+    import { withOverlayZoomStyle } from "../../../lib/overlayZoom";
     import CommunityAddonsSection from "./addons/CommunityAddonsSection.svelte";
     import InstalledAddonsSection from "./addons/InstalledAddonsSection.svelte";
 
@@ -124,7 +125,7 @@
         on:wheel|preventDefault|stopPropagation
         role="button"
         tabindex="0"
-        style="padding: clamp(20px, 5vw, 150px);"
+        style={withOverlayZoomStyle("padding: clamp(20px, 5vw, 150px);")}
     >
 
         <div

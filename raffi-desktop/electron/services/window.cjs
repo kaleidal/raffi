@@ -83,6 +83,7 @@ function createMainWindow({
   }
 
   const mainWindow = new BrowserWindow(windowOptions);
+  let currentDisplayZoom = 1;
   const miniPlayerState = {
     enabled: true,
     canEnter: false,
@@ -113,8 +114,9 @@ function createMainWindow({
 
   const applyMiniPlayerDisplayZoom = () => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
+    currentDisplayZoom = 1;
     try {
-      mainWindow.webContents.send("DISPLAY_ZOOM", 1);
+      mainWindow.webContents.send("DISPLAY_ZOOM", currentDisplayZoom);
     } catch {}
   };
 
@@ -297,6 +299,7 @@ function createMainWindow({
     exit: exitMiniPlayer,
     isActive: () => miniPlayerState.active,
   };
+  mainWindow.__raffiGetDisplayZoom = () => currentDisplayZoom;
 
   mainWindow.on("maximize", () => {
     try {
@@ -464,7 +467,8 @@ function createMainWindow({
     const effectiveWidth = width / dpiZoom;
 
     if (effectiveWidth >= widthThreshold) {
-      mainWindow.webContents.send("DISPLAY_ZOOM", dpiZoom);
+      currentDisplayZoom = dpiZoom;
+      mainWindow.webContents.send("DISPLAY_ZOOM", currentDisplayZoom);
       return;
     }
 
@@ -493,10 +497,11 @@ function createMainWindow({
 
     const widthZoom = effectiveWidth < widthThreshold ? effectiveWidth / widthThreshold : 1;
     const finalZoom = Math.min(maxZoom, Math.max(minZoom, bestZoom * widthZoom));
+    currentDisplayZoom = finalZoom;
 
     mainWindow.webContents.setZoomFactor(1);
     try {
-      mainWindow.webContents.send("DISPLAY_ZOOM", finalZoom);
+      mainWindow.webContents.send("DISPLAY_ZOOM", currentDisplayZoom);
     } catch (e) {
       console.warn("Failed to send display zoom", e);
     }

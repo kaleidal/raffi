@@ -67,6 +67,12 @@ function registerMainIpcHandlers({
     return Boolean(mainWindow.__raffiMiniPlayer?.isActive?.());
   });
 
+  ipcMain.handle("WINDOW_GET_DISPLAY_ZOOM", async () => {
+    const mainWindow = getMainWindow();
+    if (!mainWindow || mainWindow.isDestroyed()) return 1;
+    return Number(mainWindow.__raffiGetDisplayZoom?.() ?? 1) || 1;
+  });
+
   ipcMain.handle("INTRODB_FETCH_SEGMENTS", async (_event, payload) => {
     const imdbId = typeof payload?.imdbId === "string" ? payload.imdbId.trim() : "";
     const season = Number(payload?.season);

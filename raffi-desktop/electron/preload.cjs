@@ -56,6 +56,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
         toggleMaximize: () => ipcRenderer.send('WINDOW_TOGGLE_MAXIMIZE'),
         close: () => ipcRenderer.send('WINDOW_CLOSE'),
         isMaximized: () => ipcRenderer.invoke('WINDOW_IS_MAXIMIZED'),
+        getDisplayZoom: () => ipcRenderer.invoke('WINDOW_GET_DISPLAY_ZOOM'),
         syncMiniPlayerState: (state) => ipcRenderer.send('WINDOW_SYNC_MINI_PLAYER_STATE', state),
         exitMiniPlayer: () => ipcRenderer.send('WINDOW_EXIT_MINI_PLAYER'),
         isMiniPlayer: () => ipcRenderer.invoke('WINDOW_IS_MINI_PLAYER'),

@@ -14,7 +14,7 @@
 	</div>
 	<div class="grid gap-4 sm:grid-cols-2">
 		<div class="rounded-2xl bg-white/[0.08] p-4">
-			<p class="text-white/60 text-xs uppercase tracking-[0.3em]">
+			<p class="text-white/60 text-sm">
 				Movies
 			</p>
 			<p class="text-white text-4xl font-bold">
@@ -22,7 +22,7 @@
 			</p>
 		</div>
 		<div class="rounded-2xl bg-white/[0.08] p-4">
-			<p class="text-white/60 text-xs uppercase tracking-[0.3em]">
+			<p class="text-white/60 text-sm">
 				Shows
 			</p>
 			<p class="text-white text-4xl font-bold">

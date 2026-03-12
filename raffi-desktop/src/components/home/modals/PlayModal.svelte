@@ -5,6 +5,7 @@
     import { router } from "../../../lib/stores/router";
     import { getCachedMetaData } from "../../../lib/library/metaCache";
     import { cloudSyncStatus, getWatchPartyInfo } from "../../../lib/db/db";
+    import { overlayZoomStyle } from "../../../lib/overlayZoom";
     import { localMode } from "../../../lib/stores/authStore";
 
     const portal = (node: HTMLElement) => {
@@ -218,6 +219,7 @@
     <div
         use:portal
         class="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center"
+        style={overlayZoomStyle}
         transition:fade={{ duration: 200 }}
         on:click|self={closeModal}
         on:keydown={(e) => e.key === "Escape" && closeModal()}

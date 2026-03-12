@@ -128,34 +128,39 @@ export const syncLocalStateToUser = async (userId: string) => {
         try {
             await persistMergedRemoteState(true);
             const local = readLocalState();
-            await convexMutation("raffi:importState", {
+            const syncState = readSyncState();
+            await convexMutation("raffi:applySyncState", {
                 addons: local.addons.map((addon) => ({ transport_url: addon.transport_url, manifest: addon.manifest, flags: addon.flags, addon_id: addon.addon_id, added_at: addon.added_at })),
                 library: local.library.map((item) => ({ imdb_id: item.imdb_id, progress: item.progress, last_watched: item.last_watched, completed_at: item.completed_at, type: item.type, shown: item.shown, poster: item.poster })),
                 lists: local.lists.map((list) => ({ list_id: list.list_id, name: list.name, position: list.position, created_at: list.created_at })),
                 listItems: local.listItems.map((item) => ({ list_id: item.list_id, imdb_id: item.imdb_id, position: item.position, type: item.type, poster: item.poster })),
+                deletes: {
+                    addons: Object.keys(syncState.tombstones.addons),
+                    library: Object.keys(syncState.tombstones.library),
+                    lists: Object.keys(syncState.tombstones.lists),
+                    listItems: Object.keys(syncState.tombstones.listItems)
+                        .map((key) => {
+                            const [list_id, imdb_id] = key.split("::");
+                            if (!list_id || !imdb_id) return null;
+                            return { list_id, imdb_id };
+                        })
+                        .filter((item): item is { list_id: string; imdb_id: string } => Boolean(item)),
+                },
             });
 
-            const syncState = readSyncState();
+            clearDirtyMarkers();
             for (const transportUrl of Object.keys(syncState.tombstones.addons)) {
-                await convexMutation("raffi:removeAddon", { transport_url: transportUrl });
                 clearTombstone("addons", transportUrl);
             }
             for (const imdbId of Object.keys(syncState.tombstones.library)) {
-                await convexMutation("raffi:forgetProgress", { imdb_id: imdbId });
                 clearTombstone("library", imdbId);
             }
             for (const listId of Object.keys(syncState.tombstones.lists)) {
-                await convexMutation("raffi:deleteList", { list_id: listId });
                 clearTombstone("lists", listId);
             }
             for (const key of Object.keys(syncState.tombstones.listItems)) {
-                const [listId, imdbId] = key.split("::");
-                if (!listId || !imdbId) continue;
-                await convexMutation("raffi:removeFromList", { list_id: listId, imdb_id: imdbId });
                 clearTombstone("listItems", key);
             }
-
-            clearDirtyMarkers();
             invalidateRemoteCache();
             setSyncResult(null);
             return { ok: true };

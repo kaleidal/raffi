@@ -4,6 +4,8 @@ const ALLOWED_EXTERNAL_HOSTS = new Set([
   "aveid.net",
   "www.aveid.net",
   "api.aveid.net",
+  "github.com",
+  "www.github.com",
   "stator.sh",
   "www.stator.sh",
   "trakt.tv",

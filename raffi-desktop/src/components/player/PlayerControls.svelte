@@ -1,7 +1,6 @@
 <script lang="ts">
     import Slider from "../common/Slider.svelte";
     import ExpandingButton from "../common/ExpandingButton.svelte";
-    import { slide } from "svelte/transition";
     import type { ShowResponse } from "../../lib/library/types/meta_types";
     import type { Chapter } from "../../pages/player/types";
     import ClipPanel from "./ClipPanel.svelte";
@@ -12,8 +11,6 @@
     export let duration = 0;
     export let currentTime = 0;
     export let volume = 1;
-    export let controlsVisible = true;
-    export let loading = false;
     export let videoSrc: string | null = null;
     export let metaData: ShowResponse | null = null;
     export let sessionId: string;
@@ -54,13 +51,6 @@
             : duration > 0
               ? duration - displayedTime
               : 0;
-    $: leftVisibleTime = seekBarStyle === "normal" ? displayedTime : remainingTime;
-    $: leftHasHourFormat = leftVisibleTime >= 3600;
-    $: rightHasHourFormat = duration >= 3600;
-    $: leftTimeLabelWidth = leftHasHourFormat ? "6ch" : "4ch";
-    $: rightTimeLabelWidth = rightHasHourFormat ? "6ch" : "4ch";
-    $: leftTimeLabelStyle = `width:${leftTimeLabelWidth};min-width:${leftTimeLabelWidth};max-width:${leftTimeLabelWidth};flex:0 0 ${leftTimeLabelWidth};font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1, "lnum" 1;`;
-    $: rightTimeLabelStyle = `width:${rightTimeLabelWidth};min-width:${rightTimeLabelWidth};max-width:${rightTimeLabelWidth};flex:0 0 ${rightTimeLabelWidth};font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1, "lnum" 1;`;
 
     let showClipPanel = false;
 
@@ -134,12 +124,12 @@
         : [];
 </script>
 
-{#if controlsVisible && !loading}
-    <div
-        in:slide={{ duration: 200, axis: "y" }}
-        out:slide={{ duration: 200, axis: "y" }}
-        class="z-10 items-center bg-[#000000]/10 backdrop-blur-xl rounded-4xl w-250 flex flex-col gap-2 px-7.5 py-5 text-white"
-    >
+<div
+    class="relative z-10 items-center rounded-4xl w-250 flex flex-col gap-2 px-7.5 py-5 text-white overflow-hidden"
+>
+    <div class="absolute inset-0 rounded-4xl bg-[#000000]/10 backdrop-blur-xl pointer-events-none"></div>
+
+    <div class="relative z-10 flex flex-col gap-2 w-full">
         <div class="flex flex-row gap-5 items-center w-full">
             {#if !isWatchPartyMember}
                 <button
@@ -177,8 +167,7 @@
             {/if}
 
             <span
-                class="inline-block tabular-nums text-[22px] font-poppins font-medium text-[#D3D3D3] text-center"
-                style={leftTimeLabelStyle}
+                class="inline-block tabular-nums text-[22px] font-roboto font-medium text-[#D3D3D3] text-center"
                 >{formatTime(
                     seekBarStyle === "normal" ? displayedTime : remainingTime,
                 )}</span
@@ -224,8 +213,7 @@
             </div>            
             {#if seekBarStyle === "normal"}
                 <span
-                    class="inline-block tabular-nums text-[22px] font-poppins font-medium text-[#D3D3D3] text-center"
-                    style={rightTimeLabelStyle}
+                    class="inline-block tabular-nums text-[22px] font-roboto font-medium text-[#D3D3D3] text-center"
                     >{formatTime(duration)}</span
                 >
             {/if}
@@ -341,4 +329,4 @@
             onClose={() => setClipPanelOpen(false)}
         />
     </div>
-{/if}
+</div>

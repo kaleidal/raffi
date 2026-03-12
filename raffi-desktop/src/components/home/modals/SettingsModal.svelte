@@ -22,6 +22,7 @@
 	import {
 		trackEvent,
 	} from "../../../lib/analytics";
+	import { withOverlayZoomStyle } from "../../../lib/overlayZoom";
 	import ActivitySection from "./settings/ActivitySection.svelte";
 	import FeedbackSection from "./settings/FeedbackSection.svelte";
 	import UpdateSection from "./settings/UpdateSection.svelte";
@@ -29,7 +30,6 @@
 	import PreferencesSection from "./settings/PreferencesSection.svelte";
 	import PrivacySection from "./settings/PrivacySection.svelte";
 	import LocalLibrarySection from "./settings/LocalLibrarySection.svelte";
-	import DataBackupsSection from "./settings/DataBackupsSection.svelte";
 	import AccountSection from "./settings/AccountSection.svelte";
 	import AccountStateMismatchSection from "./settings/AccountStateMismatchSection.svelte";
 
@@ -58,6 +58,7 @@
 	let message = "";
 	let error = "";
 	let showUpdateNotes = false;
+	let showSignOutModal = false;
 	let aveLoading = false;
 	let bodyLocked = false;
 
@@ -143,7 +144,16 @@
 
 
 	function close() {
+		showSignOutModal = false;
 		showSettings = false;
+	}
+
+	function openSignOutModal() {
+		showSignOutModal = true;
+	}
+
+	function closeSignOutModal() {
+		showSignOutModal = false;
 	}
 
 	function openExternalLink(url: string) {
@@ -156,12 +166,12 @@
 		if (electronApi?.openExternal) {
 			electronApi.openExternal(target).catch((error) => {
 				console.error("Failed to open external link", error);
-				window.open(target, "_blank", "noopener,noreferrer");
+				window.location.assign(target);
 			});
 			return;
 		}
 
-		window.open(target, "_blank", "noopener,noreferrer");
+		window.location.assign(target);
 	}
 
 
@@ -202,6 +212,7 @@
 		if (!$currentUser) return;
 		message = "";
 		error = "";
+		showSignOutModal = false;
 		try {
 			if (keepData) {
 				await syncUserStateToLocal($currentUser.id);
@@ -299,21 +310,20 @@
 
 		role="button"
 		tabindex="0"
-		style="padding: clamp(20px, 5vw, 150px);"
+		style={withOverlayZoomStyle("padding: clamp(20px, 5vw, 150px);")}
 	>
 		<div
-			class="bg-[#121212] w-full max-w-5xl max-h-[90vh] rounded-[32px] p-6 md:p-10 flex flex-col gap-8 relative overflow-hidden shadow-[0_40px_160px_rgba(0,0,0,0.55)]"
+			class="bg-[#121212] w-full h-full rounded-[32px] p-6 md:p-8 flex flex-col gap-6 relative overflow-hidden shadow-[0_40px_160px_rgba(0,0,0,0.55)]"
 			transition:scale={{ start: 0.95, duration: 200 }}
 			on:wheel|stopPropagation
 		>
-
-			<div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+			<div class="relative z-10 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
 				<div>
 					<h2 class="text-white text-3xl font-poppins font-bold">
 						Settings
 					</h2>
 					<p class="text-white/60 text-sm">
-						Personalize Raffi and keep your account tidy.
+						Personalize Raffi with an account-first layout and cleaner controls.
 					</p>
 				</div>
 				<div class="flex items-center gap-3 justify-end">
@@ -327,51 +337,105 @@
 				</div>
 			</div>
 
-			<UpdateSection
-				available={$updateStatus.available}
-				version={$updateStatus.version}
-				downloaded={$updateStatus.downloaded}
-				notes={$updateStatus.notes}
-				{showUpdateNotes}
-				onInstallUpdate={installUpdate}
-				onToggleNotes={() => (showUpdateNotes = !showUpdateNotes)}
-			/>
+			<div class="relative z-10 flex-1 min-h-0 overflow-hidden">
+				<div class="grid h-full min-w-0 gap-6 md:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+					<div class="min-h-0 min-w-0 overflow-y-auto pr-1 md:pr-3">
+						<div class="flex flex-col gap-5 pb-1">
+								{#if $localMode}
+									<LocalModeSignInSection aveLoading={aveLoading} onAveLogin={handleAveLogin} />
+								{:else if $currentUser}
+									<AccountSection
+										{message}
+										{error}
+										onSyncNow={syncNow}
+										onDownloadData={downloadData}
+										onRequestSignOut={openSignOutModal}
+									/>
+								{:else}
+									<AccountStateMismatchSection onRecoverToLocalMode={recoverToLocalMode} />
+								{/if}
 
-			<div class="flex-1 min-h-0 overflow-y-auto">
+											<PrivacySection />
 
-				<div class="flex flex-col gap-6 min-h-0 pr-1 pb-1">
-					{#if $localMode}
-						<LocalModeSignInSection aveLoading={aveLoading} onAveLogin={handleAveLogin} />
-					{/if}
-
-					<ActivitySection
-						moviesWatched={stats.moviesWatched}
-						showsWatched={stats.showsWatched}
-					/>
-
-					<PreferencesSection />
-
-					<PrivacySection />
-
-					<FeedbackSection {openExternalLink} />
-
-					<LocalLibrarySection />
-
-					{#if !$localMode && $currentUser}
-						<div class="grid gap-6 lg:grid-cols-[1fr,1.2fr]">
-							<DataBackupsSection onDownloadData={downloadData} onSyncNow={syncNow} />
-							<AccountSection
-								{message}
-								{error}
-								onSwitchToLocalMode={switchToLocalMode}
-							/>
+								<UpdateSection
+									available={$updateStatus.available}
+									version={$updateStatus.version}
+									downloaded={$updateStatus.downloaded}
+									notes={$updateStatus.notes}
+									{showUpdateNotes}
+									onInstallUpdate={installUpdate}
+									onToggleNotes={() => (showUpdateNotes = !showUpdateNotes)}
+								/>
 						</div>
-					{:else if !$localMode && !$currentUser}
-						<AccountStateMismatchSection onRecoverToLocalMode={recoverToLocalMode} />
-					{/if}
-				</div>
+					</div>
 
+					<div class="min-h-0 min-w-0 overflow-y-auto pl-0 md:pl-3">
+						<div class="flex flex-col gap-5 pb-1">
+								<ActivitySection
+									moviesWatched={stats.moviesWatched}
+									showsWatched={stats.showsWatched}
+								/>
+
+								<FeedbackSection {openExternalLink} />
+
+								<PreferencesSection />
+
+								<LocalLibrarySection />
+							</div>
+					</div>
+				</div>
 			</div>
+
+			{#if showSignOutModal}
+				<div
+					class="absolute inset-0 z-20 flex items-center justify-center bg-black/55 backdrop-blur-sm"
+					on:click|self={closeSignOutModal}
+					on:keydown={(e) => e.key === "Escape" && closeSignOutModal()}
+					role="button"
+					tabindex="0"
+				>
+					<div
+						class="w-full max-w-xl rounded-[28px] bg-[#151515] p-6 md:p-7 flex flex-col gap-5 shadow-[0_30px_100px_rgba(0,0,0,0.45)]"
+						on:click|stopPropagation
+						on:keydown|stopPropagation
+						role="dialog"
+						tabindex="-1"
+					>
+						<div class="flex flex-col gap-2">
+							<h3 class="text-white text-2xl font-semibold">Sign out</h3>
+							<p class="text-white/60 text-sm">
+								Choose whether you want Raffi to copy your synced data back to this device before switching to local mode.
+							</p>
+						</div>
+
+						<div class="grid gap-3 md:grid-cols-2">
+							<button
+								class="rounded-2xl bg-white/10 text-white p-5 text-left hover:bg-white/20 transition-colors cursor-pointer"
+								on:click={() => switchToLocalMode(true)}
+							>
+								<span class="block text-base font-semibold">Keep synced data</span>
+								<span class="mt-2 block text-sm text-white/65">Copy your synced library and lists onto this device, then continue in local mode.</span>
+							</button>
+							<button
+								class="rounded-2xl bg-white/10 text-white p-5 text-left hover:bg-white/20 transition-colors cursor-pointer"
+								on:click={() => switchToLocalMode(false)}
+							>
+								<span class="block text-base font-semibold">Start fresh</span>
+								<span class="mt-2 block text-sm text-white/65">Sign out and clear the synced copy from this device so you can start over locally.</span>
+							</button>
+						</div>
+
+						<div class="flex justify-end">
+							<button
+								class="px-4 py-2 rounded-2xl bg-white/10 text-white font-semibold hover:bg-white/20 transition-colors cursor-pointer"
+								on:click={closeSignOutModal}
+							>
+								Cancel
+							</button>
+						</div>
+					</div>
+				</div>
+			{/if}
 		</div>
 	</div>
 {/if}

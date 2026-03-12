@@ -70,9 +70,9 @@
 			aria-checked={analyticsEnabled}
 		>
 			<span
-				class={`absolute top-1 left-1 w-7 h-7 rounded-full text-[10px] font-semibold tracking-[0.2em] flex items-center justify-center transition-all duration-200 ${analyticsEnabled ? "translate-x-7 bg-black text-white/90" : "translate-x-0 bg-white/80 text-black"}`}
+				class={`absolute top-1 left-1 w-7 h-7 rounded-full text-[10px] font-semibold flex items-center justify-center transition-all duration-200 ${analyticsEnabled ? "translate-x-7 bg-black text-white/90" : "translate-x-0 bg-white/80 text-black"}`}
 			>
-				{analyticsEnabled ? "ON" : "OFF"}
+				{analyticsEnabled ? "On" : "Off"}
 			</span>
 		</button>
 	</div>
@@ -94,9 +94,9 @@
 			aria-checked={sessionReplayEnabled}
 		>
 			<span
-				class={`absolute top-1 left-1 w-7 h-7 rounded-full text-[10px] font-semibold tracking-[0.2em] flex items-center justify-center transition-all duration-200 ${sessionReplayEnabled ? "translate-x-7 bg-black text-white/90" : "translate-x-0 bg-white/80 text-black"}`}
+				class={`absolute top-1 left-1 w-7 h-7 rounded-full text-[10px] font-semibold flex items-center justify-center transition-all duration-200 ${sessionReplayEnabled ? "translate-x-7 bg-black text-white/90" : "translate-x-0 bg-white/80 text-black"}`}
 			>
-				{sessionReplayEnabled ? "ON" : "OFF"}
+				{sessionReplayEnabled ? "On" : "Off"}
 			</span>
 		</button>
 	</div>

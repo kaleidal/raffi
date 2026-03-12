@@ -70,6 +70,8 @@
     let viewportAspect = 16 / 9;
     let backgroundAspect: number | null = null;
     let lastBackgroundSrc = "";
+    const metaPanelOffsetStyle =
+        "transform: translateY(max(0px, calc((1 - var(--raffi-effective-zoom, 1)) * 16rem))); will-change: transform;";
 
     const updateViewportAspect = () => {
         if (typeof window === "undefined") return;
@@ -255,7 +257,7 @@
             >
                 <div
                     class="w-[40vw] flex gap-12.5 flex-col justify-between items-start"
-                    style="min-height: max(640px, calc(100vh - 20rem));"
+                    style={`min-height: max(640px, calc(100vh - 20rem)); ${metaPanelOffsetStyle}`}
                 >
 
             <style>
@@ -389,7 +391,7 @@
 
                 <div
                     class="flex flex-col gap-5 justify-end items-end self-stretch"
-                    style="min-height: max(640px, calc(100vh - 20rem));"
+                    style={`min-height: max(640px, calc(100vh - 20rem)); ${metaPanelOffsetStyle}`}
                 >
                     {#if $metaData.meta.type === "series"}
                         {@const watchedCount = Object.values(

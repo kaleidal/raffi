@@ -1,6 +1,7 @@
 <script lang="ts">
     import { fade, scale } from "svelte/transition";
     import { onMount } from "svelte";
+    import { overlayZoomStyle } from "../../lib/overlayZoom";
 
     import * as Subtitles from "../../pages/player/subtitles";
 
@@ -165,6 +166,7 @@
 <div
     use:portal
     class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm cursor-default"
+    style={overlayZoomStyle}
     transition:fade={{ duration: 200 }}
     on:click={close}
     on:keydown={(e) => e.key === "Escape" && close()}
