@@ -1,5 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
+    import { overlayZoomStyle } from "../../lib/overlayZoom";
     import { userZoom } from "../../lib/stores/settingsStore";
     import { X, ZoomIn, ZoomOut, RotateCcw } from "lucide-svelte";
     import { fade, scale } from "svelte/transition";
@@ -34,6 +35,7 @@
 {#if showModal}
     <div
         class="fixed inset-0 z-[1000] bg-black/80 backdrop-blur-sm flex items-center justify-center"
+        style={overlayZoomStyle}
         transition:fade={{ duration: 200 }}
     >
         <div

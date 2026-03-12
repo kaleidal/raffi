@@ -3,6 +3,7 @@
     import { X } from "lucide-svelte";
     import { failedStreamKeys, streamFailureMessage } from "../../../pages/meta/metaState";
     import { trackEvent } from "../../../lib/analytics";
+    import { overlayZoomStyle } from "../../../lib/overlayZoom";
     import type { Addon } from "../../../lib/db/db";
     import type { ShowResponse } from "../../../lib/library/types/meta_types";
     import type { ProgressItem, ProgressMap } from "../../../pages/meta/types";
@@ -243,6 +244,7 @@
     <div
         use:portal
         class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 sm:p-10 lg:p-20"
+        style={overlayZoomStyle}
         transition:fade={{ duration: 200 }}
         on:click|self={close}
         on:keydown={(e) => e.key === "Escape" && close()}
