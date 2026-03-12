@@ -17,6 +17,7 @@
         updateStatus,
     } from "./lib/stores/authStore";
     import { initAnalytics, setAnalyticsUser, trackEvent, trackPageView } from "./lib/analytics";
+    import { overlayZoomStyle } from "./lib/overlayZoom";
     import { formatReleaseNotes } from "./lib/updateNotes";
     import { userZoom } from "./lib/stores/settingsStore";
     import ZoomModal from "./components/common/ZoomModal.svelte";
@@ -193,6 +194,15 @@
         window.addEventListener("pointerup", handlePointerButtons);
         window.addEventListener("keydown", handleUpdateTestKey);
 
+        void (window as any).electronAPI?.windowControls?.getDisplayZoom?.()
+            ?.then((value: number) => {
+                if (disposed) return;
+                if (typeof value === "number" && Number.isFinite(value)) {
+                    displayZoom = value;
+                }
+            })
+            ?.catch?.(() => {});
+
         // Listen for file open events
         if ((window as any).electronAPI?.onOpenFile) {
             (window as any).electronAPI.onOpenFile((filePath: string) => {
@@ -334,6 +344,7 @@
     {#if showUpdatePrompt}
         <div
             class="fixed inset-0 z-[500] bg-black/80 backdrop-blur-sm flex items-center justify-center"
+            style={overlayZoomStyle}
             on:click|self={handleUpdateLater}
             on:keydown={(e) => e.key === "Escape" && handleUpdateLater()}
             role="button"

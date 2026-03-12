@@ -29,6 +29,7 @@ declare global {
                 toggleMaximize?: () => void;
                 close?: () => void;
                 isMaximized?: () => Promise<boolean>;
+                getDisplayZoom?: () => Promise<number>;
                 syncMiniPlayerState?: (state: { enabled: boolean; canEnter: boolean }) => void;
                 exitMiniPlayer?: () => void;
                 isMiniPlayer?: () => Promise<boolean>;

@@ -203,13 +203,13 @@
 			aria-checked={discordRpcEnabled}
 		>
 			<span
-				class={`absolute top-1 left-1 w-7 h-7 rounded-full text-[10px] font-semibold tracking-[0.2em] flex items-center justify-center transition-all duration-200 ${
+				class={`absolute top-1 left-1 w-7 h-7 rounded-full text-[10px] font-semibold flex items-center justify-center transition-all duration-200 ${
 					discordRpcEnabled
 						? "translate-x-7 bg-black text-white/90"
 						: "translate-x-0 bg-white/80 text-black"
 				}`}
 			>
-				{discordRpcEnabled ? "ON" : "OFF"}
+				{discordRpcEnabled ? "On" : "Off"}
 			</span>
 		</button>
 	</div>
@@ -229,8 +229,8 @@
 			aria-label="Toggle Seek Bar Style"
 		>
 			<div class="relative z-10 flex w-full h-full items-center">
-				<span class={`flex-1 text-center text-xs font-semibold tracking-wider transition-colors duration-200 ${seekBarStyle === 'raffi' ? 'text-black' : 'text-white/60'}`}>RAFFI</span>
-				<span class={`flex-1 text-center text-xs font-semibold tracking-wider transition-colors duration-200 ${seekBarStyle === 'normal' ? 'text-black' : 'text-white/60'}`}>NORMAL</span>
+				<span class={`flex-1 text-center text-xs font-semibold transition-colors duration-200 ${seekBarStyle === 'raffi' ? 'text-black' : 'text-white/60'}`}>Raffi</span>
+				<span class={`flex-1 text-center text-xs font-semibold transition-colors duration-200 ${seekBarStyle === 'normal' ? 'text-black' : 'text-white/60'}`}>Normal</span>
 			</div>
 			<div
 				class={`absolute top-1 bottom-1 left-1 w-[calc(50%-4px)] bg-white rounded-full transition-transform duration-200 ${seekBarStyle === 'normal' ? 'translate-x-full' : 'translate-x-0'}`}
@@ -257,13 +257,13 @@
 			aria-checked={miniPlayerEnabled}
 		>
 			<span
-				class={`absolute top-1 left-1 w-7 h-7 rounded-full text-[10px] font-semibold tracking-[0.2em] flex items-center justify-center transition-all duration-200 ${
+				class={`absolute top-1 left-1 w-7 h-7 rounded-full text-[10px] font-semibold flex items-center justify-center transition-all duration-200 ${
 					miniPlayerEnabled
 						? "translate-x-7 bg-black text-white/90"
 						: "translate-x-0 bg-white/80 text-black"
 				}`}
 			>
-				{miniPlayerEnabled ? "ON" : "OFF"}
+				{miniPlayerEnabled ? "On" : "Off"}
 			</span>
 		</button>
 	</div>
@@ -287,13 +287,13 @@
 			aria-checked={$autoSkipIntros}
 		>
 			<span
-				class={`absolute top-1 left-1 w-7 h-7 rounded-full text-[10px] font-semibold tracking-[0.2em] flex items-center justify-center transition-all duration-200 ${
+				class={`absolute top-1 left-1 w-7 h-7 rounded-full text-[10px] font-semibold flex items-center justify-center transition-all duration-200 ${
 					$autoSkipIntros
 						? "translate-x-7 bg-black text-white/90"
 						: "translate-x-0 bg-white/80 text-black"
 				}`}
 			>
-				{$autoSkipIntros ? "ON" : "OFF"}
+				{$autoSkipIntros ? "On" : "Off"}
 			</span>
 		</button>
 	</div>
