@@ -17,17 +17,34 @@ declare global {
             clearActivity: () => void;
             enableRPC: () => void;
             disableRPC: () => void;
+            usesTitleBarOverlay?: boolean;
             getFilePath?: (file: any) => string;
             saveClipPath?: (suggestedName?: string) => Promise<{ canceled: boolean; filePath: string | null; error?: string }>;
             persistClipFile?: (
                 sourcePath: string,
                 targetPath: string,
             ) => Promise<{ ok: boolean; filePath: string | null; error?: string }>;
+            windowControls?: {
+                minimize?: () => void;
+                toggleMaximize?: () => void;
+                close?: () => void;
+                isMaximized?: () => Promise<boolean>;
+                syncMiniPlayerState?: (state: { enabled: boolean; canEnter: boolean }) => void;
+                exitMiniPlayer?: () => void;
+                isMiniPlayer?: () => Promise<boolean>;
+                onMaximizedChanged?: (callback: (value: boolean) => void) => (() => void) | void;
+                onMiniPlayerChanged?: (callback: (value: boolean) => void) => (() => void) | void;
+            };
             showSelectDialog?: (
                 message: string,
                 title: string,
                 options: string[],
             ) => Promise<{ canceled: boolean; selectedIndex: number }>;
+            fetchIntroDbSegments?: (
+                imdbId: string,
+                season: number,
+                episode: number,
+            ) => Promise<{ status: number; data: unknown | null }>;
             cast?: {
                 createBootstrap?: (
                     sessionId: string,

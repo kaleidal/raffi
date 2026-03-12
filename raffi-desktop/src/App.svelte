@@ -3,7 +3,7 @@
     import Home from "./pages/Home.svelte";
     import Player from "./pages/player/Player.svelte";
     import { router } from "./lib/stores/router";
-    import { onMount } from "svelte";
+    import { onMount, tick } from "svelte";
     import { get } from "svelte/store";
     import Lists from "./pages/lists/Lists.svelte";
     import { enableRPC, disableRPC } from "./lib/rpc";
@@ -35,6 +35,8 @@
     let updateLaterTimeout: ReturnType<typeof setTimeout> | null = null;
     let updateTestArmed = false;
     let updateTestTimeout: ReturnType<typeof setTimeout> | null = null;
+    let scrollContainerElem: HTMLDivElement | null = null;
+    let lastRouteKey = "";
 
     const UPDATE_REMIND_DELAY = 30 * 60 * 1000;
     const UPDATE_TEST_ARM_DELAY = 1500;
@@ -120,6 +122,40 @@
         showUpdatePrompt = false;
         (window as any).electronAPI?.installUpdate?.();
     };
+
+    const resetRouteScroll = async () => {
+        await tick();
+
+        const container = scrollContainerElem;
+        if (container) {
+            container.scrollTop = 0;
+            container.scrollLeft = 0;
+        }
+
+        if (typeof window !== "undefined") {
+            window.scrollTo(0, 0);
+            window.requestAnimationFrame(() => {
+                if (!scrollContainerElem) return;
+                scrollContainerElem.scrollTop = 0;
+                scrollContainerElem.scrollLeft = 0;
+            });
+        }
+    };
+
+    $: if (typeof document !== "undefined") {
+        document.documentElement.style.setProperty(
+            "--raffi-display-zoom",
+            String(displayZoom),
+        );
+        document.documentElement.style.setProperty(
+            "--raffi-user-zoom",
+            String($userZoom),
+        );
+        document.documentElement.style.setProperty(
+            "--raffi-effective-zoom",
+            String(displayZoom * $userZoom),
+        );
+    }
 
     onMount(() => {
         let disposed = false;
@@ -259,6 +295,15 @@
 
     $: trackPageView($router.page);
     $: setAnalyticsUser($currentUser);
+    $: {
+        const nextRouteKey = `${$router.page}:${JSON.stringify($router.params)}`;
+        if (nextRouteKey !== lastRouteKey) {
+            lastRouteKey = nextRouteKey;
+            if (!checkingAuth) {
+                void resetRouteScroll();
+            }
+        }
+    }
 </script>
 
 <div class="w-screen h-screen bg-[#090909] overflow-hidden flex flex-col">
@@ -269,7 +314,7 @@
         ></div> 
     {/if}
 
-    <div class="relative flex-1 min-h-0 overflow-x-hidden overflow-y-auto" data-scroll-container>
+    <div bind:this={scrollContainerElem} class="relative flex-1 min-h-0 overflow-x-hidden overflow-y-auto" data-scroll-container>
         <div
             class="w-full h-full"
             style={`transform: scale(${displayZoom * $userZoom}); transform-origin: top left; width: calc(100% / ${displayZoom * $userZoom}); height: calc(100% / ${displayZoom * $userZoom});`}
