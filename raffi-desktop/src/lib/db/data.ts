@@ -157,12 +157,19 @@ export const forgetProgress = async (imdb_id: string) => {
     scheduleCloudBackupSync();
 };
 
-export const updateLibraryProgress = async (imdb_id: string, progress: any, type: string, completed?: boolean, poster?: string) => {
+export const updateLibraryProgress = async (
+	imdb_id: string,
+	progress: any,
+	type: string,
+	completed?: boolean,
+	poster?: string,
+	options?: { syncDelayMs?: number },
+) => {
     const items = readLocal<LibraryItem[]>(LOCAL_LIBRARY_KEY, []);
     const { updated, next } = upsertLibraryItem(items, imdb_id, progress, type, completed, poster);
     writeLocal(LOCAL_LIBRARY_KEY, updated);
     markDirty("library", imdb_id);
-    scheduleCloudBackupSync();
+    scheduleCloudBackupSync(options?.syncDelayMs);
     return next;
 };
 
