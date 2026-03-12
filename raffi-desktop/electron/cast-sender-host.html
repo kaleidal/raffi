@@ -341,16 +341,9 @@
           }
         }
 
-        async function loadMedia(payload) {
-          let session = null;
-          try {
-            session = await requestSession(payload);
-          } catch (error) {
-            throw new Error(`session_error:${formatError(error)}`);
-          }
+        function buildMediaInfo(payload) {
           const streamUrl = String(payload?.streamUrl || "").trim();
           if (!streamUrl) throw new Error("streamUrl is required");
-          const startTime = Number(payload?.startTime || 0);
 
           const mediaInfo = new chrome.cast.media.MediaInfo(
             streamUrl,
@@ -358,9 +351,15 @@
           );
           mediaInfo.streamType = chrome.cast.media.StreamType.BUFFERED;
 
+          const durationSeconds = Number(payload?.metadata?.durationSeconds || 0);
+          if (Number.isFinite(durationSeconds) && durationSeconds > 0) {
+            mediaInfo.duration = durationSeconds;
+            mediaInfo.customData = { durationSeconds };
+          }
+
           const title = String(payload?.metadata?.title || "").trim();
           const subtitle = String(payload?.metadata?.subtitle || "").trim();
-          const cover = String(payload?.metadata?.cover || "").trim();
+          const cover = String(payload?.metadata?.cover || payload?.metadata?.background || "").trim();
 
           if (title || subtitle || cover) {
             const metadata = new chrome.cast.media.GenericMediaMetadata();
@@ -370,6 +369,38 @@
             mediaInfo.metadata = metadata;
           }
 
+          return mediaInfo;
+        }
+
+        async function ensureStartTime(media, startTime) {
+          const targetTime = Number(startTime || 0);
+          if (!Number.isFinite(targetTime) || targetTime <= 0 || !media) {
+            return media;
+          }
+
+          const estimatedTime = Number(media?.getEstimatedTime?.() || 0);
+          if (estimatedTime + 1 >= targetTime) {
+            return media;
+          }
+
+          await new Promise((resolve) => window.setTimeout(resolve, 250));
+          const seekRequest = new chrome.cast.media.SeekRequest();
+          seekRequest.currentTime = targetTime;
+          seekRequest.resumeState = chrome.cast.media.ResumeState.PLAYBACK_START;
+          await media.seek(seekRequest);
+          return media;
+        }
+
+        async function loadMedia(payload) {
+          let session = null;
+          try {
+            session = await requestSession(payload);
+          } catch (error) {
+            throw new Error(`session_error:${formatError(error)}`);
+          }
+          const startTime = Number(payload?.startTime || 0);
+          const mediaInfo = buildMediaInfo(payload);
+
           const request = new chrome.cast.media.LoadRequest(mediaInfo);
           request.autoplay = true;
           request.currentTime = Number.isFinite(startTime) && startTime > 0 ? startTime : 0;
@@ -377,6 +408,7 @@
           let media = null;
           try {
             media = await session.loadMedia(request);
+            media = await ensureStartTime(media, startTime);
           } catch (error) {
             throw new Error(`load_media_failed:${formatError(error)}`);
           }
@@ -385,6 +417,7 @@
             active: true,
             currentTime: Number(media?.getEstimatedTime?.() || 0),
             playerState: String(media?.playerState || "UNKNOWN"),
+            duration: Number(media?.media?.duration || media?.duration || payload?.metadata?.durationSeconds || 0),
             deviceName: getSessionDeviceName(session),
           };
         }
@@ -459,6 +492,7 @@
             active: true,
             currentTime: Number(media?.getEstimatedTime?.() || 0),
             playerState: String(media?.playerState || "UNKNOWN"),
+            duration: Number(media?.media?.duration || media?.duration || 0),
             volumeLevel: Number(volume?.level || 0),
             deviceName: getSessionDeviceName(session),
           };

@@ -338,6 +338,18 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, ba
       currentTime: startAt,
     });
 
+    if (startAt > 0) {
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        await callNativePlayer("seek", startAt);
+      } catch (error) {
+        logToFile("Native cast post-load seek failed", {
+          startTime: startAt,
+          error: String(error?.message || error || "unknown_error"),
+        });
+      }
+    }
+
     activeLegacyDevice = device;
     activeMediaUrl = streamUrl;
     activeDeviceName = String(device?.friendlyName || device?.name || "Chromecast");

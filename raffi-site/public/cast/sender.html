@@ -132,6 +132,25 @@
           initializeCastApi(requestedAppId);
         }
 
+        async function ensureStartTime(media, startTime) {
+          const targetTime = Number(startTime || 0);
+          if (!Number.isFinite(targetTime) || targetTime <= 0 || !media) {
+            return media;
+          }
+
+          const estimatedTime = Number(media?.getEstimatedTime?.() || 0);
+          if (estimatedTime + 1 >= targetTime) {
+            return media;
+          }
+
+          await new Promise((resolve) => window.setTimeout(resolve, 250));
+          const seekRequest = new chrome.cast.media.SeekRequest();
+          seekRequest.currentTime = targetTime;
+          seekRequest.resumeState = chrome.cast.media.ResumeState.PLAYBACK_START;
+          await media.seek(seekRequest);
+          return media;
+        }
+
         function getCurrentSession() {
           return cast.framework.CastContext.getInstance().getCurrentSession();
         }
@@ -498,6 +517,7 @@
           let media = null;
           try {
             media = await session.loadMedia(request);
+            media = await ensureStartTime(media, payload?.startTime);
           } catch (error) {
             throw new Error(`load_media_failed:${formatError(error)}`);
           }
