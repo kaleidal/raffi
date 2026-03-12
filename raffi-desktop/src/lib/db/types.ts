@@ -5,6 +5,7 @@ export interface Addon {
     manifest: any;
     flags: any;
     addon_id: string;
+    position?: number;
 }
 
 export interface LibraryItem {

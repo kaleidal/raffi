@@ -302,7 +302,7 @@
 {#if showSettings}
 	<div
 		use:portal
-		class="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center"
+		class="fixed inset-0 z-200 bg-[#101010]/56 backdrop-blur-xl flex items-center justify-center"
 		transition:fade={{ duration: 200 }}
 		on:click|self={close}
 		on:keydown={(e) => e.key === "Escape" && close()}
@@ -313,7 +313,7 @@
 		style={withOverlayZoomStyle("padding: clamp(20px, 5vw, 150px);")}
 	>
 		<div
-			class="bg-[#121212] w-full h-full rounded-[32px] p-6 md:p-8 flex flex-col gap-6 relative overflow-hidden shadow-[0_40px_160px_rgba(0,0,0,0.55)]"
+			class="w-full h-full rounded-4xl bg-[#2b2b2b]/56 backdrop-blur-[40px] p-6 md:p-8 flex flex-col gap-6 relative overflow-hidden shadow-[0_40px_160px_rgba(0,0,0,0.45)]"
 			transition:scale={{ start: 0.95, duration: 200 }}
 			on:wheel|stopPropagation
 		>
@@ -395,7 +395,7 @@
 					tabindex="0"
 				>
 					<div
-						class="w-full max-w-xl rounded-[28px] bg-[#151515] p-6 md:p-7 flex flex-col gap-5 shadow-[0_30px_100px_rgba(0,0,0,0.45)]"
+						class="w-full max-w-xl rounded-[28px] bg-[#303030]/62 backdrop-blur-[40px] p-6 md:p-7 flex flex-col gap-5 shadow-[0_30px_100px_rgba(0,0,0,0.38)]"
 						on:click|stopPropagation
 						on:keydown|stopPropagation
 						role="dialog"

@@ -23,7 +23,7 @@
 <SettingsModal bind:showSettings={$showSettingsModal} />
 
 <div
-    class="bg-[#090909] h-full w-full flex flex-col overflow-hidden overflow-x-hidden items-center"
+    class="bg-[#090909] h-full min-h-0 w-full flex flex-col overflow-hidden overflow-x-hidden items-center relative"
 >
     <SearchBar
         absolute={false}
@@ -42,17 +42,16 @@
                 </div>
             </div>
         {:else}
-            <div
-                class="flex flex-row gap-2.5 mt-12.5 items-start justify-center w-full max-w-screen h-[calc(100%-200px)] px-5 z-10 rounded-[20px]"
-                in:fade={{ duration: 300 }}
-            >
-                <ListSidebar>
-                    <div slot="grid" let:listId>
-                        <ListItemGrid {listId} />
-                    </div>
-                </ListSidebar>
+            <div class="relative z-10 flex-1 min-h-0 w-full px-5 pb-5 pt-8 xl:pt-12.5" in:fade={{ duration: 300 }}>
+                <div class="mx-auto grid h-full min-h-0 w-full max-w-[1680px] gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.92fr)]">
+                    <ListSidebar>
+                        <div slot="grid" let:listId>
+                            <ListItemGrid {listId} />
+                        </div>
+                    </ListSidebar>
 
-                <ListPreview />
+                    <ListPreview />
+                </div>
             </div>
 
             <div class="w-full absolute top-0 left-0 overflow-hidden">
