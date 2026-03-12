@@ -115,7 +115,7 @@
 {#if visible}
     <div
         use:portal
-        class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-20"
+        class="fixed inset-0 z-50 bg-[#101010]/58 backdrop-blur-xl flex items-center justify-center p-20"
         style={overlayZoomStyle}
         on:click|self={close}
         on:keydown={(e) => e.key === "Escape" && close()}
@@ -124,10 +124,10 @@
         transition:fade={{ duration: 200 }}
     >
         <div
-            class="bg-[#121212] w-full max-w-md max-h-[80vh] rounded-[32px] p-8 flex flex-col gap-6 overflow-hidden relative"
+            class="w-full max-w-md max-h-[80vh] rounded-[32px] bg-[#303030]/60 backdrop-blur-[40px] p-8 flex flex-col gap-6 overflow-hidden relative shadow-[0_40px_160px_rgba(0,0,0,0.45)]"
         >
             <button
-                class="absolute top-6 right-6 text-white/50 hover:text-white cursor-pointer"
+                class="absolute top-6 right-6 z-10 text-white/50 hover:text-white cursor-pointer"
                 on:click={close}
                 aria-label="Close"
             >
@@ -149,11 +149,11 @@
                 >
             </button>
 
-            <h2 class="text-white text-2xl font-poppins font-bold">
+            <h2 class="relative z-10 text-white text-2xl font-poppins font-bold">
                 Add to List
             </h2>
 
-            <div class="flex flex-col gap-3 overflow-y-auto pr-2">
+            <div class="relative z-10 flex flex-col gap-3 overflow-y-auto pr-2">
                 <div class="relative">
                     <input
                         type="text"

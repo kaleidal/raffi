@@ -218,7 +218,7 @@
 
     <div
         use:portal
-        class="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center"
+        class="fixed inset-0 z-[200] bg-[#101010]/58 backdrop-blur-xl flex items-center justify-center"
         style={overlayZoomStyle}
         transition:fade={{ duration: 200 }}
         on:click|self={closeModal}
@@ -238,7 +238,7 @@
     />
 
     <div
-        class="bg-[#121212] w-full max-w-lg rounded-[32px] p-6 md:p-8 flex flex-col gap-6 relative overflow-hidden shadow-[0_40px_160px_rgba(0,0,0,0.55)] cursor-default"
+        class="w-full max-w-lg rounded-[32px] bg-[#2f2f2f]/58 backdrop-blur-[40px] p-6 md:p-8 flex flex-col gap-6 relative overflow-hidden shadow-[0_40px_160px_rgba(0,0,0,0.45)] cursor-default"
         transition:scale={{ start: 0.95, duration: 200 }}
         on:click|stopPropagation
         on:keydown|stopPropagation
@@ -246,10 +246,8 @@
         role="dialog"
         tabindex="-1"
     >
-
-
         <!-- Header -->
-        <div class="flex flex-row items-center justify-between shrink-0">
+        <div class="relative z-10 flex flex-row items-center justify-between shrink-0">
             <div>
                 <h2 class="text-white text-2xl font-poppins font-bold">
                     {#if mode === "select"}
@@ -273,7 +271,7 @@
         </div>
 
         <!-- Content -->
-        <div class="flex-1 overflow-y-auto">
+        <div class="relative z-10 flex-1 overflow-y-auto">
             {#if mode === "select"}
                 <div class="flex flex-col gap-4">
                     <label

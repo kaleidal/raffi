@@ -11,8 +11,8 @@
 
 <button
     class="w-full p-5 rounded-2xl flex flex-col gap-3 text-left transition-all duration-200 {disabled
-        ? 'bg-[#141414] opacity-45 cursor-not-allowed'
-        : 'bg-[#1A1A1A] hover:bg-[#222] cursor-pointer'}"
+        ? 'bg-white/10 backdrop-blur-3xl opacity-45 cursor-not-allowed'
+        : 'bg-white/10 backdrop-blur-3xl hover:bg-white/14 cursor-pointer'}"
     disabled={disabled}
     on:click={() => {
         if (disabled) return;
@@ -26,7 +26,7 @@
             </span>
 
             {#if item.meta.infoLine}
-                <span class="text-[10px] uppercase tracking-[0.4em] text-white/40">
+                <span class="text-xs text-white/45">
                     {item.meta.infoLine}
                 </span>
             {/if}
@@ -47,10 +47,10 @@
             <div class="flex flex-wrap gap-2 justify-end">
                 {#each item.meta.statusBadges as badge (badge.label)}
                     <span
-                        class={`px-3 py-1 rounded-full text-[11px] font-semibold tracking-wide uppercase ${badge.variant ===
+                        class={`px-3 py-1 rounded-full text-[11px] font-semibold ${badge.variant ===
                         'accent'
                             ? 'bg-white text-black'
-                            : 'border border-white/20 text-white/80'}`}
+                            : 'bg-white/12 text-white/80'}`}
                     >
                         {badge.label}
                     </span>
@@ -63,7 +63,7 @@
         <div class="flex flex-wrap gap-2">
             {#each item.meta.featureBadges as badge (badge.label)}
                 <span
-                    class={`px-3 py-1 rounded-full text-xs font-medium tracking-wide ${badge.variant ===
+                    class={`px-3 py-1 rounded-full text-xs font-medium ${badge.variant ===
                     'accent'
                         ? 'bg-white text-black'
                         : badge.variant === 'muted'

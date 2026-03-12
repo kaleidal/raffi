@@ -34,12 +34,12 @@
 
 <div
     use:portal
-    class="fixed inset-0 z-300 flex items-center justify-center bg-black/90 backdrop-blur-sm"
+    class="fixed inset-0 z-300 flex items-center justify-center bg-[#101010]/60 backdrop-blur-xl"
     style={overlayZoomStyle}
     transition:fade={{ duration: 200 }}
 >
     <div
-        class="bg-[#121212] rounded-2xl p-8 max-w-md w-full shadow-2xl flex flex-col gap-6"
+        class="max-w-md w-full rounded-2xl bg-[#303030]/60 backdrop-blur-[40px] p-8 shadow-2xl flex flex-col gap-6"
         transition:scale={{ duration: 200, start: 0.95 }}
     >
         <div class="flex flex-col gap-3 text-center">

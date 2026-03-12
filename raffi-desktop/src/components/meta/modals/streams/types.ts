@@ -6,15 +6,20 @@ export interface StreamBadge {
 export interface ParsedStreamMetadata {
     providerLabel: string;
     hostLabel: string | null;
+    availabilityLabel: string | null;
     resolution: string | null;
     resolutionLabel: string | null;
+    resolutionRank: number;
     isHDR: boolean;
     isDubbed: boolean;
-    isSubbed: boolean;
+    audioLanguageCodes: string[];
+    audioLanguageLabel: string | null;
     featureBadges: StreamBadge[];
     statusBadges: StreamBadge[];
     peerCount: number | null;
     isP2P: boolean;
+    sourceType: "local" | "torrent" | "direct";
+    sizeInMb: number | null;
     infoLine: string | null;
 }
 
@@ -35,13 +40,19 @@ export type ResolutionFilter =
     | "480p"
     | "other";
 
-export type AudioFilter = "all" | "dubbed" | "subbed";
+export type AudioFilter = "all" | "original" | "dubbed";
+
+export type SourceFilter = "all" | "local" | "direct" | "torrent";
+
+export type StreamSortOption = "recommended" | "quality" | "sizeAsc" | "sizeDesc" | "peers";
 
 export interface StreamFilterState {
     resolutionFilter: ResolutionFilter;
     providerFilter: string;
     audioFilter: AudioFilter;
-    ignoreSubbed: boolean;
+    audioLanguageFilter: string;
+    sourceFilter: SourceFilter;
+    sortOption: StreamSortOption;
     excludeDubbed: boolean;
     excludeHDR: boolean;
 }

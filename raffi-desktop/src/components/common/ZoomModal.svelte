@@ -34,15 +34,15 @@
 
 {#if showModal}
     <div
-        class="fixed inset-0 z-[1000] bg-black/80 backdrop-blur-sm flex items-center justify-center"
+        class="fixed inset-0 z-1000 bg-[#101010]/58 backdrop-blur-xl flex items-center justify-center"
         style={overlayZoomStyle}
         transition:fade={{ duration: 200 }}
     >
         <div
-            class="bg-[#121212] w-full max-w-md rounded-[32px] p-6 md:p-10 flex flex-col gap-8 relative overflow-hidden shadow-[0_40px_160px_rgba(0,0,0,0.55)]"
+            class="w-full max-w-md rounded-4xl bg-[#303030]/60 backdrop-blur-[40px] p-6 md:p-10 flex flex-col gap-8 relative overflow-hidden shadow-[0_40px_160px_rgba(0,0,0,0.45)]"
             transition:scale={{ duration: 200, start: 0.95 }}
         >
-            <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div class="relative z-10 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 <div>
                     <h2 class="text-white text-3xl font-poppins font-bold">Adjust UI Scale</h2>
                     <p class="text-white/60 text-sm">
@@ -59,7 +59,7 @@
                 </div>
             </div>
 
-            <div class="flex flex-col gap-6">
+            <div class="relative z-10 flex flex-col gap-6">
                 <div class="flex items-center justify-center gap-4">
                     <button
                         class="p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-colors text-white cursor-pointer"
@@ -103,7 +103,7 @@
                 </div>
             </div>
 
-            <div class="flex justify-end">
+            <div class="relative z-10 flex justify-end">
                 <button
                     class="px-6 py-2.5 bg-white text-black font-semibold rounded-2xl hover:bg-white/90 transition-colors cursor-pointer"
                     on:click={close}

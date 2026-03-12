@@ -159,35 +159,6 @@ export const createPlayerModalHandlers = ({
         );
     };
 
-    const onAddLocalSubtitle = (track: any) => {
-        trackEvent("subtitle_local_added", {
-            ...getPlaybackAnalyticsProps(),
-            format: track?.format ?? null,
-        });
-
-        const videoElem = getVideoElem();
-        if (!videoElem) return;
-
-        subtitleTracks.update((tracks) => {
-            const next = tracks
-                .filter(
-                    (item) =>
-                        !(item.isLocal && String(item.id).startsWith("local:")),
-                )
-                .map((item) => ({ ...item, selected: false }));
-            return [...next, { ...track, selected: true }];
-        });
-        currentSubtitleLabel.set(track.label);
-
-        void Subtitles.handleSubtitleSelect(
-            track,
-            videoElem,
-            get(currentTime),
-            get(playbackOffset),
-            getCueLinePercent,
-        );
-    };
-
     const onErrorRetry = () => {
         trackEvent("player_error_retry", getPlaybackAnalyticsProps());
         showError.set(false);
@@ -219,7 +190,6 @@ export const createPlayerModalHandlers = ({
         onAudioSelect,
         onSubtitleSelect,
         onSubtitleDelayChange,
-        onAddLocalSubtitle,
         onErrorRetry,
         onErrorBack,
         onCloseAudio,
