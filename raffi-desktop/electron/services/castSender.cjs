@@ -241,6 +241,10 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, ba
     if (Number.isFinite(durationSeconds) && durationSeconds > 0) {
       media.duration = durationSeconds;
     }
+    const timelineOffsetSeconds = Number(metadata?.timelineOffsetSeconds || 0);
+    if (Number.isFinite(timelineOffsetSeconds) && timelineOffsetSeconds > 0) {
+      media.customData = { timelineOffsetSeconds };
+    }
     return media;
   }
 
@@ -327,7 +331,10 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, ba
         subtitle: media.cover.subtitle,
         images: media.cover.url ? [{ url: media.cover.url }] : [],
       },
-      customData: hasDuration ? { durationSeconds } : {},
+      customData: {
+        ...(media.customData || {}),
+        ...(hasDuration ? { durationSeconds } : {}),
+      },
     };
     if (hasDuration) {
       loadRequest.duration = durationSeconds;
@@ -382,6 +389,8 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, ba
 
   async function openBrowserFallback({ appId, streamUrl, startTime, metadata, reason }) {
     const target = new URL(senderBridgeUrl);
+    const durationSeconds = Number(metadata?.durationSeconds || 0);
+    const timelineOffsetSeconds = Number(metadata?.timelineOffsetSeconds || 0);
     target.searchParams.set("mode", "standalone");
     target.searchParams.set("receiverAppId", String(appId || defaultReceiverAppId));
     target.searchParams.set("streamUrl", String(streamUrl || ""));
@@ -390,6 +399,12 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, ba
     target.searchParams.set("subtitle", String(metadata?.subtitle || ""));
     target.searchParams.set("cover", String(metadata?.cover || ""));
     target.searchParams.set("background", String(metadata?.background || ""));
+    if (Number.isFinite(durationSeconds) && durationSeconds > 0) {
+      target.searchParams.set("durationSeconds", String(durationSeconds));
+    }
+    if (Number.isFinite(timelineOffsetSeconds) && timelineOffsetSeconds >= 0) {
+      target.searchParams.set("timelineOffsetSeconds", String(timelineOffsetSeconds));
+    }
     target.searchParams.set("reason", String(reason || "electron_no_devices"));
     const targetUrl = target.toString();
 
@@ -577,6 +592,10 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, ba
         subtitle: String(metadata?.subtitle || ""),
         cover: String(metadata?.cover || ""),
         background: String(metadata?.background || ""),
+        timelineOffsetSeconds: Number.isFinite(Number(metadata?.timelineOffsetSeconds || 0)) &&
+          Number(metadata?.timelineOffsetSeconds || 0) > 0
+          ? Number(metadata.timelineOffsetSeconds)
+          : undefined,
         durationSeconds: Number.isFinite(durationSeconds) && durationSeconds > 0
           ? durationSeconds
           : undefined,
@@ -1043,7 +1062,10 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, ba
         subtitle: media.cover.subtitle,
         images: media.cover.url ? [{ url: media.cover.url }] : [],
       },
-      customData: { durationSeconds: dur },
+      customData: {
+        ...(media.customData || {}),
+        durationSeconds: dur,
+      },
       duration: dur,
     };
 
