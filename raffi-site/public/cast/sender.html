@@ -488,9 +488,22 @@
           );
           mediaInfo.streamType = chrome.cast.media.StreamType.BUFFERED;
           const durationSeconds = Number(payload?.metadata?.durationSeconds || 0);
-          if (Number.isFinite(durationSeconds) && durationSeconds > 0) {
-            mediaInfo.duration = durationSeconds;
-            mediaInfo.customData = { durationSeconds };
+          const timelineOffsetSeconds = Number(payload?.metadata?.timelineOffsetSeconds || 0);
+          if (
+            (Number.isFinite(durationSeconds) && durationSeconds > 0) ||
+            (Number.isFinite(timelineOffsetSeconds) && timelineOffsetSeconds > 0)
+          ) {
+            mediaInfo.customData = {
+              ...(Number.isFinite(durationSeconds) && durationSeconds > 0
+                ? { durationSeconds }
+                : {}),
+              ...(Number.isFinite(timelineOffsetSeconds) && timelineOffsetSeconds > 0
+                ? { timelineOffsetSeconds }
+                : {}),
+            };
+            if (Number.isFinite(durationSeconds) && durationSeconds > 0) {
+              mediaInfo.duration = durationSeconds;
+            }
           }
 
           const title = String(payload?.metadata?.title || "").trim();
@@ -553,6 +566,16 @@
           }
 
           const parsedStart = Number(params.get("startTime") || 0);
+          const parseOptionalNumberParam = (name, allowZero = false) => {
+            const value = Number(params.get(name));
+            if (!Number.isFinite(value)) {
+              return undefined;
+            }
+            if (allowZero ? value >= 0 : value > 0) {
+              return value;
+            }
+            return undefined;
+          };
           return {
             receiverAppId: String(params.get("receiverAppId") || "").trim() || DEFAULT_RECEIVER_APP_ID,
             streamUrl,
@@ -562,6 +585,8 @@
               subtitle: String(params.get("subtitle") || ""),
               cover: String(params.get("cover") || ""),
               background: String(params.get("background") || ""),
+              durationSeconds: parseOptionalNumberParam("durationSeconds"),
+              timelineOffsetSeconds: parseOptionalNumberParam("timelineOffsetSeconds", true),
             },
           };
         }
