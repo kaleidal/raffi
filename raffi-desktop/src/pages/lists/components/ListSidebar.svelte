@@ -24,11 +24,11 @@
 </script>
 
 <div
-    class="w-[45%] h-full flex flex-col overflow-y-scroll no-scrollbar relative z-10 pr-[20px] overflow-x-hidden"
+    class="w-full min-w-0 min-h-0 flex flex-col overflow-y-auto no-scrollbar relative z-10 overflow-x-hidden xl:pr-[20px]"
 >
-    <div class="flex flex-col gap-[60px] pb-[100px]">
+    <div class="flex flex-col gap-12 pb-20 xl:gap-[60px] xl:pb-[100px]">
         {#each $lists as list}
-            <div class="flex flex-col gap-[20px]">
+            <div class="flex flex-col gap-5">
                 <div
                     class="flex flex-row justify-between items-center group/header"
                 >
@@ -47,7 +47,7 @@
                     {:else}
                         <div class="flex flex-row gap-4 items-center">
                             <h3
-                                class="text-[#FFFFFF] text-[32px] font-poppins font-semibold cursor-pointer hover:text-white/80 transition-colors"
+                                class="text-[#FFFFFF] text-[28px] xl:text-[32px] font-poppins font-semibold cursor-pointer hover:text-white/80 transition-colors"
                                 on:dblclick={() => startEditing(list)}
                             >
                                 {list.name}

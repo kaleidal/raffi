@@ -109,6 +109,7 @@ const importedAddonValidator = v.object({
     flags: v.optional(v.any()),
     addon_id: v.optional(v.string()),
     added_at: v.optional(v.string()),
+    position: v.optional(v.number()),
 });
 
 const importedLibraryValidator = v.object({
@@ -414,6 +415,7 @@ export const ensureDefaultAddon = mutationGeneric({
             manifest: args.addon.manifest,
             flags: { protected: false, official: false },
             addon_id: crypto.randomUUID(),
+            position: 1,
         });
     },
 });
@@ -437,6 +439,7 @@ export const importState = mutationGeneric({
                     flags: addon.flags,
                     added_at: addon.added_at || getNowIso(),
                     addon_id: addon.addon_id || existing.addon_id,
+                    position: addon.position ?? existing.position ?? 0,
                 });
             } else {
                 await ctx.db.insert("addons", {
@@ -446,6 +449,7 @@ export const importState = mutationGeneric({
                     manifest: addon.manifest,
                     flags: addon.flags,
                     addon_id: addon.addon_id || crypto.randomUUID(),
+                    position: addon.position ?? 0,
                 });
             }
         }
@@ -544,6 +548,7 @@ export const applySyncState = mutationGeneric({
                     flags: addon.flags,
                     added_at: addon.added_at || getNowIso(),
                     addon_id: addon.addon_id || existing.addon_id,
+                    position: addon.position ?? existing.position ?? 0,
                 });
             } else {
                 await ctx.db.insert("addons", {
@@ -553,6 +558,7 @@ export const applySyncState = mutationGeneric({
                     manifest: addon.manifest,
                     flags: addon.flags,
                     addon_id: addon.addon_id || crypto.randomUUID(),
+                    position: addon.position ?? 0,
                 });
             }
         }
@@ -680,6 +686,7 @@ export const addAddon = mutationGeneric({
             manifest: args.addon.manifest,
             flags: args.addon.flags,
             addon_id: args.addon.addon_id || crypto.randomUUID(),
+            position: args.addon.position ?? 0,
         });
         return ctx.db.get(id);
     },

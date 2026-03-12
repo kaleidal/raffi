@@ -20,6 +20,28 @@ import { scheduleCloudBackupSync } from "./sync";
 
 export { hasLocalState } from "./state";
 
+const sortAddons = (addons: Addon[]) =>
+    [...addons].sort((left, right) => {
+        const leftPosition = left.position ?? Number.MAX_SAFE_INTEGER;
+        const rightPosition = right.position ?? Number.MAX_SAFE_INTEGER;
+        if (leftPosition !== rightPosition) {
+            return leftPosition - rightPosition;
+        }
+        return (left.added_at || "").localeCompare(right.added_at || "");
+    });
+
+const normalizeAddons = (addons: Addon[]) => {
+    const sorted = sortAddons(addons);
+    let changed = false;
+    const normalized = sorted.map((addon, index) => {
+        const position = index + 1;
+        if (addon.position === position) return addon;
+        changed = true;
+        return { ...addon, position };
+    });
+    return { normalized, changed };
+};
+
 export const ensureDefaultAddonsForUser = async (userId: string) => {
     await ensureDefaultAddonsForLocal();
     if (!userId) return;
@@ -42,6 +64,7 @@ export const ensureDefaultAddonsForLocal = async () => {
             manifest: DEFAULT_ADDON.manifest,
             flags: { protected: false, official: false },
             addon_id: crypto.randomUUID(),
+            position: addons.length + 1,
         },
     ]);
     markDirty("addons", DEFAULT_ADDON.transportUrl);
@@ -49,20 +72,62 @@ export const ensureDefaultAddonsForLocal = async () => {
     publishCloudSyncStatus();
 };
 
-export const getAddons = async () => readLocal<Addon[]>(LOCAL_ADDONS_KEY, []);
+export const getAddons = async () => {
+    const current = readLocal<Addon[]>(LOCAL_ADDONS_KEY, []);
+    const { normalized, changed } = normalizeAddons(current);
+    if (changed) {
+        writeLocal(LOCAL_ADDONS_KEY, normalized);
+    }
+    return normalized;
+};
 
 export const addAddon = async (addon: Omit<Addon, "user_id" | "added_at">) => {
-    const current = readLocal<Addon[]>(LOCAL_ADDONS_KEY, []);
+    const current = await getAddons();
     const existing = current.find((item) => item.transport_url === addon.transport_url);
     if (existing) return existing;
+    const maxPosition = current.reduce(
+        (highest, item) => Math.max(highest, item.position ?? 0),
+        0,
+    );
     const next = {
         ...addon,
         user_id: getLocalUserId(),
         added_at: new Date().toISOString(),
         addon_id: addon.addon_id || crypto.randomUUID(),
+        position: addon.position ?? maxPosition + 1,
     } as Addon;
     writeLocal(LOCAL_ADDONS_KEY, [...current, next]);
     markDirty("addons", next.transport_url);
+    scheduleCloudBackupSync();
+    return next;
+};
+
+export const reorderAddons = async (transportUrlsInOrder: string[]) => {
+    const current = await getAddons();
+    if (current.length <= 1) return current;
+
+    const currentByUrl = new Map(current.map((addon) => [addon.transport_url, addon]));
+    const ordered: Addon[] = [];
+
+    for (const transportUrl of transportUrlsInOrder) {
+        const addon = currentByUrl.get(transportUrl);
+        if (!addon) continue;
+        ordered.push(addon);
+        currentByUrl.delete(transportUrl);
+    }
+
+    for (const addon of current) {
+        if (currentByUrl.has(addon.transport_url)) {
+            ordered.push(addon);
+            currentByUrl.delete(addon.transport_url);
+        }
+    }
+
+    const next = ordered.map((addon, index) => ({ ...addon, position: index + 1 }));
+    writeLocal(LOCAL_ADDONS_KEY, next);
+    for (const addon of next) {
+        markDirty("addons", addon.transport_url);
+    }
     scheduleCloudBackupSync();
     return next;
 };

@@ -27,7 +27,6 @@
     export let onAudioSelect: (detail: any) => void;
     export let onSubtitleSelect: (detail: any) => void;
     export let onSubtitleDelayChange: (detail: { seconds: number }) => void = () => {};
-    export let onAddLocalSubtitle: (detail: any) => void = () => {};
     export let onErrorRetry: () => void;
     export let onErrorBack: () => void;
     export let onCloseAudio: () => void;
@@ -54,7 +53,6 @@
         tracks={subtitleTracks}
         onSelect={onSubtitleSelect}
         onDelayChange={onSubtitleDelayChange}
-        onAddLocalSubtitle={onAddLocalSubtitle}
         onClose={onCloseSubtitle}
     />
 {/if}
