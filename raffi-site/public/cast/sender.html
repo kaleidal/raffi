@@ -566,6 +566,16 @@
           }
 
           const parsedStart = Number(params.get("startTime") || 0);
+          const parseOptionalNumberParam = (name, allowZero = false) => {
+            const value = Number(params.get(name));
+            if (!Number.isFinite(value)) {
+              return undefined;
+            }
+            if (allowZero ? value >= 0 : value > 0) {
+              return value;
+            }
+            return undefined;
+          };
           return {
             receiverAppId: String(params.get("receiverAppId") || "").trim() || DEFAULT_RECEIVER_APP_ID,
             streamUrl,
@@ -575,6 +585,8 @@
               subtitle: String(params.get("subtitle") || ""),
               cover: String(params.get("cover") || ""),
               background: String(params.get("background") || ""),
+              durationSeconds: parseOptionalNumberParam("durationSeconds"),
+              timelineOffsetSeconds: parseOptionalNumberParam("timelineOffsetSeconds", true),
             },
           };
         }
