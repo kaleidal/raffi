@@ -5,7 +5,7 @@
     import type { Chapter } from "../../pages/player/types";
     import ClipPanel from "./ClipPanel.svelte";
     import { formatTime } from "../../lib/time";
-    import { CirclePause, CirclePlay, Maximize, ZoomIn, ZoomOut, AudioWaveform, Subtitles, Users, SkipForward, Download, Scissors, Cast } from "lucide-svelte";
+    import { CirclePause, CirclePlay, Maximize, ZoomIn, ZoomOut, AudioWaveform, Subtitles, Users, SkipForward, Download, Scissors } from "lucide-svelte";
 
     export let isPlaying = false;
     export let duration = 0;
@@ -20,9 +20,6 @@
     export let pendingSeek: number | null = null;
     export let isWatchPartyMember = false;
     export let hasNextEpisode = true;
-    export let castActive = false;
-    export let castBusy = false;
-    export let castDeviceName: string = "";
     export let showWatchParty = true;
     export let chapterMarkers: Chapter[] = [];
 
@@ -37,7 +34,6 @@
     export let onNextEpisode: () => void;
 
     export let onAudioClick: () => void = () => {};
-    export let onCastClick: () => void = () => {};
     export let onSubtitleClick: () => void = () => {};
     export let onWatchPartyClick: () => void = () => {};
     export let onClipPanelOpenChange: (detail: { open: boolean }) => void = () => {};
@@ -248,20 +244,6 @@
                     <AudioWaveform size={20} color="#E9E9E9" strokeWidth={2} />
                 </ExpandingButton>
             {/if}
-
-            <ExpandingButton
-                label={castBusy
-                    ? "Casting..."
-                    : castActive
-                      ? `Casting: ${castDeviceName || "Connected"}`
-                      : "Cast"}
-                onClick={() => {
-                    if (castBusy) return;
-                    onCastClick();
-                }}
-            >
-                <Cast size={20} color="#E9E9E9" strokeWidth={2} />
-            </ExpandingButton>
 
             <ExpandingButton
                 label={currentSubtitleLabel || "Subtitles: Off"}
