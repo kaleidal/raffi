@@ -136,6 +136,16 @@ const importedListItemValidator = v.object({
     poster: v.optional(v.string()),
 });
 
+const syncDeletesValidator = v.object({
+    addons: v.array(v.string()),
+    library: v.array(v.string()),
+    lists: v.array(v.string()),
+    listItems: v.array(v.object({
+        list_id: v.string(),
+        imdb_id: v.string(),
+    })),
+});
+
 const MAX_IMPORT_COUNTS = {
     addons: 500,
     library: 10_000,
@@ -511,6 +521,149 @@ export const importState = mutationGeneric({
         }
 
         return { ok: true };
+    },
+});
+
+export const applySyncState = mutationGeneric({
+    args: {
+        addons: v.array(importedAddonValidator),
+        library: v.array(importedLibraryValidator),
+        lists: v.array(importedListValidator),
+        listItems: v.array(importedListItemValidator),
+        deletes: syncDeletesValidator,
+    },
+    handler: async (ctx, args) => {
+        const userId = await requireAuthedUserId(ctx);
+        const addons = uniqueBy(args.addons || [], (item) => item.transport_url || "");
+        assertImportCount("addons", addons.length);
+        for (const addon of addons) {
+            const existing = await findAddonByUserTransport(ctx.db, userId, addon.transport_url);
+            if (existing) {
+                await ctx.db.patch(existing._id, {
+                    manifest: addon.manifest,
+                    flags: addon.flags,
+                    added_at: addon.added_at || getNowIso(),
+                    addon_id: addon.addon_id || existing.addon_id,
+                });
+            } else {
+                await ctx.db.insert("addons", {
+                    user_id: userId,
+                    added_at: addon.added_at || getNowIso(),
+                    transport_url: addon.transport_url,
+                    manifest: addon.manifest,
+                    flags: addon.flags,
+                    addon_id: addon.addon_id || crypto.randomUUID(),
+                });
+            }
+        }
+
+        const library = uniqueBy(args.library || [], (item) => item.imdb_id || "");
+        assertImportCount("library", library.length);
+        for (const row of library) {
+            const existing = await findLibraryByUserImdb(ctx.db, userId, row.imdb_id);
+            if (existing) {
+                await ctx.db.patch(existing._id, {
+                    progress: row.progress,
+                    last_watched: row.last_watched || getNowIso(),
+                    completed_at: row.completed_at ?? null,
+                    type: row.type || "movie",
+                    shown: row.shown !== false,
+                    poster: optionalString(row.poster),
+                });
+            } else {
+                await ctx.db.insert("libraries", {
+                    user_id: userId,
+                    imdb_id: row.imdb_id,
+                    progress: row.progress,
+                    last_watched: row.last_watched || getNowIso(),
+                    completed_at: row.completed_at ?? null,
+                    type: row.type || "movie",
+                    shown: row.shown !== false,
+                    poster: optionalString(row.poster),
+                });
+            }
+        }
+
+        const lists = uniqueBy(args.lists || [], (item) => item.list_id || "");
+        assertImportCount("lists", lists.length);
+        for (const list of lists) {
+            const existing = await findListByListId(ctx.db, list.list_id);
+            if (existing) {
+                await ctx.db.patch(existing._id, {
+                    user_id: userId,
+                    name: list.name,
+                    position: list.position ?? 0,
+                    created_at: list.created_at || getNowIso(),
+                });
+            } else {
+                await ctx.db.insert("lists", {
+                    list_id: list.list_id,
+                    user_id: userId,
+                    name: list.name,
+                    position: list.position ?? 0,
+                    created_at: list.created_at || getNowIso(),
+                });
+            }
+        }
+
+        const listItems = uniqueBy(args.listItems || [], (item) => `${item.list_id}:${item.imdb_id}`);
+        assertImportCount("listItems", listItems.length);
+        for (const item of listItems) {
+            const existing = await findListItemByListImdb(ctx.db, item.list_id, item.imdb_id);
+            if (existing) {
+                await ctx.db.patch(existing._id, {
+                    position: item.position ?? 0,
+                    type: item.type || "movie",
+                    poster: optionalString(item.poster),
+                });
+            } else {
+                await ctx.db.insert("list_items", {
+                    list_id: item.list_id,
+                    imdb_id: item.imdb_id,
+                    position: item.position ?? 0,
+                    type: item.type || "movie",
+                    poster: optionalString(item.poster),
+                });
+            }
+        }
+
+        for (const transportUrl of uniqueBy((args.deletes?.addons || []).map((transport_url) => ({ transport_url })), (item) => item.transport_url).map((item) => item.transport_url)) {
+            const existing = await findAddonByUserTransport(ctx.db, userId, transportUrl);
+            if (existing) await ctx.db.delete(existing._id);
+        }
+
+        for (const imdbId of uniqueBy((args.deletes?.library || []).map((imdb_id) => ({ imdb_id })), (item) => item.imdb_id).map((item) => item.imdb_id)) {
+            const existing = await findLibraryByUserImdb(ctx.db, userId, imdbId);
+            if (existing) await ctx.db.delete(existing._id);
+        }
+
+        for (const listId of uniqueBy((args.deletes?.lists || []).map((list_id) => ({ list_id })), (item) => item.list_id).map((item) => item.list_id)) {
+            const existing = await findListByListId(ctx.db, listId);
+            if (!existing || existing.user_id !== userId) continue;
+            const items = await collectListItemsByListId(ctx.db, listId);
+            for (const item of items) {
+                await ctx.db.delete(item._id);
+            }
+            await ctx.db.delete(existing._id);
+        }
+
+        const deletedListItems = uniqueBy(args.deletes?.listItems || [], (item) => `${item.list_id}:${item.imdb_id}`);
+        for (const item of deletedListItems) {
+            const list = await findListByListId(ctx.db, item.list_id);
+            if (!list || list.user_id !== userId) continue;
+            const existing = await findListItemByListImdb(ctx.db, item.list_id, item.imdb_id);
+            if (existing) await ctx.db.delete(existing._id);
+        }
+
+        return {
+            ok: true,
+            deleted: {
+                addons: args.deletes?.addons.length || 0,
+                library: args.deletes?.library.length || 0,
+                lists: args.deletes?.lists.length || 0,
+                listItems: args.deletes?.listItems.length || 0,
+            },
+        };
     },
 });
 

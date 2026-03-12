@@ -142,6 +142,8 @@
     let lastMiniPlayerActive: boolean | null = null;
     let canEnterMiniPlayer = false;
     let isPlayerRoute = true;
+    let loadingBackdropSrc: string | null = null;
+    let loadingBackdropMode: "art" | "frame" = "art";
 
     const getWindowControls = () =>
         (typeof window !== "undefined" ? (window as any).electronAPI?.windowControls : undefined) as
@@ -632,6 +634,30 @@
         videoElem.pause();
     };
 
+    const captureLoadingBackdrop = () => {
+        if (
+            hasStarted &&
+            videoElem &&
+            canvasElem &&
+            videoElem.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+            videoElem.videoWidth > 0 &&
+            videoElem.videoHeight > 0 &&
+            videoElem.currentTime > 0
+        ) {
+            Session.captureFrame(videoElem, canvasElem);
+            try {
+                loadingBackdropSrc = canvasElem.toDataURL("image/jpeg", 0.72);
+                loadingBackdropMode = "frame";
+                return;
+            } catch {
+                // ignore and fall back to artwork
+            }
+        }
+
+        loadingBackdropSrc = null;
+        loadingBackdropMode = "art";
+    };
+
     $: hasStartedStore.set(hasStarted);
 
     $: controlsManager = Controls.createControlsManager(
@@ -963,6 +989,11 @@
         videoElem.muted = false;
     }
 
+    $: if ($loading && !hasStarted) {
+        loadingBackdropSrc = null;
+        loadingBackdropMode = "art";
+    }
+
     $: isPlayerRoute = $router.page === "player";
 
     $: canEnterMiniPlayer = Boolean(
@@ -1077,6 +1108,7 @@
                 }
             }}
             on:waiting={() => {
+                captureLoadingBackdrop();
                 loading.set(true);
                 loadingStage.set("Buffering");
                 handleBufferStart();
@@ -1125,6 +1157,8 @@
         loading={$loading && !miniPlayerActive}
         onClose={handleClose}
         {metaData}
+        backdropSrc={loadingBackdropSrc}
+        backdropMode={loadingBackdropMode}
         stage={$loadingStage}
         details={$loadingDetails}
         progress={$loadingProgress}
@@ -1147,7 +1181,7 @@
         <div
             class="absolute left-0 top-0 p-10 z-50 transition-all duration-300 ease-in-out transform {$controlsVisible
                 ? 'translate-y-0 opacity-100'
-                : '-translate-y-10 opacity-0 pointer-events-none'}"
+                : '-translate-y-10 opacity-0 pointer-events-none'} will-change-transform will-change-opacity"
         >
             <button
                 class="bg-[#000000]/20 backdrop-blur-md hover:bg-[#FFFFFF]/20 transition-colors duration-200 rounded-full p-4 cursor-pointer"
@@ -1173,7 +1207,7 @@
             <div
                 class="transition-all duration-300 ease-in-out transform {$controlsVisible
                     ? 'translate-y-0 opacity-100'
-                    : 'translate-y-10 opacity-0 pointer-events-none'}"
+                    : 'translate-y-10 opacity-0 pointer-events-none'} will-change-transform will-change-opacity"
                 bind:this={controlsOverlayElem}
             >
                 <PlayerControls
@@ -1182,8 +1216,6 @@
                     currentTime={$currentTime}
                     pendingSeek={$pendingSeek}
                     volume={$volume}
-                    controlsVisible={$controlsVisible}
-                    loading={$loading}
                     {seekBarStyle}
                     chapterMarkers={effectiveChapterMarkers}
                     {sessionId}

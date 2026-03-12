@@ -8,6 +8,7 @@
     export let hidden: boolean = false;
 
     const AMBIENT_ASPECT_EPSILON = 0.015;
+    const SMART_COVER_MAX_CROP_RATIO = 0.11;
     const AMBIENT_MIN_WIDTH = 160;
     const AMBIENT_MAX_WIDTH = 420;
     const AMBIENT_BLEND_FACTOR = 0.14;
@@ -29,6 +30,8 @@
     let ambientSampleCanvas: HTMLCanvasElement | undefined = undefined;
     let ambientHasFrame = false;
     let ambientDisplayVisible = false;
+    let effectiveObjectFit: "contain" | "cover" = "contain";
+    let effectiveObjectPosition = "center bottom";
 
     const getAmbientContext = () => ambientCanvasElem?.getContext("2d", { alpha: false }) ?? null;
     const getCanvasContext = (canvas: HTMLCanvasElement | undefined) => canvas?.getContext("2d", { alpha: false }) ?? null;
@@ -46,6 +49,45 @@
 
     const resetAmbientFrameState = () => {
         ambientHasFrame = false;
+    };
+
+    const getSmartCoverCropRatio = () => {
+        if (!containerElem || !videoElem) return 1;
+
+        const containerWidth = containerElem.clientWidth;
+        const containerHeight = containerElem.clientHeight;
+        const { videoWidth, videoHeight } = videoElem;
+
+        if (!containerWidth || !containerHeight || !videoWidth || !videoHeight) {
+            return 1;
+        }
+
+        const videoAspect = videoWidth / videoHeight;
+        const containerAspect = containerWidth / containerHeight;
+
+        if (!Number.isFinite(videoAspect) || !Number.isFinite(containerAspect)) {
+            return 1;
+        }
+
+        if (videoAspect > containerAspect) {
+            return 1 - containerAspect / videoAspect;
+        }
+
+        return 1 - videoAspect / containerAspect;
+    };
+
+    const updateEffectiveVideoFit = () => {
+        if (objectFit === "cover") {
+            effectiveObjectFit = "cover";
+            effectiveObjectPosition = "center center";
+            return;
+        }
+
+        const cropRatio = getSmartCoverCropRatio();
+        const useSmartCover = cropRatio > 0 && cropRatio <= SMART_COVER_MAX_CROP_RATIO;
+
+        effectiveObjectFit = useSmartCover ? "cover" : "contain";
+        effectiveObjectPosition = useSmartCover ? "center center" : "center bottom";
     };
 
     const updateAmbientDisplayVisibility = () => {
@@ -139,6 +181,8 @@
     };
 
     const updateAmbientState = () => {
+        updateEffectiveVideoFit();
+
         if (hidden || objectFit !== "contain") {
             ambientActive = false;
             resetAmbientFrameState();
@@ -336,6 +380,7 @@
 
     $: bindVideoListeners(videoElem);
     $: refreshAmbient();
+    $: updateEffectiveVideoFit();
 
     onMount(() => {
         ambientBlendCanvas = document.createElement("canvas");
@@ -372,9 +417,10 @@
 
     <video
         bind:this={videoElem}
-        class="absolute top-0 left-0 z-10 h-full w-full {hidden ? 'hidden' : 'block'} {objectFit === 'contain'
+        class="absolute top-0 left-0 z-10 h-full w-full {hidden ? 'hidden' : 'block'} {effectiveObjectFit === 'contain'
             ? 'object-contain'
             : 'object-cover'}"
+        style={`object-position: ${effectiveObjectPosition};`}
         crossorigin="anonymous"
         playsinline
         disablepictureinpicture
@@ -392,9 +438,10 @@
 
     <canvas
         bind:this={canvasElem}
-        class="absolute top-0 left-0 z-20 h-full w-full {objectFit === 'contain'
+        class="absolute top-0 left-0 z-20 h-full w-full {effectiveObjectFit === 'contain'
             ? 'object-contain'
             : 'object-cover'} {showCanvas && !hidden ? 'block' : 'hidden'}"
+        style={`object-position: ${effectiveObjectPosition};`}
     ></canvas>
 </div>
 
