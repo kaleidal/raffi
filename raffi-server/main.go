@@ -15,6 +15,7 @@ import (
 	"raffi-server/src/session"
 	"raffi-server/src/stream"
 	"raffi-server/src/stream/hls"
+	"runtime"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -27,6 +28,8 @@ type Server struct {
 	sessions        session.Store
 	torrentStreamer *stream.TorrentStreamer
 	hlsController   *hls.Controller
+	ffmpegPath      string
+	ffprobePath     string
 	probeMu         sync.Mutex
 	probeCooldown   map[string]time.Time
 }
@@ -34,12 +37,22 @@ type Server struct {
 func main() {
 	debug.SetTraceback("single")
 
+	ffmpegPath, ffprobePath, err := resolveMediaToolPaths()
+	if err != nil {
+		log.Fatalf("failed to resolve media tools: %v", err)
+	}
+
 	srv := &Server{
 		sessions:        session.NewMemoryStore(),
 		torrentStreamer: stream.NewTorrentStreamer(filepath.Join(os.TempDir(), "raffi-torrents")),
-		hlsController:   hls.NewController(),
+		hlsController:   hls.NewController(ffmpegPath, ffprobePath),
+		ffmpegPath:      ffmpegPath,
+		ffprobePath:     ffprobePath,
 		probeCooldown:   make(map[string]time.Time),
 	}
+
+	log.Printf("Using ffmpeg: %s", ffmpegPath)
+	log.Printf("Using ffprobe: %s", ffprobePath)
 
 	// Set up cleanup on exit
 	sigChan := make(chan os.Signal, 1)
@@ -102,6 +115,46 @@ func main() {
 	if err := http.Serve(listener, withCORS(mux)); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func resolveMediaToolPaths() (string, string, error) {
+	ffmpegPath, err := resolveMediaToolPath("RAFFI_FFMPEG_BIN", executableToolName("ffmpeg"), "ffmpeg")
+	if err != nil {
+		return "", "", err
+	}
+
+	ffprobePath, err := resolveMediaToolPath("RAFFI_FFPROBE_BIN", executableToolName("ffprobe"), "ffprobe")
+	if err != nil {
+		return "", "", err
+	}
+
+	return ffmpegPath, ffprobePath, nil
+}
+
+func resolveMediaToolPath(envKey, siblingName, fallback string) (string, error) {
+	if configured := strings.TrimSpace(os.Getenv(envKey)); configured != "" {
+		if _, err := os.Stat(configured); err != nil {
+			return "", fmt.Errorf("%s points to %q but it is not usable: %w", envKey, configured, err)
+		}
+		return configured, nil
+	}
+
+	exePath, err := os.Executable()
+	if err == nil {
+		candidate := filepath.Join(filepath.Dir(exePath), siblingName)
+		if _, statErr := os.Stat(candidate); statErr == nil {
+			return candidate, nil
+		}
+	}
+
+	return fallback, nil
+}
+
+func executableToolName(base string) string {
+	if runtime.GOOS == "windows" {
+		return base + ".exe"
+	}
+	return base
 }
 
 func (s *Server) handleAudioTrack(w http.ResponseWriter, r *http.Request, id string) {

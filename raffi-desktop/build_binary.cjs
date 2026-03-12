@@ -1,5 +1,8 @@
 const { spawn } = require('child_process');
+const fs = require('fs');
 const path = require('path');
+const ffmpegBinary = require('ffmpeg-static');
+const ffprobeBinary = require('ffprobe-static').path;
 
 function runCommand(command, args, options = {}) {
   return new Promise((resolve, reject) => {
@@ -15,6 +18,7 @@ function runCommand(command, args, options = {}) {
 async function build() {
   const platform = process.platform;
   const serverDir = path.join(__dirname, '..', 'raffi-server');
+  const electronDir = path.join(__dirname, 'electron');
   
   if (platform === 'win32') {
     console.log('Building Windows binary (static CGO)...');
@@ -73,8 +77,27 @@ async function build() {
   } else {
     throw new Error(`Unsupported platform: ${platform}`);
   }
+
+  await stageMediaTool(ffmpegBinary, path.join(electronDir, executableName('ffmpeg')));
+  await stageMediaTool(ffprobeBinary, path.join(electronDir, executableName('ffprobe')));
   
   console.log('Binary built successfully');
+}
+
+async function stageMediaTool(sourcePath, targetPath) {
+  if (!sourcePath) {
+    throw new Error(`Missing media tool binary for ${targetPath}`);
+  }
+
+  await fs.promises.copyFile(sourcePath, targetPath);
+  if (process.platform !== 'win32') {
+    await fs.promises.chmod(targetPath, 0o755);
+  }
+  console.log(`Staged ${path.basename(targetPath)} from ${sourcePath}`);
+}
+
+function executableName(baseName) {
+  return process.platform === 'win32' ? `${baseName}.exe` : baseName;
 }
 
 build().catch(err => {
