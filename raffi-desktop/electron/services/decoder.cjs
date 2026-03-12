@@ -3,6 +3,13 @@ const http = require("http");
 function createDecoderService({ isDev, path, fs, spawn, logToFile, baseDir }) {
   let goServer = null;
 
+  function getBundledToolPath(toolName) {
+    const extension = process.platform === "win32" ? ".exe" : "";
+    const fileName = `${toolName}${extension}`;
+    const rootDir = isDev ? baseDir : process.resourcesPath;
+    return path.join(rootDir, fileName);
+  }
+
   function getDecoderPath() {
     const platform = process.platform;
     const arch = process.arch;
@@ -81,6 +88,8 @@ function createDecoderService({ isDev, path, fs, spawn, logToFile, baseDir }) {
 
   async function startDecoderServer() {
     const binPath = getDecoderPath();
+    const ffmpegPath = getBundledToolPath("ffmpeg");
+    const ffprobePath = getBundledToolPath("ffprobe");
     console.log("Binary path:", binPath);
     logToFile("Decoder binary path", binPath);
 
@@ -93,13 +102,31 @@ function createDecoderService({ isDev, path, fs, spawn, logToFile, baseDir }) {
 
     await ensureDecoderExecutable(binPath);
 
+    const decoderEnv = {
+      ...process.env,
+      RAFFI_SERVER_ADDR: process.env.RAFFI_SERVER_ADDR || "127.0.0.1:6969",
+    };
+
+    if (fs.existsSync(ffmpegPath)) {
+      await ensureDecoderExecutable(ffmpegPath);
+      decoderEnv.RAFFI_FFMPEG_BIN = ffmpegPath;
+      logToFile("Using bundled ffmpeg", ffmpegPath);
+    } else {
+      logToFile("Bundled ffmpeg not found; falling back to PATH", ffmpegPath);
+    }
+
+    if (fs.existsSync(ffprobePath)) {
+      await ensureDecoderExecutable(ffprobePath);
+      decoderEnv.RAFFI_FFPROBE_BIN = ffprobePath;
+      logToFile("Using bundled ffprobe", ffprobePath);
+    } else {
+      logToFile("Bundled ffprobe not found; falling back to PATH", ffprobePath);
+    }
+
     logToFile("Spawning decoder process");
     goServer = spawn(binPath, [], {
       stdio: "pipe",
-      env: {
-        ...process.env,
-        RAFFI_SERVER_ADDR: process.env.RAFFI_SERVER_ADDR || "127.0.0.1:6969",
-      },
+      env: decoderEnv,
     });
     logToFile(`Decoder process spawned, pid: ${goServer.pid}`);
 
