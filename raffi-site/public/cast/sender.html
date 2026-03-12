@@ -488,9 +488,22 @@
           );
           mediaInfo.streamType = chrome.cast.media.StreamType.BUFFERED;
           const durationSeconds = Number(payload?.metadata?.durationSeconds || 0);
+          const timelineOffsetSeconds = Number(payload?.metadata?.timelineOffsetSeconds || 0);
+          if (
+            (Number.isFinite(durationSeconds) && durationSeconds > 0) ||
+            (Number.isFinite(timelineOffsetSeconds) && timelineOffsetSeconds > 0)
+          ) {
+            mediaInfo.customData = {
+              ...(Number.isFinite(durationSeconds) && durationSeconds > 0
+                ? { durationSeconds }
+                : {}),
+              ...(Number.isFinite(timelineOffsetSeconds) && timelineOffsetSeconds > 0
+                ? { timelineOffsetSeconds }
+                : {}),
+            };
+          }
           if (Number.isFinite(durationSeconds) && durationSeconds > 0) {
             mediaInfo.duration = durationSeconds;
-            mediaInfo.customData = { durationSeconds };
           }
 
           const title = String(payload?.metadata?.title || "").trim();

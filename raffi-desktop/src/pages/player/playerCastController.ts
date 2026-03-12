@@ -17,6 +17,7 @@ type CastMetadata = {
     cover?: string;
     background?: string;
     durationSeconds?: number;
+    timelineOffsetSeconds?: number;
 };
 
 type CastMode = "native" | "chrome";
@@ -88,7 +89,28 @@ export function createPlayerCastController(deps: CreatePlayerCastControllerDeps)
             const absoluteCurrentTime = deps.getCurrentTime();
             const playbackOffset = Math.max(0, Number(deps.getPlaybackOffset() || 0));
             const streamRelativeStartTime = Math.max(0, absoluteCurrentTime - playbackOffset);
+            let streamUrl = cast.streamUrl;
             let metadata = deps.getMetadata();
+
+            if (playbackOffset > 0) {
+                try {
+                    const castStreamUrl = new URL(cast.streamUrl);
+                    castStreamUrl.searchParams.set("seek", String(playbackOffset));
+                    castStreamUrl.searchParams.set(
+                        "seek_id",
+                        `cast-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+                    );
+                    castStreamUrl.searchParams.set("force_slice", "1");
+                    streamUrl = castStreamUrl.toString();
+                } catch {
+                    streamUrl = cast.streamUrl;
+                }
+            }
+
+            metadata = {
+                ...metadata,
+                timelineOffsetSeconds: playbackOffset,
+            };
 
             if (!Number.isFinite(Number(metadata?.durationSeconds || 0)) || Number(metadata?.durationSeconds || 0) <= 0) {
                 try {
@@ -114,7 +136,7 @@ export function createPlayerCastController(deps: CreatePlayerCastControllerDeps)
 
             const connection = await connectAndLoadCast({
                 deviceId,
-                streamUrl: cast.streamUrl,
+                streamUrl,
                 startTime: streamRelativeStartTime,
                 mode,
                 metadata,
