@@ -365,9 +365,9 @@
                 ? { timelineOffsetSeconds }
                 : {}),
             };
-          }
-          if (Number.isFinite(durationSeconds) && durationSeconds > 0) {
-            mediaInfo.duration = durationSeconds;
+            if (Number.isFinite(durationSeconds) && durationSeconds > 0) {
+              mediaInfo.duration = durationSeconds;
+            }
           }
 
           const title = String(payload?.metadata?.title || "").trim();

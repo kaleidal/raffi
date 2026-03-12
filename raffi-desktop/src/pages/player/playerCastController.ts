@@ -48,6 +48,8 @@ type CreatePlayerCastControllerDeps = {
 };
 
 export function createPlayerCastController(deps: CreatePlayerCastControllerDeps) {
+    let castSeekSequence = 0;
+
     const setDisconnectedState = () => {
         deps.setCastActive(false);
         deps.setCastDeviceName("");
@@ -96,9 +98,10 @@ export function createPlayerCastController(deps: CreatePlayerCastControllerDeps)
                 try {
                     const castStreamUrl = new URL(cast.streamUrl);
                     castStreamUrl.searchParams.set("seek", String(playbackOffset));
+                    castSeekSequence += 1;
                     castStreamUrl.searchParams.set(
                         "seek_id",
-                        `cast-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+                        `cast-${Date.now().toString(36)}-${castSeekSequence.toString(36)}`,
                     );
                     castStreamUrl.searchParams.set("force_slice", "1");
                     streamUrl = castStreamUrl.toString();
