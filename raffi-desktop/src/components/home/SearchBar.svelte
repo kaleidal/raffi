@@ -367,12 +367,13 @@
     $: homeOverlayMode = absolute && $router.page === "home";
     $: portalSearchDock = homeOverlayMode;
     $: searchDockStyle = homeOverlayMode
-        ? `top: ${searchDockBottom ? "calc(100vh - 24px - 86px)" : "50px"};`
+        ? `top: ${searchDockBottom
+            ? "calc(100vh - (24px + 86px) * var(--raffi-effective-zoom, 1))"
+            : "calc(50px * var(--raffi-effective-zoom, 1))"};`
         : "";
-    $: searchDockScaleStyle =
-        portalSearchDock && Number.isFinite($userZoom)
-            ? `transform: scale(${$userZoom}); transform-origin: top center;`
-            : "";
+    $: searchDockScaleStyle = portalSearchDock
+        ? "transform: scale(var(--raffi-effective-zoom, 1)); transform-origin: top center;"
+        : "";
 
     $: if (searchBarPositionPreference === HOME_SEARCH_BAR_POSITION_AUTO) {
         $router.page;

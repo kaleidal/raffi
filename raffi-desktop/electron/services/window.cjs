@@ -26,13 +26,21 @@ function createMainWindow({
   const isWindows = process.platform === "win32";
   const isMac = process.platform === "darwin";
   const isLinux = process.platform === "linux";
+  const MINI_PLAYER_WIDTH = 480;
+  const MINI_PLAYER_HEIGHT = 270;
+  const MINI_PLAYER_MARGIN = 24;
+  const primaryWorkArea = screen.getPrimaryDisplay()?.workArea;
+  const initialWidth = Math.min(defaultWindowWidth, primaryWorkArea?.width || defaultWindowWidth);
+  const initialHeight = Math.min(defaultWindowHeight, primaryWorkArea?.height || defaultWindowHeight);
+  const minWindowWidth = Math.min(1200, primaryWorkArea?.width || 1200);
+  const minWindowHeight = Math.min(800, primaryWorkArea?.height || 800);
   logToFile("Creating main window");
 
   const windowOptions = {
-    width: defaultWindowWidth,
-    height: defaultWindowHeight,
-    minHeight: 800,
-    minWidth: 1200,
+    width: initialWidth,
+    height: initialHeight,
+    minHeight: minWindowHeight,
+    minWidth: minWindowWidth,
     autoHideMenuBar: true,
     backgroundColor: "#090909",
     show: true,
@@ -40,6 +48,7 @@ function createMainWindow({
       nodeIntegration: false,
       contextIsolation: true,
       webviewTag: true,
+      backgroundThrottling: false,
       preload: path.join(baseDir, "preload.cjs"),
     },
   };
@@ -74,6 +83,220 @@ function createMainWindow({
   }
 
   const mainWindow = new BrowserWindow(windowOptions);
+  const miniPlayerState = {
+    enabled: true,
+    canEnter: false,
+    active: false,
+    restoring: false,
+    savedBounds: null,
+    wasMaximized: false,
+    wasFullScreen: false,
+  };
+
+  const emitMiniPlayerChanged = (active) => {
+    try {
+      mainWindow.webContents.send("WINDOW_MINI_PLAYER_CHANGED", active);
+    } catch {}
+  };
+
+  const scheduleDisplayZoomRefresh = () => {
+    const run = () => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      applyDisplayZoom();
+    };
+
+    run();
+    setImmediate(run);
+    setTimeout(run, 80);
+    setTimeout(run, 180);
+  };
+
+  const applyMiniPlayerDisplayZoom = () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    try {
+      mainWindow.webContents.send("DISPLAY_ZOOM", 1);
+    } catch {}
+  };
+
+  const getMiniPlayerBounds = () => {
+    const windowBounds = mainWindow.getBounds();
+    const display = screen.getDisplayMatching(windowBounds);
+    const workArea = display?.workArea || screen.getPrimaryDisplay().workArea;
+    const width = Math.min(MINI_PLAYER_WIDTH, Math.max(320, workArea.width - MINI_PLAYER_MARGIN * 2));
+    const height = Math.min(
+      MINI_PLAYER_HEIGHT,
+      Math.max(180, Math.round(width / (16 / 9))),
+    );
+    return {
+      width,
+      height,
+      x: Math.round(workArea.x + workArea.width - width - MINI_PLAYER_MARGIN),
+      y: Math.round(workArea.y + workArea.height - height - MINI_PLAYER_MARGIN),
+    };
+  };
+
+  const getRestoreWindowState = () => {
+    const savedBounds = miniPlayerState.savedBounds;
+    if (!savedBounds) {
+      return { bounds: null, maximize: miniPlayerState.wasMaximized };
+    }
+
+    const display = screen.getDisplayMatching(savedBounds);
+    const workArea = display?.workArea || screen.getPrimaryDisplay().workArea;
+    const fitsWorkArea =
+      savedBounds.width <= workArea.width &&
+      savedBounds.height <= workArea.height &&
+      savedBounds.x >= workArea.x &&
+      savedBounds.y >= workArea.y &&
+      savedBounds.x + savedBounds.width <= workArea.x + workArea.width &&
+      savedBounds.y + savedBounds.height <= workArea.y + workArea.height;
+
+    if (miniPlayerState.wasMaximized || !fitsWorkArea) {
+      return { bounds: null, maximize: true };
+    }
+
+    return {
+      bounds: {
+        x: Math.max(workArea.x, Math.min(savedBounds.x, workArea.x + workArea.width - savedBounds.width)),
+        y: Math.max(workArea.y, Math.min(savedBounds.y, workArea.y + workArea.height - savedBounds.height)),
+        width: savedBounds.width,
+        height: savedBounds.height,
+      },
+      maximize: false,
+    };
+  };
+
+  const exitMiniPlayer = ({ focus = true } = {}) => {
+    if (!miniPlayerState.active || miniPlayerState.restoring) return;
+
+    miniPlayerState.restoring = true;
+    miniPlayerState.active = false;
+
+    mainWindow.setAlwaysOnTop(false);
+    mainWindow.setResizable(true);
+    mainWindow.setMinimizable(true);
+    mainWindow.setMaximizable(true);
+    mainWindow.setFullScreenable(true);
+    const activeWorkArea = screen.getDisplayMatching(mainWindow.getBounds())?.workArea || primaryWorkArea;
+    mainWindow.setMinimumSize(
+      Math.min(1200, activeWorkArea?.width || 1200),
+      Math.min(800, activeWorkArea?.height || 800),
+    );
+    mainWindow.setMaximumSize(0, 0);
+    mainWindow.setAspectRatio(0);
+
+    const restoreState = getRestoreWindowState();
+    const nextBounds = restoreState.bounds;
+    const shouldMaximize = restoreState.maximize;
+    const shouldFullscreen = miniPlayerState.wasFullScreen;
+
+    if (nextBounds) {
+      mainWindow.setBounds(nextBounds);
+    }
+
+    if (shouldMaximize) {
+      mainWindow.maximize();
+    }
+
+    if (shouldFullscreen) {
+      mainWindow.setFullScreen(true);
+    }
+
+    miniPlayerState.savedBounds = null;
+    miniPlayerState.wasMaximized = false;
+    miniPlayerState.wasFullScreen = false;
+    miniPlayerState.restoring = false;
+
+    emitMiniPlayerChanged(false);
+
+    if (focus) {
+      mainWindow.show();
+      mainWindow.focus();
+      mainWindow.webContents.focus();
+    }
+
+    scheduleDisplayZoomRefresh();
+  };
+
+  const enterMiniPlayer = () => {
+    if (
+      miniPlayerState.active ||
+      !miniPlayerState.enabled ||
+      !miniPlayerState.canEnter ||
+      mainWindow.isDestroyed()
+    ) {
+      return;
+    }
+
+    miniPlayerState.savedBounds = mainWindow.isMaximized()
+      ? mainWindow.getNormalBounds()
+      : mainWindow.getBounds();
+    miniPlayerState.wasMaximized = mainWindow.isMaximized();
+    miniPlayerState.wasFullScreen = mainWindow.isFullScreen();
+
+    const applyMiniPlayerBounds = () => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+
+      const nextBounds = getMiniPlayerBounds();
+
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+      }
+
+      mainWindow.show();
+      mainWindow.setResizable(false);
+      mainWindow.setMinimizable(false);
+      mainWindow.setMaximizable(false);
+      mainWindow.setFullScreenable(false);
+      mainWindow.setMinimumSize(nextBounds.width, nextBounds.height);
+      mainWindow.setMaximumSize(nextBounds.width, nextBounds.height);
+      mainWindow.setAspectRatio(16 / 9);
+      mainWindow.setBounds(nextBounds);
+      mainWindow.setSize(nextBounds.width, nextBounds.height);
+      mainWindow.setPosition(nextBounds.x, nextBounds.y);
+      mainWindow.setAlwaysOnTop(true, "floating");
+      miniPlayerState.active = true;
+      emitMiniPlayerChanged(true);
+      applyMiniPlayerDisplayZoom();
+      if (typeof mainWindow.showInactive === "function") {
+        mainWindow.showInactive();
+      } else {
+        mainWindow.show();
+      }
+      try {
+        mainWindow.moveTop();
+      } catch {}
+    };
+
+    if (miniPlayerState.wasFullScreen) {
+      mainWindow.setFullScreen(false);
+    }
+
+    if (miniPlayerState.wasMaximized) {
+      mainWindow.once("unmaximize", () => {
+        setImmediate(applyMiniPlayerBounds);
+      });
+      mainWindow.unmaximize();
+      return;
+    }
+
+    setImmediate(applyMiniPlayerBounds);
+  };
+
+  const syncMiniPlayerState = (payload) => {
+    miniPlayerState.enabled = Boolean(payload?.enabled ?? miniPlayerState.enabled);
+    miniPlayerState.canEnter = Boolean(payload?.canEnter);
+
+    if (miniPlayerState.active && (!miniPlayerState.enabled || !miniPlayerState.canEnter)) {
+      exitMiniPlayer({ focus: true });
+    }
+  };
+
+  mainWindow.__raffiMiniPlayer = {
+    syncState: syncMiniPlayerState,
+    exit: exitMiniPlayer,
+    isActive: () => miniPlayerState.active,
+  };
 
   mainWindow.on("maximize", () => {
     try {
@@ -97,6 +320,25 @@ function createMainWindow({
     try {
       mainWindow.webContents.send("WINDOW_FULLSCREEN_CHANGED", false);
     } catch {}
+  });
+
+  mainWindow.on("minimize", (event) => {
+    if (miniPlayerState.restoring) return;
+    if (miniPlayerState.active) {
+      event.preventDefault();
+      exitMiniPlayer({ focus: true });
+      return;
+    }
+    if (!miniPlayerState.enabled || !miniPlayerState.canEnter) return;
+    event.preventDefault();
+    setImmediate(() => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+      }
+      mainWindow.show();
+      enterMiniPlayer();
+    });
   });
 
   try {
@@ -202,6 +444,12 @@ function createMainWindow({
 
   const applyDisplayZoom = () => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
+
+    if (miniPlayerState.active) {
+      applyMiniPlayerDisplayZoom();
+      return;
+    }
+
     const { width, height } = mainWindow.getBounds();
 
     if (height < 1000) {
@@ -216,7 +464,7 @@ function createMainWindow({
     const effectiveWidth = width / dpiZoom;
 
     if (effectiveWidth >= widthThreshold) {
-      mainWindow.webContents.send("display-zoom", dpiZoom);
+      mainWindow.webContents.send("DISPLAY_ZOOM", dpiZoom);
       return;
     }
 
@@ -281,7 +529,12 @@ function createMainWindow({
     logToFile("Main window shown");
   });
 
-  mainWindow.on("close", () => {
+  mainWindow.on("close", (event) => {
+    if (miniPlayerState.active && !miniPlayerState.restoring) {
+      event.preventDefault();
+      exitMiniPlayer({ focus: true });
+      return;
+    }
     logToFile("Main window close requested");
   });
 

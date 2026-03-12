@@ -49,6 +49,53 @@ function registerMainIpcHandlers({
     return mainWindow.isFullScreen();
   });
 
+  ipcMain.on("WINDOW_SYNC_MINI_PLAYER_STATE", (_event, payload) => {
+    const mainWindow = getMainWindow();
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.__raffiMiniPlayer?.syncState?.(payload || {});
+  });
+
+  ipcMain.on("WINDOW_EXIT_MINI_PLAYER", () => {
+    const mainWindow = getMainWindow();
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.__raffiMiniPlayer?.exit?.({ focus: true });
+  });
+
+  ipcMain.handle("WINDOW_IS_MINI_PLAYER", async () => {
+    const mainWindow = getMainWindow();
+    if (!mainWindow || mainWindow.isDestroyed()) return false;
+    return Boolean(mainWindow.__raffiMiniPlayer?.isActive?.());
+  });
+
+  ipcMain.handle("INTRODB_FETCH_SEGMENTS", async (_event, payload) => {
+    const imdbId = typeof payload?.imdbId === "string" ? payload.imdbId.trim() : "";
+    const season = Number(payload?.season);
+    const episode = Number(payload?.episode);
+
+    if (!imdbId || !Number.isFinite(season) || !Number.isFinite(episode)) {
+      throw new Error("Invalid IntroDB request");
+    }
+
+    const params = new URLSearchParams({
+      imdb_id: imdbId,
+      season: String(season),
+      episode: String(episode),
+    });
+
+    const response = await fetch(`https://api.introdb.app/segments?${params.toString()}`);
+    if (response.status === 404) {
+      return { status: 404, data: null };
+    }
+    if (!response.ok) {
+      throw new Error(`IntroDB request failed with ${response.status}`);
+    }
+
+    return {
+      status: response.status,
+      data: await response.json(),
+    };
+  });
+
   ipcMain.handle("OPEN_EXTERNAL_URL", async (_event, targetUrl) => {
     if (!targetUrl || typeof targetUrl !== "string") throw new Error("Invalid URL");
     if (!isAllowedExternalUrl(targetUrl)) throw new Error("External URL is not allowed");

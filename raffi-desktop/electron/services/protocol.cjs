@@ -43,6 +43,7 @@ function createProtocolUrlHandler({
         setPendingAveAuthPayload(payload);
         const mainWindow = getMainWindow();
         if (mainWindow && mainWindow.webContents) {
+          mainWindow.__raffiMiniPlayer?.exit?.({ focus: false });
           mainWindow.webContents.send("AVE_AUTH_CALLBACK", payload);
           if (mainWindow.isMinimized()) mainWindow.restore();
           mainWindow.focus();
@@ -54,6 +55,7 @@ function createProtocolUrlHandler({
         setPendingTraktAuthPayload(payload);
         const mainWindow = getMainWindow();
         if (mainWindow && mainWindow.webContents) {
+          mainWindow.__raffiMiniPlayer?.exit?.({ focus: false });
           mainWindow.webContents.send("TRAKT_AUTH_CALLBACK", payload);
           if (mainWindow.isMinimized()) mainWindow.restore();
           mainWindow.focus();

@@ -138,6 +138,7 @@ app.on("open-file", (event, path) => {
   event.preventDefault();
   fileToOpen = path;
   if (mainWindow && mainWindow.webContents) {
+    mainWindow.__raffiMiniPlayer?.exit?.({ focus: false });
     mainWindow.webContents.send("open-file", fileToOpen);
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.focus();
@@ -156,6 +157,7 @@ if (!gotTheLock) {
   app.on("second-instance", (event, commandLine, workingDirectory) => {
     // Someone tried to run a second instance, we should focus our window.
     if (mainWindow) {
+      mainWindow.__raffiMiniPlayer?.exit?.({ focus: false });
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
 
@@ -310,6 +312,18 @@ app.whenReady().then(async () => {
 
   logToFile("Decoder server ready, creating window");
   createWindow();
+});
+
+app.on("activate", () => {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow();
+    return;
+  }
+
+  mainWindow.__raffiMiniPlayer?.exit?.({ focus: false });
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
 });
 
 function cleanup() {

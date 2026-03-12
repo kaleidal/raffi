@@ -3,6 +3,7 @@
     import { get } from "svelte/store";
     import { router } from "../../lib/stores/router";
     import PlayerControls from "../../components/player/PlayerControls.svelte";
+    import MiniPlayerControls from "../../components/player/MiniPlayerControls.svelte";
     import PlayerOverlays from "../../components/player/PlayerOverlays.svelte";
     import SeekFeedback from "../../components/player/SeekFeedback.svelte";
     import PlayPauseFeedback from "../../components/player/PlayPauseFeedback.svelte";
@@ -16,7 +17,10 @@
     import { localMode } from "../../lib/stores/authStore";
     import { cloudSyncStatus, flushPendingLibraryProgress } from "../../lib/db/db";
     import { trackEvent } from "../../lib/analytics";
-    import { autoSkipIntros } from "../../lib/stores/playbackPreferences";
+    import {
+        autoSkipIntros,
+        miniPlayerOnMinimize,
+    } from "../../lib/stores/playbackPreferences";
     import { ChevronLeft } from "lucide-svelte";
     import * as NavigationLogic from "../meta/navigationLogic";
     import * as ProgressLogic from "../meta/progressLogic";
@@ -134,6 +138,20 @@
     let introDbChapters: Chapter[] = [];
     let effectiveChapterMarkers: Chapter[] = [];
     let skipButtonLabel = "Skip Intro";
+    let miniPlayerActive = false;
+    let lastMiniPlayerActive: boolean | null = null;
+    let canEnterMiniPlayer = false;
+    let isPlayerRoute = true;
+
+    const getWindowControls = () =>
+        (typeof window !== "undefined" ? (window as any).electronAPI?.windowControls : undefined) as
+            | {
+                syncMiniPlayerState?: (state: { enabled: boolean; canEnter: boolean }) => void;
+                exitMiniPlayer?: () => void;
+                isMiniPlayer?: () => Promise<boolean>;
+                onMiniPlayerChanged?: (callback: (value: boolean) => void) => (() => void) | void;
+            }
+            | undefined;
 
     const handleSeekStyleChange = (style: SeekBarStyle) => {
         seekBarStyle = style;
@@ -237,6 +255,7 @@
     };
 
     const handleClose = async () => {
+        getWindowControls()?.exitMiniPlayer?.();
         if (imdbID) {
             void flushPendingLibraryProgress(imdbID);
         }
@@ -600,6 +619,19 @@
         controlsManager.togglePlay(controlsVisible.set);
     };
 
+    const togglePlaybackFromMiniPlayer = () => {
+        if (castActive) return;
+        if ($watchParty.isActive && !$watchParty.isHost) return;
+        if (!videoElem) return;
+
+        if (videoElem.paused) {
+            void videoElem.play();
+            return;
+        }
+
+        videoElem.pause();
+    };
+
     $: hasStartedStore.set(hasStarted);
 
     $: controlsManager = Controls.createControlsManager(
@@ -618,6 +650,16 @@
         resetPlayerState();
         hasStarted = false;
         pendingAutoJoin = Boolean(joinPartyId && autoJoin);
+
+        const windowControls = getWindowControls();
+        const removeMiniPlayerChanged =
+            windowControls?.onMiniPlayerChanged?.((value: boolean) => {
+                miniPlayerActive = Boolean(value);
+            }) ?? null;
+
+        void windowControls?.isMiniPlayer?.().then((value) => {
+            miniPlayerActive = Boolean(value);
+        });
 
         loadingStage.set("Loading...");
         loadingDetails.set("");
@@ -666,9 +708,20 @@
                 }
             }
         }, 1000);
+
+        return () => {
+            if (typeof removeMiniPlayerChanged === "function") {
+                removeMiniPlayerChanged();
+            }
+        };
     });
 
     onDestroy(() => {
+        getWindowControls()?.syncMiniPlayerState?.({
+            enabled: false,
+            canEnter: false,
+        });
+        getWindowControls()?.exitMiniPlayer?.();
         if (imdbID) {
             void flushPendingLibraryProgress(imdbID);
         }
@@ -910,6 +963,31 @@
         videoElem.muted = false;
     }
 
+    $: isPlayerRoute = $router.page === "player";
+
+    $: canEnterMiniPlayer = Boolean(
+        isPlayerRoute &&
+        $miniPlayerOnMinimize &&
+        videoSrc &&
+        !castActive &&
+        !$showError &&
+        ($isPlaying || miniPlayerActive),
+    );
+
+    $: getWindowControls()?.syncMiniPlayerState?.({
+        enabled: $miniPlayerOnMinimize && isPlayerRoute,
+        canEnter: canEnterMiniPlayer,
+    });
+
+    $: if (miniPlayerActive && !canEnterMiniPlayer) {
+        getWindowControls()?.exitMiniPlayer?.();
+    }
+
+    $: if (lastMiniPlayerActive !== miniPlayerActive) {
+        lastMiniPlayerActive = miniPlayerActive;
+        resizeCounter += 1;
+    }
+
     $: if (pendingAutoJoin && joinPartyId && autoJoin && !$localMode && $cloudSyncStatus.cloudFeaturesAvailable) {
         showWatchPartyModal.set(true);
         pendingAutoJoin = false;
@@ -980,6 +1058,7 @@
         ? 'cursor-default'
         : 'cursor-none'}"
     bind:this={playerContainer}
+    role="presentation"
 >
     <div class="w-full h-full">
         <PlayerVideo
@@ -992,7 +1071,11 @@
             on:play={handlePlay}
             on:pause={handlePause}
             on:ended={handleEnded}
-            on:click={togglePlayWithFeedback}
+            on:click={() => {
+                if (!miniPlayerActive) {
+                    togglePlayWithFeedback();
+                }
+            }}
             on:waiting={() => {
                 loading.set(true);
                 loadingStage.set("Buffering");
@@ -1018,12 +1101,28 @@
         />
     {/if}
 
+    {#if miniPlayerActive}
+        <MiniPlayerControls
+            currentTime={$currentTime}
+            duration={$duration}
+            pendingSeek={$pendingSeek}
+            loading={$loading}
+            isPlaying={$isPlaying}
+            {seekBarStyle}
+            onTogglePlayback={togglePlaybackFromMiniPlayer}
+            onSeekInput={(e) =>
+                controlsManager.onSeekInput(e, $duration, pendingSeek.set)}
+            onSeekChange={(e) =>
+                controlsManager.onSeekChange(e, $duration, seekToTime)}
+        />
+    {/if}
+
     {#if $seekFeedback}
         <SeekFeedback type={$seekFeedback.type} id={$seekFeedback.id} />
     {/if}
 
     <PlayerLoadingScreen
-        loading={$loading}
+        loading={$loading && !miniPlayerActive}
         onClose={handleClose}
         {metaData}
         stage={$loadingStage}
@@ -1044,7 +1143,7 @@
         </div>
     {/if}
 
-    {#if !$loading}
+    {#if !$loading && !miniPlayerActive}
         <div
             class="absolute left-0 top-0 p-10 z-50 transition-all duration-300 ease-in-out transform {$controlsVisible
                 ? 'translate-y-0 opacity-100'
