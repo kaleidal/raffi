@@ -11,8 +11,6 @@ const {
   registerLinuxProtocolHandler,
 } = require("./services/protocol.cjs");
 const { createDecoderService } = require("./services/decoder.cjs");
-const { createCastBootstrapService } = require("./services/castBootstrap.cjs");
-const { createCastSenderService } = require("./services/castSender.cjs");
 const { registerMainIpcHandlers } = require("./services/mainIpc.cjs");
 const { registerDiscordRpcHandlers } = require("./services/rpc.cjs");
 const { createMainWindow } = require("./services/window.cjs");
@@ -117,11 +115,6 @@ const isDev = !app.isPackaged;
 if (process.platform === "linux") {
   app.commandLine.appendSwitch("class", "Raffi");
 }
-app.commandLine.appendSwitch("load-media-router-component-extension");
-app.commandLine.appendSwitch(
-  "enable-features",
-  "MediaRouter,CastMediaRouteProvider,DialMediaRouteProvider",
-);
 app.setName("Raffi");
 if (process.platform === "linux" && !isDev) {
   try {
@@ -180,21 +173,6 @@ const decoderService = createDecoderService({
   fs,
   spawn,
   logToFile,
-  baseDir: __dirname,
-});
-
-const decoderServerAddr = process.env.RAFFI_SERVER_ADDR || "0.0.0.0:6969";
-const castBootstrapService = createCastBootstrapService({
-  logToFile,
-  serverAddr: decoderServerAddr,
-  castHost: process.env.RAFFI_CAST_HOST || "",
-});
-const castSenderService = createCastSenderService({
-  logToFile,
-  BrowserWindow,
-  shell,
-  fs,
-  path,
   baseDir: __dirname,
 });
 
@@ -330,7 +308,6 @@ function cleanup() {
   console.log("Cleaning up...");
   console.log("Killing decoder server...");
   decoderService.cleanupDecoder();
-  castSenderService.shutdown();
   if (httpServer) {
     console.log("Closing HTTP server...");
     httpServer.close();
@@ -348,8 +325,6 @@ registerMainIpcHandlers({
   logToFile,
   getMainWindow: () => mainWindow,
   scanLibraryRoots,
-  castBootstrapService,
-  castSenderService,
 });
 
 app.on("before-quit", cleanup);

@@ -17,7 +17,6 @@
 	let traktError = "";
 	let traktStatusRequested = false;
 
-	export let message = "";
 	export let error = "";
 	export let onSyncNow: () => void | Promise<void> = () => {};
 	export let onDownloadData: () => void = () => {};
@@ -251,9 +250,6 @@
 		</div>
 	</div>
 
-	{#if message}
-		<div class="p-3 rounded-2xl bg-emerald-500/12 text-emerald-200 text-sm">{message}</div>
-	{/if}
 	{#if error}
 		<div class="p-3 rounded-2xl bg-red-500/12 text-red-200 text-sm">{error}</div>
 	{/if}

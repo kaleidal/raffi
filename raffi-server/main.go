@@ -29,8 +29,6 @@ type Server struct {
 	hlsController   *hls.Controller
 	probeMu         sync.Mutex
 	probeCooldown   map[string]time.Time
-	castMu          sync.RWMutex
-	castTokens      map[string]CastToken
 }
 
 func main() {
@@ -41,7 +39,6 @@ func main() {
 		torrentStreamer: stream.NewTorrentStreamer(filepath.Join(os.TempDir(), "raffi-torrents")),
 		hlsController:   hls.NewController(),
 		probeCooldown:   make(map[string]time.Time),
-		castTokens:      make(map[string]CastToken),
 	}
 
 	// Set up cleanup on exit
@@ -83,14 +80,12 @@ func main() {
 		defer ticker.Stop()
 		for range ticker.C {
 			srv.hlsController.CleanupOrphanedSessions()
-			srv.cleanupExpiredCastTokens()
 		}
 	}()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/sessions", srv.handleSessions)
 	mux.HandleFunc("/sessions/", srv.handleSessionByID)
-	mux.HandleFunc("/cast/token", srv.handleCastToken)
 	mux.HandleFunc("/cleanup", srv.handleCleanup)
 	mux.HandleFunc("/torrents/", srv.torrentStreamer.ServeHTTP)
 	mux.HandleFunc("/community-addons", srv.handleCommunityAddons)
@@ -103,12 +98,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to bind to %s: %v", addr, err)
 	}
-	if strings.HasPrefix(addr, "127.") {
-		log.Printf("Server listening on http://%s (loopback only)\n", listener.Addr().String())
-	} else {
-		log.Printf("Server listening on http://%s (LAN mode with cast token guard)\n", listener.Addr().String())
-	}
-	if err := http.Serve(listener, withCORS(withLANGuard(srv, mux))); err != nil {
+	log.Printf("Server listening on http://%s\n", listener.Addr().String())
+	if err := http.Serve(listener, withCORS(mux)); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -403,7 +394,6 @@ func (s *Server) handleHLSSessionAsset(w http.ResponseWriter, r *http.Request, s
 		http.Error(w, "failed to prepare stream", http.StatusInternalServerError)
 		return
 	}
-	castToken := castTokenFromRequest(r)
 
 	if asset == "child.m3u8" {
 		if s.hlsController != nil {
@@ -468,12 +458,6 @@ func (s *Server) handleHLSSessionAsset(w http.ResponseWriter, r *http.Request, s
 				} else {
 					lines = append([]string{tag}, lines...)
 				}
-			}
-		}
-
-		if castToken != "" {
-			for i, line := range lines {
-				lines[i] = rewritePlaylistLineWithCastToken(line, castToken)
 			}
 		}
 
@@ -559,49 +543,6 @@ func waitForFile(ctx context.Context, p string, timeout time.Duration) error {
 	}
 }
 
-func addCastTokenToURL(rawURL string, castToken string) string {
-	rawURL = strings.TrimSpace(rawURL)
-	if rawURL == "" || castToken == "" {
-		return rawURL
-	}
-	if strings.Contains(rawURL, "cast_token=") {
-		return rawURL
-	}
-	sep := "?"
-	if strings.Contains(rawURL, "?") {
-		sep = "&"
-	}
-	return rawURL + sep + "cast_token=" + castToken
-}
-
-func rewritePlaylistLineWithCastToken(line string, castToken string) string {
-	trimmed := strings.TrimSpace(line)
-	if trimmed == "" || castToken == "" {
-		return line
-	}
-
-	if strings.HasPrefix(trimmed, "#") {
-		uriStart := strings.Index(line, "URI=\"")
-		if uriStart == -1 {
-			return line
-		}
-		valueStart := uriStart + len("URI=\"")
-		valueEndRel := strings.Index(line[valueStart:], "\"")
-		if valueEndRel == -1 {
-			return line
-		}
-		valueEnd := valueStart + valueEndRel
-		uriValue := line[valueStart:valueEnd]
-		patched := addCastTokenToURL(uriValue, castToken)
-		if patched == uriValue {
-			return line
-		}
-		return line[:valueStart] + patched + line[valueEnd:]
-	}
-
-	return addCastTokenToURL(trimmed, castToken)
-}
-
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(v)
@@ -615,7 +556,7 @@ func withCORS(next http.Handler) http.Handler {
 			w.Header().Set("Vary", "Origin")
 		}
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, DELETE, HEAD")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept-Encoding, Range, Origin, Accept, X-Raffi-Cast-Token")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept-Encoding, Range, Origin, Accept")
 		w.Header().Set("Access-Control-Expose-Headers", "X-Raffi-Slice-Start, Accept-Ranges, Content-Range, Content-Length")
 		w.Header().Set("Access-Control-Max-Age", "86400")
 

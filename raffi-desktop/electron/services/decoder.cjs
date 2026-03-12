@@ -98,7 +98,7 @@ function createDecoderService({ isDev, path, fs, spawn, logToFile, baseDir }) {
       stdio: "pipe",
       env: {
         ...process.env,
-        RAFFI_SERVER_ADDR: process.env.RAFFI_SERVER_ADDR || "0.0.0.0:6969",
+        RAFFI_SERVER_ADDR: process.env.RAFFI_SERVER_ADDR || "127.0.0.1:6969",
       },
     });
     logToFile(`Decoder process spawned, pid: ${goServer.pid}`);

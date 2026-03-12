@@ -11,7 +11,6 @@
     import PlayerLoadingScreen from "./components/PlayerLoadingScreen.svelte";
     import PlayerModals from "./components/PlayerModals.svelte";
     import PlayerWatchParty from "./components/PlayerWatchParty.svelte";
-    import CastDeviceModal from "../../components/player/CastDeviceModal.svelte";
     import type { ShowResponse } from "../../lib/library/types/meta_types";
     import { watchParty } from "../../lib/stores/watchPartyStore";
     import { localMode } from "../../lib/stores/authStore";
@@ -88,14 +87,6 @@
     import { createNextEpisodeHandler } from "./playerNextEpisode";
     import { createPlayerSessionLoader } from "./playerSessionLoader";
     import { createPlayerModalHandlers } from "./playerModalHandlers";
-    import { createPlayerCastController } from "./playerCastController";
-    import {
-        createPlayerCastRuntime,
-        type CastDevice,
-        type CastModalStep,
-        type CastMode,
-    } from "./playerCastRuntime";
-
     import { serverUrl } from "../../lib/client";
     import type { Chapter } from "./types";
 
@@ -172,27 +163,7 @@
         try {
             await videoElem.play();
         } catch {
-            // ignore
         }
-    };
-
-    const getPlaybackAnalyticsProps = () =>
-        buildPlaybackAnalyticsProps({
-            currentVideoSrc,
-            sessionData: $sessionData,
-            duration: $duration,
-            currentTime: $currentTime,
-            metaData,
-            season,
-            episode,
-            watchPartyActive: $watchParty.isActive,
-        });
-
-    const trackPlaybackClosed = () => {
-        if (playbackClosedTracked) return;
-        if (!currentVideoSrc) return;
-        playbackClosedTracked = true;
-        trackEvent("playback_closed", getPlaybackAnalyticsProps());
     };
 
     const handleToggleFullscreen = () => {
@@ -230,6 +201,25 @@
         }
         trackEvent("watch_party_modal_opened", getPlaybackAnalyticsProps());
         showWatchPartyModal.set(true);
+    };
+
+    const getPlaybackAnalyticsProps = () =>
+        buildPlaybackAnalyticsProps({
+            currentVideoSrc,
+            sessionData: $sessionData,
+            duration: $duration,
+            currentTime: $currentTime,
+            metaData,
+            season,
+            episode,
+            watchPartyActive: $watchParty.isActive,
+        });
+
+    const trackPlaybackClosed = () => {
+        if (playbackClosedTracked) return;
+        if (!currentVideoSrc) return;
+        playbackClosedTracked = true;
+        trackEvent("playback_closed", getPlaybackAnalyticsProps());
     };
 
     let fullscreenCleanupDone = false;
@@ -271,7 +261,6 @@
         }
     };
 
-    // Local refs
     let videoElem: HTMLVideoElement;
     let playerContainer: HTMLDivElement;
     let canvasElem: HTMLCanvasElement;
@@ -286,139 +275,6 @@
     let errorModalOpen = false;
     let reprobeAttempted = false;
     let torrentFailureExitTimeout: ReturnType<typeof setTimeout> | null = null;
-    let castActive = false;
-    let castBusy = false;
-    let castTransport: CastMode | null = null;
-    let castDeviceName = "";
-    let showCastDeviceModal = false;
-    let castDeviceModalLoading = false;
-    let castDeviceModalMode: CastMode = "native";
-    let castModalStep: CastModalStep = "mode";
-    let nativeCastDevices: CastDevice[] = [];
-
-    const showCastAlert = async (message: string, title: string) => {
-        const electronApi = (window as any).electronAPI;
-        if (electronApi?.showAlertDialog) {
-            await electronApi.showAlertDialog(message, title);
-        }
-    };
-
-    const castRuntime = createPlayerCastRuntime({
-        getSessionId: () => sessionId,
-        getServerUrl: () => serverUrl,
-        isCastActive: () => castActive,
-        setCastActive: (active) => {
-            castActive = active;
-        },
-        getCastTransport: () => castTransport,
-        setCastTransport: (mode) => {
-            castTransport = mode;
-        },
-        setCastDeviceName: (name) => {
-            castDeviceName = name;
-        },
-        setCastModalOpen: (open) => {
-            showCastDeviceModal = open;
-        },
-        setCastModalLoading: (loading) => {
-            castDeviceModalLoading = loading;
-        },
-        setCastModalMode: (mode) => {
-            castDeviceModalMode = mode;
-        },
-        setCastModalStep: (step) => {
-            castModalStep = step;
-        },
-        setNativeCastDevices: (devices) => {
-            nativeCastDevices = devices;
-        },
-        setHasStarted: (started) => {
-            hasStarted = started;
-        },
-        getPlaybackOffset: () => $playbackOffset,
-        setCurrentTime: currentTime.set,
-        handleProgress: handleProgressInternal,
-        getDuration: () => $duration,
-        setDuration: duration.set,
-        setIsPlaying: isPlaying.set,
-        showAlert: showCastAlert,
-    });
-
-    const castController = createPlayerCastController({
-        getSessionId: () => sessionId,
-        isCastActive: () => castActive,
-        isCastBusy: () => castBusy,
-        setCastBusy: (busy) => {
-            castBusy = busy;
-        },
-        setCastActive: (active) => {
-            castActive = active;
-        },
-        setCastDeviceName: (name) => {
-            castDeviceName = name;
-        },
-        setCastTransport: (mode) => {
-            castTransport = mode;
-        },
-        getCastTransport: () => castTransport,
-        setHasStarted: (started) => {
-            hasStarted = started;
-        },
-        getCurrentTime: () => $currentTime,
-        getPlaybackOffset: () => $playbackOffset,
-        setCurrentTime: currentTime.set,
-        setVolumeLevel: volume.set,
-        setIsPlaying: isPlaying.set,
-        setPendingSeek: pendingSeek.set,
-        pauseLocalVideo: () => {
-            if (videoElem && !videoElem.paused) {
-                videoElem.pause();
-            }
-            if (videoElem) {
-                videoElem.muted = true;
-            }
-            if (hls) {
-                Session.detachLocalPlayback(hls, videoElem);
-                hls = null;
-            }
-        },
-        showDeviceScanLoading: castRuntime.showDeviceScanLoading,
-        hideDevicePicker: castRuntime.hideDevicePicker,
-        showAlert: showCastAlert,
-        trackEvent,
-        getPlaybackAnalyticsProps,
-        getMetadata: () => ({
-            title: metaData?.meta?.name,
-            subtitle:
-                metaData?.meta?.type === "series" && season != null && episode != null
-                    ? `S${season} E${episode}`
-                    : undefined,
-            cover: String((metaData as any)?.meta?.poster || (metaData as any)?.meta?.logo || ""),
-            background: String((metaData as any)?.meta?.background || ""),
-            durationSeconds: Number($duration || 0),
-        }),
-    });
-
-    const openCastBootstrap = async () => {
-        if (castBusy) return;
-        if (castActive) {
-            await castController.connectOrDisconnect(castTransport || "native");
-            return;
-        }
-        castRuntime.showDeviceModePicker();
-    };
-
-    const startCastWithMode = async (mode: "native" | "chrome") => {
-        await castController.connectOrDisconnect(mode);
-    };
-
-    const openNativeDeviceSelection = async () => {
-        await castRuntime.openNativeDeviceSelection();
-    };
-
-    const startNativeCastWithDevice = async (deviceId: string) => {
-        await castController.connectOrDisconnect("native", deviceId);
-    };
 
     const getTraktMediaType = (): "movie" | "episode" => {
         return metaData?.meta?.type === "series" ? "episode" : "movie";
@@ -559,10 +415,6 @@
     const loadVideo = playerSessionLoader.loadVideo;
 
     const seekToTime = (targetTime: number) => {
-        if (castActive) {
-            void castController.seek(targetTime);
-            return;
-        }
         if (!videoElem) return;
         performSeekWithEffects({
             targetTime,
@@ -599,14 +451,6 @@
     const togglePlayWithFeedback = () => {
         if ($watchParty.isActive && !$watchParty.isHost) return;
 
-        if (castActive) {
-            if (castTransport === "native") {
-                triggerPlayPauseFeedback($isPlaying ? "pause" : "play");
-                void castController.togglePlay($isPlaying);
-            }
-            return;
-        }
-
         if (!videoElem) return;
 
         if ($showSeekStyleModal) return;
@@ -622,7 +466,6 @@
     };
 
     const togglePlaybackFromMiniPlayer = () => {
-        if (castActive) return;
         if ($watchParty.isActive && !$watchParty.isHost) return;
         if (!videoElem) return;
 
@@ -768,14 +611,11 @@
             WatchParty.leaveWatchParty,
             $watchParty.isActive,
         );
-        void castController.cleanup();
-        castRuntime.cleanup();
         resetPlayerState();
         hasStarted = false;
     });
 
     const handleTimeUpdate = () => {
-        if (castActive) return;
         if (!videoElem) return;
         const time = $playbackOffset + videoElem.currentTime;
         currentTime.set(time);
@@ -805,7 +645,6 @@
     };
 
     const handlePlay = () => {
-        if (castActive) return;
         isPlaying.set(true);
         hasStarted = true;
         void traktScrobbler.send("start");
@@ -827,7 +666,6 @@
     };
 
     const handlePause = () => {
-        if (castActive) return;
         isPlaying.set(false);
         if (
             !traktScrobbler.isStopSent() &&
@@ -985,7 +823,7 @@
 
     $: effectiveChapterMarkers = Chapters.getEffectiveChapterSegments($sessionData, introDbChapters);
 
-    $: if (!castActive && videoElem) {
+    $: if (videoElem) {
         videoElem.muted = false;
     }
 
@@ -1000,7 +838,6 @@
         isPlayerRoute &&
         $miniPlayerOnMinimize &&
         videoSrc &&
-        !castActive &&
         !$showError &&
         ($isPlaying || miniPlayerActive),
     );
@@ -1026,12 +863,6 @@
 
     $: if ($showWatchPartyModal && !$cloudSyncStatus.cloudFeaturesAvailable) {
         showWatchPartyModal.set(false);
-    }
-
-    $: if (castActive) {
-        castRuntime.startStatusPolling();
-    } else {
-        castRuntime.stopStatusPolling();
     }
 
     $: {
@@ -1097,7 +928,6 @@
             bind:canvasElem
             objectFit={$objectFit}
             showCanvas={$showCanvas}
-            hidden={castActive}
             on:timeupdate={handleTimeUpdate}
             on:play={handlePlay}
             on:pause={handlePause}
@@ -1164,19 +994,6 @@
         progress={$loadingProgress}
     />
 
-    {#if castActive}
-        <div class="absolute inset-0 z-20 flex items-center justify-center bg-black text-white pointer-events-none">
-            <div class="text-center">
-                <div class="text-2xl font-semibold">Casting to {castDeviceName || "Chromecast"}</div>
-                <div class="text-sm text-white/70 mt-2">
-                    {castTransport === "chrome"
-                        ? "Playback is running on your TV via Chrome"
-                        : "Playback is running on your TV"}
-                </div>
-            </div>
-        </div>
-    {/if}
-
     {#if !$loading && !miniPlayerActive}
         <div
             class="absolute left-0 top-0 p-10 z-50 transition-all duration-300 ease-in-out transform {$controlsVisible
@@ -1230,25 +1047,13 @@
                         controlsManager.onSeekInput(e, $duration, pendingSeek.set)}
                     onSeekChange={(e) =>
                         controlsManager.onSeekChange(e, $duration, seekToTime)}
-                    onVolumeChange={(e) =>
-                        castActive && castTransport === "native"
-                            ? (() => {
-                                const target = e.target as HTMLInputElement;
-                                const nextVolume = Number(target?.value ?? $volume);
-                                if (!Number.isFinite(nextVolume)) return;
-                                void castController.setVolume(nextVolume);
-                            })()
-                            : controlsManager.onVolumeChange(e, volume.set)}
+                    onVolumeChange={(e) => controlsManager.onVolumeChange(e, volume.set)}
                     toggleFullscreen={handleToggleFullscreen}
                     objectFit={$objectFit}
                     toggleObjectFit={handleToggleObjectFit}
                     onNextEpisode={handleNextEpisodeClick}
-                    {castActive}
-                    {castBusy}
-                    {castDeviceName}
                     showWatchParty={!$localMode && $cloudSyncStatus.cloudFeaturesAvailable}
                     onAudioClick={openAudioSelection}
-                    onCastClick={openCastBootstrap}
                     onSubtitleClick={openSubtitleSelection}
                     onWatchPartyClick={() => {
                         if (!$localMode && $cloudSyncStatus.cloudFeaturesAvailable) {
@@ -1309,24 +1114,5 @@
             showPartyEndModal.set(false);
             void handleClose();
         }}
-    />
-
-    <CastDeviceModal
-        open={showCastDeviceModal}
-        loading={castDeviceModalLoading}
-        loadingMode={castDeviceModalMode}
-        step={castModalStep}
-        nativeDevices={nativeCastDevices}
-        onSelectNativeDevice={(detail) => {
-            void startNativeCastWithDevice(detail?.deviceId || "");
-        }}
-        onBackToMode={castRuntime.showDeviceModePicker}
-        onNative={() => {
-            void openNativeDeviceSelection();
-        }}
-        onChrome={() => {
-            void startCastWithMode("chrome");
-        }}
-        onCancel={castRuntime.hideDevicePicker}
     />
 </div>
