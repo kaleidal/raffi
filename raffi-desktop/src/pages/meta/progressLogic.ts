@@ -8,6 +8,7 @@ import {
 import type { ProgressMap, ProgressItem } from "./types";
 
 let lastUpdate = 0;
+const PROGRESS_CLOUD_SYNC_DELAY_MS = 90_000;
 
 const isEpisodeReleased = (episode: any): boolean => {
     if (!episode) return false;
@@ -95,7 +96,14 @@ export const handleProgress = async (time: number, duration: number, imdbID: str
     if (now - lastUpdate > 5000 || isWatched) {
         lastUpdate = now;
         const completed = determineCompletion(type, currentMap, data.meta.videos);
-        await updateLibraryProgress(imdbID, currentMap, type, completed);
+        await updateLibraryProgress(
+            imdbID,
+            currentMap,
+            type,
+            completed,
+            undefined,
+            { syncDelayMs: isWatched ? undefined : PROGRESS_CLOUD_SYNC_DELAY_MS },
+        );
     }
 };
 
