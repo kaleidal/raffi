@@ -33,6 +33,7 @@ type CastMetadata = {
     cover?: string;
     background?: string;
     durationSeconds?: number;
+    timelineOffsetSeconds?: number;
 };
 
 type CastConnectPayload = {
