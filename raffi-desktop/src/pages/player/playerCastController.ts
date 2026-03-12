@@ -17,6 +17,7 @@ type CastMetadata = {
     cover?: string;
     background?: string;
     durationSeconds?: number;
+    timelineOffsetSeconds?: number;
 };
 
 type CastMode = "native" | "chrome";
@@ -47,6 +48,8 @@ type CreatePlayerCastControllerDeps = {
 };
 
 export function createPlayerCastController(deps: CreatePlayerCastControllerDeps) {
+    let castSeekSequence = 0;
+
     const setDisconnectedState = () => {
         deps.setCastActive(false);
         deps.setCastDeviceName("");
@@ -88,7 +91,29 @@ export function createPlayerCastController(deps: CreatePlayerCastControllerDeps)
             const absoluteCurrentTime = deps.getCurrentTime();
             const playbackOffset = Math.max(0, Number(deps.getPlaybackOffset() || 0));
             const streamRelativeStartTime = Math.max(0, absoluteCurrentTime - playbackOffset);
+            let streamUrl = cast.streamUrl;
             let metadata = deps.getMetadata();
+
+            if (playbackOffset > 0) {
+                try {
+                    const castStreamUrl = new URL(cast.streamUrl);
+                    castStreamUrl.searchParams.set("seek", String(playbackOffset));
+                    castSeekSequence += 1;
+                    castStreamUrl.searchParams.set(
+                        "seek_id",
+                        `cast-${Date.now().toString(36)}-${castSeekSequence.toString(36)}`,
+                    );
+                    castStreamUrl.searchParams.set("force_slice", "1");
+                    streamUrl = castStreamUrl.toString();
+                } catch {
+                    streamUrl = cast.streamUrl;
+                }
+            }
+
+            metadata = {
+                ...metadata,
+                timelineOffsetSeconds: playbackOffset,
+            };
 
             if (!Number.isFinite(Number(metadata?.durationSeconds || 0)) || Number(metadata?.durationSeconds || 0) <= 0) {
                 try {
@@ -114,7 +139,7 @@ export function createPlayerCastController(deps: CreatePlayerCastControllerDeps)
 
             const connection = await connectAndLoadCast({
                 deviceId,
-                streamUrl: cast.streamUrl,
+                streamUrl,
                 startTime: streamRelativeStartTime,
                 mode,
                 metadata,
