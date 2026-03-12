@@ -1,6 +1,7 @@
 import { convexMutation, convexQuery } from "./convex";
-import type { RemoteState } from "./types";
+import type { CloudSyncState, RemoteState, SyncSection } from "./types";
 import {
+    clearDirtyMarker,
     getCloudSyncPromise,
     getCloudSyncTimer,
     getRequiredUserId,
@@ -12,18 +13,19 @@ import {
     readSyncState,
     setCloudSyncPromise,
     setCloudSyncTimer,
-    clearDirtyMarkers,
     clearTombstone,
     cloudSyncStatus,
     mergeRemoteStateIntoLocal,
     setSyncResult,
     canUseCloudFeatures,
+    updateSyncState,
 } from "./state";
 import { get } from "svelte/store";
 import { getCachedUser } from "../stores/authStore";
 
 const CACHE_TTL_MS = 15_000;
 const REMOTE_RECONCILE_INTERVAL_MS = 30 * 60 * 1000;
+const DEFAULT_SYNC_DELAY_MS = 1_200;
 
 let remoteStateCache: { userId: string; data: RemoteState; updatedAt: number } | null = null;
 let remoteReconcileTimer: ReturnType<typeof setInterval> | null = null;
@@ -100,7 +102,7 @@ export const hydrateLocalBackupFromCloud = async () => {
 
 export const getCloudSyncStatus = () => get(cloudSyncStatus);
 
-export const scheduleCloudBackupSync = (delayMs = 1200) => {
+export const scheduleCloudBackupSync = (delayMs = DEFAULT_SYNC_DELAY_MS) => {
     if (!isCloudBackupEnabled()) return;
     if (!hasPendingCloudSyncChanges()) return;
     const currentTimer = getCloudSyncTimer();
@@ -110,11 +112,81 @@ export const scheduleCloudBackupSync = (delayMs = 1200) => {
         const userId = getCachedUser()?.id;
         if (!userId) return;
         if (!hasPendingCloudSyncChanges()) return;
-        void syncLocalStateToUser(userId);
+        void syncLocalStateToUser(userId, { forceRemoteRefresh: true });
     }, delayMs));
 };
 
-export const syncLocalStateToUser = async (userId: string) => {
+const buildDirtySyncPayload = (local: RemoteState, syncState: CloudSyncState) => {
+    const addonsByTransportUrl = new Map(local.addons.map((addon) => [addon.transport_url, addon]));
+    const libraryByImdbId = new Map(local.library.map((item) => [item.imdb_id, item]));
+    const listsById = new Map(local.lists.map((list) => [list.list_id, list]));
+    const listItemsByKey = new Map(local.listItems.map((item) => [`${item.list_id}::${item.imdb_id}`, item]));
+
+    return {
+        addons: Object.keys(syncState.dirty.addons)
+            .map((key) => addonsByTransportUrl.get(key))
+            .filter((value): value is NonNullable<typeof value> => Boolean(value)),
+        library: Object.keys(syncState.dirty.library)
+            .map((key) => libraryByImdbId.get(key))
+            .filter((value): value is NonNullable<typeof value> => Boolean(value)),
+        lists: Object.keys(syncState.dirty.lists)
+            .map((key) => listsById.get(key))
+            .filter((value): value is NonNullable<typeof value> => Boolean(value)),
+        listItems: Object.keys(syncState.dirty.listItems)
+            .map((key) => listItemsByKey.get(key))
+            .filter((value): value is NonNullable<typeof value> => Boolean(value)),
+        deletes: {
+            addons: Object.keys(syncState.tombstones.addons),
+            library: Object.keys(syncState.tombstones.library),
+            lists: Object.keys(syncState.tombstones.lists),
+            listItems: Object.keys(syncState.tombstones.listItems)
+                .map((key) => {
+                    const [list_id, imdb_id] = key.split("::");
+                    if (!list_id || !imdb_id) return null;
+                    return { list_id, imdb_id };
+                })
+                .filter((item): item is { list_id: string; imdb_id: string } => Boolean(item)),
+        },
+    };
+};
+
+const clearSyncedSnapshot = (snapshot: CloudSyncState) => {
+    const sections: SyncSection[] = ["addons", "library", "lists", "listItems"];
+    updateSyncState((state) => {
+        const next = {
+            ...state,
+            dirty: {
+                addons: { ...state.dirty.addons },
+                library: { ...state.dirty.library },
+                lists: { ...state.dirty.lists },
+                listItems: { ...state.dirty.listItems },
+            },
+            tombstones: {
+                addons: { ...state.tombstones.addons },
+                library: { ...state.tombstones.library },
+                lists: { ...state.tombstones.lists },
+                listItems: { ...state.tombstones.listItems },
+            },
+        };
+
+        for (const section of sections) {
+            for (const [key, timestamp] of Object.entries(snapshot.dirty[section])) {
+                if (next.dirty[section][key] === timestamp) {
+                    delete next.dirty[section][key];
+                }
+            }
+            for (const [key, timestamp] of Object.entries(snapshot.tombstones[section])) {
+                if (next.tombstones[section][key] === timestamp) {
+                    delete next.tombstones[section][key];
+                }
+            }
+        }
+
+        return next;
+    });
+};
+
+export const syncLocalStateToUser = async (userId: string, options?: { forceRemoteRefresh?: boolean }) => {
     if (!userId || !isCloudBackupEnabled()) return { ok: false };
     const active = getCloudSyncPromise();
     if (active) return active;
@@ -126,41 +198,35 @@ export const syncLocalStateToUser = async (userId: string) => {
 
     const promise = (async () => {
         try {
-            await persistMergedRemoteState(true);
+            await persistMergedRemoteState(options?.forceRemoteRefresh ?? true);
             const local = readLocalState();
             const syncState = readSyncState();
+            const payload = buildDirtySyncPayload(local, syncState);
+
+            if (
+                payload.addons.length
+                + payload.library.length
+                + payload.lists.length
+                + payload.listItems.length
+                + payload.deletes.addons.length
+                + payload.deletes.library.length
+                + payload.deletes.lists.length
+                + payload.deletes.listItems.length
+                === 0
+            ) {
+                publishCloudSyncStatus();
+                return { ok: true, skipped: true as const, reason: "clean" as const };
+            }
+
             await convexMutation("raffi:applySyncState", {
-                addons: local.addons.map((addon) => ({ transport_url: addon.transport_url, manifest: addon.manifest, flags: addon.flags, addon_id: addon.addon_id, added_at: addon.added_at, position: addon.position })),
-                library: local.library.map((item) => ({ imdb_id: item.imdb_id, progress: item.progress, last_watched: item.last_watched, completed_at: item.completed_at, type: item.type, shown: item.shown, poster: item.poster })),
-                lists: local.lists.map((list) => ({ list_id: list.list_id, name: list.name, position: list.position, created_at: list.created_at })),
-                listItems: local.listItems.map((item) => ({ list_id: item.list_id, imdb_id: item.imdb_id, position: item.position, type: item.type, poster: item.poster })),
-                deletes: {
-                    addons: Object.keys(syncState.tombstones.addons),
-                    library: Object.keys(syncState.tombstones.library),
-                    lists: Object.keys(syncState.tombstones.lists),
-                    listItems: Object.keys(syncState.tombstones.listItems)
-                        .map((key) => {
-                            const [list_id, imdb_id] = key.split("::");
-                            if (!list_id || !imdb_id) return null;
-                            return { list_id, imdb_id };
-                        })
-                        .filter((item): item is { list_id: string; imdb_id: string } => Boolean(item)),
-                },
+                addons: payload.addons.map((addon) => ({ transport_url: addon.transport_url, manifest: addon.manifest, flags: addon.flags, addon_id: addon.addon_id, added_at: addon.added_at, position: addon.position })),
+                library: payload.library.map((item) => ({ imdb_id: item.imdb_id, progress: item.progress, last_watched: item.last_watched, completed_at: item.completed_at, type: item.type, shown: item.shown, poster: item.poster })),
+                lists: payload.lists.map((list) => ({ list_id: list.list_id, name: list.name, position: list.position, created_at: list.created_at })),
+                listItems: payload.listItems.map((item) => ({ list_id: item.list_id, imdb_id: item.imdb_id, position: item.position, type: item.type, poster: item.poster })),
+                deletes: payload.deletes,
             });
 
-            clearDirtyMarkers();
-            for (const transportUrl of Object.keys(syncState.tombstones.addons)) {
-                clearTombstone("addons", transportUrl);
-            }
-            for (const imdbId of Object.keys(syncState.tombstones.library)) {
-                clearTombstone("library", imdbId);
-            }
-            for (const listId of Object.keys(syncState.tombstones.lists)) {
-                clearTombstone("lists", listId);
-            }
-            for (const key of Object.keys(syncState.tombstones.listItems)) {
-                clearTombstone("listItems", key);
-            }
+            clearSyncedSnapshot(syncState);
             invalidateRemoteCache();
             setSyncResult(null);
             return { ok: true };
@@ -192,7 +258,7 @@ export const syncCloudBackupNow = async () => {
         publishCloudSyncStatus();
         return { ok: false as const, reason: "disabled" as const };
     }
-    return syncLocalStateToUser(userId);
+    return syncLocalStateToUser(userId, { forceRemoteRefresh: true });
 };
 
 export const flushPendingLibraryProgress = async (_imdbId?: string) => {
