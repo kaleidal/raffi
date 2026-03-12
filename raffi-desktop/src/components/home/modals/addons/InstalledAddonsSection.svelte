@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onDestroy, onMount } from "svelte";
-	import { Trash } from "lucide-svelte";
-	import { addAddon, getAddons, removeAddon, type Addon } from "../../../../lib/db/db";
+	import { ArrowDown, ArrowUp, Trash } from "lucide-svelte";
+	import { addAddon, getAddons, removeAddon, reorderAddons, type Addon } from "../../../../lib/db/db";
 	import { alertDialog, confirmDialog } from "../../../../lib/systemDialogs";
 	import { trackEvent } from "../../../../lib/analytics";
 	import LoadingSpinner from "../../../common/LoadingSpinner.svelte";
@@ -36,6 +36,14 @@
 	function emitAddonsChanged() {
 		window.dispatchEvent(new CustomEvent(ADDONS_CHANGED_EVENT));
 		window.dispatchEvent(new CustomEvent(HOME_REFRESH_EVENT));
+	}
+
+	function addonSupportsStreams(addon: Addon) {
+		return supportsResource(addon?.manifest, "stream");
+	}
+
+	function firstStreamAddonUrl(addons: Addon[]) {
+		return addons.find((addon) => addonSupportsStreams(addon))?.transport_url ?? null;
 	}
 
 	async function loadAddons() {
@@ -123,9 +131,36 @@
 			});
 		}
 	}
+
+	async function moveAddon(addon: Addon, direction: -1 | 1) {
+		const currentIndex = addonsList.findIndex((item) => item.transport_url === addon.transport_url);
+		if (currentIndex < 0) return;
+		const targetIndex = currentIndex + direction;
+		if (targetIndex < 0 || targetIndex >= addonsList.length) return;
+
+		const next = [...addonsList];
+		const [moved] = next.splice(currentIndex, 1);
+		next.splice(targetIndex, 0, moved);
+		addonsList = next.map((item, index) => ({ ...item, position: index + 1 }));
+
+		try {
+			await reorderAddons(addonsList.map((item) => item.transport_url));
+			emitAddonsChanged();
+			trackEvent("addon_reordered", {
+				direction: direction < 0 ? "up" : "down",
+				resource_type: addonSupportsStreams(addon) ? "stream" : "other",
+			});
+		} catch (e) {
+			console.error("Failed to reorder addons", e);
+			await loadAddons();
+			trackEvent("addon_reorder_failed", {
+				error_name: e instanceof Error ? e.name : "unknown",
+			});
+		}
+	}
 </script>
 
-<section class="rounded-[28px] bg-white/[0.04] p-5 md:p-6 flex flex-col gap-4 flex-1 min-h-0">
+<section class="rounded-[28px] bg-white/4 p-5 md:p-6 flex flex-col gap-4 flex-1 min-h-0">
 	<div class="flex flex-col gap-1">
 		<h3 class="text-white text-xl font-semibold">Installed Addons</h3>
 		<p class="text-white/60 text-sm">These sources are already available inside Raffi.</p>
@@ -141,7 +176,8 @@
 		{:else}
 			{#each addonsList as addon}
 				{@const addonResources = getResourceNames(addon.manifest)}
-				<div class="rounded-2xl bg-white/[0.08] p-4 flex items-center gap-4">
+				{@const isDefaultStreamAddon = firstStreamAddonUrl(addonsList) === addon.transport_url && addonSupportsStreams(addon)}
+				<div class="rounded-2xl bg-white/8 p-4 flex items-center gap-4">
 					<AddonLogo src={addon.manifest.logo} name={addon.manifest.name} sizeClass="w-12 h-12" />
 					<div class="flex-1 min-w-0">
 						<p class="text-white font-semibold truncate">{addon.manifest.name}</p>
@@ -150,11 +186,30 @@
 								? addonResources.map((name) => formatResourceName(name)).join(" • ")
 								: "No declared resources"}
 						</p>
+						{#if isDefaultStreamAddon}
+							<p class="mt-2 text-xs text-white/70">Default stream source</p>
+						{/if}
 					</div>
 					<div class="flex gap-2">
+						<button
+							class="px-2 py-2 rounded-xl bg-white/8 text-white/80 hover:text-white cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+							on:click={() => moveAddon(addon, -1)}
+							disabled={addonsList[0]?.transport_url === addon.transport_url}
+							aria-label="Move addon up"
+						>
+							<ArrowUp size={18} strokeWidth={2} />
+						</button>
+						<button
+							class="px-2 py-2 rounded-xl bg-white/8 text-white/80 hover:text-white cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+							on:click={() => moveAddon(addon, 1)}
+							disabled={addonsList[addonsList.length - 1]?.transport_url === addon.transport_url}
+							aria-label="Move addon down"
+						>
+							<ArrowDown size={18} strokeWidth={2} />
+						</button>
 						{#if addon.manifest.behaviorHints?.configurable}
 							<button
-								class="px-3 py-2 rounded-xl bg-white/[0.08] text-white/80 hover:text-white cursor-pointer"
+								class="px-3 py-2 rounded-xl bg-white/8 text-white/80 hover:text-white cursor-pointer"
 								on:click={() => handleConfigure(addon.transport_url)}
 							>
 								Configure

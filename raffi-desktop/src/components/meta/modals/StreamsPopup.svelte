@@ -11,17 +11,26 @@
     import StreamsFiltersPanel from "./streams/StreamsFiltersPanel.svelte";
     import StreamsList from "./streams/StreamsList.svelte";
     import {
-        RESOLUTION_FILTERS,
-        applyStreamFilters,
-        areFiltersActive,
-        buildEnrichedStreams,
+        getAudioLanguageFilterOptions,
         getFilteredAddons,
         getProviderFilterOptions,
         getStreamCounts,
+        RESOLUTION_FILTERS,
+        SOURCE_FILTERS,
         splitStreamsBySource,
+        STREAM_SORT_OPTIONS,
+        applyStreamFilters,
+        areFiltersActive,
+        buildEnrichedStreams,
     } from "./streams/streamFilters";
     import { computeProgressDetails, getProgressEntry, getReleaseInfo } from "./streams/episodeDetails";
-    import type { AudioFilter, ResolutionFilter, EpisodeProgressDetails } from "./streams/types";
+    import type {
+        AudioFilter,
+        EpisodeProgressDetails,
+        ResolutionFilter,
+        SourceFilter,
+        StreamSortOption,
+    } from "./streams/types";
 
     export let streamsPopupVisible = false;
     export let addons: Addon[] = [];
@@ -53,7 +62,9 @@
     let resolutionFilter: ResolutionFilter = "all";
     let providerFilter = "all";
     let audioFilter: AudioFilter = "all";
-    let ignoreSubbed = true;
+    let audioLanguageFilter = "all";
+    let sourceFilter: SourceFilter = "all";
+    let sortOption: StreamSortOption = "recommended";
     let excludeDubbed = false;
     let filtersCollapsed = true;
     let excludeHDR = false;
@@ -61,6 +72,12 @@
 
     let episodeProgressEntry: ProgressItem | null = null;
     let progressDetails: EpisodeProgressDetails | null = null;
+
+    $: popupBackdropSrc =
+        selectedEpisode?.thumbnail ||
+        metaData?.meta?.background ||
+        metaData?.meta?.poster ||
+        null;
 
     function getStreamCountsNow() {
         return getStreamCounts(streams);
@@ -70,7 +87,9 @@
         resolutionFilter = "all";
         providerFilter = "all";
         audioFilter = "all";
-        ignoreSubbed = true;
+        audioLanguageFilter = "all";
+        sourceFilter = "all";
+        sortOption = "recommended";
         excludeDubbed = false;
         excludeHDR = false;
         trackEvent("stream_filters_reset", getStreamCountsNow());
@@ -81,6 +100,9 @@
         resolutionFilter = value;
         trackEvent("stream_filter_resolution", {
             value,
+            audio_language_filter: audioLanguageFilter,
+            source_filter: sourceFilter,
+            sort_option: sortOption,
             exclude_hdr: excludeHDR,
             ...getStreamCountsNow(),
         });
@@ -93,7 +115,9 @@
             value,
             resolution_filter: resolutionFilter,
             audio_filter: audioFilter,
-            ignore_subbed: ignoreSubbed,
+            audio_language_filter: audioLanguageFilter,
+            source_filter: sourceFilter,
+            sort_option: sortOption,
             exclude_dubbed: excludeDubbed,
             exclude_hdr: excludeHDR,
             ...getStreamCountsNow(),
@@ -103,27 +127,61 @@
     function setAudioFilter(value: AudioFilter) {
         if (audioFilter === value) return;
         audioFilter = value;
-        if (audioFilter === "subbed") {
-            ignoreSubbed = false;
-        }
         trackEvent("stream_filter_audio", {
             value,
             resolution_filter: resolutionFilter,
             provider_filter: providerFilter,
-            ignore_subbed: ignoreSubbed,
+            audio_language_filter: audioLanguageFilter,
+            source_filter: sourceFilter,
+            sort_option: sortOption,
             exclude_dubbed: excludeDubbed,
             exclude_hdr: excludeHDR,
             ...getStreamCountsNow(),
         });
     }
 
-    function toggleIgnoreSubbed() {
-        ignoreSubbed = !ignoreSubbed;
-        trackEvent("stream_filter_ignore_subbed", {
-            ignored: ignoreSubbed,
+    function setAudioLanguageFilter(value: string) {
+        if (audioLanguageFilter === value) return;
+        audioLanguageFilter = value;
+        trackEvent("stream_filter_audio_language", {
+            value,
             resolution_filter: resolutionFilter,
             provider_filter: providerFilter,
             audio_filter: audioFilter,
+            source_filter: sourceFilter,
+            sort_option: sortOption,
+            exclude_dubbed: excludeDubbed,
+            exclude_hdr: excludeHDR,
+            ...getStreamCountsNow(),
+        });
+    }
+
+    function setSourceFilter(value: SourceFilter) {
+        if (sourceFilter === value) return;
+        sourceFilter = value;
+        trackEvent("stream_filter_source", {
+            value,
+            resolution_filter: resolutionFilter,
+            provider_filter: providerFilter,
+            audio_filter: audioFilter,
+            audio_language_filter: audioLanguageFilter,
+            sort_option: sortOption,
+            exclude_dubbed: excludeDubbed,
+            exclude_hdr: excludeHDR,
+            ...getStreamCountsNow(),
+        });
+    }
+
+    function setSortOption(value: StreamSortOption) {
+        if (sortOption === value) return;
+        sortOption = value;
+        trackEvent("stream_sort_changed", {
+            value,
+            resolution_filter: resolutionFilter,
+            provider_filter: providerFilter,
+            audio_filter: audioFilter,
+            audio_language_filter: audioLanguageFilter,
+            source_filter: sourceFilter,
             exclude_dubbed: excludeDubbed,
             exclude_hdr: excludeHDR,
             ...getStreamCountsNow(),
@@ -137,7 +195,9 @@
             resolution_filter: resolutionFilter,
             provider_filter: providerFilter,
             audio_filter: audioFilter,
-            ignore_subbed: ignoreSubbed,
+            audio_language_filter: audioLanguageFilter,
+            source_filter: sourceFilter,
+            sort_option: sortOption,
             exclude_hdr: excludeHDR,
             ...getStreamCountsNow(),
         });
@@ -150,7 +210,9 @@
             resolution_filter: resolutionFilter,
             provider_filter: providerFilter,
             audio_filter: audioFilter,
-            ignore_subbed: ignoreSubbed,
+            audio_language_filter: audioLanguageFilter,
+            source_filter: sourceFilter,
+            sort_option: sortOption,
             exclude_dubbed: excludeDubbed,
             ...getStreamCountsNow(),
         });
@@ -172,7 +234,9 @@
             resolution_filter: resolutionFilter,
             provider_filter: providerFilter,
             audio_filter: audioFilter,
-            ignore_subbed: ignoreSubbed,
+            audio_language_filter: audioLanguageFilter,
+            source_filter: sourceFilter,
+            sort_option: sortOption,
             exclude_dubbed: excludeDubbed,
             exclude_hdr: excludeHDR,
             ...getStreamCountsNow(),
@@ -188,7 +252,9 @@
         resolutionFilter,
         providerFilter,
         audioFilter,
-        ignoreSubbed,
+        audioLanguageFilter,
+        sourceFilter,
+        sortOption,
         excludeDubbed,
         excludeHDR,
     };
@@ -196,9 +262,13 @@
     $: filteredAddons = getFilteredAddons(addons);
     $: enrichedStreams = buildEnrichedStreams(streams, $failedStreamKeys);
     $: providerFilterOptions = getProviderFilterOptions(enrichedStreams);
-
+    $: audioLanguageFilterOptions = getAudioLanguageFilterOptions(enrichedStreams);
     $: if (providerFilter !== "all" && !providerFilterOptions.includes(providerFilter)) {
         providerFilter = "all";
+    }
+
+    $: if (audioLanguageFilter !== "all" && !audioLanguageFilterOptions.includes(audioLanguageFilter)) {
+        audioLanguageFilter = "all";
     }
 
     $: filteredStreams = applyStreamFilters(enrichedStreams, filterState);
@@ -229,7 +299,9 @@
             resolution_filter: resolutionFilter,
             provider_filter: providerFilter,
             audio_filter: audioFilter,
-            ignore_subbed: ignoreSubbed,
+            audio_language_filter: audioLanguageFilter,
+            source_filter: sourceFilter,
+            sort_option: sortOption,
             exclude_dubbed: excludeDubbed,
             exclude_hdr: excludeHDR,
         });
@@ -243,7 +315,7 @@
 {#if streamsPopupVisible}
     <div
         use:portal
-        class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 sm:p-10 lg:p-20"
+        class="fixed inset-0 z-50 bg-[#0f0f0f]/58 backdrop-blur-xl flex items-center justify-center p-6 sm:p-10 lg:p-20"
         style={overlayZoomStyle}
         transition:fade={{ duration: 200 }}
         on:click|self={close}
@@ -253,26 +325,62 @@
         tabindex="0"
     >
         <div
-            class="bg-[#121212] w-full max-w-6xl max-h-full rounded-4xl p-6 sm:p-8 lg:p-10 flex flex-col gap-6 overflow-hidden relative"
+            class="w-full max-w-7xl max-h-full rounded-4xl bg-[#2a2a2a]/56 backdrop-blur-[40px] p-6 sm:p-8 lg:p-10 xl:p-12 flex flex-col gap-6 overflow-hidden relative isolate shadow-[0_40px_160px_rgba(0,0,0,0.45)]"
             on:wheel|stopPropagation
         >
             <button
-                class="absolute top-6 right-6 text-white/50 hover:text-white cursor-pointer"
+                class="absolute top-6 right-6 z-10 text-white/50 hover:text-white cursor-pointer"
                 on:click={close}
                 aria-label="Close streams"
             >
                 <X size={24} color="currentColor" strokeWidth={2} />
             </button>
 
-            <div class="flex flex-col lg:flex-row gap-8 flex-1 min-h-0">
-                <EpisodeDetailsPanel
-                    {selectedEpisode}
-                    {metaData}
-                    {releaseInfo}
-                    {progressDetails}
-                />
+            <div class="relative z-10 grid flex-1 min-h-0 gap-8 lg:grid-cols-[460px_minmax(0,1fr)] xl:grid-cols-[520px_minmax(0,1fr)]">
+                <section class="flex min-h-0 flex-col gap-4 overflow-hidden lg:gap-5">
+                    <div class="flex-1 min-h-0">
+                        <EpisodeDetailsPanel
+                            {selectedEpisode}
+                            {metaData}
+                            {releaseInfo}
+                            {progressDetails}
+                        />
+                    </div>
 
-                <section class="flex-1 flex flex-col gap-5 min-h-0">
+                    <div class="shrink-0">
+                        <StreamsFiltersPanel
+                            {filtersCollapsed}
+                            filteredCount={filteredStreams.length}
+                            totalCount={streams.length}
+                            {resolutionFilter}
+                            {providerFilter}
+                            {audioFilter}
+                            {audioLanguageFilter}
+                            {sourceFilter}
+                            {sortOption}
+                            {excludeDubbed}
+                            {excludeHDR}
+                            {filtersActive}
+                            {providerFilterOptions}
+                            {audioLanguageFilterOptions}
+                            resolutionFilters={RESOLUTION_FILTERS}
+                            sourceFilters={SOURCE_FILTERS}
+                            sortOptions={STREAM_SORT_OPTIONS}
+                            onToggleFiltersCollapsed={() => (filtersCollapsed = !filtersCollapsed)}
+                            onSetResolutionFilter={setResolutionFilter}
+                            onSetProviderFilter={setProviderFilter}
+                            onSetAudioFilter={setAudioFilter}
+                            onSetAudioLanguageFilter={setAudioLanguageFilter}
+                            onSetSourceFilter={setSourceFilter}
+                            onSetSortOption={setSortOption}
+                            onToggleExcludeDubbed={toggleExcludeDubbed}
+                            onToggleExcludeHDR={toggleExcludeHDR}
+                            onResetFilters={resetFilters}
+                        />
+                    </div>
+                </section>
+
+                <section class="flex min-h-0 flex-col gap-5">
                     <div class="flex flex-col gap-2">
                         <h2 class="text-white text-2xl font-poppins font-bold">
                             Select Stream
@@ -281,21 +389,21 @@
                             Pick a source to start watching. Some sources may take longer to load.
                         </p>
                         {#if $streamFailureMessage}
-                            <p class="text-red-300/90 text-sm bg-red-500/10 border border-red-400/25 rounded-xl px-3 py-2">
+                            <p class="text-red-300/90 text-sm bg-red-500/14 backdrop-blur-xl rounded-xl px-3 py-2">
                                 {$streamFailureMessage}
                             </p>
                         {/if}
                     </div>
 
                     {#if filteredAddons.length > 1}
-                        <div class="flex flex-wrap gap-3 pb-1">
+                        <div class="flex flex-wrap gap-2.5 pb-1">
                             {#each filteredAddons as addon}
                                 <button
                                     type="button"
-                                    class="px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 cursor-pointer whitespace-nowrap {selectedAddon ===
+                                    class="px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 cursor-pointer whitespace-nowrap backdrop-blur-xl {selectedAddon ===
                                     addon.transport_url
                                         ? 'bg-white text-black shadow-lg shadow-white/10'
-                                        : 'bg-white/10 text-white/70 hover:bg-white/20'}"
+                                        : 'bg-white/10 text-white/70 hover:bg-white/18'}"
                                     on:click={() => selectAddon(addon)}
                                 >
                                     {addon.manifest.name}
@@ -303,29 +411,6 @@
                             {/each}
                         </div>
                     {/if}
-
-                    <StreamsFiltersPanel
-                        {filtersCollapsed}
-                        filteredCount={filteredStreams.length}
-                        totalCount={streams.length}
-                        {resolutionFilter}
-                        {providerFilter}
-                        {audioFilter}
-                        {ignoreSubbed}
-                        {excludeDubbed}
-                        {excludeHDR}
-                        {filtersActive}
-                        {providerFilterOptions}
-                        resolutionFilters={RESOLUTION_FILTERS}
-                        onToggleFiltersCollapsed={() => (filtersCollapsed = !filtersCollapsed)}
-                        onSetResolutionFilter={setResolutionFilter}
-                        onSetProviderFilter={setProviderFilter}
-                        onSetAudioFilter={setAudioFilter}
-                        onToggleIgnoreSubbed={toggleIgnoreSubbed}
-                        onToggleExcludeDubbed={toggleExcludeDubbed}
-                        onToggleExcludeHDR={toggleExcludeHDR}
-                        onResetFilters={resetFilters}
-                    />
 
                     <StreamsList
                         {loadingStreams}

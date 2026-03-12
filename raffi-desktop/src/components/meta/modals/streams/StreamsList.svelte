@@ -30,8 +30,8 @@
     {:else}
         {#if localFilteredStreams.length}
             <div class="flex items-center justify-between">
-                <span class="text-white/60 text-xs font-semibold tracking-[0.25em] uppercase">
-                    Local
+                <span class="text-white/60 text-sm font-medium">
+                    Local files
                 </span>
             </div>
             {#each localFilteredStreams as item (item.key)}
@@ -49,8 +49,8 @@
 
         {#if addonFilteredStreams.length}
             <div class="flex items-center justify-between">
-                <span class="text-white/60 text-xs font-semibold tracking-[0.25em] uppercase">
-                    {addonFilteredStreams.length} Source{addonFilteredStreams.length > 1 ? 's' : ''}
+                <span class="text-white/60 text-sm font-medium">
+                    Online sources · {addonFilteredStreams.length}
                 </span>
             </div>
             {#each addonFilteredStreams as item (item.key)}

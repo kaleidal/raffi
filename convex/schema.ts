@@ -9,6 +9,7 @@ export default defineSchema({
         manifest: v.any(),
         flags: v.optional(v.any()),
         addon_id: v.string(),
+        position: v.optional(v.number()),
     })
         .index("by_user", ["user_id"])
         .index("by_user_transport", ["user_id", "transport_url"]),

@@ -1291,7 +1291,6 @@
         onAudioSelect={modalHandlers.onAudioSelect}
         onSubtitleSelect={modalHandlers.onSubtitleSelect}
         onSubtitleDelayChange={modalHandlers.onSubtitleDelayChange}
-        onAddLocalSubtitle={modalHandlers.onAddLocalSubtitle}
         onErrorRetry={modalHandlers.onErrorRetry}
         onErrorBack={modalHandlers.onErrorBack}
         onCloseAudio={modalHandlers.onCloseAudio}

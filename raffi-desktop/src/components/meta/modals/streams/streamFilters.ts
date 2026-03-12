@@ -11,8 +11,10 @@ import type {
     EnrichedStream,
     ParsedStreamMetadata,
     ResolutionFilter,
+    SourceFilter,
     StreamBadge,
     StreamFilterState,
+    StreamSortOption,
 } from "./types";
 
 export const RESOLUTION_FILTERS: Array<{ label: string; value: ResolutionFilter }> = [
@@ -25,6 +27,29 @@ export const RESOLUTION_FILTERS: Array<{ label: string; value: ResolutionFilter 
     { label: "Other", value: "other" },
 ];
 
+export const STREAM_SORT_OPTIONS: Array<{ label: string; value: StreamSortOption }> = [
+    { label: "Recommended", value: "recommended" },
+    { label: "Best quality", value: "quality" },
+    { label: "Smallest file", value: "sizeAsc" },
+    { label: "Largest file", value: "sizeDesc" },
+    { label: "Most peers", value: "peers" },
+];
+
+export const SOURCE_FILTERS: Array<{ label: string; value: SourceFilter }> = [
+    { label: "All sources", value: "all" },
+    { label: "Local", value: "local" },
+    { label: "Direct", value: "direct" },
+    { label: "Torrent", value: "torrent" },
+];
+
+const RESOLUTION_RANKS: Record<string, number> = {
+    "2160p": 5,
+    "1440p": 4,
+    "1080p": 3,
+    "720p": 2,
+    "480p": 1,
+};
+
 function extractLanguageCodes(audioLanguagesLabel: string | null): string[] {
     if (!audioLanguagesLabel) return [];
     const matches = audioLanguagesLabel.match(/\b[A-Z]{2,3}\b/g) || [];
@@ -34,6 +59,60 @@ function extractLanguageCodes(audioLanguagesLabel: string | null): string[] {
 function inferDubbedFromLanguages(codes: string[]): boolean {
     if (!codes.length) return false;
     return codes.some((code) => code !== "EN" && code !== "ENG");
+}
+
+function parseSizeInMb(sizeLabel: string | null): number | null {
+    if (!sizeLabel) return null;
+    const match = sizeLabel.match(/(\d+(?:\.\d+)?)\s?(GB|MB)/i);
+    if (!match) return null;
+    const value = Number.parseFloat(match[1]);
+    if (!Number.isFinite(value)) return null;
+    return match[2].toUpperCase() === "GB" ? value * 1024 : value;
+}
+
+function formatAudioLanguageLabel(codes: string[]): string | null {
+    if (!codes.length) return null;
+    const visible = codes.slice(0, 4);
+    const remainder = codes.length - visible.length;
+    return `${visible.join(" + ")}${remainder > 0 ? ` +${remainder}` : ""}`;
+}
+
+function getRecommendedScore(meta: ParsedStreamMetadata): number {
+    const sourceScore =
+        meta.sourceType === "local"
+            ? 5000
+            : meta.availabilityLabel
+                ? 3400
+                : meta.sourceType === "direct"
+                    ? 2600
+                    : 1800;
+
+    const qualityScore = meta.resolutionRank * 200;
+    const peerScore = Math.min(meta.peerCount ?? 0, 999);
+    const hdrScore = meta.isHDR ? 25 : 0;
+    const sizeScore = meta.sizeInMb ? Math.min(meta.sizeInMb / 256, 40) : 0;
+
+    return sourceScore + qualityScore + peerScore + hdrScore + sizeScore;
+}
+
+function compareBySort(left: EnrichedStream, right: EnrichedStream, sortOption: StreamSortOption) {
+    if (sortOption === "quality") {
+        return (right.meta.resolutionRank - left.meta.resolutionRank) || ((right.meta.peerCount ?? -1) - (left.meta.peerCount ?? -1));
+    }
+
+    if (sortOption === "sizeAsc") {
+        return ((left.meta.sizeInMb ?? Number.POSITIVE_INFINITY) - (right.meta.sizeInMb ?? Number.POSITIVE_INFINITY)) || (right.meta.resolutionRank - left.meta.resolutionRank);
+    }
+
+    if (sortOption === "sizeDesc") {
+        return ((right.meta.sizeInMb ?? -1) - (left.meta.sizeInMb ?? -1)) || (right.meta.resolutionRank - left.meta.resolutionRank);
+    }
+
+    if (sortOption === "peers") {
+        return ((right.meta.peerCount ?? -1) - (left.meta.peerCount ?? -1)) || (right.meta.resolutionRank - left.meta.resolutionRank);
+    }
+
+    return getRecommendedScore(right.meta) - getRecommendedScore(left.meta);
 }
 
 export function getFilteredAddons(addons: Addon[]): Addon[] {
@@ -78,6 +157,7 @@ export function parseStreamMetadata(stream: any): ParsedStreamMetadata {
             ? "4K"
             : resolution.toUpperCase()
         : null;
+    const resolutionRank = resolution ? (RESOLUTION_RANKS[resolution] ?? 0) : 0;
 
     const hasDolbyVision = /Dolby\s?Vision|\bDV\b/i.test(fullText);
     const hasHDR = /HDR/i.test(fullText) || hasDolbyVision;
@@ -85,8 +165,6 @@ export function parseStreamMetadata(stream: any): ParsedStreamMetadata {
         /(dubbed|\bdub\b|dual\s*audio|multi\s*audio|multi-audio|\bdual\b)/i.test(
             fullText,
         );
-    const explicitSub = /(subbed|\bsubs?\b|softsub|hardsub|\bsub\b)/i.test(fullText);
-
     const codecLabel = /AV1/i.test(fullText)
         ? "AV1"
         : /(?:x265|H\.?(?:265)|HEVC)/i.test(fullText)
@@ -105,12 +183,13 @@ export function parseStreamMetadata(stream: any): ParsedStreamMetadata {
 
     const audioLanguagesLabel = buildAudioLanguageBadge(fullText);
     const audioLanguageCodes = extractLanguageCodes(audioLanguagesLabel);
+    const audioLanguageLabel = formatAudioLanguageLabel(audioLanguageCodes);
     const inferredDubbedFromLanguage = inferDubbedFromLanguages(audioLanguageCodes);
     const isDubbed = explicitDub || inferredDubbedFromLanguage;
-    const isSubbed = explicitSub;
 
     const sizeMatch = fullText.match(/(\d+(?:\.\d+)?)\s?(GB|MB)/i);
     const sizeLabel = sizeMatch ? `${sizeMatch[1]} ${sizeMatch[2].toUpperCase()}` : null;
+    const sizeInMb = parseSizeInMb(sizeLabel);
 
     const provider = isLocal
         ? "Local"
@@ -149,26 +228,18 @@ export function parseStreamMetadata(stream: any): ParsedStreamMetadata {
     }
 
     if (isLocal) {
-        statusBadges.push({ label: "LOCAL", variant: "accent" });
+        statusBadges.push({ label: "Local", variant: "accent" });
     }
 
     if (isP2P) {
-        statusBadges.push({ label: "P2P", variant: "outline" });
+        statusBadges.push({ label: "Torrent", variant: "outline" });
     }
 
     if (isDubbed) {
-        statusBadges.push({ label: "DUB", variant: "outline" });
+        statusBadges.push({ label: "Dubbed", variant: "outline" });
     }
 
-    if (isSubbed) {
-        statusBadges.push({ label: "SUB", variant: "outline" });
-    }
-
-    const audioLanguagesBadgeLabel = audioLanguagesLabel
-        ? isSubbed
-            ? `SUB • ${audioLanguagesLabel}`
-            : audioLanguagesLabel
-        : null;
+    const audioLanguagesBadgeLabel = audioLanguageLabel ? `Audio ${audioLanguageLabel}` : null;
 
     addFeature(resolutionLabel);
     if (hasDolbyVision) {
@@ -184,16 +255,21 @@ export function parseStreamMetadata(stream: any): ParsedStreamMetadata {
     return {
         providerLabel: provider,
         hostLabel,
+        availabilityLabel: availability,
         resolution,
         resolutionLabel,
+        resolutionRank,
         isHDR: hasHDR,
         isDubbed,
-        isSubbed,
+        audioLanguageCodes,
+        audioLanguageLabel,
         featureBadges,
         statusBadges,
         peerCount,
         isP2P: isP2PAdjusted,
-        infoLine: hostLabel ? `via ${hostLabel}` : null,
+        sourceType: isLocal ? "local" : isP2PAdjusted ? "torrent" : "direct",
+        sizeInMb,
+        infoLine: hostLabel ? `Via ${hostLabel}` : null,
     };
 }
 
@@ -233,37 +309,23 @@ export function applyStreamFilters(
         if (state.providerFilter !== "all" && meta.providerLabel !== state.providerFilter) {
             return false;
         }
+        if (state.sourceFilter !== "all" && meta.sourceType !== state.sourceFilter) {
+            return false;
+        }
         if (state.excludeDubbed && meta.isDubbed) {
             return false;
         }
-        if (state.ignoreSubbed && meta.isSubbed && !meta.isDubbed) {
+        if (state.audioLanguageFilter !== "all" && !meta.audioLanguageCodes.includes(state.audioLanguageFilter)) {
             return false;
         }
+        if (state.audioFilter === "original" && meta.isDubbed) return false;
         if (state.audioFilter === "dubbed" && !meta.isDubbed) return false;
-        if (state.audioFilter === "subbed" && !meta.isSubbed) return false;
         if (state.resolutionFilter === "all") return true;
         if (state.resolutionFilter === "other") return !meta.resolution;
         return meta.resolution === state.resolutionFilter;
     });
 
-    const p2p: EnrichedStream[] = [];
-    const rest: EnrichedStream[] = [];
-
-    for (const item of filtered) {
-        if (item.meta.isP2P) {
-            p2p.push(item);
-        } else {
-            rest.push(item);
-        }
-    }
-
-    p2p.sort((a, b) => {
-        const aPeers = a.meta.peerCount ?? -1;
-        const bPeers = b.meta.peerCount ?? -1;
-        return bPeers - aPeers;
-    });
-
-    return [...p2p, ...rest];
+    return [...filtered].sort((left, right) => compareBySort(left, right, state.sortOption));
 }
 
 export function splitStreamsBySource(filteredStreams: EnrichedStream[]) {
@@ -287,15 +349,47 @@ export function getProviderFilterOptions(enrichedStreams: EnrichedStream[]): str
     return ["all", ...Array.from(providers).sort((a, b) => a.localeCompare(b))];
 }
 
+export function getAudioLanguageFilterOptions(enrichedStreams: EnrichedStream[]): string[] {
+    const languages = new Set<string>();
+    for (const item of enrichedStreams) {
+        for (const code of item.meta.audioLanguageCodes) {
+            languages.add(code);
+        }
+    }
+    return ["all", ...Array.from(languages).sort((a, b) => a.localeCompare(b))];
+}
+
 export function areFiltersActive(state: StreamFilterState): boolean {
     return (
         state.resolutionFilter !== "all" ||
         state.providerFilter !== "all" ||
         state.audioFilter !== "all" ||
-        !state.ignoreSubbed ||
+        state.audioLanguageFilter !== "all" ||
+        state.sourceFilter !== "all" ||
+        state.sortOption !== "recommended" ||
         state.excludeDubbed ||
         state.excludeHDR
     );
+}
+
+export function getActiveFilterLabels(state: StreamFilterState): string[] {
+    const labels: string[] = [];
+
+    if (state.audioFilter === "original") labels.push("Original audio");
+    if (state.audioFilter === "dubbed") labels.push("Dubbed");
+    if (state.audioLanguageFilter !== "all") labels.push(`Language ${state.audioLanguageFilter}`);
+    if (state.resolutionFilter !== "all") {
+        labels.push(state.resolutionFilter === "other" ? "Other quality" : state.resolutionFilter.toUpperCase());
+    }
+    if (state.sourceFilter !== "all") labels.push(SOURCE_FILTERS.find((option) => option.value === state.sourceFilter)?.label ?? state.sourceFilter);
+    if (state.providerFilter !== "all") labels.push(state.providerFilter);
+    if (state.excludeDubbed) labels.push("Hide dubbed");
+    if (state.excludeHDR) labels.push("Skip HDR");
+    if (state.sortOption !== "recommended") {
+        labels.push(STREAM_SORT_OPTIONS.find((option) => option.value === state.sortOption)?.label ?? state.sortOption);
+    }
+
+    return labels;
 }
 
 export function getStreamCounts(streams: any[]) {
@@ -307,4 +401,4 @@ export function getStreamCounts(streams: any[]) {
     };
 }
 
-export type { AudioFilter, ResolutionFilter };
+export type { AudioFilter, ResolutionFilter, SourceFilter, StreamSortOption };

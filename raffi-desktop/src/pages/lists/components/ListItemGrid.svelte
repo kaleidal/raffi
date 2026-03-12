@@ -19,7 +19,7 @@
 </script>
 
 {#if items.length > 0}
-    <div class="grid grid-cols-4 gap-[20px]">
+    <div class="grid gap-4 xl:gap-[20px] [grid-template-columns:repeat(auto-fill,minmax(120px,1fr))]">
         {#each items as item (item.imdb_id)}
             <button
                 class="flex flex-col gap-[10px] w-full aspect-[2/3] transition-opacity duration-300 group cursor-pointer relative

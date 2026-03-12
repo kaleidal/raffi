@@ -118,7 +118,7 @@
 {#if showAddonsModal}
     <div
         use:portal
-        class="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex"
+        class="fixed inset-0 z-[200] bg-[#101010]/58 backdrop-blur-xl flex"
         transition:fade={{ duration: 200 }}
         on:click|self={closeModal}
         on:keydown={(e) => e.key === "Escape" && closeModal()}
@@ -129,12 +129,11 @@
     >
 
         <div
-            class="bg-[#121212] w-full h-full rounded-[32px] p-6 md:p-10 flex flex-col gap-6 relative overflow-hidden shadow-[0_40px_160px_rgba(0,0,0,0.55)]"
+            class="w-full h-full rounded-[32px] bg-[#2b2b2b]/56 backdrop-blur-[40px] p-6 md:p-10 flex flex-col gap-6 relative overflow-hidden shadow-[0_40px_160px_rgba(0,0,0,0.45)]"
             transition:scale={{ start: 0.95, duration: 200 }}
             on:wheel|stopPropagation
         >
-
-            <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div class="relative z-10 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 <div>
                     <h2 class="text-white text-3xl font-poppins font-bold">
                         Manage Addons
@@ -153,7 +152,7 @@
                 </button>
             </div>
 
-            <div class="flex-1 min-h-0">
+            <div class="relative z-10 flex-1 min-h-0">
                 <div class="flex h-full flex-col gap-6 overflow-hidden lg:flex-row lg:gap-8">
                     <CommunityAddonsSection />
                     <InstalledAddonsSection />

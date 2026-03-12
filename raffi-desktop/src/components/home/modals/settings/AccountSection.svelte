@@ -32,7 +32,17 @@
 	$: accountEmail = $currentUser?.email || "No email returned by Ave";
 	$: avatarInitial = (accountName || "?").slice(0, 1).toUpperCase();
 	$: pendingSyncCount = $cloudSyncStatus.pendingUploads + $cloudSyncStatus.pendingDeletes;
-	$: showSyncNow = !$localMode && $cloudSyncStatus.cloudFeaturesAvailable && ($cloudSyncStatus.isSyncing || pendingSyncCount > 0 || Boolean($cloudSyncStatus.lastError));
+	$: syncStatusLabel = $localMode
+		? "Device only"
+		: $cloudSyncStatus.isSyncing
+			? "Syncing"
+			: $cloudSyncStatus.lastError
+				? "Sync failed"
+				: "Sync ready";
+	$: syncStatusDetail = $cloudSyncStatus.lastError
+		? $cloudSyncStatus.lastError
+		: `Last sync ${formatTimestamp($cloudSyncStatus.lastSuccessAt)}`;
+	$: showSyncNow = !$localMode && $cloudSyncStatus.cloudFeaturesAvailable;
 	$: traktActionLabel = traktLoading
 		? "Loading..."
 		: traktBusy
@@ -122,10 +132,10 @@
 </script>
 
 <section class="flex flex-col gap-5">
-	<div class="rounded-[24px] bg-white/[0.06] p-5 md:p-6 flex flex-col gap-5">
+	<div class="rounded-[28px] bg-white/4 p-6 flex flex-col gap-5">
 		<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 			<div class="flex items-center gap-4 min-w-0">
-				<div class="h-18 w-18 rounded-[26px] bg-white/[0.09] overflow-hidden shrink-0 flex items-center justify-center text-white text-2xl font-semibold">
+				<div class="h-18 w-18 rounded-[26px] bg-white/9 overflow-hidden shrink-0 flex items-center justify-center text-white text-2xl font-semibold">
 					{#if $currentUser?.avatar}
 						<img
 							src={$currentUser.avatar}
@@ -144,29 +154,20 @@
 							{$localMode ? "Local" : "Ave"}
 						</div>
 						{#if !$localMode && $cloudSyncStatus.cloudFeaturesAvailable}
-							<div class="rounded-full bg-white/[0.08] px-3 py-1 text-xs text-white/72">
+							<div class="rounded-full bg-white/8 px-3 py-1 text-xs text-white/72">
 								{$cloudSyncStatus.isSyncing ? "Syncing now" : `${pendingSyncCount} queued change${pendingSyncCount === 1 ? "" : "s"}`}
 							</div>
 						{/if}
 					</div>
 				</div>
 			</div>
-			{#if showSyncNow}
-				<button
-					class="bg-white text-black px-5 py-2.5 rounded-2xl font-semibold hover:bg-white/90 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-					on:click={onSyncNow}
-					disabled={$cloudSyncStatus.isSyncing}
-				>
-					{$cloudSyncStatus.isSyncing ? "Syncing..." : "Sync now"}
-				</button>
-			{/if}
 		</div>
 
 		<div class="grid gap-3 sm:grid-cols-2">
 			<div class="rounded-2xl bg-black/20 px-4 py-4">
 				<p class="text-white/50 text-sm">Sync</p>
-				<p class="mt-2 text-white text-lg font-semibold">{$localMode ? "Device only" : "Sync ready"}</p>
-				<p class="mt-1 text-white/55 text-sm">Last sync {formatTimestamp($cloudSyncStatus.lastSuccessAt)}</p>
+				<p class="mt-2 text-white text-lg font-semibold">{syncStatusLabel}</p>
+				<p class="mt-1 text-white/55 text-sm">{syncStatusDetail}</p>
 			</div>
 			<div class="rounded-2xl bg-black/20 px-4 py-4">
 				<p class="text-white/50 text-sm">Queue</p>
@@ -176,6 +177,15 @@
 		</div>
 
 		<div class="flex flex-wrap gap-3">
+			{#if showSyncNow}
+				<button
+					class="bg-white/10 text-white px-4 py-2 rounded-2xl font-semibold hover:bg-white/20 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+					on:click={onSyncNow}
+					disabled={$cloudSyncStatus.isSyncing}
+				>
+					{$cloudSyncStatus.isSyncing ? "Syncing..." : "Sync now"}
+				</button>
+			{/if}
 			<button
 				class="bg-white/10 text-white px-4 py-2 rounded-2xl font-semibold hover:bg-white/20 transition-colors cursor-pointer"
 				on:click={onDownloadData}
@@ -194,7 +204,7 @@
 		</div>
 	</div>
 
-	<div class="rounded-2xl bg-white/[0.05] p-5 space-y-4">
+	<div class="rounded-[28px] bg-white/4 p-6 space-y-4">
 		<div class="flex flex-col gap-1">
 			<p class="text-white font-medium">Integrations</p>
 			<p class="text-white/60 text-sm">Connected services that extend sync and playback across platforms.</p>
