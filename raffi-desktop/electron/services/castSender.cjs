@@ -389,6 +389,8 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, ba
 
   async function openBrowserFallback({ appId, streamUrl, startTime, metadata, reason }) {
     const target = new URL(senderBridgeUrl);
+    const durationSeconds = Number(metadata?.durationSeconds || 0);
+    const timelineOffsetSeconds = Number(metadata?.timelineOffsetSeconds || 0);
     target.searchParams.set("mode", "standalone");
     target.searchParams.set("receiverAppId", String(appId || defaultReceiverAppId));
     target.searchParams.set("streamUrl", String(streamUrl || ""));
@@ -397,6 +399,12 @@ function createCastSenderService({ logToFile, BrowserWindow, shell, fs, path, ba
     target.searchParams.set("subtitle", String(metadata?.subtitle || ""));
     target.searchParams.set("cover", String(metadata?.cover || ""));
     target.searchParams.set("background", String(metadata?.background || ""));
+    if (Number.isFinite(durationSeconds) && durationSeconds > 0) {
+      target.searchParams.set("durationSeconds", String(durationSeconds));
+    }
+    if (Number.isFinite(timelineOffsetSeconds) && timelineOffsetSeconds >= 0) {
+      target.searchParams.set("timelineOffsetSeconds", String(timelineOffsetSeconds));
+    }
     target.searchParams.set("reason", String(reason || "electron_no_devices"));
     const targetUrl = target.toString();
 
