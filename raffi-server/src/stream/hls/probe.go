@@ -46,50 +46,56 @@ type StreamInfo struct {
 }
 
 func ProbeDuration(ctx context.Context, source string) (*Metadata, string, error) {
-	probeSource := source
-	if strings.Contains(source, "/torrents/") {
-		if strings.Contains(source, "?") {
-			probeSource = source + "&metadata=1"
-		} else {
-			probeSource = source + "?metadata=1"
+	return NewProbeDuration("ffprobe")(ctx, source)
+}
+
+func NewProbeDuration(ffprobePath string) func(ctx context.Context, source string) (*Metadata, string, error) {
+	return func(ctx context.Context, source string) (*Metadata, string, error) {
+		probeSource := source
+		if strings.Contains(source, "/torrents/") {
+			if strings.Contains(source, "?") {
+				probeSource = source + "&metadata=1"
+			} else {
+				probeSource = source + "?metadata=1"
+			}
 		}
-	}
 
-	cmd := exec.CommandContext(ctx, "ffprobe",
-		"-v", "quiet",
-		"-analyzeduration", "200M",
-		"-probesize", "200M",
-		"-print_format", "json",
-		"-show_format",
-		"-show_streams",
-		"-show_chapters",
-		probeSource,
-	)
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, "", err
-	}
-
-	var data Metadata
-	if err := json.Unmarshal(out, &data); err != nil {
-		return nil, "", err
-	}
-
-	dur, _ := strconv.ParseFloat(data.Format.Duration, 64)
-	data.Format.DurationSeconds = dur
-
-	videoCodec := "libx264"
-	for _, st := range data.Streams {
-		if st.CodecType != "video" {
-			continue
+		cmd := exec.CommandContext(ctx, ffprobePath,
+			"-v", "quiet",
+			"-analyzeduration", "200M",
+			"-probesize", "200M",
+			"-print_format", "json",
+			"-show_format",
+			"-show_streams",
+			"-show_chapters",
+			probeSource,
+		)
+		out, err := cmd.Output()
+		if err != nil {
+			return nil, "", err
 		}
-		if st.CodecName == "h264" && st.Profile != "High 10" && st.Profile != "High 4:2:2" && st.Profile != "High 4:4:4 Predictive" {
-			videoCodec = "h264"
-		}
-		break
-	}
 
-	return &data, videoCodec, nil
+		var data Metadata
+		if err := json.Unmarshal(out, &data); err != nil {
+			return nil, "", err
+		}
+
+		dur, _ := strconv.ParseFloat(data.Format.Duration, 64)
+		data.Format.DurationSeconds = dur
+
+		videoCodec := "libx264"
+		for _, st := range data.Streams {
+			if st.CodecType != "video" {
+				continue
+			}
+			if st.CodecName == "h264" && st.Profile != "High 10" && st.Profile != "High 4:2:2" && st.Profile != "High 4:4:4 Predictive" {
+				videoCodec = "h264"
+			}
+			break
+		}
+
+		return &data, videoCodec, nil
+	}
 }
 
 func (c *Controller) ProbeMetadata(ctx context.Context, id, source string) (*Metadata, error) {

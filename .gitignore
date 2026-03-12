@@ -2,3 +2,5 @@ node_modules
 .env.local
 .bun
 Raffi/*.log
+ffmpeg.exe
+ffprobe.exe

@@ -138,7 +138,7 @@ func (s *Server) handleClip(w http.ResponseWriter, r *http.Request, id string) {
 		outputPath,
 	)
 
-	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
+	cmd := exec.CommandContext(ctx, s.ffmpegPath, args...)
 	var stderr bytes.Buffer
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = &stderr

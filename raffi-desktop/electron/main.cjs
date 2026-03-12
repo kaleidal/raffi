@@ -4,7 +4,6 @@ const path = require("path");
 const fs = require("fs");
 const { createLogger } = require("./services/logging.cjs");
 const { scanLibraryRoots } = require("./services/mediaScan.cjs");
-const { ensureFFmpegAvailable } = require("./services/ffmpeg.cjs");
 const {
   isAllowedExternalUrl,
   createProtocolUrlHandler,
@@ -255,16 +254,6 @@ app.whenReady().then(async () => {
       fileToOpen = filePath;
     }
   }
-
-  logToFile("Checking ffmpeg availability");
-  const ffmpegReady = await ensureFFmpegAvailable({ spawn, dialog });
-
-  if (!ffmpegReady) {
-    logToFile("FFmpeg missing; quitting");
-    app.quit();
-    return;
-  }
-
   logToFile("Starting decoder server");
   try {
     await decoderService.startDecoderServer();
