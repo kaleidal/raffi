@@ -56,15 +56,26 @@ export async function fetchIntroDbChapters(
         episode: String(episode),
     });
 
-    const response = await fetch(`${INTRO_DB_BASE_URL}/segments?${params.toString()}`);
-    if (response.status === 404) {
-        return [];
-    }
-    if (!response.ok) {
-        throw new Error(`IntroDB request failed with ${response.status}`);
+    let data: IntroDbResponse;
+    const electronApi = typeof window !== "undefined" ? window.electronAPI : undefined;
+
+    if (electronApi?.fetchIntroDbSegments) {
+        const result = await electronApi.fetchIntroDbSegments(imdbId, season, episode);
+        if (result.status === 404) {
+            return [];
+        }
+        data = result.data as IntroDbResponse;
+    } else {
+        const response = await fetch(`${INTRO_DB_BASE_URL}/segments?${params.toString()}`);
+        if (response.status === 404) {
+            return [];
+        }
+        if (!response.ok) {
+            throw new Error(`IntroDB request failed with ${response.status}`);
+        }
+        data = (await response.json()) as IntroDbResponse;
     }
 
-    const data = (await response.json()) as IntroDbResponse;
     return [
         toChapter("recap", data.recap),
         toChapter("intro", data.intro),
