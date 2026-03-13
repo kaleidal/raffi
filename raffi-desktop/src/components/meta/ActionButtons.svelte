@@ -32,7 +32,12 @@
         on:click={openLists}
     >
 
-        <Archive size={30} strokeWidth={2} color="white" />
+        <Archive
+            size={30}
+            strokeWidth={2}
+            color="white"
+            class="shrink-0 min-w-[30px] min-h-[30px]"
+        />
 
         <span class="text-[#E1E1E1] text-[24px] font-poppins font-medium whitespace-nowrap"
             >Add to list</span

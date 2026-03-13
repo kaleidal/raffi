@@ -20,6 +20,7 @@
     import { overlayZoomStyle } from "./lib/overlayZoom";
     import { formatReleaseNotes } from "./lib/updateNotes";
     import { userZoom } from "./lib/stores/settingsStore";
+    import { warmTraktClientAuth } from "./lib/db/db";
     import ZoomModal from "./components/common/ZoomModal.svelte";
 
     const pages = {
@@ -298,6 +299,7 @@
         const init = async () => {
             try {
                 await initAuth();
+                void warmTraktClientAuth();
             } catch (err) {
                 console.error("Auth initialization failed", err);
             }
