@@ -179,8 +179,9 @@ const isPermanentAveRefreshError = (error: any) => {
         message.includes("invalid refresh token") ||
         message.includes("refresh token not found") ||
         message.includes("invalid_grant") ||
-        message.includes("unauthorized") ||
-        message.includes("forbidden")
+        message.includes("refresh token expired") ||
+        message.includes("refresh token revoked") ||
+        message.includes("token has been revoked")
     );
 };
 

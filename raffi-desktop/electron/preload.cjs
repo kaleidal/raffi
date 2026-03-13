@@ -55,6 +55,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
             return () => ipcRenderer.removeListener('WINDOW_MINI_PLAYER_CHANGED', handler);
         },
     },
+    getDecoderStatus: () => ipcRenderer.invoke('DECODER_STATUS_GET'),
+    onDecoderStatusChanged: (callback) => {
+        const handler = (_event, value) => callback(value);
+        ipcRenderer.on('DECODER_STATUS_CHANGED', handler);
+        return () => ipcRenderer.removeListener('DECODER_STATUS_CHANGED', handler);
+    },
     onDisplayZoom: (callback) => {
         const handler = (_event, value) => callback(value);
         ipcRenderer.on('DISPLAY_ZOOM', handler);
