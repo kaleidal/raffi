@@ -1,6 +1,12 @@
 import { convexAction, convexMutation, convexQuery } from "./convex";
 import type { TraktRecommendation, TraktScrobbleArgs, TraktStatus, WatchParty, WatchPartyMember } from "./types";
 import { DEFAULT_TRAKT_STATUS, canUseCloudFeatures, getRequiredUserId, isLocalModeActive } from "./state";
+import {
+    clearTraktClientAuthCache,
+    getTraktRecommendationsClient,
+    traktScrobbleClient,
+    warmTraktClientAuth as warmTraktClientAuthInternal,
+} from "./traktClient";
 
 export const getTraktStatus = async (): Promise<TraktStatus> => {
     if (isLocalModeActive() || !canUseCloudFeatures()) return DEFAULT_TRAKT_STATUS;
@@ -12,32 +18,37 @@ export const getTraktStatus = async (): Promise<TraktStatus> => {
 export const exchangeTraktCode = async (code: string) => {
     if (!canUseCloudFeatures()) throw new Error("Cloud backup is offline");
     getRequiredUserId();
-    return convexAction("raffi:exchangeTraktCode", { code });
+    const result = await convexAction("raffi:exchangeTraktCode", { code });
+    clearTraktClientAuthCache();
+    return result;
 };
 
 export const disconnectTrakt = async () => {
     if (isLocalModeActive() || !canUseCloudFeatures()) return { ok: true };
     getRequiredUserId();
-    return convexMutation("raffi:disconnectTrakt", {});
+    const result = await convexMutation("raffi:disconnectTrakt", {});
+    clearTraktClientAuthCache();
+    return result;
 };
 
 export const refreshTraktToken = async () => {
     if (!canUseCloudFeatures()) throw new Error("Cloud backup is offline");
     getRequiredUserId();
-    return convexAction("raffi:refreshTraktToken", {});
+    const result = await convexAction("raffi:refreshTraktToken", {});
+    clearTraktClientAuthCache();
+    return result;
 };
 
 export const traktScrobble = async (args: TraktScrobbleArgs) => {
-    if (isLocalModeActive() || !canUseCloudFeatures()) return { ok: false, reason: "cloud_unavailable" };
-    getRequiredUserId();
-    return convexAction("raffi:traktScrobble", args as any);
+    return traktScrobbleClient(args);
 };
 
 export const getTraktRecommendations = async (limit = 24): Promise<TraktRecommendation[]> => {
-    if (isLocalModeActive() || !canUseCloudFeatures()) return [];
-    getRequiredUserId();
-    const result = await convexAction<any>("raffi:getTraktRecommendations", { limit });
-    return result?.ok && Array.isArray(result.recommendations) ? result.recommendations : [];
+    return getTraktRecommendationsClient(limit);
+};
+
+export const warmTraktClientAuth = async () => {
+    await warmTraktClientAuthInternal();
 };
 
 export const createWatchParty = async (imdbId: string, streamSource: string, season: number | null = null, episode: number | null = null, fileIdx: number | null = null) => {
