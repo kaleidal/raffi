@@ -416,6 +416,7 @@
 
     const seekToTime = (targetTime: number) => {
         if (!videoElem) return;
+        captureLoadingBackdrop();
         performSeekWithEffects({
             targetTime,
             duration: $duration,
@@ -478,23 +479,41 @@
     };
 
     const captureLoadingBackdrop = () => {
+        if (!hasStarted) {
+            loadingBackdropSrc = null;
+            loadingBackdropMode = "art";
+            return;
+        }
+
         if (
-            hasStarted &&
             videoElem &&
             canvasElem &&
             videoElem.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
             videoElem.videoWidth > 0 &&
-            videoElem.videoHeight > 0 &&
-            videoElem.currentTime > 0
+            videoElem.videoHeight > 0
         ) {
             Session.captureFrame(videoElem, canvasElem);
+            if (canvasElem.width > 0 && canvasElem.height > 0) {
+                try {
+                    loadingBackdropSrc = canvasElem.toDataURL("image/jpeg", 0.72);
+                    loadingBackdropMode = "frame";
+                    return;
+                } catch {
+                }
+            }
+        }
+
+        if (canvasElem && canvasElem.width > 0 && canvasElem.height > 0) {
             try {
                 loadingBackdropSrc = canvasElem.toDataURL("image/jpeg", 0.72);
                 loadingBackdropMode = "frame";
                 return;
             } catch {
-                // ignore and fall back to artwork
             }
+        }
+
+        if (loadingBackdropMode === "frame" && loadingBackdropSrc) {
+            return;
         }
 
         loadingBackdropSrc = null;
