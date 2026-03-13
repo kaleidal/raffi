@@ -268,7 +268,6 @@ func (c *Controller) Seek(ctx context.Context, id, source string, target float64
 	}
 
 	if seekID != "" && sess.LastSeekID == seekID {
-		log.Printf("Seek: reusing last seek ID %s", seekID)
 		sliceDir := filepath.Join(sess.WorkDir, fmt.Sprintf("slice_%03d", sess.SliceIndex))
 		manifestPath := filepath.Join(sliceDir, "child.m3u8")
 
@@ -366,8 +365,23 @@ func (c *Controller) Seek(ctx context.Context, id, source string, target float64
 		return 0, 0, "", err
 	}
 
-	log.Printf("Seek: returning duration=%.2f, target=%.2f", duration, target)
 	return duration, target, manifestPath, nil
+}
+
+func (c *Controller) IsDuplicateSeek(id, seekID string) bool {
+	if seekID == "" {
+		return false
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	sess := c.sessions[id]
+	if sess == nil {
+		return false
+	}
+
+	return sess.LastSeekID == seekID
 }
 
 func (c *Controller) GetSliceStart(id string) float64 {

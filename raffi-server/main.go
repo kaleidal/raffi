@@ -458,19 +458,19 @@ func (s *Server) handleHLSSessionAsset(w http.ResponseWriter, r *http.Request, s
 
 		if start != "" {
 			if val, err := strconv.ParseFloat(start, 64); err == nil && val >= 0 {
-				log.Printf("Calling Seek with val=%.2f", val)
-				log.Printf("Seeking session %s to %.2f seconds (seekID=%s)", sess.ID, val, seekID)
-				dur, actualStart, _, err := s.hlsController.Seek(r.Context(), sess.ID, sess.Source, val, seekID, forceSlice)
-				if err != nil {
-					log.Printf("seek error for %s: %v", sess.ID, err)
-					http.Error(w, "failed to seek", http.StatusInternalServerError)
-					return
+				shouldSeek := forceSlice || !s.hlsController.IsDuplicateSeek(sess.ID, seekID)
+				if shouldSeek {
+					dur, actualStart, _, err := s.hlsController.Seek(r.Context(), sess.ID, sess.Source, val, seekID, forceSlice)
+					if err != nil {
+						log.Printf("seek error for %s: %v", sess.ID, err)
+						http.Error(w, "failed to seek", http.StatusInternalServerError)
+						return
+					}
+					if dur > 0 {
+						sess.DurationSeconds = dur
+					}
+					sliceStart = actualStart
 				}
-				if dur > 0 {
-					sess.DurationSeconds = dur
-				}
-				log.Printf("Seek returned actualStart=%.2f", actualStart)
-				sliceStart = actualStart
 			}
 		} else {
 			if _, _, err := s.hlsController.EnsureSession(r.Context(), sess.ID, sess.Source, sess.StartTime); err != nil {
