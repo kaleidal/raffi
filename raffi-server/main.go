@@ -443,11 +443,6 @@ func (s *Server) handleStreamAsset(w http.ResponseWriter, r *http.Request, id, a
 }
 
 func (s *Server) handleHLSSessionAsset(w http.ResponseWriter, r *http.Request, sess *session.Session, asset string) {
-	if _, _, err := s.hlsController.EnsureSession(r.Context(), sess.ID, sess.Source, sess.StartTime); err != nil {
-		http.Error(w, "failed to prepare stream", http.StatusInternalServerError)
-		return
-	}
-
 	if asset == "child.m3u8" {
 		if s.hlsController != nil {
 			s.hlsController.NotifyClientPlaylistRequest(sess.ID)
@@ -477,6 +472,12 @@ func (s *Server) handleHLSSessionAsset(w http.ResponseWriter, r *http.Request, s
 				log.Printf("Seek returned actualStart=%.2f", actualStart)
 				sliceStart = actualStart
 			}
+		} else {
+			if _, _, err := s.hlsController.EnsureSession(r.Context(), sess.ID, sess.Source, sess.StartTime); err != nil {
+				http.Error(w, "failed to prepare stream", http.StatusInternalServerError)
+				return
+			}
+			sliceStart = s.hlsController.GetSliceStart(sess.ID)
 		}
 
 		w.Header().Set("X-Raffi-Slice-Start", fmt.Sprintf("%.3f", sliceStart))
@@ -520,6 +521,11 @@ func (s *Server) handleHLSSessionAsset(w http.ResponseWriter, r *http.Request, s
 		w.Header().Set("Pragma", "no-cache")
 		w.Header().Set("Expires", "0")
 		http.ServeContent(w, r, asset, time.Now(), strings.NewReader(finalContent))
+		return
+	}
+
+	if _, _, err := s.hlsController.EnsureSession(r.Context(), sess.ID, sess.Source, sess.StartTime); err != nil {
+		http.Error(w, "failed to prepare stream", http.StatusInternalServerError)
 		return
 	}
 
