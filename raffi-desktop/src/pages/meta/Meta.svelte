@@ -447,12 +447,12 @@
                                     href={`https://www.imdb.com/title/${$metaData.meta.imdb_id}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    class="cursor-pointer hover:opacity-60 transition-opacity duration-200"
+                                    class="cursor-pointer hover:opacity-60 transition-opacity duration-200 shrink-0"
                                 >
                                     <img
                                         src="imdb.png"
                                         alt="IMDB Logo"
-                                        class="h-12.5 w-auto object-contain"
+                                        class="h-12.5 min-h-12.5 w-auto min-w-[110px] object-contain shrink-0"
                                     />
                                 </a>
                             </div>
