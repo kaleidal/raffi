@@ -29,10 +29,32 @@
         lists: Lists,
     };
 
+    type DecoderStatus = {
+        state: string;
+        reason: string;
+        message: string;
+        detail: string;
+        pid: number | null;
+        updatedAt: number;
+    };
+
+    const defaultDecoderStatus = (): DecoderStatus => ({
+        state: "idle",
+        reason: "idle",
+        message: "",
+        detail: "",
+        pid: null,
+        updatedAt: 0,
+    });
+
     let checkingAuth = true;
     let showTitleBar = false;
     let displayZoom = 1;
     let showUpdatePrompt = false;
+    let decoderStatus: DecoderStatus = defaultDecoderStatus();
+    let dismissedDecoderStatusAt = 0;
+    let decoderDetailsCopied = false;
+    let decoderDetailsCopyTimeout: ReturnType<typeof setTimeout> | null = null;
     let updateLaterTimeout: ReturnType<typeof setTimeout> | null = null;
     let updateTestArmed = false;
     let updateTestTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -41,6 +63,100 @@
 
     const UPDATE_REMIND_DELAY = 30 * 60 * 1000;
     const UPDATE_TEST_ARM_DELAY = 1500;
+    const ISSUE_TRACKER_URL = "https://github.com/kaleidal/raffi/issues";
+
+    const normalizeDecoderStatus = (value: any): DecoderStatus => ({
+        state: typeof value?.state === "string" ? value.state : "idle",
+        reason: typeof value?.reason === "string" ? value.reason : "idle",
+        message: typeof value?.message === "string" ? value.message : "",
+        detail: typeof value?.detail === "string" ? value.detail : "",
+        pid: typeof value?.pid === "number" && Number.isFinite(value.pid) ? value.pid : null,
+        updatedAt:
+            typeof value?.updatedAt === "number" && Number.isFinite(value.updatedAt)
+                ? value.updatedAt
+                : Date.now(),
+    });
+
+    const applyDecoderStatus = (value: any) => {
+        const next = normalizeDecoderStatus(value);
+        const previousUpdatedAt = decoderStatus.updatedAt;
+        const previousState = decoderStatus.state;
+        decoderStatus = next;
+
+        if (next.state === "ready") {
+            dismissedDecoderStatusAt = 0;
+            return;
+        }
+
+        if (
+            next.state === "unavailable" &&
+            (next.updatedAt !== previousUpdatedAt || previousState !== next.state)
+        ) {
+            dismissedDecoderStatusAt = 0;
+        }
+    };
+
+    const dismissDecoderFailure = () => {
+        dismissedDecoderStatusAt = decoderStatus.updatedAt;
+    };
+
+    const openIssueTracker = () => {
+        const target = ISSUE_TRACKER_URL;
+        const electronApi = (window as any).electronAPI as
+            | { openExternal?: (url: string) => Promise<void> }
+            | undefined;
+
+        if (electronApi?.openExternal) {
+            electronApi.openExternal(target).catch(() => {
+                if (typeof window !== "undefined") {
+                    window.location.assign(target);
+                }
+            });
+            return;
+        }
+
+        if (typeof window !== "undefined") {
+            window.location.assign(target);
+        }
+    };
+
+    const copyDecoderDetails = async () => {
+        const detailText =
+            decoderStatus.detail || "No additional details were provided by the playback server.";
+
+        try {
+            if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(detailText);
+            } else if (typeof document !== "undefined") {
+                const textArea = document.createElement("textarea");
+                textArea.value = detailText;
+                textArea.style.position = "fixed";
+                textArea.style.opacity = "0";
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                document.execCommand("copy");
+                document.body.removeChild(textArea);
+            } else {
+                return;
+            }
+
+            decoderDetailsCopied = true;
+            if (decoderDetailsCopyTimeout) {
+                clearTimeout(decoderDetailsCopyTimeout);
+            }
+            decoderDetailsCopyTimeout = setTimeout(() => {
+                decoderDetailsCopied = false;
+            }, 2000);
+        } catch {
+            decoderDetailsCopied = false;
+        }
+    };
+
+    $: showDecoderFailure =
+        decoderStatus.state === "unavailable" &&
+        decoderStatus.updatedAt !== 0 &&
+        decoderStatus.updatedAt !== dismissedDecoderStatusAt;
 
     function handlePointerButtons(event: PointerEvent) {
         if (event.pointerType !== "mouse") return;
@@ -225,6 +341,18 @@
                 }
             }) ?? null;
 
+        void (window as any).electronAPI?.getDecoderStatus?.()
+            ?.then((value: any) => {
+                if (disposed) return;
+                applyDecoderStatus(value);
+            })
+            ?.catch?.(() => {});
+
+        const removeDecoderStatusListener =
+            (window as any).electronAPI?.onDecoderStatusChanged?.((value: any) => {
+                applyDecoderStatus(value);
+            }) ?? null;
+
         const handleUpdateTestEvent = () => {
             triggerUpdateTest();
         };
@@ -280,6 +408,9 @@
             if (typeof removeZoomListener === "function") {
                 removeZoomListener();
             }
+            if (typeof removeDecoderStatusListener === "function") {
+                removeDecoderStatusListener();
+            }
             if (typeof removeUpdateAvailable === "function") {
                 removeUpdateAvailable();
             }
@@ -294,6 +425,9 @@
             }
             if (updateTestTimeout) {
                 clearTimeout(updateTestTimeout);
+            }
+            if (decoderDetailsCopyTimeout) {
+                clearTimeout(decoderDetailsCopyTimeout);
             }
             window.removeEventListener("keydown", handleUpdateTestKey);
             window.removeEventListener(
@@ -340,6 +474,77 @@
     </div>
 
     <ZoomModal />
+
+    {#if showDecoderFailure}
+        <div
+            class="fixed inset-0 z-[900] bg-[#101010]/56 backdrop-blur-xl flex items-center justify-center px-4"
+            style={overlayZoomStyle}
+            on:click|self={dismissDecoderFailure}
+            on:keydown={(e) => e.key === "Escape" && dismissDecoderFailure()}
+            role="button"
+            tabindex="0"
+        >
+            <div
+                class="w-full max-w-3xl max-h-[80vh] rounded-[32px] bg-[#2b2b2b]/58 backdrop-blur-[40px] p-6 md:p-8 flex flex-col gap-5 relative overflow-hidden shadow-[0_40px_160px_rgba(0,0,0,0.45)]"
+                on:click|stopPropagation
+                on:keydown|stopPropagation
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="decoder-status-title"
+                tabindex="-1"
+            >
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <h2 id="decoder-status-title" class="text-white text-2xl font-poppins font-semibold leading-tight">
+                            {decoderStatus.message || "Raffi could not reach its playback server."}
+                        </h2>
+                        <p class="text-white/50 text-sm">
+                            Video playback and anything that depends on the local server will stay unavailable until it comes back.
+                        </p>
+                    </div>
+                    <button
+                        class="text-white/50 hover:text-white transition-colors cursor-pointer"
+                        on:click={dismissDecoderFailure}
+                        aria-label="Dismiss playback server dialog"
+                    >
+                        <X size={24} strokeWidth={2} />
+                    </button>
+                </div>
+
+                <div class="rounded-2xl bg-white/[0.05] px-4 py-3 text-sm text-white/70 leading-6">
+                    Try restarting Raffi. If this keeps happening, check the desktop logs for decoder startup or exit errors.
+                </div>
+
+                <div class="rounded-2xl bg-black/20 px-4 py-3 text-sm leading-6">
+                    <div class="mb-1 flex items-center justify-between gap-3">
+                        <p class="text-white/45 text-xs">Error details</p>
+                        <button
+                            class="text-xs px-2.5 py-1 rounded-lg bg-white/10 text-white/75 hover:bg-white/20 hover:text-white transition-colors cursor-pointer"
+                            on:click={copyDecoderDetails}
+                        >
+                            {decoderDetailsCopied ? "Copied" : "Copy"}
+                        </button>
+                    </div>
+                    <p class="text-white/75">{decoderStatus.detail || "No additional details were provided by the playback server."}</p>
+                </div>
+
+                <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                    <button
+                        class="px-4 py-2 rounded-2xl bg-white/10 text-white font-semibold hover:bg-white/20 transition-colors cursor-pointer"
+                        on:click={openIssueTracker}
+                    >
+                        Open issue tracker
+                    </button>
+                    <button
+                        class="px-4 py-2 rounded-2xl bg-white text-black font-semibold hover:bg-white/90 transition-colors cursor-pointer"
+                        on:click={dismissDecoderFailure}
+                    >
+                        Dismiss
+                    </button>
+                </div>
+            </div>
+        </div>
+    {/if}
 
     {#if showUpdatePrompt}
         <div

@@ -8,6 +8,7 @@ function registerMainIpcHandlers({
   cleanup,
   logToFile,
   getMainWindow,
+  getDecoderStatus,
   scanLibraryRoots,
 }) {
   ipcMain.on("WINDOW_MINIMIZE", () => {
@@ -69,6 +70,11 @@ function registerMainIpcHandlers({
     const mainWindow = getMainWindow();
     if (!mainWindow || mainWindow.isDestroyed()) return 1;
     return Number(mainWindow.__raffiGetDisplayZoom?.() ?? 1) || 1;
+  });
+
+  ipcMain.handle("DECODER_STATUS_GET", async () => {
+    if (typeof getDecoderStatus !== "function") return null;
+    return getDecoderStatus();
   });
 
   ipcMain.handle("INTRODB_FETCH_SEGMENTS", async (_event, payload) => {

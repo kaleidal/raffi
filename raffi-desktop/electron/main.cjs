@@ -14,7 +14,7 @@ const { registerMainIpcHandlers } = require("./services/mainIpc.cjs");
 const { registerDiscordRpcHandlers } = require("./services/rpc.cjs");
 const { createMainWindow } = require("./services/window.cjs");
 
-const { getLogPath, logFallback, logToFile } = createLogger(app);
+const { logFallback, logToFile } = createLogger(app);
 
 let autoUpdater = null;
 try {
@@ -175,6 +175,13 @@ const decoderService = createDecoderService({
   baseDir: __dirname,
 });
 
+decoderService.onDecoderStatusChange((status) => {
+  if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.webContents) {
+    return;
+  }
+  mainWindow.webContents.send("DECODER_STATUS_CHANGED", status);
+});
+
 function createWindow() {
   mainWindow = createMainWindow({
     BrowserWindow,
@@ -259,11 +266,7 @@ app.whenReady().then(async () => {
     await decoderService.startDecoderServer();
   } catch (err) {
     logToFile("Failed to start decoder server", err);
-    dialog.showErrorBoxSync(
-      "Decoder Error",
-      `Failed to start decoder server: ${err.message}\n\nCheck logs at ${getLogPath()}`
-    );
-    app.quit();
+    createWindow();
     return;
   }
 
@@ -313,6 +316,7 @@ registerMainIpcHandlers({
   cleanup,
   logToFile,
   getMainWindow: () => mainWindow,
+  getDecoderStatus: () => decoderService.getDecoderStatus(),
   scanLibraryRoots,
 });
 

@@ -5,6 +5,7 @@ import {
     generateCodeVerifier,
     generateNonce,
     refreshToken,
+    verifyJwt,
 } from "@ave-id/sdk";
 import type { AppUser } from "./types";
 
@@ -15,6 +16,7 @@ const AVE_REDIRECT_URI = "raffi://auth/callback";
 
 const PKCE_VERIFIER_KEY = "ave_pkce_verifier";
 const PKCE_STATE_KEY = "ave_pkce_state";
+const PKCE_NONCE_KEY = "ave_pkce_nonce";
 
 const AVE_OAUTH_CONFIG = {
     clientId: AVE_CLIENT_ID,
@@ -22,32 +24,33 @@ const AVE_OAUTH_CONFIG = {
     issuer: AVE_ISSUER,
 };
 
-const decodeJwtPayload = (token: string): Record<string, any> | null => {
-    try {
-        const parts = token.split(".");
-        if (parts.length < 2) return null;
-        const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-        const json = decodeURIComponent(
-            atob(base64)
-                .split("")
-                .map((ch) => `%${(`00${ch.charCodeAt(0).toString(16)}`).slice(-2)}`)
-                .join(""),
-        );
-        return JSON.parse(json);
-    } catch {
-        return null;
-    }
-};
-
 const getElectronApi = () => (window as any).electronAPI as {
     openExternal?: (url: string) => Promise<void>;
     onAveAuthCallback?: (callback: (payload: { code?: string; state?: string; error?: string }) => void) => () => void;
 };
 
-const buildUserFromTokens = async (tokens: any, fallback?: AppUser): Promise<AppUser> => {
-    const jwtToken = tokens?.id_token || tokens?.access_token_jwt || tokens?.access_token;
-    if (!jwtToken) {
-        throw new Error("Ave token exchange did not return a JWT token");
+const buildUserFromTokens = async (
+    tokens: any,
+    options: {
+        fallback?: AppUser;
+        expectedNonce?: string | null;
+        requireFreshRefreshToken?: boolean;
+    } = {},
+): Promise<AppUser> => {
+    const { fallback, expectedNonce = null, requireFreshRefreshToken = false } = options;
+    const idToken = tokens?.id_token;
+    if (!idToken || typeof idToken !== "string") {
+        throw new Error("Ave token response did not include an id_token");
+    }
+
+    const claims = await verifyJwt<Record<string, any>>(idToken, {
+        expectedIssuer: AVE_ISSUER,
+        audience: AVE_CLIENT_ID,
+        nonce: expectedNonce || undefined,
+    });
+
+    if (!claims) {
+        throw new Error("Ave id_token validation failed");
     }
 
     let profile: any = null;
@@ -60,10 +63,20 @@ const buildUserFromTokens = async (tokens: any, fallback?: AppUser): Promise<App
         }
     }
 
-    const claims = decodeJwtPayload(jwtToken) || {};
     const id = String(profile?.sub || claims.sub || fallback?.id || "");
     if (!id) {
         throw new Error("Unable to resolve Ave user id");
+    }
+
+    const resolvedRefreshToken =
+        tokens?.refresh_token ||
+        tokens?.refreshToken ||
+        tokens?.refresh?.token ||
+        fallback?.refreshToken ||
+        null;
+
+    if (requireFreshRefreshToken && !resolvedRefreshToken) {
+        throw new Error("Ave token response did not include a refresh token");
     }
 
     return {
@@ -78,8 +91,8 @@ const buildUserFromTokens = async (tokens: any, fallback?: AppUser): Promise<App
             null,
         avatar: profile?.picture || claims.picture || fallback?.avatar || null,
         provider: "ave",
-        token: jwtToken,
-        refreshToken: tokens?.refresh_token || fallback?.refreshToken || null,
+        token: idToken,
+        refreshToken: resolvedRefreshToken,
     };
 };
 
@@ -91,6 +104,7 @@ export async function signInWithAveViaBrowser(): Promise<AppUser> {
 
     sessionStorage.setItem(PKCE_VERIFIER_KEY, codeVerifier);
     sessionStorage.setItem(PKCE_STATE_KEY, state);
+    sessionStorage.setItem(PKCE_NONCE_KEY, nonce);
 
     const authParams = new URLSearchParams({
         client_id: AVE_CLIENT_ID,
@@ -137,25 +151,30 @@ export async function signInWithAveViaBrowser(): Promise<AppUser> {
     const receivedCode = callbackPayload.code;
     const storedState = sessionStorage.getItem(PKCE_STATE_KEY);
     const storedVerifier = sessionStorage.getItem(PKCE_VERIFIER_KEY);
+    const storedNonce = sessionStorage.getItem(PKCE_NONCE_KEY);
 
-    if (!receivedCode || !receivedState || !storedState || !storedVerifier) {
-        throw new Error("Invalid Ave callback payload");
+    try {
+        if (!receivedCode || !receivedState || !storedState || !storedVerifier || !storedNonce) {
+            throw new Error("Invalid Ave callback payload");
+        }
+        if (receivedState !== storedState) {
+            throw new Error("Invalid Ave state");
+        }
+
+        const tokens = await exchangeCode(AVE_OAUTH_CONFIG, {
+            code: receivedCode,
+            codeVerifier: storedVerifier,
+        });
+
+        return await buildUserFromTokens(tokens, {
+            expectedNonce: storedNonce,
+            requireFreshRefreshToken: true,
+        });
+    } finally {
+        sessionStorage.removeItem(PKCE_VERIFIER_KEY);
+        sessionStorage.removeItem(PKCE_STATE_KEY);
+        sessionStorage.removeItem(PKCE_NONCE_KEY);
     }
-    if (receivedState !== storedState) {
-        throw new Error("Invalid Ave state");
-    }
-
-    const tokens = await exchangeCode(AVE_OAUTH_CONFIG, {
-        code: receivedCode,
-        codeVerifier: storedVerifier,
-    });
-
-    const user = await buildUserFromTokens(tokens);
-
-    sessionStorage.removeItem(PKCE_VERIFIER_KEY);
-    sessionStorage.removeItem(PKCE_STATE_KEY);
-
-    return user;
 }
 
 export async function refreshAveUserSession(user: AppUser): Promise<AppUser> {
@@ -165,5 +184,8 @@ export async function refreshAveUserSession(user: AppUser): Promise<AppUser> {
     const tokens = await refreshToken(AVE_OAUTH_CONFIG, {
         refreshToken: user.refreshToken,
     });
-    return buildUserFromTokens(tokens, user);
+    return buildUserFromTokens(tokens, {
+        fallback: user,
+        requireFreshRefreshToken: true,
+    });
 }
