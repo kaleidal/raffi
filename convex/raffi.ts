@@ -1331,6 +1331,126 @@ export const refreshTraktToken = actionGeneric({
     },
 });
 
+export const getTraktClientAuth = actionGeneric({
+    args: {
+        forceRefresh: v.optional(v.boolean()),
+    },
+    handler: async (ctx, args) => {
+        try {
+            const userId = await requireAuthedUserId(ctx);
+            const config = getTraktConfig();
+            if (!config.clientId || !config.clientSecret) {
+                return {
+                    ok: false,
+                    configured: false,
+                    connected: false,
+                    reason: "not_configured",
+                    clientId: null,
+                    accessToken: null,
+                    expiresAt: null,
+                };
+            }
+
+            const integration = await getTraktIntegrationForUser(ctx, userId);
+            if (!integration?.access_token || !integration?.refresh_token) {
+                return {
+                    ok: false,
+                    configured: true,
+                    connected: false,
+                    reason: "not_connected",
+                    clientId: config.clientId,
+                    accessToken: null,
+                    expiresAt: null,
+                };
+            }
+
+            const now = Date.now();
+            const integrationExpiry = Number(integration.expires_at);
+            const hasExpiry = Number.isFinite(integrationExpiry) && integrationExpiry > 0;
+            const shouldRefresh =
+                Boolean(args.forceRefresh) || (hasExpiry && integrationExpiry <= now + 30_000);
+
+            let accessToken = integration.access_token;
+            let expiresAt = hasExpiry ? integrationExpiry : null;
+
+            if (shouldRefresh) {
+                try {
+                    const tokenPayload = await exchangeOrRefreshTraktToken(
+                        {
+                            refresh_token: integration.refresh_token,
+                            grant_type: "refresh_token",
+                            redirect_uri: config.redirectUri,
+                        },
+                        {
+                            clientId: config.clientId,
+                            clientSecret: config.clientSecret,
+                        },
+                    );
+
+                    const refreshedAccess = optionalString(tokenPayload?.access_token);
+                    const refreshedRefresh = optionalString(tokenPayload?.refresh_token);
+                    if (!refreshedAccess || !refreshedRefresh) {
+                        return {
+                            ok: false,
+                            configured: true,
+                            connected: false,
+                            reason: "refresh_failed",
+                            clientId: config.clientId,
+                            accessToken: null,
+                            expiresAt: null,
+                        };
+                    }
+
+                    accessToken = refreshedAccess;
+                    expiresAt = toExpiresAtMs(tokenPayload) ?? null;
+
+                    await saveTraktIntegrationForUser(ctx, {
+                        userId,
+                        accessToken: refreshedAccess,
+                        refreshToken: refreshedRefresh,
+                        scope: optionalString(tokenPayload?.scope) || integration.scope,
+                        tokenType: optionalString(tokenPayload?.token_type) || integration.token_type,
+                        expiresAt: expiresAt ?? undefined,
+                        username: integration.username,
+                        slug: integration.slug,
+                    });
+                } catch (error: any) {
+                    return {
+                        ok: false,
+                        configured: true,
+                        connected: false,
+                        reason: "refresh_failed",
+                        message: String(error?.message || error || "Unknown error"),
+                        clientId: config.clientId,
+                        accessToken: null,
+                        expiresAt: null,
+                    };
+                }
+            }
+
+            return {
+                ok: true,
+                configured: true,
+                connected: true,
+                clientId: config.clientId,
+                accessToken,
+                expiresAt,
+            };
+        } catch (error: any) {
+            return {
+                ok: false,
+                configured: true,
+                connected: false,
+                reason: "exception",
+                message: String(error?.message || error || "Unknown error"),
+                clientId: null,
+                accessToken: null,
+                expiresAt: null,
+            };
+        }
+    },
+});
+
 export const traktScrobble = actionGeneric({
     args: {
         action: v.union(v.literal("start"), v.literal("pause"), v.literal("stop")),
