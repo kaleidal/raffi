@@ -138,7 +138,7 @@
                 {/if}
 
                 {#if episodeDescription}
-                    <div class="min-h-0 overflow-hidden" bind:this={descriptionContainer}>
+                    <div class="min-h-0 overflow-y-auto pr-1" bind:this={descriptionContainer}>
                         <p
                             bind:this={descriptionText}
                             class="text-sm leading-6 text-white/58 {descriptionIsClipped
