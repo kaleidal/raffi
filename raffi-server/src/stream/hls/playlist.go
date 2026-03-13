@@ -10,6 +10,13 @@ import (
 	"time"
 )
 
+type PlaylistSegment struct {
+	Sequence int
+	Filename string
+	Start    float64
+	End      float64
+}
+
 func readPlaylistState(path string) (int, int, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -35,6 +42,75 @@ func readPlaylistState(path string) (int, int, error) {
 	if err := scanner.Err(); err != nil {
 		return 0, 0, err
 	}
+	return mediaSeq, segments, nil
+}
+
+func readPlaylistTimeline(path string, sliceStart float64) (int, []PlaylistSegment, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	mediaSeq := 0
+	nextSeq := 0
+	cursor := sliceStart
+	pendingDur := 0.0
+	segments := make([]PlaylistSegment, 0, 8)
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+
+		if strings.HasPrefix(line, "#EXT-X-MEDIA-SEQUENCE:") {
+			val := strings.TrimPrefix(line, "#EXT-X-MEDIA-SEQUENCE:")
+			if seq, convErr := strconv.Atoi(strings.TrimSpace(val)); convErr == nil {
+				mediaSeq = seq
+				nextSeq = seq
+			}
+			continue
+		}
+
+		if strings.HasPrefix(line, "#EXTINF:") {
+			val := strings.TrimPrefix(line, "#EXTINF:")
+			if comma := strings.Index(val, ","); comma >= 0 {
+				val = val[:comma]
+			}
+			dur, convErr := strconv.ParseFloat(strings.TrimSpace(val), 64)
+			if convErr != nil || dur <= 0 {
+				dur = DefaultSegmentDuration.Seconds()
+			}
+			pendingDur = dur
+			continue
+		}
+
+		if strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		dur := pendingDur
+		if dur <= 0 {
+			dur = DefaultSegmentDuration.Seconds()
+		}
+		seg := PlaylistSegment{
+			Sequence: nextSeq,
+			Filename: line,
+			Start:    cursor,
+			End:      cursor + dur,
+		}
+		segments = append(segments, seg)
+		cursor = seg.End
+		nextSeq++
+		pendingDur = 0
+	}
+
+	if err := scanner.Err(); err != nil {
+		return 0, nil, err
+	}
+
 	return mediaSeq, segments, nil
 }
 

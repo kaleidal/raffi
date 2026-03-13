@@ -62,8 +62,8 @@ func NewProbeDuration(ffprobePath string) func(ctx context.Context, source strin
 
 		cmd := exec.CommandContext(ctx, ffprobePath,
 			"-v", "quiet",
-			"-analyzeduration", "200M",
-			"-probesize", "200M",
+			"-analyzeduration", "1000000",
+			"-probesize", "1000000",
 			"-print_format", "json",
 			"-show_format",
 			"-show_streams",
@@ -99,6 +99,9 @@ func NewProbeDuration(ffprobePath string) func(ctx context.Context, source strin
 }
 
 func (c *Controller) ProbeMetadata(ctx context.Context, id, source string) (*Metadata, error) {
-	meta, _, err := ProbeDuration(ctx, source)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	meta, _, err := c.getOrProbeLocked(ctx, source)
 	return meta, err
 }

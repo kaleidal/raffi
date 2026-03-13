@@ -8,7 +8,7 @@
     export let hidden: boolean = false;
 
     const AMBIENT_ASPECT_EPSILON = 0.015;
-    const SMART_COVER_MAX_CROP_RATIO = 0.11;
+    const SMART_COVER_MAX_CROP_RATIO = 0.06;
     const AMBIENT_MIN_WIDTH = 160;
     const AMBIENT_MAX_WIDTH = 420;
     const AMBIENT_BLEND_FACTOR = 0.14;
@@ -31,7 +31,7 @@
     let ambientHasFrame = false;
     let ambientDisplayVisible = false;
     let effectiveObjectFit: "contain" | "cover" = "contain";
-    let effectiveObjectPosition = "center bottom";
+    let effectiveObjectPosition = "center center";
 
     const getAmbientContext = () => ambientCanvasElem?.getContext("2d", { alpha: false }) ?? null;
     const getCanvasContext = (canvas: HTMLCanvasElement | undefined) => canvas?.getContext("2d", { alpha: false }) ?? null;
@@ -87,7 +87,7 @@
         const useSmartCover = cropRatio > 0 && cropRatio <= SMART_COVER_MAX_CROP_RATIO;
 
         effectiveObjectFit = useSmartCover ? "cover" : "contain";
-        effectiveObjectPosition = useSmartCover ? "center center" : "center bottom";
+        effectiveObjectPosition = "center center";
     };
 
     const updateAmbientDisplayVisibility = () => {

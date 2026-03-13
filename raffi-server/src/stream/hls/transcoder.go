@@ -88,6 +88,9 @@ func NewTranscoder(ffmpegPath string) TranscoderFunc {
 
 		args := []string{
 			"-hwaccel", "auto",
+			"-fflags", "+genpts+nofillin",
+			"-probesize", "1000000",
+			"-analyzeduration", "1000000",
 		}
 
 		if strings.HasPrefix(source, "http://") || strings.HasPrefix(source, "https://") {
@@ -110,7 +113,10 @@ func NewTranscoder(ffmpegPath string) TranscoderFunc {
 			"-c:v", videoCodec,
 		)
 		if videoCodec == "copy" {
-			args = append(args, "-bsf:v", "h264_mp4toannexb")
+			args = append(args,
+				"-copytb", "1",
+				"-bsf:v", "h264_mp4toannexb",
+			)
 		}
 		args = append(args, videoArgs...)
 		hlsFlags := "independent_segments+temp_file"
@@ -133,7 +139,6 @@ func NewTranscoder(ffmpegPath string) TranscoderFunc {
 
 		args = append(args,
 			"-avoid_negative_ts", "make_zero",
-			"-reset_timestamps", "1",
 			"-muxdelay", "0",
 			"-muxpreload", "0",
 			"-max_interleave_delta", "0",

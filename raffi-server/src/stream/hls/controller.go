@@ -20,18 +20,39 @@ const (
 )
 
 type Controller struct {
-	mu        sync.Mutex
-	sessions  map[string]*Session
-	ffprobeFn func(ctx context.Context, source string) (*Metadata, string, error)
-	startCmd  TranscoderFunc
+	mu         sync.Mutex
+	sessions   map[string]*Session
+	probeCache map[string]probeCacheEntry
+	ffprobeFn  func(ctx context.Context, source string) (*Metadata, string, error)
+	startCmd   TranscoderFunc
+}
+
+type probeCacheEntry struct {
+	meta  *Metadata
+	codec string
 }
 
 func NewController(ffmpegPath, ffprobePath string) *Controller {
 	return &Controller{
-		sessions:  make(map[string]*Session),
-		ffprobeFn: NewProbeDuration(ffprobePath),
-		startCmd:  NewTranscoder(ffmpegPath),
+		sessions:   make(map[string]*Session),
+		probeCache: make(map[string]probeCacheEntry),
+		ffprobeFn:  NewProbeDuration(ffprobePath),
+		startCmd:   NewTranscoder(ffmpegPath),
 	}
+}
+
+func (c *Controller) getOrProbeLocked(ctx context.Context, source string) (*Metadata, string, error) {
+	if cached, ok := c.probeCache[source]; ok {
+		return cached.meta, cached.codec, nil
+	}
+
+	meta, codec, err := c.ffprobeFn(ctx, source)
+	if err != nil {
+		return nil, "", err
+	}
+
+	c.probeCache[source] = probeCacheEntry{meta: meta, codec: codec}
+	return meta, codec, nil
 }
 
 func isTorrentSource(source string) bool {
@@ -57,7 +78,7 @@ func (c *Controller) EnsureSession(ctx context.Context, id, source string, start
 			probeCtx = ctxProbe
 		}
 
-		meta, codec, err := c.ffprobeFn(probeCtx, source)
+		meta, codec, err := c.getOrProbeLocked(probeCtx, source)
 		if err != nil {
 			c.mu.Unlock()
 			return 0, "", err
@@ -172,7 +193,7 @@ func (c *Controller) Seek(ctx context.Context, id, source string, target float64
 			defer cancel()
 			probeCtx = ctxProbe
 		}
-		meta, codec, err := c.ffprobeFn(probeCtx, source)
+		meta, codec, err := c.getOrProbeLocked(probeCtx, source)
 		if err != nil {
 			c.mu.Unlock()
 			return 0, 0, "", err
@@ -270,42 +291,50 @@ func (c *Controller) Seek(ctx context.Context, id, source string, target float64
 		target = sess.DurationHint
 	}
 
-	maxReuseWindowSeconds := MaxBufferAhead.Seconds()
-
 	if !forceSlice {
 		// Check if we can reuse an existing slice
 		for _, slice := range sess.Slices {
 			sliceDir := filepath.Join(sess.WorkDir, fmt.Sprintf("slice_%03d", slice.Index))
 			manifestPath := filepath.Join(sliceDir, "child.m3u8")
-			mediaSeq, segCount, err := readPlaylistState(manifestPath)
-			if err == nil && segCount > 0 {
-				currentDuration := float64(segCount) * DefaultSegmentDuration.Seconds()
-				endTime := slice.StartTime + currentDuration
+			_, timeline, err := readPlaylistTimeline(manifestPath, slice.StartTime)
+			if err != nil || len(timeline) == 0 {
+				continue
+			}
 
-				if target >= slice.StartTime && target < (endTime-sliceReuseSafetyMargin) {
-					distanceFromStart := target - slice.StartTime
-					if distanceFromStart > maxReuseWindowSeconds {
-						// Force a brand new slice when the desired seek is far away from the slice start
-						// so that clients receive an accurate playback offset, which is critical on Windows
-						// where ffmpeg cannot be paused via signals and would otherwise keep a giant playlist alive.
-						continue
+			lastSegment := timeline[len(timeline)-1]
+			endTime := lastSegment.End
+			if target < slice.StartTime || target >= (endTime-sliceReuseSafetyMargin) {
+				continue
+			}
+
+			hasTargetSegment := false
+			for _, seg := range timeline {
+				if target >= seg.Start && target < seg.End {
+					if _, statErr := os.Stat(filepath.Join(sliceDir, seg.Filename)); statErr == nil {
+						hasTargetSegment = true
 					}
-					log.Printf("Seek: reusing slice %d (start=%.2f) for target %.2f", slice.Index, slice.StartTime, target)
-					sess.SliceIndex = slice.Index
-					sess.LastSeekID = seekID
-					sess.CurrentlyAt = target
-
-					if !sess.Finished && endTime < sess.DurationHint {
-						resumeTime := slice.StartTime + float64(mediaSeq+segCount)*DefaultSegmentDuration.Seconds()
-						if err := c.ensureCmdLocked(id, source, sess, resumeTime, sliceDir, true); err != nil {
-							log.Printf("Failed to resume slice %d: %v", slice.Index, err)
-						}
-					}
-
-					c.mu.Unlock()
-					return sess.DurationHint, slice.StartTime, manifestPath, nil
+					break
 				}
 			}
+
+			if !hasTargetSegment {
+				continue
+			}
+
+			log.Printf("Seek: reusing cached segment in slice %d (start=%.2f) for target %.2f", slice.Index, slice.StartTime, target)
+			sess.SliceIndex = slice.Index
+			sess.LastSeekID = seekID
+			sess.CurrentlyAt = target
+
+			if !sess.Finished && endTime < sess.DurationHint {
+				resumeTime := endTime
+				if err := c.ensureCmdLocked(id, source, sess, resumeTime, sliceDir, true); err != nil {
+					log.Printf("Failed to resume slice %d: %v", slice.Index, err)
+				}
+			}
+
+			c.mu.Unlock()
+			return sess.DurationHint, slice.StartTime, manifestPath, nil
 		}
 	}
 
