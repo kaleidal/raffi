@@ -181,7 +181,37 @@
         trackEvent("player_object_fit_toggled", {
             ...getPlaybackAnalyticsProps(),
         });
-        controlsManager?.toggleObjectFit?.($objectFit, objectFit.set);
+
+        const nextFit: "contain" | "cover" = $objectFit === "contain" ? "cover" : "contain";
+        const nextTransform = nextFit === "cover" ? "scale(1.035)" : "none";
+        objectFit.set(nextFit);
+
+        if (videoElem) {
+            videoElem.style.objectFit = nextFit;
+            videoElem.style.objectPosition = "center center";
+            videoElem.style.transform = nextTransform;
+            videoElem.style.transformOrigin = "center center";
+        }
+
+        if (canvasElem) {
+            canvasElem.style.objectFit = nextFit;
+            canvasElem.style.objectPosition = "center center";
+            canvasElem.style.transform = nextTransform;
+            canvasElem.style.transformOrigin = "center center";
+        }
+
+        if (videoElem && canvasElem) {
+            Session.captureFrame(videoElem, canvasElem);
+
+            if (!$showCanvas && !$loading) {
+                showCanvas.set(true);
+                requestAnimationFrame(() => {
+                    if (!$loading) {
+                        showCanvas.set(false);
+                    }
+                });
+            }
+        }
     };
 
     const openAudioSelection = () => {

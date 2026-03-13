@@ -291,7 +291,7 @@
 
 <div
     use:portal
-    class="fixed inset-0 z-[300] flex items-center justify-center bg-black/90 backdrop-blur-sm"
+    class="fixed inset-0 z-[300] flex items-center justify-center bg-[#101010]/56 backdrop-blur-xl"
     style={overlayZoomStyle}
     transition:fade={{ duration: 200 }}
     on:click|self={onClose}
@@ -301,13 +301,13 @@
     tabindex="0"
 >
         <div
-            class="bg-[#121212] w-full max-w-2xl max-h-[90vh] rounded-3xl overflow-hidden shadow-[0_40px_160px_rgba(0,0,0,0.55)]"
+            class="w-full max-w-2xl max-h-[90vh] rounded-4xl overflow-hidden bg-[#2b2b2b]/56 backdrop-blur-[40px] shadow-[0_40px_160px_rgba(0,0,0,0.45)]"
             on:wheel|stopPropagation
         >
             <!-- Header -->
 
         <div
-            class="flex items-center justify-between p-6 border-b border-white/10"
+            class="flex items-center justify-between p-6 border-b border-white/12"
         >
             <h2 class="text-2xl font-bold text-white">
                 {$watchParty.isActive ? "Party Details" : "Watch Together"}
@@ -364,20 +364,20 @@
                         <h3 class="text-xl font-bold text-white mb-2">
                             Active Session
                         </h3>
-                        <p class="text-[#878787]">
+                        <p class="text-white/60">
                             You are currently in a watch party
                         </p>
                     </div>
                 </div>
 
-                <div class="bg-[#1a1a1a] rounded-xl p-4 space-y-3">
+                    <div class="bg-white/8 rounded-2xl p-4 space-y-3 border border-white/12">
                     <div class="flex items-center justify-between">
                         <span
-                            class="text-xs text-[#878787] uppercase font-medium"
+                            class="text-xs text-white/55 uppercase font-medium"
                             >Party ID</span
                         >
                         <button
-                            class="flex items-center gap-2 px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium text-white transition-colors cursor-pointer"
+                            class="flex items-center gap-2 px-3 py-1.5 bg-white/14 hover:bg-white/24 rounded-lg text-sm font-medium text-white transition-colors cursor-pointer"
                             on:click={() =>
                                 copyPartyId($watchParty.partyId || "")}
                         >
@@ -423,15 +423,15 @@
                         </button>
                     </div>
                     <code
-                        class="block text-white font-mono text-sm bg-black/40 rounded px-3 py-2 break-all"
+                        class="block text-white font-mono text-sm bg-black/28 rounded px-3 py-2 break-all border border-white/8"
                         >{$watchParty.partyId}</code
                     >
                 </div>
 
                 <div class="grid grid-cols-2 gap-4">
-                    <div class="bg-[#1a1a1a] rounded-xl p-4">
+                    <div class="bg-white/8 rounded-2xl p-4 border border-white/12">
                         <span
-                            class="text-xs text-[#878787] uppercase font-medium block mb-1"
+                            class="text-xs text-white/55 uppercase font-medium block mb-1"
                             >Role</span
                         >
                         <span
@@ -458,9 +458,9 @@
                             {/if}
                         </span>
                     </div>
-                    <div class="bg-[#1a1a1a] rounded-xl p-4">
+                    <div class="bg-white/8 rounded-2xl p-4 border border-white/12">
                         <span
-                            class="text-xs text-[#878787] uppercase font-medium block mb-1"
+                            class="text-xs text-white/55 uppercase font-medium block mb-1"
                             >Members</span
                         >
                         <span class="text-white font-semibold"
@@ -470,7 +470,7 @@
                 </div>
 
                 <button
-                    class="w-full py-3 px-4 bg-red-500/10 text-red-400 font-bold rounded-xl hover:bg-red-500/20 transition-colors cursor-pointer"
+                    class="w-full py-3 px-4 bg-[#ff6b6b]/16 text-[#ffd2d2] font-semibold rounded-2xl hover:bg-[#ff6b6b]/24 transition-colors cursor-pointer border border-[#ff6b6b]/30"
                     on:click={handleLeaveParty}
                 >
                     Leave Party
@@ -628,7 +628,7 @@
                             </div>
 
                             <div
-                                class="bg-blue-500/10 rounded-xl p-4 flex gap-3 items-center"
+                                class="bg-white/8 rounded-2xl p-4 flex gap-3 items-center border border-white/12"
                             >
                                 <svg
                                     width="20"
@@ -651,14 +651,14 @@
                                         stroke-linecap="round"
                                     />
                                 </svg>
-                                <p class="text-sm text-blue-400">
+                                <p class="text-sm text-white/78">
                                     As the host, your playback controls sync
                                     with all participants
                                 </p>
                             </div>
 
                             <button
-                                class="w-full py-3 px-4 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition-colors cursor-pointer"
+                                class="w-full py-3 px-4 bg-white/92 text-black font-semibold rounded-2xl hover:bg-white transition-colors cursor-pointer"
                                 on:click={onClose}
                             >
                                 Start Watching
@@ -710,7 +710,7 @@
                             </div>
 
                             <button
-                                class="w-full py-3 px-4 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                                class="w-full py-3 px-4 bg-white/92 text-black font-semibold rounded-2xl hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                                 on:click={handleCreateParty}
                                 disabled={loading}
                             >
@@ -722,19 +722,19 @@
                     <div class="space-y-4" in:fade={{ duration: 200 }}>
                         {#if joinStep === "input"}
                             <div>
-                                <label for="party-code" class="block text-sm font-medium text-white/60 mb-2">Party Code</label>
+                                <label for="party-code" class="block text-sm font-medium text-white/70 mb-2">Party Code</label>
                                 <input
                                     id="party-code"
                                     type="text"
                                     bind:value={partyIdInput}
                                     placeholder="Enter code..."
-                                    class="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-primary-500 transition-colors font-mono text-center text-lg tracking-widest uppercase"
+                                    class="w-full bg-black/24 border border-white/16 rounded-2xl px-4 py-3 text-white placeholder-white/28 focus:outline-none focus:border-white/40 transition-colors font-mono text-center text-lg tracking-widest uppercase"
                                     on:keydown={(e) => e.key === "Enter" && handlePreviewParty()}
                                 />
                             </div>
 
                             <button
-                                class="w-full py-3 bg-white text-black rounded-xl font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                class="w-full py-3 bg-white/92 text-black rounded-2xl font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                 on:click={handlePreviewParty}
                                 disabled={loading || !partyIdInput.trim()}
                             >
@@ -750,7 +750,7 @@
                                 <h3 class="text-lg font-bold text-white mb-1">Party Found!</h3>
                                 <p class="text-white/60 text-sm mb-6">Ready to join?</p>
 
-                                <div class="bg-white/5 rounded-xl p-4 mb-6 text-left">
+                                <div class="bg-white/8 rounded-2xl p-4 mb-6 text-left border border-white/12">
                                     <div class="flex items-center gap-3 mb-3">
                                         <div class="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
                                             <Users size={20} color="currentColor" strokeWidth={2} class="text-blue-400" />
@@ -773,13 +773,13 @@
 
                                 <div class="flex gap-3">
                                     <button
-                                        class="flex-1 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-medium transition-colors"
+                                        class="flex-1 py-3 bg-white/12 hover:bg-white/20 text-white rounded-2xl font-medium transition-colors"
                                         on:click={() => joinStep = "input"}
                                     >
                                         Back
                                     </button>
                                     <button
-                                        class="flex-1 py-3 bg-white text-black rounded-xl font-bold transition-colors"
+                                        class="flex-1 py-3 bg-white/92 text-black rounded-2xl font-semibold transition-colors"
                                         on:click={handleContinueToJoin}
                                     >
                                         Join
@@ -791,7 +791,7 @@
                                 <h3 class="text-lg font-bold text-white mb-1">Select File</h3>
                                 <p class="text-white/60 text-sm mb-6">This party is watching a local file. Please select your copy.</p>
 
-                                <div class="bg-white/5 rounded-xl p-6 mb-6 border-2 border-dashed border-white/10 hover:border-blue-500/50 transition-colors relative group">
+                                <div class="bg-white/8 rounded-2xl p-6 mb-6 border-2 border-dashed border-white/14 hover:border-white/35 transition-colors relative group">
                                     <input
                                         type="file"
                                         class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
@@ -815,13 +815,13 @@
 
                                 <div class="flex gap-3">
                                     <button
-                                        class="flex-1 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-medium transition-colors"
+                                        class="flex-1 py-3 bg-white/12 hover:bg-white/20 text-white rounded-2xl font-medium transition-colors"
                                         on:click={() => joinStep = "preview"}
                                     >
                                         Back
                                     </button>
                                     <button
-                                        class="flex-1 py-3 bg-white text-black rounded-xl font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        class="flex-1 py-3 bg-white/92 text-black rounded-2xl font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                         on:click={handleFinalJoin}
                                         disabled={!selectedFile || loading}
                                     >

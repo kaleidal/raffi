@@ -8,7 +8,8 @@
     export let hidden: boolean = false;
 
     const AMBIENT_ASPECT_EPSILON = 0.015;
-    const SMART_COVER_MAX_CROP_RATIO = 0.06;
+    const SMART_COVER_MAX_CROP_RATIO = 0.02;
+    const MANUAL_ZOOM_SCALE = 1.035;
     const AMBIENT_MIN_WIDTH = 160;
     const AMBIENT_MAX_WIDTH = 420;
     const AMBIENT_BLEND_FACTOR = 0.14;
@@ -32,6 +33,7 @@
     let ambientDisplayVisible = false;
     let effectiveObjectFit: "contain" | "cover" = "contain";
     let effectiveObjectPosition = "center center";
+    let effectiveTransform = "none";
 
     const getAmbientContext = () => ambientCanvasElem?.getContext("2d", { alpha: false }) ?? null;
     const getCanvasContext = (canvas: HTMLCanvasElement | undefined) => canvas?.getContext("2d", { alpha: false }) ?? null;
@@ -80,6 +82,7 @@
         if (objectFit === "cover") {
             effectiveObjectFit = "cover";
             effectiveObjectPosition = "center center";
+            effectiveTransform = `scale(${MANUAL_ZOOM_SCALE})`;
             return;
         }
 
@@ -88,6 +91,7 @@
 
         effectiveObjectFit = useSmartCover ? "cover" : "contain";
         effectiveObjectPosition = "center center";
+        effectiveTransform = "none";
     };
 
     const updateAmbientDisplayVisibility = () => {
@@ -420,7 +424,7 @@
         class="absolute top-0 left-0 z-10 h-full w-full {hidden ? 'hidden' : 'block'} {effectiveObjectFit === 'contain'
             ? 'object-contain'
             : 'object-cover'}"
-        style={`object-position: ${effectiveObjectPosition};`}
+        style={`object-position: ${effectiveObjectPosition}; transform: ${effectiveTransform}; transform-origin: center center;`}
         crossorigin="anonymous"
         playsinline
         disablepictureinpicture
@@ -441,7 +445,7 @@
         class="absolute top-0 left-0 z-20 h-full w-full {effectiveObjectFit === 'contain'
             ? 'object-contain'
             : 'object-cover'} {showCanvas && !hidden ? 'block' : 'hidden'}"
-        style={`object-position: ${effectiveObjectPosition};`}
+        style={`object-position: ${effectiveObjectPosition}; transform: ${effectiveTransform}; transform-origin: center center;`}
     ></canvas>
 </div>
 
