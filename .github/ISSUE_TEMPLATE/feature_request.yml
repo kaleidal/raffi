@@ -27,12 +27,10 @@ body:
       label: Area
       description: Which part of the project would this change affect?
       options:
-        - apps/web
-        - apps/server
-        - apps/desktop
-        - packages/contracts or packages/shared
+        - raffi-desktop/
+        - raffi-mobile/
+        - raffi-server/
         - Build, CI, or release tooling
-        - Docs
         - Not sure
     validations:
       required: true
@@ -42,7 +40,7 @@ body:
     attributes:
       label: Problem or use case
       description: What are you trying to do? What is hard, slow, or impossible today?
-      placeholder: I want to reconnect to an existing provider session after a browser refresh without losing the current thread state.
+      placeholder: I want to ...
     validations:
       required: true
 
@@ -51,7 +49,7 @@ body:
     attributes:
       label: Proposed solution
       description: Describe the behavior, API, or UX you want.
-      placeholder: Persist enough session metadata so the client can discover and reattach to the active provider session on load.
+      placeholder: Add ...
     validations:
       required: true
 
@@ -60,7 +58,7 @@ body:
     attributes:
       label: Why this matters
       description: Who benefits, and what outcome does this unlock?
-      placeholder: This would make reconnects predictable during network drops and reduce accidental duplicate sessions.
+      placeholder: This would improve the user experience by ...
     validations:
       required: true
 
@@ -69,7 +67,7 @@ body:
     attributes:
       label: Smallest useful scope
       description: What is the narrowest version of this request that would still solve your problem?
-      placeholder: A first pass only needs to support restoring the active session for the current thread.
+      placeholder: A first pass only needs to ...
     validations:
       required: true
 
@@ -78,14 +76,14 @@ body:
     attributes:
       label: Alternatives considered
       description: Workarounds, prior art, or other approaches you considered.
-      placeholder: I currently work around this by manually restarting the provider session, but that loses in-flight context.
+      placeholder: I currently work around this by ...
 
   - type: textarea
     id: tradeoffs
     attributes:
       label: Risks or tradeoffs
       description: What costs, complexity, or edge cases should be considered?
-      placeholder: This may require careful handling when the underlying provider session has already exited.
+      placeholder: This may ...
 
   - type: textarea
     id: references
