@@ -3,6 +3,7 @@ package hls
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -51,8 +52,11 @@ func readPlaylistTimeline(path string, sliceStart float64) (int, []PlaylistSegme
 		return 0, nil, err
 	}
 	defer f.Close()
+	return readPlaylistTimelineFromReader(f, sliceStart)
+}
 
-	scanner := bufio.NewScanner(f)
+func readPlaylistTimelineFromReader(r io.Reader, sliceStart float64) (int, []PlaylistSegment, error) {
+	scanner := bufio.NewScanner(r)
 	mediaSeq := 0
 	nextSeq := 0
 	cursor := sliceStart
