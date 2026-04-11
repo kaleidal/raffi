@@ -40,7 +40,7 @@ const buildUserFromTokens = async (
     const { fallback, expectedNonce = null, requireFreshRefreshToken = false } = options;
     const idToken = tokens?.id_token;
     if (!idToken || typeof idToken !== "string") {
-        throw new Error("Ave token response did not include an id_token");
+        throw new Error("Sign-in response did not include an id_token");
     }
 
     const claims = await verifyJwt<Record<string, any>>(idToken, {
@@ -50,7 +50,7 @@ const buildUserFromTokens = async (
     });
 
     if (!claims) {
-        throw new Error("Ave id_token validation failed");
+        throw new Error("Sign-in response could not be validated");
     }
 
     let profile: any = null;
@@ -65,7 +65,7 @@ const buildUserFromTokens = async (
 
     const id = String(profile?.sub || claims.sub || fallback?.id || "");
     if (!id) {
-        throw new Error("Unable to resolve Ave user id");
+        throw new Error("Unable to resolve user id");
     }
 
     const resolvedRefreshToken =
@@ -76,7 +76,7 @@ const buildUserFromTokens = async (
         null;
 
     if (requireFreshRefreshToken && !resolvedRefreshToken) {
-        throw new Error("Ave token response did not include a refresh token");
+        throw new Error("Sign-in response did not include a refresh token");
     }
 
     return {
@@ -119,13 +119,13 @@ export async function signInWithAveViaBrowser(): Promise<AppUser> {
 
     const electronAPI = getElectronApi();
     if (!electronAPI?.openExternal || !electronAPI?.onAveAuthCallback) {
-        throw new Error("Ave auth requires Electron desktop runtime");
+        throw new Error("Sign-in requires the desktop app");
     }
 
     const callbackPayload = await new Promise<{ code?: string; state?: string; error?: string }>((resolve, reject) => {
         const timeout = setTimeout(() => {
             unsubscribe?.();
-            reject(new Error("Ave sign-in timed out"));
+            reject(new Error("Sign-in timed out"));
         }, 5 * 60 * 1000);
 
         const unsubscribe = electronAPI.onAveAuthCallback?.((payload) => {
@@ -155,10 +155,10 @@ export async function signInWithAveViaBrowser(): Promise<AppUser> {
 
     try {
         if (!receivedCode || !receivedState || !storedState || !storedVerifier || !storedNonce) {
-            throw new Error("Invalid Ave callback payload");
+            throw new Error("Invalid sign-in callback");
         }
         if (receivedState !== storedState) {
-            throw new Error("Invalid Ave state");
+            throw new Error("Invalid sign-in state");
         }
 
         const tokens = await exchangeCode(AVE_OAUTH_CONFIG, {
@@ -179,7 +179,7 @@ export async function signInWithAveViaBrowser(): Promise<AppUser> {
 
 export async function refreshAveUserSession(user: AppUser): Promise<AppUser> {
     if (!user?.refreshToken) {
-        throw new Error("No Ave refresh token available");
+        throw new Error("No refresh token available");
     }
     const tokens = await refreshToken(AVE_OAUTH_CONFIG, {
         refreshToken: user.refreshToken,

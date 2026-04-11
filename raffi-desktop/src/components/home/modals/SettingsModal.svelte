@@ -250,14 +250,14 @@
 			await signInWithAve();
 			await refreshStats();
 			trackEvent("ave_login_success", { source: "settings" });
-			message = "Signed in with Ave. Local data will keep working and sync in the background.";
+			message = "Signed in. Local data will keep working and sync in the background.";
 			setTimeout(() => {
 				close();
 				router.navigate("home");
 			}, 500);
 		} catch (e: any) {
 			console.error(e);
-			error = e?.message || "Failed to sign in with Ave";
+			error = e?.message || "Failed to sign in";
 			trackEvent("ave_login_failed", {
 				error_name: e instanceof Error ? e.name : "unknown",
 			});

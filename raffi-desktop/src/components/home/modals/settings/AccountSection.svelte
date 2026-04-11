@@ -28,7 +28,7 @@
 	};
 
 	$: accountName = $currentUser?.name || $currentUser?.email?.split("@")[0] || "Local viewer";
-	$: accountEmail = $currentUser?.email || "No email returned by Ave";
+	$: accountEmail = $currentUser?.email || "No email on file";
 	$: avatarInitial = (accountName || "?").slice(0, 1).toUpperCase();
 	$: pendingSyncCount = $cloudSyncStatus.pendingUploads + $cloudSyncStatus.pendingDeletes;
 	$: syncStatusLabel = $localMode
@@ -150,7 +150,7 @@
 					<p class="text-white/62 text-sm break-all">{accountEmail}</p>
 					<div class="mt-3 flex flex-wrap gap-2">
 						<div class="rounded-full bg-black/25 px-3 py-1 text-xs font-medium text-white/78">
-							{$localMode ? "Local" : "Ave"}
+							{$localMode ? "Local" : "Cloud"}
 						</div>
 						{#if !$localMode && $cloudSyncStatus.cloudFeaturesAvailable}
 							<div class="rounded-full bg-white/8 px-3 py-1 text-xs text-white/72">
