@@ -80,8 +80,18 @@
     },
     "mac": {
       "target": [
-        "dmg",
-        "zip"
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "universal"
+          ]
+        }
       ],
       "icon": "build/icons/icon.icns",
       "category": "public.app-category.video",
@@ -96,12 +106,20 @@
           "to": "decoder-x86_64-apple-darwin"
         },
         {
-          "from": "electron/ffmpeg",
-          "to": "ffmpeg"
+          "from": "electron/ffmpeg-x64",
+          "to": "ffmpeg-x64"
         },
         {
-          "from": "electron/ffprobe",
-          "to": "ffprobe"
+          "from": "electron/ffmpeg-arm64",
+          "to": "ffmpeg-arm64"
+        },
+        {
+          "from": "electron/ffprobe-x64",
+          "to": "ffprobe-x64"
+        },
+        {
+          "from": "electron/ffprobe-arm64",
+          "to": "ffprobe-arm64"
         }
       ]
     },
