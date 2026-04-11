@@ -644,6 +644,7 @@ export function createSeekHandler(
             };
 
             hlsInstance.on(Hls.Events.MANIFEST_PARSED, onSeekParsed);
+            hlsInstance.stopLoad();
             hlsInstance.loadSource(url);
             hlsInstance.startLoad(0);
         } else {
