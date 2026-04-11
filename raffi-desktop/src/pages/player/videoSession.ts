@@ -9,6 +9,11 @@ import {
 import type { SessionData, Track } from "./types";
 import { trackEvent } from "../../lib/analytics";
 
+function formatSeekQueryParam(seconds: number): string {
+    if (!Number.isFinite(seconds) || seconds < 0) return "0";
+    return seconds.toFixed(3);
+}
+
 export function isTimeBuffered(
     elem: HTMLVideoElement,
     target: number,
@@ -351,7 +356,7 @@ export function initHLS(
     let baseManifest = `${getStreamUrl(sessionId)}/child.m3u8`;
     if (initialSeekTime != null && Number.isFinite(initialSeekTime) && initialSeekTime > 0) {
         const seekId = Math.random().toString(36).substring(7);
-        baseManifest = `${baseManifest}?seek=${Math.floor(initialSeekTime)}&seek_id=${seekId}`;
+        baseManifest = `${baseManifest}?seek=${formatSeekQueryParam(initialSeekTime)}&seek_id=${seekId}`;
     }
     setPlaybackOffset(startOffset);
     
@@ -610,7 +615,7 @@ export function createSeekHandler(
             return;
         }
         const seekId = Math.random().toString(36).substring(7);
-        const url = `${getStreamUrl(sessionId)}/child.m3u8?seek=${Math.floor(desiredGlobal)}&seek_id=${seekId}`;
+        const url = `${getStreamUrl(sessionId)}/child.m3u8?seek=${formatSeekQueryParam(desiredGlobal)}&seek_id=${seekId}`;
         console.log("Hard seek to", desiredGlobal, "->", url);
 
         const hlsInstance = getHls();

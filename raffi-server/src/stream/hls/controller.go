@@ -325,7 +325,7 @@ func (c *Controller) Seek(ctx context.Context, id, source string, target float64
 			sess.LastSeekID = seekID
 			sess.CurrentlyAt = target
 
-			if !sess.Finished && endTime < sess.DurationHint {
+			if sess.Cmd == nil && !sess.Finished && endTime < sess.DurationHint {
 				resumeTime := endTime
 				if err := c.ensureCmdLocked(id, source, sess, resumeTime, sliceDir, true); err != nil {
 					log.Printf("Failed to resume slice %d: %v", slice.Index, err)
