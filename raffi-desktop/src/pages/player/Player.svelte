@@ -666,6 +666,9 @@
 
     const handleTimeUpdate = () => {
         if (!videoElem) return;
+        if ($pendingSeek != null || $seekGuard) {
+            return;
+        }
         const time = $playbackOffset + videoElem.currentTime;
         currentTime.set(time);
         handleProgressInternal(time, $duration);
