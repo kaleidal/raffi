@@ -351,7 +351,7 @@ export function initHLS(
     let baseManifest = `${getStreamUrl(sessionId)}/child.m3u8`;
     if (initialSeekTime != null && Number.isFinite(initialSeekTime) && initialSeekTime > 0) {
         const seekId = Math.random().toString(36).substring(7);
-        baseManifest = `${baseManifest}?seek=${Math.floor(initialSeekTime)}&seek_id=${seekId}&force_slice=1`;
+        baseManifest = `${baseManifest}?seek=${Math.floor(initialSeekTime)}&seek_id=${seekId}`;
     }
     setPlaybackOffset(startOffset);
     
@@ -428,9 +428,9 @@ export function initHLS(
                     const val = parseFloat(startHeader);
                     if (!isNaN(val)) {
                         console.log("Received slice start offset:", val);
-                        // For local files, we want strict, stable offsets (and local seeks)
-                        // and the server may be mid-transcode; don't let header updates yank the offset.
-                        if (!treatAsLocalFile) {
+                        const responseUrl = data.networkDetails.responseURL;
+                        const isSeekManifest = responseUrl.includes("seek=");
+                        if (!treatAsLocalFile || isSeekManifest) {
                             setPlaybackOffset(val);
                         }
                     } else {
@@ -610,7 +610,7 @@ export function createSeekHandler(
             return;
         }
         const seekId = Math.random().toString(36).substring(7);
-        const url = `${getStreamUrl(sessionId)}/child.m3u8?seek=${Math.floor(desiredGlobal)}&seek_id=${seekId}&force_slice=1`;
+        const url = `${getStreamUrl(sessionId)}/child.m3u8?seek=${Math.floor(desiredGlobal)}&seek_id=${seekId}`;
         console.log("Hard seek to", desiredGlobal, "->", url);
 
         const hlsInstance = getHls();
@@ -618,7 +618,6 @@ export function createSeekHandler(
         if (hlsInstance) {
             const onSeekParsed = () => {
                 console.log("HLS MANIFEST_PARSED (seek)");
-                setPlaybackOffset(desiredGlobal);
                 setSeekGuard(false);
                 setLoading(false);
                 setShowCanvas(false);
