@@ -73,7 +73,7 @@ export async function signInWithAve(): Promise<AppUser> {
 
   const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri);
   if (result.type !== 'success' || !result.url) {
-    throw new Error('Ave sign-in was canceled');
+    throw new Error('Sign-in was canceled');
   }
 
   const parsed = Linking.parse(result.url);
@@ -85,7 +85,7 @@ export async function signInWithAve(): Promise<AppUser> {
     throw new Error(receivedError);
   }
   if (!receivedCode || !receivedState || receivedState !== state) {
-    throw new Error('Invalid Ave callback');
+    throw new Error('Invalid sign-in callback');
   }
 
   const tokens = await exchangeCode(
@@ -102,7 +102,7 @@ export async function signInWithAve(): Promise<AppUser> {
 
   const jwtToken = (tokens as any).id_token || (tokens as any).access_token_jwt || (tokens as any).access_token;
   if (!jwtToken) {
-    throw new Error('Ave token exchange did not return a JWT token');
+    throw new Error('Sign-in did not return a valid token');
   }
 
   const accessToken = (tokens as any).access_token;
@@ -125,7 +125,7 @@ export async function signInWithAve(): Promise<AppUser> {
   const claims = decodeJwtPayload(jwtToken) || {};
   const id = String(profile?.sub || claims.sub || '');
   if (!id) {
-    throw new Error('Unable to resolve Ave user id');
+    throw new Error('Unable to resolve user id');
   }
 
   return {

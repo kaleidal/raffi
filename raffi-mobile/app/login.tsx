@@ -38,7 +38,7 @@ export default function LoginScreen() {
         <View style={styles.content}>
           <Text style={styles.title}>Sign In</Text>
           <Text style={styles.subtitle}>
-            Sign in with Ave to sync your library, lists, and settings
+            Sign in to sync your library, lists, and settings across devices
           </Text>
 
           {/* Form */}
@@ -52,7 +52,7 @@ export default function LoginScreen() {
                 <ActivityIndicator color="#000" />
               ) : (
                 <Text style={styles.submitButtonText}>
-                  Continue with Ave
+                  Sign in
                 </Text>
               )}
             </TouchableOpacity>
