@@ -50,7 +50,13 @@ function createDecoderService({ isDev, path, fs, spawn, logToFile, baseDir }) {
 
   function getBundledToolPath(toolName) {
     const extension = process.platform === "win32" ? ".exe" : "";
-    const fileName = `${toolName}${extension}`;
+    let fileName;
+    if (process.platform === "darwin") {
+      const suffix = process.arch === "arm64" ? "arm64" : "x64";
+      fileName = `${toolName}-${suffix}${extension}`;
+    } else {
+      fileName = `${toolName}${extension}`;
+    }
     const rootDir = isDev ? baseDir : process.resourcesPath;
     return path.join(rootDir, fileName);
   }
