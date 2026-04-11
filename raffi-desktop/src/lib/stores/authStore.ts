@@ -341,7 +341,7 @@ export async function signInWithAve() {
             await hydrateLocalBackupFromCloud();
         }
     } catch (error) {
-        console.error("Ave sign-in sync failed", error);
+        console.error("Sign-in sync failed", error);
     }
 
     void syncLocalStateToUser(user.id);

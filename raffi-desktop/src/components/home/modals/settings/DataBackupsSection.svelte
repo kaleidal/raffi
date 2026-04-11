@@ -23,7 +23,7 @@
 			Data & Backups
 		</h3>
 		<p class="text-white/60 text-sm">
-			Your device stays primary. Export a JSON copy any time, and Ave backup stays optional.
+			Your device stays primary. Export a JSON copy any time, and cloud backup stays optional.
 		</p>
 	</div>
 	<div class="rounded-2xl bg-white/[0.08] p-5 flex flex-col gap-4">

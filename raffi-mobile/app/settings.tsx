@@ -190,7 +190,7 @@ export default function SettingsScreen() {
 
   const handleConnectTrakt = async () => {
     if (!user) {
-      Alert.alert('Sign In Required', 'Please sign in with Ave first.');
+      Alert.alert('Sign In Required', 'Please sign in first.');
       return;
     }
 
@@ -235,10 +235,10 @@ export default function SettingsScreen() {
         <View style={styles.authGateContainer}>
           <Text style={styles.authGateTitle}>Sign in required</Text>
           <Text style={styles.authGateDescription}>
-            Sign in with Ave to access settings and sync across devices.
+            Sign in to access settings and sync across devices.
           </Text>
           <TouchableOpacity style={styles.authGateButton} onPress={() => router.push('/login')}>
-            <Text style={styles.authGateButtonText}>Continue with Ave</Text>
+            <Text style={styles.authGateButtonText}>Sign in</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
