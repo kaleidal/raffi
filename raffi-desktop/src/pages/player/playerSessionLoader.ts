@@ -74,7 +74,10 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
         loadTimeout = null;
     };
 
-    const loadVideo = async (src: string) => {
+    const loadVideo = async (
+        src: string,
+        opts?: { reuseSession?: { sessionId: string; sessionData: any } },
+    ) => {
         try {
             loadingStage.set("Initializing playback");
             loadingDetails.set("");
@@ -127,6 +130,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                             ...tracks,
                         ]);
                     }),
+                opts,
             );
 
             deps.setSessionId(result.sessionId);
@@ -270,8 +274,13 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                     // ignore
                 });
 
-            loadingStage.set("Preparing stream");
-            loadingDetails.set("Starting HLS session...");
+            if (opts?.reuseSession) {
+                loadingStage.set("");
+                loadingDetails.set("");
+            } else {
+                loadingStage.set("Preparing stream");
+                loadingDetails.set("Starting HLS session...");
+            }
             loadingProgress.set(null);
 
             const sessionId = result.sessionId;

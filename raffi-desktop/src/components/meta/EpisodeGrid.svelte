@@ -1,6 +1,6 @@
 <script lang="ts">
     import type { ShowResponse } from "../../lib/library/types/meta_types";
-    import { FileVideo, Eye } from "lucide-svelte";
+    import { FileVideo, Eye } from "@lucide/svelte";
 
     export let metaData: ShowResponse;
     export let currentSeason: number;

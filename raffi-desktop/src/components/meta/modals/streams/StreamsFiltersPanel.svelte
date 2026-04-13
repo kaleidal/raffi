@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { ChevronDown, ChevronUp } from "lucide-svelte";
+    import { ChevronDown, ChevronUp } from "@lucide/svelte";
     import CustomSelect from "../../../common/CustomSelect.svelte";
     import type { AudioFilter, ResolutionFilter, SourceFilter, StreamSortOption } from "./types";
 

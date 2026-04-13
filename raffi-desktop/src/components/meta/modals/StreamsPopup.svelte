@@ -1,6 +1,6 @@
 <script lang="ts">
     import { fade } from "svelte/transition";
-    import { X } from "lucide-svelte";
+    import { X } from "@lucide/svelte";
     import { failedStreamKeys, streamFailureMessage } from "../../../pages/meta/metaState";
     import { trackEvent } from "../../../lib/analytics";
     import { overlayZoomStyle } from "../../../lib/overlayZoom";

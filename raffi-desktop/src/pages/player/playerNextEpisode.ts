@@ -9,6 +9,7 @@ export const createNextEpisodeHandler = ({
     setCurrentVideoSrc,
     invokeNextEpisode,
     showActionLoading,
+    suppressInitialLoading,
 }: {
     trackEvent: (event: string, props?: Record<string, any>) => void;
     getPlaybackAnalyticsProps: () => Record<string, any>;
@@ -17,6 +18,7 @@ export const createNextEpisodeHandler = ({
     setCurrentVideoSrc: (value: string | null) => void;
     invokeNextEpisode: () => unknown;
     showActionLoading: (label: string, err: unknown) => void;
+    suppressInitialLoading?: () => boolean;
 }) => {
     let nextEpisodeAttemptId = 0;
 
@@ -27,7 +29,9 @@ export const createNextEpisodeHandler = ({
         const attemptId = nextEpisodeAttemptId;
         setCurrentVideoSrc(getVideoSrc());
         const beforeSrc = getVideoSrc();
-        loading.set(true);
+        if (!suppressInitialLoading?.()) {
+            loading.set(true);
+        }
 
         const currentDuration = get(duration);
         const currentPlaybackTime = get(currentTime);

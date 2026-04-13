@@ -119,6 +119,49 @@ export const fetchStreams = async (
     return [];
 };
 
+export const streamToPlayableUrl = (stream: Stream): { url: string; fileIdx: number | null } | null => {
+    if (!stream.url && !stream.infoHash) return null;
+    let url = stream.url;
+    const fileIdx = stream.infoHash ? (stream.fileIdx ?? null) : null;
+    if (stream.infoHash) {
+        url = `magnet:?xt=urn:btih:${stream.infoHash}`;
+    }
+    return url ? { url, fileIdx } : null;
+};
+
+export const fetchStreamListForEpisodeOnly = async (episode: any, imdbID: string): Promise<Stream[]> => {
+    const data = get(metaData);
+    if (!data) return [];
+
+    const type = data.meta.type;
+    let streamId = imdbID;
+    if (type === "series") {
+        streamId += `:${episode.season}:${episode.episode}`;
+    }
+
+    const addonUrl = get(selectedAddon);
+    try {
+        const response = await fetch(
+            addonUrl + "/stream/" + type + "/" + streamId + ".json",
+        );
+        const result = await response.json();
+        const remoteStreams: Stream[] = Array.isArray(result.streams)
+            ? result.streams
+            : [];
+        const localStreams = getLocalStreamsFor(imdbID, type as any, episode);
+        return [...(localStreams as any), ...remoteStreams];
+    } catch (e) {
+        console.error("fetchStreamListForEpisodeOnly failed", e);
+        try {
+            const type = data.meta.type;
+            const localStreams = getLocalStreamsFor(imdbID, type as any, episode);
+            return localStreams as any;
+        } catch {
+            return [];
+        }
+    }
+};
+
 
 export const episodeClicked = async (episode: any, imdbID: string) => {
     await fetchStreams(episode, false, true, imdbID);
