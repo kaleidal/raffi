@@ -1,6 +1,6 @@
 <script lang="ts">
     import { createEventDispatcher, onDestroy, tick } from "svelte";
-    import { ChevronDown } from "lucide-svelte";
+    import { ChevronDown } from "@lucide/svelte";
 
     export let value = "";
     export let options: Array<{ label: string; value: string }> = [];

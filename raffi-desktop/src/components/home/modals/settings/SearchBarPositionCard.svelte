@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ChevronDown } from "lucide-svelte";
+	import { ChevronDown } from "@lucide/svelte";
 	import {
 		HOME_SEARCH_BAR_POSITION_AUTO,
 		HOME_SEARCH_BAR_POSITION_BOTTOM,

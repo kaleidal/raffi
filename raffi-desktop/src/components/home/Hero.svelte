@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { Info, Play, Pause, VolumeX, Volume2 } from "lucide-svelte";
+    import { Info, Play, Pause, VolumeX, Volume2 } from "@lucide/svelte";
     import type { PopularTitleMeta } from "../../lib/library/types/popular_types";
     import { router } from "../../lib/stores/router";
     import ExpandingButton from "../common/ExpandingButton.svelte";

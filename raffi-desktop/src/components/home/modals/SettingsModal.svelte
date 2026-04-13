@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onDestroy, onMount } from "svelte";
-	import { X } from "lucide-svelte";
+	import { X } from "@lucide/svelte";
     import { fade, scale } from "svelte/transition";
 	import {
 		getLibrary,

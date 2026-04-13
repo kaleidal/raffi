@@ -6,7 +6,7 @@
     import ListsPopup from "../../meta/modals/ListsPopup.svelte";
     import TrailerModal from "../../meta/modals/TrailerModal.svelte";
     import { onMount } from "svelte";
-    import { ChevronLeft, ChevronRight } from "lucide-svelte";
+    import { ChevronLeft, ChevronRight } from "@lucide/svelte";
     import PosterImage from "./PosterImage.svelte";
     import { getPrimaryTrailerId } from "../../../lib/trailers";
  

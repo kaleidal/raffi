@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { Search, Link, Blocks, Library, Settings } from "lucide-svelte";
+    import { Search, Link, Blocks, Library, Settings } from "@lucide/svelte";
     import {
         searchAddonTitlesSplit,
         searchTitlesSplit,
