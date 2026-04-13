@@ -9,7 +9,7 @@
     import { enableRPC, disableRPC } from "./lib/rpc";
 
 
-    import { X } from "lucide-svelte";
+    import { X } from "@lucide/svelte";
     import LoadingSpinner from "./components/common/LoadingSpinner.svelte";
     import {
         currentUser,

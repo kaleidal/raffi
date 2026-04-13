@@ -17,7 +17,7 @@
     export let onChange: (event: Event) => void = () => {};
 </script>
 
-<div class="flex flex-col items-start gap-1 ml-auto">
+<div class="flex flex-col items-stretch gap-1 w-full min-w-0">
     {#if label}
         <span class="text-[#878787] text-[15px] font-poppins font-medium"
             >{label}</span

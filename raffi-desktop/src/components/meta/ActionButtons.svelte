@@ -1,7 +1,7 @@
 <script lang="ts">
     import ListsPopup from "./modals/ListsPopup.svelte";
     import TrailerModal from "./modals/TrailerModal.svelte";
-    import { Archive, Film } from "lucide-svelte";
+    import { Archive, Film } from "@lucide/svelte";
     import { trackEvent } from "../../lib/analytics";
 
 

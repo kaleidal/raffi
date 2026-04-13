@@ -26,7 +26,7 @@
     import { onDestroy, onMount } from "svelte";
 
     import { trackEvent } from "../../../lib/analytics";
-    import { Users } from "lucide-svelte";
+    import { Users } from "@lucide/svelte";
 
 
     export let onClose: () => void;

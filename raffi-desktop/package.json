@@ -178,6 +178,7 @@
   },
   "dependencies": {
     "@ave-id/sdk": "^0.6.0",
+    "@lucide/svelte": "^1.8.0",
     "@ryuziii/discord-rpc": "^1.0.1-rc.1",
     "@tailwindcss/vite": "^4.2.2",
     "convex": "^1.35.1",
@@ -185,7 +186,6 @@
     "eventemitter3": "^5.0.4",
     "express": "^5.2.1",
     "hls.js": "^1.6.15",
-    "lucide-svelte": "^1.0.1",
     "posthog-js": "^1.367.0",
     "tailwindcss": "^4.2.2"
   },

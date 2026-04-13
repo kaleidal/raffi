@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onDestroy, onMount } from "svelte";
     import { fade } from "svelte/transition";
-    import { ChevronLeft, Play } from "lucide-svelte";
+    import { ChevronLeft, Play } from "@lucide/svelte";
     import { router } from "../../lib/stores/router";
 
     import SeasonSelector from "../../components/meta/SeasonSelector.svelte";

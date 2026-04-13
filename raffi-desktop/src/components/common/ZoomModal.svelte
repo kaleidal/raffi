@@ -2,7 +2,7 @@
     import { onMount } from "svelte";
     import { overlayZoomStyle } from "../../lib/overlayZoom";
     import { userZoom } from "../../lib/stores/settingsStore";
-    import { X, ZoomIn, ZoomOut, RotateCcw } from "lucide-svelte";
+    import { X, ZoomIn, ZoomOut, RotateCcw } from "@lucide/svelte";
     import { fade, scale } from "svelte/transition";
 
     let showModal = false;

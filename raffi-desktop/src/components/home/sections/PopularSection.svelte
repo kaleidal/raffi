@@ -4,7 +4,7 @@
 
     import { onMount } from "svelte";
     import { fade } from "svelte/transition";
-    import { Flame, ChevronLeft, ChevronRight } from "lucide-svelte";
+    import { Flame, ChevronLeft, ChevronRight } from "@lucide/svelte";
     import TitleContextMenu from "../context_menus/TitleContextMenu.svelte";
     import ListsPopup from "../../meta/modals/ListsPopup.svelte";
     import TrailerModal from "../../meta/modals/TrailerModal.svelte";

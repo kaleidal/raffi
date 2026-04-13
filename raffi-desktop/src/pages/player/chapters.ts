@@ -3,6 +3,9 @@ import type { Chapter, ChapterKind, SessionData } from "./types";
 import type { ShowResponse } from "../../lib/library/types/meta_types";
 
 const OUTRO_FALLBACK_SECONDS = 45;
+export const CREDITS_FALLBACK_SECONDS = 60;
+export const NEXT_EPISODE_PREBUFFER_LEAD_SECONDS = 120;
+export const BINGE_CREDITS_BUFFER_SECONDS = 5;
 const CHAINED_SKIP_TOLERANCE_SECONDS = 1.5;
 
 const classifyChapterKind = (title: string): ChapterKind => {
@@ -157,6 +160,61 @@ export function getStartupSkipTarget(
     return targetTime;
 }
 
+export function getCreditsStartTime(
+    duration: number,
+    sessionData: SessionData | null,
+    introDbChapters: Chapter[] = [],
+): number {
+    if (!(duration > 0)) return 0;
+    const segments = getEffectiveChapterSegments(sessionData, introDbChapters);
+    const outro = segments.find((c) => c.kind === "outro") ?? null;
+    if (outro) {
+        return Math.max(0, Math.min(duration, outro.startTime));
+    }
+    return Math.max(0, duration - CREDITS_FALLBACK_SECONDS);
+}
+
+export function getNextEpisodePrefetchWindow(
+    duration: number,
+    sessionData: SessionData | null,
+    introDbChapters: Chapter[] = [],
+): { startAt: number; creditsAt: number } {
+    const rawCreditsAt = getCreditsStartTime(duration, sessionData, introDbChapters);
+    const creditsAt = Math.max(0, rawCreditsAt - BINGE_CREDITS_BUFFER_SECONDS);
+    if (!(duration > 0) || !(creditsAt > 0)) {
+        return { startAt: 0, creditsAt: Math.max(0, creditsAt) };
+    }
+    const rawStart = creditsAt - NEXT_EPISODE_PREBUFFER_LEAD_SECONDS;
+    const minEarly = duration * 0.12;
+    let startAt = Math.max(0, Math.max(rawStart, minEarly));
+    const gap = Math.max(15, Math.min(90, NEXT_EPISODE_PREBUFFER_LEAD_SECONDS * 0.5));
+    if (startAt >= creditsAt - gap) {
+        startAt = Math.max(0, creditsAt - gap);
+    }
+    if (startAt >= creditsAt) {
+        startAt = Math.max(0, creditsAt - 1);
+    }
+    return { startAt, creditsAt };
+}
+
+export function getBingeOutroAutoNextThreshold(chapter: Chapter | null): number | null {
+    if (!chapter || chapter.kind !== "outro") return null;
+    const margin = BINGE_CREDITS_BUFFER_SECONDS;
+    const start = chapter.startTime;
+    const end = chapter.endTime;
+    if (!Number.isFinite(end) || end <= start) {
+        return start + margin;
+    }
+    return Math.min(start + margin, Math.max(start, end - 0.25));
+}
+
+export function hasMarkedOutroChapter(
+    sessionData: SessionData | null,
+    introDbChapters: Chapter[] = [],
+): boolean {
+    return getEffectiveChapterSegments(sessionData, introDbChapters).some((c) => c.kind === "outro");
+}
+
 export function checkChapters(
     time: number,
     sessionData: SessionData | null,
@@ -172,7 +230,8 @@ export function checkChapters(
     const nativeChapter = findChapterAtTime(getRelevantNativeChapters(sessionData), time);
     const currentChapter = nativeChapter ?? findChapterAtTime(getEffectiveChapterSegments(sessionData, introDbChapters), time);
 
-    const showSkipIntro = currentChapter?.kind === "intro" || currentChapter?.kind === "recap";
+    const inSkippableIntro = currentChapter?.kind === "intro" || currentChapter?.kind === "recap";
+    const showSkipIntro = inSkippableIntro;
     const skipButtonLabel = getSkipButtonLabel(currentChapter);
 
     let showNextEpisode = false;

@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onDestroy } from "svelte";
-    import { X, FileVideo, Magnet, Users, Film } from "lucide-svelte";
+    import { X, FileVideo, Magnet, Users, Film } from "@lucide/svelte";
     import { fade, scale } from "svelte/transition";
     import { router } from "../../../lib/stores/router";
     import { getCachedMetaData } from "../../../lib/library/metaCache";

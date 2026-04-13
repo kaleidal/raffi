@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { Film } from "lucide-svelte";
+    import { Film } from "@lucide/svelte";
 
     export let src: string | null | undefined = null;
     export let title: string | null | undefined = null;
