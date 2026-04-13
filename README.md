@@ -229,7 +229,7 @@ npm run build
 - **Video Player**: HLS.js for adaptive streaming
 - **Database**: Supabase (PostgreSQL)
 - **Build**: Vite + electron-builder
-- **Key Libraries**: `lucide-svelte`, `posthog-js`, `@ryuziii/discord-rpc`
+- **Key Libraries**: `@lucide/svelte`, `posthog-js`, `@ryuziii/discord-rpc`
 
 #### Mobile App
 - **Frontend**: React Native (React 19), TypeScript

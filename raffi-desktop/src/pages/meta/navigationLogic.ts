@@ -5,7 +5,65 @@ import {
     pendingTorrentStream, progressMap as progressMapStore
 } from "./metaState";
 import { router } from "../../lib/stores/router";
-import { fetchStreams, playStream } from "./streamLogic";
+import { fetchStreams, fetchStreamListForEpisodeOnly, playStream } from "./streamLogic";
+import type { Stream } from "./types";
+
+export const resolveNextEpisodeStream = async (
+    imdbID: string,
+): Promise<{ stream: Stream; nextEpisode: any } | null> => {
+    const episode = get(selectedEpisode);
+    const data = get(metaData);
+
+    if (!episode || !data || !data.meta.videos) return null;
+
+    const currentIndex = data.meta.videos.findIndex(
+        (v: any) =>
+            v.season === episode.season &&
+            v.episode === episode.episode,
+    );
+
+    if (currentIndex === -1 || currentIndex >= data.meta.videos.length - 1) {
+        return null;
+    }
+
+    const nextEp = data.meta.videos[currentIndex + 1];
+    const nextStreams = await fetchStreamListForEpisodeOnly(nextEp, imdbID);
+    const currentStream = get(selectedStream);
+
+    let match: Stream | null = null;
+    if (currentStream && nextStreams.length > 0) {
+        const currentGroup = currentStream.behaviorHints?.bingeGroup;
+
+        if (currentGroup) {
+            match =
+                nextStreams.find(
+                    (s: any) =>
+                        s.behaviorHints?.bingeGroup === currentGroup,
+                ) ?? null;
+        }
+
+        if (!match) {
+            match =
+                nextStreams.find((s: any) => {
+                    if (s.name !== currentStream.name) return false;
+                    const currentTitle = currentStream.title?.split("\n")[0];
+                    return currentTitle
+                        ? s.title?.includes(currentTitle)
+                        : true;
+                }) ?? null;
+        }
+
+        if (!match) {
+            match =
+                nextStreams.find(
+                    (s: any) => s.name === currentStream.name,
+                ) ?? null;
+        }
+    }
+
+    if (!match) return null;
+    return { stream: match, nextEpisode: nextEp };
+};
 
 export const handleNextEpisode = async (imdbID: string, progressMap: any) => {
     const episode = get(selectedEpisode);

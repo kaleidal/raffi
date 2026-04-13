@@ -1,6 +1,6 @@
 <script lang="ts">
     import { fade, scale } from "svelte/transition";
-    import { AlertTriangle } from "lucide-svelte";
+    import { AlertTriangle } from "@lucide/svelte";
     import { overlayZoomStyle } from "../../../lib/overlayZoom";
 
     const portal = (node: HTMLElement) => {

@@ -13,7 +13,7 @@
     import { getPrimaryTrailerId } from "../../../lib/trailers";
 
     import { onMount, onDestroy, tick } from "svelte";
-    import { Play, ChevronDown, ChevronLeft, ChevronRight } from "lucide-svelte";
+    import { Play, ChevronDown, ChevronLeft, ChevronRight } from "@lucide/svelte";
     import PosterImage from "./PosterImage.svelte";
  
     export let continueWatchingMeta: (ShowResponse & { libraryItem: any })[] =

@@ -2,7 +2,6 @@ import { writable } from "svelte/store";
 
 const AUTO_SKIP_INTROS_KEY = "raffi_auto_skip_intros";
 const MINI_PLAYER_ON_MINIMIZE_KEY = "raffi_mini_player_on_minimize";
-
 const readStoredBoolean = (key: string, fallback = false) => {
     try {
         const value = localStorage.getItem(key);

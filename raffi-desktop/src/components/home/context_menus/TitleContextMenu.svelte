@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import { fade } from "svelte/transition";
-    import { Film, Plus } from "lucide-svelte";
+    import { Film, Plus } from "@lucide/svelte";
 
 
 

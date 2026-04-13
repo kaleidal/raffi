@@ -20,10 +20,11 @@
         autoSkipIntros,
         miniPlayerOnMinimize,
     } from "../../lib/stores/playbackPreferences";
-    import { ChevronLeft } from "lucide-svelte";
+    import { ChevronLeft } from "@lucide/svelte";
     import * as NavigationLogic from "../meta/navigationLogic";
+    import { streamToPlayableUrl } from "../meta/streamLogic";
     import * as ProgressLogic from "../meta/progressLogic";
-    import { progressMap as metaProgressMap, streamsPopupVisible } from "../meta/metaState";
+    import { progressMap as metaProgressMap, streamsPopupVisible, selectedStream } from "../meta/metaState";
     import { markCurrentStreamAsFailed } from "../meta/streamLogic";
 
     import {
@@ -87,6 +88,10 @@
     import { createNextEpisodeHandler } from "./playerNextEpisode";
     import { createPlayerSessionLoader } from "./playerSessionLoader";
     import { createPlayerModalHandlers } from "./playerModalHandlers";
+    import {
+        startNextEpisodePrefetch,
+        type NextEpisodePrefetchHandoff,
+    } from "./nextEpisodePrefetch";
     import { serverUrl } from "../../lib/client";
     import type { Chapter } from "./types";
 
@@ -127,6 +132,13 @@
     let seekBarStyle: SeekBarStyle = "raffi";
     let pendingStartAfterSeekStyleModal = false;
     let introDbChapters: Chapter[] = [];
+    let nextEpisodePrefetchVideo: HTMLVideoElement | null = null;
+    let nextEpisodePrefetchDispose: ((opts?: { transfer?: boolean }) => void) | null =
+        null;
+    let nextEpisodePrefetchHandoff: NextEpisodePrefetchHandoff | null = null;
+    let bingeAutoAdvancing = false;
+    let nextEpisodePrefetchRunId = 0;
+    let nextEpisodePrefetchStarting = false;
     let effectiveChapterMarkers: Chapter[] = [];
     let skipButtonLabel = "Skip Intro";
     let miniPlayerActive = false;
@@ -342,7 +354,28 @@
 
     $: hasNextEpisode = computeHasNextEpisode();
 
+    $: bingeNextSupported =
+        metaData?.meta?.type === "series" &&
+        Boolean($selectedStream?.behaviorHints?.bingeGroup) &&
+        !$watchParty.isActive;
+
+    $: nextEpisodePrefetchWindow = Chapters.getNextEpisodePrefetchWindow(
+        $duration,
+        $sessionData,
+        introDbChapters,
+    );
+
     $: showNextEpisodeAllowed = $showNextEpisode && hasNextEpisode;
+
+    const disposeNextEpisodePrefetch = (opts?: { transfer?: boolean }) => {
+        nextEpisodePrefetchRunId += 1;
+        nextEpisodePrefetchStarting = false;
+        if (nextEpisodePrefetchDispose) {
+            nextEpisodePrefetchDispose(opts);
+            nextEpisodePrefetchDispose = null;
+        }
+        nextEpisodePrefetchHandoff = null;
+    };
 
     const handleTorrentError = (message: string) => {
         if (torrentFailureExitTimeout) {
@@ -427,9 +460,13 @@
                 sessionData,
                 nextIntroDbChapters,
             );
+            const bingeStartup =
+                metaData?.meta?.type === "series" &&
+                Boolean(get(selectedStream)?.behaviorHints?.bingeGroup) &&
+                !get(watchParty).isActive;
             const effectiveStartTime = Chapters.getStartupSkipTarget(startTime, effectiveChapters, {
-                autoSkipIntros: $autoSkipIntros || autoSkipFromNextEpisode,
-                autoSkipRecap: autoSkipFromNextEpisode,
+                autoSkipIntros: $autoSkipIntros || autoSkipFromNextEpisode || bingeStartup,
+                autoSkipRecap: autoSkipFromNextEpisode || bingeStartup,
             });
 
             return {
@@ -653,6 +690,7 @@
         if (playPauseFeedbackTimeout) clearTimeout(playPauseFeedbackTimeout);
         if (torrentFailureExitTimeout) clearTimeout(torrentFailureExitTimeout);
         playerSessionLoader.clearLoadTimeout();
+        disposeNextEpisodePrefetch();
         Session.cleanupSession(
             hls,
             sessionId,
@@ -693,6 +731,75 @@
             showSkipIntro.set(result.showSkipIntro);
             showNextEpisode.set(result.showNextEpisode);
             skipButtonLabel = result.skipButtonLabel;
+
+            if (bingeNextSupported) {
+                if (
+                    result.currentChapter?.kind === "intro" ||
+                    result.currentChapter?.kind === "recap"
+                ) {
+                    seekToTime(result.currentChapter.endTime + 0.1);
+                    return;
+                }
+
+                const hasOutro = Chapters.hasMarkedOutroChapter(
+                    $sessionData,
+                    introDbChapters,
+                );
+                let shouldAutoNext = false;
+                if (hasOutro && result.currentChapter?.kind === "outro") {
+                    const t = Chapters.getBingeOutroAutoNextThreshold(
+                        result.currentChapter,
+                    );
+                    shouldAutoNext = t != null && time >= t;
+                } else if (!hasOutro && $duration > 0) {
+                    shouldAutoNext =
+                        time >=
+                        $duration -
+                            Chapters.CREDITS_FALLBACK_SECONDS +
+                            Chapters.BINGE_CREDITS_BUFFER_SECONDS;
+                }
+                if (shouldAutoNext && !bingeAutoAdvancing) {
+                    bingeAutoAdvancing = true;
+                    handleNextEpisodeClick();
+                    return;
+                }
+
+                if (
+                    imdbID &&
+                    hasNextEpisode &&
+                    !nextEpisodePrefetchDispose &&
+                    !nextEpisodePrefetchStarting &&
+                    time >= nextEpisodePrefetchWindow.startAt &&
+                    time < nextEpisodePrefetchWindow.creditsAt &&
+                    nextEpisodePrefetchWindow.creditsAt > 0
+                ) {
+                    nextEpisodePrefetchStarting = true;
+                    const runId = ++nextEpisodePrefetchRunId;
+                    void (async () => {
+                        try {
+                            const resolved = await NavigationLogic.resolveNextEpisodeStream(imdbID);
+                            if (runId !== nextEpisodePrefetchRunId) return;
+                            if (!nextEpisodePrefetchVideo || !resolved) return;
+                            const playable = streamToPlayableUrl(resolved.stream);
+                            if (!playable) return;
+                            const { dispose, handoff } = await startNextEpisodePrefetch(
+                                playable.url,
+                                playable.fileIdx,
+                                nextEpisodePrefetchVideo,
+                                () => {},
+                            );
+                            if (runId !== nextEpisodePrefetchRunId) {
+                                dispose();
+                                return;
+                            }
+                            nextEpisodePrefetchDispose = dispose;
+                            nextEpisodePrefetchHandoff = handoff;
+                        } finally {
+                            nextEpisodePrefetchStarting = false;
+                        }
+                    })();
+                }
+            }
         }
     };
 
@@ -758,12 +865,6 @@
         });
     };
 
-    const handleEnded = () => {
-        if (hasStarted && !traktScrobbler.isStopSent()) {
-            void traktScrobbler.send("stop", true);
-        }
-    };
-
     const reloadSession = () => {
         if (!currentVideoSrc) return;
 
@@ -819,7 +920,18 @@
         },
         invokeNextEpisode: handleNextEpisodeInternal,
         showActionLoading,
+        suppressInitialLoading: () => nextEpisodePrefetchHandoff != null,
     });
+
+    const handleEnded = () => {
+        if (hasStarted && !traktScrobbler.isStopSent()) {
+            void traktScrobbler.send("stop", true);
+        }
+        if (bingeNextSupported && hasNextEpisode && !bingeAutoAdvancing) {
+            bingeAutoAdvancing = true;
+            handleNextEpisodeClick();
+        }
+    };
 
     const modalHandlers = createPlayerModalHandlers({
         getSessionId: () => sessionId,
@@ -863,6 +975,23 @@
         hasStarted = false;
         playbackStartTracked = false;
         playbackClosedTracked = false;
+        bingeAutoAdvancing = false;
+
+        const handoff = nextEpisodePrefetchHandoff;
+        const canReuseHandoff =
+            handoff &&
+            handoff.src === videoSrc &&
+            handoff.fileIdx === fileIdx &&
+            startTime === 0;
+
+        const reuseSession = canReuseHandoff
+            ? {
+                  sessionId: handoff.sessionId,
+                  sessionData: handoff.sessionData,
+              }
+            : undefined;
+
+        disposeNextEpisodePrefetch(reuseSession ? { transfer: true } : undefined);
         Session.cleanupSession(
             hls,
             sessionId,
@@ -870,7 +999,7 @@
             WatchParty.leaveWatchParty,
             $watchParty.isActive,
         );
-        loadVideo(videoSrc);
+        loadVideo(videoSrc, reuseSession ? { reuseSession } : undefined);
     }
 
     $: effectiveChapterMarkers = Chapters.getEffectiveChapterSegments($sessionData, introDbChapters);
@@ -975,6 +1104,14 @@
     role="presentation"
 >
     <div class="w-full h-full">
+        <video
+            bind:this={nextEpisodePrefetchVideo}
+            class="fixed left-[-9999px] top-0 w-px h-px opacity-0 pointer-events-none"
+            muted
+            playsinline
+            preload="auto"
+            aria-hidden="true"
+        ></video>
         <PlayerVideo
             bind:videoElem
             bind:canvasElem

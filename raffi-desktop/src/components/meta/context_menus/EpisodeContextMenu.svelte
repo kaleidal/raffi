@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import { fade } from "svelte/transition";
-    import { Play, Check, CircleX, CheckCircle, Ban, Trash } from "lucide-svelte";
+    import { Play, Check, CircleX, CheckCircle, Ban, Trash } from "@lucide/svelte";
 
     export let x: number;
     export let y: number;

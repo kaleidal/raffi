@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onDestroy, onMount } from "svelte";
-	import { ArrowDown, ArrowUp, Trash } from "lucide-svelte";
+	import { ArrowDown, ArrowUp, Trash } from "@lucide/svelte";
 	import { addAddon, getAddons, removeAddon, reorderAddons, type Addon } from "../../../../lib/db/db";
 	import { alertDialog, confirmDialog } from "../../../../lib/systemDialogs";
 	import { trackEvent } from "../../../../lib/analytics";

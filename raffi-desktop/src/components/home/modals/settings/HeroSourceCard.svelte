@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ChevronDown } from "lucide-svelte";
+	import { ChevronDown } from "@lucide/svelte";
 	import type { HeroCatalogSourceOption } from "../../../../lib/library/addonCatalogs";
 	import {
 		HOME_HERO_SOURCE_CINEMETA,

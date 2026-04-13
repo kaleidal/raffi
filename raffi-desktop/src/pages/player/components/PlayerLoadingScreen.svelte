@@ -1,6 +1,6 @@
 <script lang="ts">
     import type { ShowResponse } from "../../../lib/library/types/meta_types";
-    import { ChevronLeft } from "lucide-svelte";
+    import { ChevronLeft } from "@lucide/svelte";
     import { overlayZoomStyle } from "../../../lib/overlayZoom";
 
     const portal = (node: HTMLElement) => {

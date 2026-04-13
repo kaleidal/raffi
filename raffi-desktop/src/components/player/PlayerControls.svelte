@@ -5,7 +5,19 @@
     import type { Chapter } from "../../pages/player/types";
     import ClipPanel from "./ClipPanel.svelte";
     import { formatTime } from "../../lib/time";
-    import { CirclePause, CirclePlay, Maximize, ZoomIn, ZoomOut, AudioWaveform, Subtitles, Users, SkipForward, Download, Scissors } from "lucide-svelte";
+    import {
+        CirclePause,
+        CirclePlay,
+        Maximize,
+        ZoomIn,
+        ZoomOut,
+        AudioWaveform,
+        Subtitles,
+        Users,
+        SkipForward,
+        Download,
+        Scissors,
+    } from "@lucide/svelte";
 
     export let isPlaying = false;
     export let duration = 0;
@@ -169,44 +181,43 @@
                 )}</span
             >
 
-            <div
-                class="relative grow h-2 {isWatchPartyMember
-                    ? 'pointer-events-none'
-                    : ''}"
-                role="presentation"
-                on:mouseenter={(e) => updateSeekHover(e as unknown as MouseEvent)}
-                on:mousemove={(e) => updateSeekHover(e as unknown as MouseEvent)}
-                on:mouseleave={hideSeekHover}
-            >
-                <Slider
-                    widthProgress={seekBarStyle === "normal"
-                        ? progress
-                        : 100 - progress}
-                    widthGrey={seekBarStyle === "normal"
-                        ? 100 - progress
-                        : progress}
-                    markers={chapterSliderMarkers}
-                    onInput={onSeekInput}
-                    onChange={onSeekChange}
-                    value={sliderValue}
-                    min={0}
-                    max={duration}
-                    step={0.1}
-                />
-
-                {#if seekHoverVisible && duration > 0}
-                    <div
-                        class="absolute -top-9 z-10 pointer-events-none"
-                        style={`left: ${seekHoverLeftPct}%; transform: translateX(-50%);`}
-                    >
+            <div class="relative flex min-w-0 flex-1 items-center gap-2">
+                <div
+                    class="relative min-w-0 flex-1"
+                    role="presentation"
+                    on:mouseenter={(e) => updateSeekHover(e as unknown as MouseEvent)}
+                    on:mousemove={(e) => updateSeekHover(e as unknown as MouseEvent)}
+                    on:mouseleave={hideSeekHover}
+                >
+                    <Slider
+                        widthProgress={seekBarStyle === "normal"
+                            ? progress
+                            : 100 - progress}
+                        widthGrey={seekBarStyle === "normal"
+                            ? 100 - progress
+                            : progress}
+                        markers={chapterSliderMarkers}
+                        onInput={onSeekInput}
+                        onChange={onSeekChange}
+                        value={sliderValue}
+                        min={0}
+                        max={duration}
+                        step={0.1}
+                    />
+                    {#if seekHoverVisible && duration > 0}
                         <div
-                            class="tabular-nums bg-[#000000]/60 backdrop-blur-md text-white text-[12px] px-2 py-1 rounded-md"
+                            class="absolute -top-9 z-10 pointer-events-none"
+                            style={`left: ${seekHoverLeftPct}%; transform: translateX(-50%);`}
                         >
-                            {formatTime(seekHoverTime)}
+                            <div
+                                class="tabular-nums bg-[#000000]/60 backdrop-blur-md text-white text-[12px] px-2 py-1 rounded-md"
+                            >
+                                {formatTime(seekHoverTime)}
+                            </div>
                         </div>
-                    </div>
-                {/if}
-            </div>            
+                    {/if}
+                </div>
+            </div>
             {#if seekBarStyle === "normal"}
                 <span
                     class="inline-block tabular-nums text-[22px] font-roboto font-medium text-[#D3D3D3] text-center"

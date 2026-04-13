@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { Link2 } from "lucide-svelte";
+    import { Link2 } from "@lucide/svelte";
     import type { EnrichedStream } from "./types";
 
     export let item: EnrichedStream;

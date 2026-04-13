@@ -1,7 +1,7 @@
 <script lang="ts">
     import { fade, scale } from "svelte/transition";
     import { onDestroy } from "svelte";
-    import { X } from "lucide-svelte";
+    import { X } from "@lucide/svelte";
 
     import { trackEvent } from "../../../lib/analytics";
     import { withOverlayZoomStyle } from "../../../lib/overlayZoom";
