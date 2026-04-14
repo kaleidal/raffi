@@ -93,7 +93,15 @@
           ]
         }
       ],
-      "x64ArchFiles": "**/app.asar.unpacked/node_modules/**",
+      "x64ArchFiles": [
+        "**/app.asar.unpacked/node_modules/**",
+        "**/Contents/Resources/decoder-aarch64-apple-darwin",
+        "**/Contents/Resources/decoder-x86_64-apple-darwin",
+        "**/Contents/Resources/ffmpeg-arm64",
+        "**/Contents/Resources/ffmpeg-x64",
+        "**/Contents/Resources/ffprobe-arm64",
+        "**/Contents/Resources/ffprobe-x64"
+      ],
       "icon": "build/icons/icon.icns",
       "category": "public.app-category.video",
       "identity": null,
