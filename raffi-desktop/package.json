@@ -93,6 +93,7 @@
           ]
         }
       ],
+      "x64ArchFiles": "**/app.asar.unpacked/node_modules/**",
       "icon": "build/icons/icon.icns",
       "category": "public.app-category.video",
       "identity": null,
