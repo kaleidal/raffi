@@ -1,7 +1,12 @@
 @import "tailwindcss";
 
+:root {
+    --accent: #f97316;
+    --accent-weak: rgba(249, 115, 22, 0.16);
+}
+
 body {
-    background-color: #000000;
+    background-color: #ffffff;
 }
 
 .font-poppins {
