@@ -39,6 +39,7 @@ function createProtocolUrlHandler({
         code: parsed.searchParams.get("code") || undefined,
         state: parsed.searchParams.get("state") || undefined,
         error: parsed.searchParams.get("error") || undefined,
+        url,
       };
 
       if (parsed.hostname === "auth" && parsed.pathname === "/callback") {
