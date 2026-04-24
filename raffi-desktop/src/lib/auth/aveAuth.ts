@@ -1,10 +1,12 @@
 import {
+    AveSession,
+    createLocalStorageAdapter,
     exchangeCode,
     fetchUserInfo,
     generateCodeChallenge,
     generateCodeVerifier,
     generateNonce,
-    refreshToken,
+    mergeAppKeyFromUrl,
     verifyJwt,
 } from "@ave-id/sdk";
 import type { AppUser } from "./types";
@@ -17,6 +19,7 @@ const AVE_REDIRECT_URI = "raffi://auth/callback";
 const PKCE_VERIFIER_KEY = "ave_pkce_verifier";
 const PKCE_STATE_KEY = "ave_pkce_state";
 const PKCE_NONCE_KEY = "ave_pkce_nonce";
+const AVE_SESSION_STORAGE_KEY = "raffi_ave_session";
 
 const AVE_OAUTH_CONFIG = {
     clientId: AVE_CLIENT_ID,
@@ -24,23 +27,27 @@ const AVE_OAUTH_CONFIG = {
     issuer: AVE_ISSUER,
 };
 
+export const aveSession = new AveSession({
+    oauth: AVE_OAUTH_CONFIG,
+    storage: createLocalStorageAdapter(AVE_SESSION_STORAGE_KEY),
+    devtools: import.meta.env.DEV,
+});
+
 const getElectronApi = () => (window as any).electronAPI as {
     openExternal?: (url: string) => Promise<void>;
-    onAveAuthCallback?: (callback: (payload: { code?: string; state?: string; error?: string }) => void) => () => void;
+    onAveAuthCallback?: (callback: (payload: { code?: string; state?: string; error?: string; url?: string }) => void) => () => void;
 };
 
-const buildUserFromTokens = async (
-    tokens: any,
+const buildUserFromSessionTokens = async (
     options: {
         fallback?: AppUser;
         expectedNonce?: string | null;
-        requireFreshRefreshToken?: boolean;
     } = {},
 ): Promise<AppUser> => {
-    const { fallback, expectedNonce = null, requireFreshRefreshToken = false } = options;
-    const idToken = tokens?.id_token;
-    if (!idToken || typeof idToken !== "string") {
-        throw new Error("Sign-in response did not include an id_token");
+    const { fallback, expectedNonce = null } = options;
+    const idToken = await aveSession.getValidIdToken();
+    if (!idToken) {
+        throw new Error("No Ave session is available");
     }
 
     const claims = await verifyJwt<Record<string, any>>(idToken, {
@@ -54,7 +61,7 @@ const buildUserFromTokens = async (
     }
 
     let profile: any = null;
-    const accessToken = tokens?.access_token;
+    const accessToken = await aveSession.getValidAccessToken();
     if (accessToken) {
         try {
             profile = await fetchUserInfo(AVE_OAUTH_CONFIG, accessToken);
@@ -66,17 +73,6 @@ const buildUserFromTokens = async (
     const id = String(profile?.sub || claims.sub || fallback?.id || "");
     if (!id) {
         throw new Error("Unable to resolve user id");
-    }
-
-    const resolvedRefreshToken =
-        tokens?.refresh_token ||
-        tokens?.refreshToken ||
-        tokens?.refresh?.token ||
-        fallback?.refreshToken ||
-        null;
-
-    if (requireFreshRefreshToken && !resolvedRefreshToken) {
-        throw new Error("Sign-in response did not include a refresh token");
     }
 
     return {
@@ -92,7 +88,7 @@ const buildUserFromTokens = async (
         avatar: profile?.picture || claims.picture || fallback?.avatar || null,
         provider: "ave",
         token: idToken,
-        refreshToken: resolvedRefreshToken,
+        refreshToken: aveSession.getState().snapshot?.refresh_token || fallback?.refreshToken || null,
     };
 };
 
@@ -122,7 +118,7 @@ export async function signInWithAveViaBrowser(): Promise<AppUser> {
         throw new Error("Sign-in requires the desktop app");
     }
 
-    const callbackPayload = await new Promise<{ code?: string; state?: string; error?: string }>((resolve, reject) => {
+    const callbackPayload = await new Promise<{ code?: string; state?: string; error?: string; url?: string }>((resolve, reject) => {
         const timeout = setTimeout(() => {
             unsubscribe?.();
             reject(new Error("Sign-in timed out"));
@@ -165,11 +161,21 @@ export async function signInWithAveViaBrowser(): Promise<AppUser> {
             code: receivedCode,
             codeVerifier: storedVerifier,
         });
+        const sessionTokens = callbackPayload.url
+            ? mergeAppKeyFromUrl(callbackPayload.url, tokens)
+            : tokens;
 
-        return await buildUserFromTokens(tokens, {
+        await aveSession.setTokensFromResponse(sessionTokens);
+
+        const signedInUser = await buildUserFromSessionTokens({
             expectedNonce: storedNonce,
-            requireFreshRefreshToken: true,
         });
+
+        if (!signedInUser.refreshToken) {
+            throw new Error("Sign-in response did not include a refresh token");
+        }
+
+        return signedInUser;
     } finally {
         sessionStorage.removeItem(PKCE_VERIFIER_KEY);
         sessionStorage.removeItem(PKCE_STATE_KEY);
@@ -178,14 +184,38 @@ export async function signInWithAveViaBrowser(): Promise<AppUser> {
 }
 
 export async function refreshAveUserSession(user: AppUser): Promise<AppUser> {
-    if (!user?.refreshToken) {
-        throw new Error("No refresh token available");
-    }
-    const tokens = await refreshToken(AVE_OAUTH_CONFIG, {
-        refreshToken: user.refreshToken,
-    });
-    return buildUserFromTokens(tokens, {
+    return buildUserFromSessionTokens({
         fallback: user,
-        requireFreshRefreshToken: true,
     });
+}
+
+export async function hydrateAveSession(): Promise<void> {
+    await aveSession.hydrate();
+}
+
+export async function restoreAveUserFromSession(fallback?: AppUser | null): Promise<AppUser | null> {
+    await hydrateAveSession();
+    if (aveSession.getState().status !== "signedIn") return null;
+    return buildUserFromSessionTokens({
+        fallback: fallback ?? undefined,
+    });
+}
+
+export async function adoptLegacyAveSession(user: AppUser): Promise<AppUser | null> {
+    if (!user?.token || !user?.refreshToken) return null;
+
+    await aveSession.setTokensFromResponse({
+        access_token: user.token,
+        access_token_jwt: user.token,
+        id_token: user.token,
+        refresh_token: user.refreshToken,
+        expires_in: 0,
+        scope: "openid profile email offline_access",
+    });
+
+    return refreshAveUserSession(user);
+}
+
+export async function clearAveSessionStorage(): Promise<void> {
+    await aveSession.signOut();
 }
