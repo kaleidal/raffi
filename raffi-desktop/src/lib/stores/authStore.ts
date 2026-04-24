@@ -1,5 +1,11 @@
 import type { AppUser } from "../auth/types";
-import { refreshAveUserSession, signInWithAveViaBrowser } from "../auth/aveAuth";
+import {
+    adoptLegacyAveSession,
+    clearAveSessionStorage,
+    refreshAveUserSession,
+    restoreAveUserFromSession,
+    signInWithAveViaBrowser,
+} from "../auth/aveAuth";
 import {
     ensureDefaultAddonsForUser,
     ensureDefaultAddonsForLocal,
@@ -40,14 +46,10 @@ const AVE_USER_KEY = "ave_user";
 const AVE_TOKEN_KEY = "ave_token_jwt";
 const AVE_REFRESH_TOKEN_KEY = "ave_refresh_token";
 const HOME_REFRESH_EVENT = "raffi:home-refresh";
-const TOKEN_REFRESH_LEEWAY_MS = 5 * 60 * 1000;
-const TOKEN_REFRESH_RETRY_MS = 60 * 1000;
-const TOKEN_REFRESH_FALLBACK_MS = 45 * 60 * 1000;
 
 let userCache: AppUser | null = null;
 let initialized = false;
 let seededUserId: string | null = null;
-let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
 const readLocalMode = () => {
     if (typeof window === "undefined") return false;
@@ -68,7 +70,6 @@ const persistLocalMode = (enabled: boolean) => {
 };
 
 export const enableLocalMode = () => {
-    clearSessionRefreshTimer();
     stopCloudReconciliationLoop();
     localMode.set(true);
     persistLocalMode(true);
@@ -81,12 +82,6 @@ export const enableLocalMode = () => {
 export const disableLocalMode = () => {
     localMode.set(false);
     persistLocalMode(false);
-};
-
-const clearSessionRefreshTimer = () => {
-    if (!refreshTimer) return;
-    clearTimeout(refreshTimer);
-    refreshTimer = null;
 };
 
 const persistAveSession = (user: AppUser | null) => {
@@ -104,15 +99,11 @@ const persistAveSession = (user: AppUser | null) => {
         avatar: user.avatar,
         provider: user.provider,
     }));
-    localStorage.setItem(AVE_TOKEN_KEY, user.token);
-    if (user.refreshToken) {
-        localStorage.setItem(AVE_REFRESH_TOKEN_KEY, user.refreshToken);
-    } else {
-        localStorage.removeItem(AVE_REFRESH_TOKEN_KEY);
-    }
+    localStorage.removeItem(AVE_TOKEN_KEY);
+    localStorage.removeItem(AVE_REFRESH_TOKEN_KEY);
 };
 
-const readAveSession = (): AppUser | null => {
+const readLegacyAveSession = (): AppUser | null => {
     if (typeof window === "undefined") return null;
     try {
         const userRaw = localStorage.getItem(AVE_USER_KEY);
@@ -140,39 +131,6 @@ const emitHomeRefresh = () => {
     window.dispatchEvent(new CustomEvent(HOME_REFRESH_EVENT));
 };
 
-const decodeJwtPayload = (token: string): Record<string, any> | null => {
-    try {
-        const parts = token.split(".");
-        if (parts.length < 2) return null;
-        const payloadBase64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-        const padLength = (4 - (payloadBase64.length % 4)) % 4;
-        const base64 = payloadBase64.padEnd(payloadBase64.length + padLength, "=");
-        const json = decodeURIComponent(
-            atob(base64)
-                .split("")
-                .map((ch) => `%${(`00${ch.charCodeAt(0).toString(16)}`).slice(-2)}`)
-                .join(""),
-        );
-        return JSON.parse(json);
-    } catch {
-        return null;
-    }
-};
-
-const getTokenExpiryMs = (token: string | null | undefined): number | null => {
-    if (!token) return null;
-    const payload = decodeJwtPayload(token);
-    const exp = Number(payload?.exp);
-    if (!Number.isFinite(exp) || exp <= 0) return null;
-    return exp * 1000;
-};
-
-const shouldRefreshToken = (token: string, leewayMs = TOKEN_REFRESH_LEEWAY_MS) => {
-    const expiresAt = getTokenExpiryMs(token);
-    if (!expiresAt) return false;
-    return expiresAt - Date.now() <= leewayMs;
-};
-
 const isPermanentAveRefreshError = (error: any) => {
     const message = String(error?.message || "").toLowerCase();
     return (
@@ -193,16 +151,29 @@ async function seedDefaultsIfNeeded(user: AppUser | null) {
     await ensureDefaultAddonsForUser(userId);
 }
 
+const resolveStoredAveUser = async (legacyUser: AppUser | null): Promise<AppUser | null> => {
+    try {
+        const sessionUser = await restoreAveUserFromSession(legacyUser);
+        if (sessionUser) return sessionUser;
+        if (!legacyUser) return null;
+        return await adoptLegacyAveSession(legacyUser);
+    } catch (error) {
+        if (!isPermanentAveRefreshError(error) && !String((error as any)?.message || "").includes("No Ave session")) {
+            console.error("Ave session restore failed", error);
+        }
+        return null;
+    }
+};
+
 const clearAveSession = () => {
-    clearSessionRefreshTimer();
     userCache = null;
     currentUser.set(null);
     persistAveSession(null);
+    void clearAveSessionStorage();
     setConvexAuthToken(null);
 };
 
 const tryRefreshAveSession = async (user: AppUser): Promise<AppUser | null> => {
-    if (!user?.refreshToken) return null;
     try {
         const refreshedUser = await refreshAveUserSession(user);
         setConvexAuthToken(refreshedUser.token);
@@ -221,7 +192,6 @@ const applyRefreshedUser = (refreshed: AppUser) => {
     userCache = refreshed;
     currentUser.set(refreshed);
     setConvexAuthToken(refreshed.token);
-    scheduleSessionRefresh(refreshed);
 };
 
 const refreshSessionFromConvexAuthFailure = async (): Promise<string | null> => {
@@ -240,40 +210,6 @@ const refreshSessionFromConvexAuthFailure = async (): Promise<string | null> => 
     return refreshed.token;
 };
 
-const scheduleSessionRefresh = (user: AppUser | null) => {
-    clearSessionRefreshTimer();
-    if (!user?.refreshToken) return;
-
-    const expiresAt = getTokenExpiryMs(user.token);
-    const targetDelay = expiresAt
-        ? expiresAt - Date.now() - TOKEN_REFRESH_LEEWAY_MS
-        : TOKEN_REFRESH_FALLBACK_MS;
-    const delay = Math.max(TOKEN_REFRESH_RETRY_MS, targetDelay);
-
-    refreshTimer = setTimeout(async () => {
-        const activeUser = userCache;
-        if (!activeUser || activeUser.id !== user.id) return;
-        const refreshed = await tryRefreshAveSession(activeUser);
-        if (!refreshed) {
-            clearAveSession();
-            enableLocalMode();
-            emitHomeRefresh();
-            return;
-        }
-        applyRefreshedUser(refreshed);
-    }, delay);
-};
-
-const resolveStartupSession = async (storedUser: AppUser): Promise<AppUser | null> => {
-    if (!shouldRefreshToken(storedUser.token)) {
-        return storedUser;
-    }
-    if (!storedUser.refreshToken) {
-        return null;
-    }
-    return tryRefreshAveSession(storedUser);
-};
-
 export async function initAuth() {
     if (initialized) return;
     initialized = true;
@@ -285,23 +221,17 @@ export async function initAuth() {
         persistLocalMode(true);
     }
 
-    const storedUser = readAveSession();
-    userCache = storedUser;
-    currentUser.set(storedUser);
+    const legacyUser = readLegacyAveSession();
+    const activeUser = await resolveStoredAveUser(legacyUser);
 
-    if (storedUser) {
-        setConvexAuthToken(storedUser.token);
-        const activeUser = await resolveStartupSession(storedUser);
-
-        if (!activeUser) {
-            clearAveSession();
-            enableLocalMode();
-        } else {
-            userCache = activeUser;
-            currentUser.set(activeUser);
-            setConvexAuthToken(activeUser.token);
-            scheduleSessionRefresh(activeUser);
-        }
+    if (activeUser) {
+        userCache = activeUser;
+        currentUser.set(activeUser);
+        setConvexAuthToken(activeUser.token);
+        persistAveSession(activeUser);
+    } else if (legacyUser) {
+        clearAveSession();
+        enableLocalMode();
     }
 
     if (userCache) {
@@ -329,7 +259,6 @@ export async function signInWithAve() {
     currentUser.set(user);
     setConvexAuthToken(user.token);
     persistAveSession(user);
-    scheduleSessionRefresh(user);
 
     disableLocalMode();
     resetRemoteStateCache();
@@ -354,11 +283,11 @@ export async function signInWithAve() {
 }
 
 export function signOutToLocalMode() {
-    clearSessionRefreshTimer();
     stopCloudReconciliationLoop();
     userCache = null;
     currentUser.set(null);
     persistAveSession(null);
+    void clearAveSessionStorage();
     resetRemoteStateCache();
     enableLocalMode();
     emitHomeRefresh();
