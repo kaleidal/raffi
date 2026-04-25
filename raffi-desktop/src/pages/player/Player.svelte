@@ -752,11 +752,7 @@
                     );
                     shouldAutoNext = t != null && time >= t;
                 } else if (!hasOutro && $duration > 0) {
-                    shouldAutoNext =
-                        time >=
-                        $duration -
-                            Chapters.CREDITS_FALLBACK_SECONDS +
-                            Chapters.BINGE_CREDITS_BUFFER_SECONDS;
+                    shouldAutoNext = time >= $duration - 3;
                 }
                 if (shouldAutoNext && !bingeAutoAdvancing) {
                     bingeAutoAdvancing = true;
