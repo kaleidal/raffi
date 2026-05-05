@@ -4,7 +4,7 @@ This module provides standalone on-device torrent streaming, similar to how Stre
 
 ## How it Works
 
-1. **Android**: Uses `TorrentStream-Android` (based on libtorrent) to download torrents with piece prioritization optimized for streaming. A local HTTP server serves the video to the player.
+1. **Android**: Uses `libtorrent4j` to download torrents with piece prioritization optimized for streaming. A local HTTP server serves the video to the player.
 
 2. **iOS**: Currently shows a message to use debrid services. Full implementation requires compiling libtorrent for iOS.
 
@@ -41,13 +41,13 @@ Since this uses native code, you need a development build (not Expo Go):
 
 ```bash
 # Generate native projects
-npx expo prebuild
+bunx expo prebuild
 
 # Build for Android
-npx expo run:android
+bun run android
 
 # Build for iOS (torrent streaming not yet available)
-npx expo run:ios
+bun run ios
 ```
 
 ## Stream Flow
@@ -82,7 +82,7 @@ Until native torrent streaming is implemented for iOS, users should:
 ## Technical Notes
 
 ### Piece Prioritization
-TorrentStream-Android automatically prioritizes pieces needed for streaming:
+The Android torrent module prioritizes pieces needed for streaming:
 - First pieces for metadata and headers
 - Pieces from current playback position
 - Lookahead buffer
