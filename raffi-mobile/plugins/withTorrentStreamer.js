@@ -19,6 +19,11 @@ const withTorrentStreamer = (config) => {
     if (!manifest['uses-permission']) {
       manifest['uses-permission'] = [];
     }
+
+    const application = manifest.application?.[0];
+    if (application?.$) {
+      application.$['android:usesCleartextTraffic'] = 'true';
+    }
     
     // Add permissions if not already present
     const permissions = [
