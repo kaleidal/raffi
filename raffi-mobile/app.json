@@ -54,6 +54,7 @@
         }
       ],
       "./plugins/withTorrentStreamer.js",
+      "./plugins/withAndroidTv.js",
       "expo-pip"
     ],
     "experiments": {

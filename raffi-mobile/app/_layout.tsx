@@ -53,6 +53,27 @@ export default function RootLayout() {
             }}
           />
           <Stack.Screen
+            name="tv"
+            options={{
+              presentation: 'card',
+              animation: 'fade',
+            }}
+          />
+          <Stack.Screen
+            name="tv-search"
+            options={{
+              presentation: 'card',
+              animation: 'slide_from_right',
+            }}
+          />
+          <Stack.Screen
+            name="tv-meta/[id]"
+            options={{
+              presentation: 'card',
+              animation: 'slide_from_right',
+            }}
+          />
+          <Stack.Screen
             name="lists"
             options={{
               presentation: 'card',

@@ -1,9 +1,14 @@
 import { Colors } from '@/constants/theme';
+import { isTv } from '@/lib/platform/is-tv';
 import { Ionicons } from '@expo/vector-icons';
-import { Tabs } from 'expo-router';
+import { Redirect, Tabs } from 'expo-router';
 import React from 'react';
 
 export default function TabLayout() {
+  if (isTv) {
+    return <Redirect href={'/tv' as any} />;
+  }
+
   return (
     <Tabs
       screenOptions={{

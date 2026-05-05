@@ -1,137 +1,93 @@
-# Raffi Mobile 📱
+# Raffi Mobile
 
-A mobile companion app for [Raffi](../raffi), the desktop streaming application. Built with React Native and Expo.
+Raffi Mobile is the Expo client for phones, tablets, and Android TV. It uses Ave authentication with Convex-backed sync for addons, library state, lists, and watch progress.
 
 ## Features
 
-- 🎬 **Browse Content**: Popular movies and TV shows from Stremio Cinemeta
-- 📺 **Continue Watching**: Sync your watch progress across devices
-- 🔍 **Search**: Find any movie or TV show instantly
-- ▶️ **Native Playback**: Built-in video player with seek, play/pause controls
-- 🌙 **Dark Theme**: Netflix-style dark UI matching the desktop app
-- 🔐 **Authentication**: Supabase auth synced with desktop app
-- 📦 **Addon Support**: Use Stremio addons for streaming sources
+- Browse movies and series from Cinemeta and installed Stremio-compatible addons.
+- Continue watching with shared progress across signed-in devices.
+- Search, detail pages, source selection, and native playback.
+- Android TV launcher support with a D-pad-first home, search, and details flow.
+- Direct HTTP and debrid stream playback on supported platforms.
+- On-device Android torrent streaming through the bundled native torrent module.
 
-## Getting Started
+## Requirements
 
-### Prerequisites
+- Bun
+- Node.js 18+
+- Android Studio and Android SDK for Android builds
+- Xcode for iOS builds
 
-- Node.js 18+ and npm
-- Expo CLI (`npm install -g expo-cli`)
-- iOS Simulator (Mac) or Android Emulator
+## Development
 
-### Installation
+Install dependencies:
 
-1. Install dependencies:
+```bash
+bun install
+```
 
-   ```bash
-   npm install
-   ```
+Start Expo:
 
-2. Start the development server:
+```bash
+bun run start
+```
 
-   ```bash
-   npm start
-   ```
+Run a native development build:
 
-3. Open on device/emulator:
-   - Press `i` for iOS Simulator
-   - Press `a` for Android Emulator
-   - Scan QR code with Expo Go app on your phone
+```bash
+bun run android
+bun run ios
+```
+
+Expo Go is not enough for torrent playback because the app includes native Android streaming code.
+
+## Android TV
+
+Android TV devices launch into the TV interface automatically through React Native TV detection. The TV route uses full-width focusable rows, a focused hero action area, and an inline source list designed for D-pad navigation.
+
+The Android native project receives Leanback launcher metadata and a TV banner during prebuild through the app config plugin. To regenerate the native Android project:
+
+```bash
+bunx expo prebuild --platform android
+```
+
+Build a debug APK:
+
+```powershell
+cd android
+.\gradlew.bat :app:assembleDebug
+```
+
+## Streaming
+
+Stremio stream addons provide the available sources. Raffi prioritizes debrid/direct HTTP streams first, then higher-resolution and healthier peer-backed torrent streams.
+
+On Android, magnet and info-hash sources are handled locally by `modules/torrent-streamer`, which starts a loopback HTTP stream for the player. On iOS, use debrid/direct HTTP sources.
 
 ## Project Structure
 
-```
-app/                    # Expo Router file-based routing
-├── (tabs)/            # Tab navigation screens
-│   ├── index.tsx      # Home screen
-│   ├── search.tsx     # Search screen
-│   ├── downloads.tsx  # Downloads screen
-│   └── profile.tsx    # Profile/settings screen
-├── meta/[id].tsx      # Movie/series detail page
-├── player.tsx         # Video player
-└── login.tsx          # Authentication
-
-components/            # Reusable UI components
-├── home/             # Home screen components
-│   ├── Hero.tsx
-│   ├── ContentRow.tsx
-│   └── ContinueWatching.tsx
-└── common/           # Shared components
-    ├── LoadingSpinner.tsx
-    ├── PosterCard.tsx
-    └── SearchBar.tsx
-
-lib/                  # Core functionality
-├── api.ts           # Cinemeta API client
-├── db.ts            # Supabase database operations
-├── supabase.ts      # Supabase client config
-├── types.ts         # TypeScript types
-└── stores/          # Zustand state management
-    ├── authStore.ts
-    ├── libraryStore.ts
-    └── addonsStore.ts
-
-constants/
-└── theme.ts         # Design system (colors, typography, spacing)
+```text
+app/                  Expo Router screens
+app/(tabs)/           Phone and tablet tab interface
+app/tv.tsx            Android TV home
+app/tv-search.tsx     Android TV search
+app/tv-meta/[id].tsx  Android TV details and source selection
+app/player.tsx        Shared player
+components/home/      Phone home sections
+components/tv/        TV-focused controls and rows
+lib/api.ts            Cinemeta and addon API helpers
+lib/db.ts             Convex-backed app data access
+lib/stores/           Zustand auth, library, addons, and downloads state
+lib/torrent/          JavaScript interface for native torrent streaming
+modules/torrent-streamer/ Native Android torrent streaming module
+plugins/              Expo config plugins for native project generation
 ```
 
-## Streaming Server
+## Checks
 
-For torrent streams, the app connects to the Raffi desktop server for transcoding.
-Update `STREAMING_SERVER` in `app/player.tsx` with your server IP:
-
-```typescript
-const STREAMING_SERVER = 'http://YOUR_IP:6969';
-```
-
-## Tech Stack
-
-- **React Native** with Expo SDK 54
-- **Expo Router** - File-based routing
-- **Expo Video** - Native video playback
-- **Zustand** - State management
-- **Supabase** - Authentication & database
-- **React Native Reanimated** - Animations
-
-## Building
-
-### Development Build
+Run these before handing off changes:
 
 ```bash
-npx expo run:ios
-npx expo run:android
+bun run lint
+bunx tsc --noEmit
 ```
-
-### Production Build
-
-```bash
-eas build --platform ios
-eas build --platform android
-```
-
-## Notes
-
-- **EAC3/Dolby Audio**: Most modern phones support EAC3 natively
-- **Transcoding**: For unsupported codecs, streams are transcoded via the desktop server
-- **Offline**: Downloads feature coming soon
-
-```bash
-npm run reset-project
-```
-
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
