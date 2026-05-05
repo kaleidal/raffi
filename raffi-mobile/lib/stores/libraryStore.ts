@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { getCachedMetaData } from '../api';
 import {
     forgetProgress,
+    getCachedUser,
     getLibrary,
     hideFromContinueWatching,
     updateLibraryProgress
@@ -76,6 +77,9 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     poster?: string
   ) => {
     try {
+      const user = getCachedUser();
+      if (!user?.id) return;
+
       await updateLibraryProgress(imdbId, progress, type, completed, poster);
 
       // Best-effort: ensure we have a title/poster immediately

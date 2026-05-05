@@ -31,6 +31,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BorderRadius, Colors, Spacing, Typography } from '@/constants/theme';
 import { getLibraryItem, traktScrobble } from '@/lib/db';
+import { isTv } from '@/lib/platform/is-tv';
+import { useAuthStore } from '@/lib/stores/authStore';
 import { useLibraryStore } from '@/lib/stores/libraryStore';
 import TorrentStreamer, { StreamSession } from '@/lib/torrent/TorrentStreamer';
 
@@ -60,10 +62,40 @@ const TRAKT_COMPLETION_THRESHOLD = 0.9;
 const TRAKT_FAILURE_COOLDOWN_MS = 60000;
 const TRAKT_MAX_FAILURES = 3;
 const MAX_TORRENT_PLAYBACK_RETRIES = 6;
+const LOCAL_TORRENT_STREAM_PREFIX = 'http://127.0.0.1:8765/stream/';
+const LOCAL_TORRENT_PROBE_RETRIES = 18;
+const LOCAL_TORRENT_PROBE_DELAY_MS = 650;
 
 // Settings keys
 const SETTINGS_KEYS = {
   AUTO_SKIP_INTRO: 'settings_auto_skip_intro',
+};
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const cacheBustLocalStreamUrl = (url: string) => {
+  const base = url.split('?')[0];
+  return `${base}?r=${Date.now()}`;
+};
+
+const waitForLocalTorrentStream = async (url: string) => {
+  const base = url.split('?')[0];
+
+  for (let attempt = 0; attempt < LOCAL_TORRENT_PROBE_RETRIES; attempt += 1) {
+    try {
+      const response = await fetch(`${base}?probe=${Date.now()}`, {
+        headers: { Range: 'bytes=0-1' },
+      });
+      if (response.status === 200 || response.status === 206) {
+        return cacheBustLocalStreamUrl(base);
+      }
+    } catch {
+    }
+
+    await delay(LOCAL_TORRENT_PROBE_DELAY_MS);
+  }
+
+  throw new Error('Torrent stream is still buffering. Try again in a moment or pick a debrid source.');
 };
 
 export default function PlayerScreen() {
@@ -103,6 +135,7 @@ export default function PlayerScreen() {
   // Player state
   const [loading, setLoading] = useState(true);
   const { updateProgress, getItemProgress } = useLibraryStore();
+  const user = useAuthStore((state) => state.user);
   const [error, setError] = useState<string | null>(null);
   const didInitialSeek = useRef(false);
   const seriesProgressRef = useRef<Record<string, any> | null>(null);
@@ -277,6 +310,8 @@ export default function PlayerScreen() {
 
   // Determine the playback URL
   useEffect(() => {
+    let cancelled = false;
+
     const setupPlayback = async () => {
       if (!videoSrc) {
         setError('No video source provided');
@@ -325,6 +360,24 @@ export default function PlayerScreen() {
             setLoading(false);
             return;
           }
+
+          let didOpenTorrentStream = false;
+          const openReadyTorrentStream = async (streamUrl: string) => {
+            if (didOpenTorrentStream || !streamUrl) return;
+            didOpenTorrentStream = true;
+            setTorrentStatus('Opening stream...');
+            try {
+              const readyUrl = await waitForLocalTorrentStream(streamUrl);
+              if (cancelled) return;
+              setPlaybackUrl(readyUrl);
+              setTorrentStatus('');
+              setLoading(false);
+            } catch (error: any) {
+              if (cancelled) return;
+              setError(error?.message || 'Torrent stream is not ready yet.');
+              setLoading(false);
+            }
+          };
           
           const unsubscribe = TorrentStreamer.subscribe(session.id, (updatedSession) => {
             setTorrentSession(updatedSession);
@@ -334,9 +387,7 @@ export default function PlayerScreen() {
             } else if (updatedSession.status === 'buffering') {
               setTorrentStatus(`Buffering: ${updatedSession.bufferProgress.toFixed(1)}%`);
             } else if (updatedSession.status === 'ready') {
-              setPlaybackUrl(updatedSession.streamUrl);
-              setTorrentStatus('');
-              setLoading(false);
+              void openReadyTorrentStream(updatedSession.streamUrl);
             } else if (updatedSession.status === 'error') {
               setError(updatedSession.error || 'Torrent streaming error');
               setLoading(false);
@@ -344,6 +395,7 @@ export default function PlayerScreen() {
           });
 
           return () => {
+            cancelled = true;
             unsubscribe?.();
           };
         }
@@ -367,6 +419,7 @@ export default function PlayerScreen() {
     })();
 
     return () => {
+      cancelled = true;
       cleanupSubscription?.();
       if (torrentSessionRef.current) {
         TorrentStreamer.stopStream(torrentSessionRef.current.id);
@@ -414,6 +467,7 @@ export default function PlayerScreen() {
   const sendTraktEvent = useCallback(
     async (action: 'start' | 'pause' | 'stop', force = false) => {
       if (!imdbId || !type) return;
+      if (!user?.id) return;
       if (traktDisabledRef.current) return;
       if (!force && Date.now() < traktCooldownUntilRef.current) return;
       if (action === 'pause' && !traktStartSentRef.current) return;
@@ -490,7 +544,7 @@ export default function PlayerScreen() {
         }
       }
     },
-    [episode, getTraktProgress, imdbId, season, type]
+    [episode, getTraktProgress, imdbId, season, type, user?.id]
   );
 
   useEffect(() => {
@@ -537,9 +591,7 @@ export default function PlayerScreen() {
         }
       } else if (status === 'error') {
         if (playbackUrl) {
-          console.error('Video player error for URL:', playbackUrl);
-
-          const isLocalTorrentStream = playbackUrl.startsWith('http://127.0.0.1:8765/stream/');
+          const isLocalTorrentStream = playbackUrl.startsWith(LOCAL_TORRENT_STREAM_PREFIX);
           const activeTorrent = torrentSessionRef.current;
 
           if (
@@ -562,16 +614,16 @@ export default function PlayerScreen() {
 
             const retryDelayMs = Math.min(4000, 900 + retry * 500);
             torrentRetryTimeoutRef.current = setTimeout(() => {
-              const base = playbackUrl.split('?')[0];
               setPlaybackUrl(null);
               setTimeout(() => {
-                setPlaybackUrl(`${base}?r=${Date.now()}-${retry}`);
+                setPlaybackUrl(cacheBustLocalStreamUrl(playbackUrl));
               }, 100);
             }, retryDelayMs);
             return;
           }
 
-          setError('Failed to play video');
+          console.error('Video player error for URL:', playbackUrl);
+          setError(isLocalTorrentStream ? 'Torrent stream failed to open. Pick a debrid source or try again after more buffering.' : 'Failed to play video');
           setLoading(false);
         }
       }
@@ -681,47 +733,16 @@ export default function PlayerScreen() {
     };
   }, []);
 
-  // Save progress periodically
-  useEffect(() => {
-    if (!imdbId || !type) return;
-
-    if (type === 'series' && seriesProgressRef.current == null) {
-      (async () => {
-        const storeExisting = getItemProgress(imdbId)?.progress;
-        const dbExisting = storeExisting ? null : (await getLibraryItem(imdbId))?.progress;
-        const existing = storeExisting || dbExisting;
-
-        if (existing && typeof existing === 'object') {
-          seriesProgressRef.current = { ...(existing as any) };
-        } else {
-          seriesProgressRef.current = {};
-        }
-      })();
-    }
-
-    progressSaveInterval.current = setInterval(() => {
-      if (currentTime > 0 && duration > 0 && currentTime !== lastSavedTime.current) {
-        lastSavedTime.current = currentTime;
-        saveProgress();
-      }
-    }, 10000);
-
-    return () => {
-      if (progressSaveInterval.current) {
-        clearInterval(progressSaveInterval.current);
-      }
-      saveProgress();
-    };
-  }, [imdbId, type, currentTime, duration]);
-
-  const saveProgress = async () => {
-    if (!imdbId || !type || currentTime <= 0) return;
+  const saveProgress = useCallback(async () => {
+    const time = currentTimeRef.current;
+    const totalDuration = durationRef.current;
+    if (!imdbId || !type || !user?.id || time <= 0) return;
 
     try {
-      const watched = duration > 0 && currentTime / duration > 0.9;
+      const watched = totalDuration > 0 && time / totalDuration > 0.9;
       const progressData: any = {
-        time: currentTime,
-        duration: duration,
+        time,
+        duration: totalDuration,
         updatedAt: Date.now(),
         watched,
       };
@@ -738,7 +759,42 @@ export default function PlayerScreen() {
     } catch (e) {
       console.error('Failed to save progress:', e);
     }
-  };
+  }, [episode, imdbId, poster, season, type, updateProgress, user?.id]);
+
+  // Save progress periodically
+  useEffect(() => {
+    if (!imdbId || !type || !user?.id) return;
+
+    if (type === 'series' && seriesProgressRef.current == null) {
+      (async () => {
+        const storeExisting = getItemProgress(imdbId)?.progress;
+        const dbExisting = storeExisting ? null : (await getLibraryItem(imdbId))?.progress;
+        const existing = storeExisting || dbExisting;
+
+        if (existing && typeof existing === 'object') {
+          seriesProgressRef.current = { ...(existing as any) };
+        } else {
+          seriesProgressRef.current = {};
+        }
+      })();
+    }
+
+    progressSaveInterval.current = setInterval(() => {
+      const time = currentTimeRef.current;
+      const totalDuration = durationRef.current;
+      if (time > 0 && totalDuration > 0 && time !== lastSavedTime.current) {
+        lastSavedTime.current = time;
+        void saveProgress();
+      }
+    }, 10000);
+
+    return () => {
+      if (progressSaveInterval.current) {
+        clearInterval(progressSaveInterval.current);
+      }
+      void saveProgress();
+    };
+  }, [getItemProgress, imdbId, saveProgress, type, user?.id]);
 
   // Skip intro handler
   const handleSkipIntro = useCallback(() => {
@@ -765,7 +821,7 @@ export default function PlayerScreen() {
       clearTimeout(hideControlsTimeout.current);
     }
 
-    if (isPlaying && !settingsOpen) {
+    if (!isTv && isPlaying && !settingsOpen) {
       hideControlsTimeout.current = setTimeout(() => {
         controlsOpacity.value = withTiming(0, { duration: 200 });
         runOnJS(setControlsVisible)(false);
@@ -786,7 +842,7 @@ export default function PlayerScreen() {
       setControlsVisible(true);
       controlsOpacity.value = withTiming(1, { duration: 150 });
       
-      if (isPlaying && !settingsOpen) {
+      if (!isTv && isPlaying && !settingsOpen) {
         hideControlsTimeout.current = setTimeout(() => {
           controlsOpacity.value = withTiming(0, { duration: 200 });
           runOnJS(setControlsVisible)(false);
