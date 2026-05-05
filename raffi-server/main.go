@@ -36,6 +36,7 @@ type Server struct {
 
 func main() {
 	debug.SetTraceback("single")
+	preferGoDNSResolver()
 
 	ffmpegPath, ffprobePath, err := resolveMediaToolPaths()
 	if err != nil {
@@ -155,6 +156,15 @@ func executableToolName(base string) string {
 		return base + ".exe"
 	}
 	return base
+}
+
+func preferGoDNSResolver() {
+	net.DefaultResolver = &net.Resolver{PreferGo: true}
+	if existing := strings.TrimSpace(os.Getenv("GODEBUG")); existing == "" {
+		_ = os.Setenv("GODEBUG", "netdns=go")
+	} else if !strings.Contains(existing, "netdns=") {
+		_ = os.Setenv("GODEBUG", existing+",netdns=go")
+	}
 }
 
 func (s *Server) handleAudioTrack(w http.ResponseWriter, r *http.Request, id string) {
