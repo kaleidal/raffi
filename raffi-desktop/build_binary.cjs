@@ -41,21 +41,39 @@ async function build() {
       }
     });
   } else if (platform === 'linux') {
-    console.log('Building Linux binary (static CGO)...');
-    await runCommand('go', [
-      'build',
-      '-ldflags=-s -w -extldflags "-static"',
-      '-tags=sqlite_omit_load_extension',
-      '-o',
-      '../raffi-desktop/electron/decoder-x86_64-unknown-linux-gnu',
-      '.'
-    ], {
+    const linuxBuildOptions = {
       cwd: serverDir,
       env: {
         ...process.env,
         CGO_ENABLED: '1'
       }
-    });
+    };
+    const linuxBuildArgs = [
+      'build',
+      '-buildvcs=false',
+      '-tags=sqlite_omit_load_extension netgo osusergo',
+      '-o',
+      '../raffi-desktop/electron/decoder-x86_64-unknown-linux-gnu',
+      '.'
+    ];
+
+    console.log('Building Linux binary (static CGO, Go DNS resolver)...');
+    try {
+      await runCommand('go', [
+        linuxBuildArgs[0],
+        linuxBuildArgs[1],
+        '-ldflags=-s -w -extldflags "-static"',
+        ...linuxBuildArgs.slice(2),
+      ], linuxBuildOptions);
+    } catch (err) {
+      console.warn('Static Linux build failed, retrying with dynamic linking:', err.message);
+      await runCommand('go', [
+        linuxBuildArgs[0],
+        linuxBuildArgs[1],
+        '-ldflags=-s -w',
+        ...linuxBuildArgs.slice(2),
+      ], linuxBuildOptions);
+    }
   } else if (platform === 'darwin') {
     const macDecoders = [
       { goarch: 'arm64', outputName: 'decoder-aarch64-apple-darwin', cc: 'clang -arch arm64' },
