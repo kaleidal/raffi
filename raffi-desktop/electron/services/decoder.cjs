@@ -181,9 +181,13 @@ function createDecoderService({ isDev, path, fs, spawn, logToFile, baseDir }) {
     try {
       await ensureDecoderExecutable(binPath);
 
+      const inheritedGoDebug = process.env.GODEBUG || "";
       const decoderEnv = {
         ...process.env,
         RAFFI_SERVER_ADDR: process.env.RAFFI_SERVER_ADDR || "127.0.0.1:6969",
+        GODEBUG: inheritedGoDebug.includes("netdns=")
+          ? inheritedGoDebug
+          : [inheritedGoDebug, "netdns=go"].filter(Boolean).join(","),
       };
 
       if (fs.existsSync(ffmpegPath)) {
