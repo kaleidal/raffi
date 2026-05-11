@@ -52,6 +52,9 @@ Like Stremio, Raffi uses community addons to aggregate streaming sources, but go
 - Community addon ecosystem for movies, TV shows, and more
 - Multiple addon sources simultaneously
 - Easy addon management and configuration
+- Optional direct link mode with user-supplied movie and series URL templates
+- Direct links can open as provider embeds or play through Raffi's player when compatible
+- Source settings sync with your account while keeping addon and direct configurations separate
 
 ### 🎨 **Customization**
 - Configurable seek bar styles

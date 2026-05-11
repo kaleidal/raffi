@@ -90,6 +90,19 @@ const findListItemByListImdb = async (db: any, listId: string, imdbId: string) =
     }
 };
 
+const findUserMetaByUser = async (db: any, userId: string) => {
+    try {
+        return await db
+            .query("user_meta")
+            .withIndex("by_user", (q: any) => q.eq("user_id", userId))
+            .unique();
+    } catch (error) {
+        if (!isMissingIndexError(error)) throw error;
+        const rows = await collectAll(db, "user_meta");
+        return rows.find((row: any) => row?.user_id === userId) || null;
+    }
+};
+
 const uniqueBy = <T extends Record<string, any>>(items: T[], keyFn: (item: T) => string) => {
     const map = new Map<string, T>();
     for (const item of items) {
@@ -135,6 +148,11 @@ const importedListItemValidator = v.object({
     position: v.optional(v.number()),
     type: v.optional(v.string()),
     poster: v.optional(v.string()),
+});
+
+const importedUserMetaValidator = v.object({
+    settings: v.any(),
+    updated_at: v.optional(v.string()),
 });
 
 const syncDeletesValidator = v.object({
@@ -269,7 +287,7 @@ const getProfileValues = (settingsPayload: any) => {
     };
 };
 
-const getTraktIntegrationForUser = async (ctx: any, userId: string) => {
+const getTraktIntegrationForUser = async (ctx: any, userId: string): Promise<any> => {
     return ctx.runQuery((internal as any).raffi.getTraktIntegrationInternal, { userId });
 };
 
@@ -293,10 +311,11 @@ export const getState = queryGeneric({
     args: { },
     handler: async (ctx, args) => {
         const userId = await requireAuthedUserId(ctx);
-        const [addons, library, lists] = await Promise.all([
+        const [addons, library, lists, userMeta] = await Promise.all([
             collectByUser(ctx.db, "addons", userId),
             collectByUser(ctx.db, "libraries", userId),
             collectByUser(ctx.db, "lists", userId),
+            findUserMetaByUser(ctx.db, userId),
         ]);
 
         const listIds = lists.map((list: any) => list.list_id);
@@ -315,6 +334,7 @@ export const getState = queryGeneric({
             library,
             lists,
             listItems,
+            userMeta,
         };
     },
 });
@@ -534,6 +554,7 @@ export const applySyncState = mutationGeneric({
         library: v.array(importedLibraryValidator),
         lists: v.array(importedListValidator),
         listItems: v.array(importedListItemValidator),
+        userMeta: v.optional(importedUserMetaValidator),
         deletes: syncDeletesValidator,
     },
     handler: async (ctx, args) => {
@@ -630,6 +651,20 @@ export const applySyncState = mutationGeneric({
                     type: item.type || "movie",
                     poster: optionalString(item.poster),
                 });
+            }
+        }
+
+        if (args.userMeta) {
+            const existing = await findUserMetaByUser(ctx.db, userId);
+            const payload = {
+                user_id: userId,
+                settings: args.userMeta.settings || {},
+                updated_at: args.userMeta.updated_at || getNowIso(),
+            };
+            if (existing) {
+                await ctx.db.patch(existing._id, payload);
+            } else {
+                await ctx.db.insert("user_meta", payload);
             }
         }
 
@@ -1331,11 +1366,11 @@ export const refreshTraktToken = actionGeneric({
     },
 });
 
-export const getTraktClientAuth = actionGeneric({
+export const getTraktClientAuth: any = actionGeneric({
     args: {
         forceRefresh: v.optional(v.boolean()),
     },
-    handler: async (ctx, args) => {
+    handler: async (ctx, args): Promise<any> => {
         try {
             const userId = await requireAuthedUserId(ctx);
             const config = getTraktConfig();
@@ -1351,7 +1386,7 @@ export const getTraktClientAuth = actionGeneric({
                 };
             }
 
-            const integration = await getTraktIntegrationForUser(ctx, userId);
+            const integration: any = await getTraktIntegrationForUser(ctx, userId);
             if (!integration?.access_token || !integration?.refresh_token) {
                 return {
                     ok: false,
@@ -1370,7 +1405,7 @@ export const getTraktClientAuth = actionGeneric({
             const shouldRefresh =
                 Boolean(args.forceRefresh) || (hasExpiry && integrationExpiry <= now + 30_000);
 
-            let accessToken = integration.access_token;
+            let accessToken: string = integration.access_token;
             let expiresAt = hasExpiry ? integrationExpiry : null;
 
             if (shouldRefresh) {

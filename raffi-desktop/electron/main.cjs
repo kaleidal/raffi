@@ -194,6 +194,8 @@ function createWindow() {
     logToFile,
     baseDir: __dirname,
     resourcesPath: process.resourcesPath,
+    shell,
+    isAllowedExternalUrl,
     defaultWindowWidth: DEFAULT_WINDOW_WIDTH,
     defaultWindowHeight: DEFAULT_WINDOW_HEIGHT,
     minZoom: MIN_ZOOM,
