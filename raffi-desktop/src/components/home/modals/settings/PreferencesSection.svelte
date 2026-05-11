@@ -3,6 +3,7 @@
 	import UiScaleControl from "./UiScaleControl.svelte";
 	import SearchBarPositionCard from "./SearchBarPositionCard.svelte";
 	import HeroSourceCard from "./HeroSourceCard.svelte";
+	import DirectSourceSection from "./DirectSourceSection.svelte";
 	import { enableRPC, disableRPC } from "../../../../lib/rpc";
 	import { getAddons, getTraktStatus } from "../../../../lib/db/db";
 	import { trackEvent } from "../../../../lib/analytics";
@@ -297,6 +298,8 @@
 			</span>
 		</button>
 	</div>
+
+	<DirectSourceSection />
 
 	<UiScaleControl />
 

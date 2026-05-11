@@ -1,11 +1,12 @@
 import { convexMutation } from "./convex";
-import type { Addon, LibraryItem, List, ListItem } from "./types";
+import type { Addon, LibraryItem, List, ListItem, UserMeta } from "./types";
 import {
     DEFAULT_ADDON,
     LOCAL_ADDONS_KEY,
     LOCAL_LIBRARY_KEY,
     LOCAL_LIST_ITEMS_KEY,
     LOCAL_LISTS_KEY,
+    LOCAL_USER_META_KEY,
     getLocalUserId,
     listItemKey,
     markDeleted,
@@ -136,6 +137,33 @@ export const removeAddon = async (transport_url: string) => {
     writeLocal(LOCAL_ADDONS_KEY, readLocal<Addon[]>(LOCAL_ADDONS_KEY, []).filter((item) => item.transport_url !== transport_url));
     markDeleted("addons", transport_url);
     scheduleCloudBackupSync();
+};
+
+export const getUserMeta = async (): Promise<UserMeta> => {
+    const existing = readLocal<UserMeta | null>(LOCAL_USER_META_KEY, null);
+    return existing ?? {
+        user_id: getLocalUserId(),
+        settings: {},
+        updated_at: new Date().toISOString(),
+    };
+};
+
+export const updateUserSettings = async (settings: Record<string, any>) => {
+    const current = await getUserMeta();
+    const next: UserMeta = {
+        ...current,
+        user_id: getLocalUserId(),
+        settings: {
+            ...(current.settings || {}),
+            ...settings,
+        },
+        updated_at: new Date().toISOString(),
+    };
+    writeLocal(LOCAL_USER_META_KEY, next);
+    markDirty("userMeta", "settings");
+    scheduleCloudBackupSync();
+    publishCloudSyncStatus();
+    return next;
 };
 
 export const getLibrary = async (limit = 100, offset = 0) => {

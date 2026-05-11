@@ -274,6 +274,7 @@
     $: filteredStreams = applyStreamFilters(enrichedStreams, filterState);
     $: ({ localFilteredStreams, addonFilteredStreams } = splitStreamsBySource(filteredStreams));
     $: filtersActive = areFiltersActive(filterState);
+    $: hasDirectStream = streams.some((stream) => stream?.raffiSource === "direct");
 
     $: releaseInfo = getReleaseInfo(
         selectedEpisode?.released ||
@@ -395,7 +396,7 @@
                         {/if}
                     </div>
 
-                    {#if filteredAddons.length > 1}
+                    {#if filteredAddons.length > 1 && !hasDirectStream}
                         <div class="flex flex-wrap gap-2.5 pb-1">
                             {#each filteredAddons as addon}
                                 <button
