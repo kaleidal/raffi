@@ -384,67 +384,84 @@
         }
     }
 
-    onMount(() => {
-        const loadHomeData = async () => {
-            const [mostPopularMovies, mostPopularSeries, installedAddons] =
-                await Promise.all([
-                    getPopularTitles("movie"),
-                    getPopularTitles("series"),
-                    getAddons().catch(() => []),
-                ]);
-            absolutePopularTitles = [...mostPopularMovies, ...mostPopularSeries];
+    function applyPopularData(
+        mostPopularMovies: PopularTitleMeta[],
+        mostPopularSeries: PopularTitleMeta[],
+    ) {
+        absolutePopularTitles = [...mostPopularMovies, ...mostPopularSeries];
 
-            if (absolutePopularTitles.length > 0) {
-                absolutePopularTitles.sort(
-                    (a, b) =>
-                        (b.popularities.moviedb || 0) -
-                        (a.popularities.moviedb || 0),
-                );
+        if (absolutePopularTitles.length > 0) {
+            absolutePopularTitles.sort(
+                (a, b) =>
+                    (b.popularities.moviedb || 0) -
+                    (a.popularities.moviedb || 0),
+            );
 
-                absolutePopularTitles = absolutePopularTitles.slice(0, 20);
+            absolutePopularTitles = absolutePopularTitles.slice(0, 20);
+            popularMeta = absolutePopularTitles;
+            heroPoolTitles = absolutePopularTitles;
+            setFeaturedFromPool();
+        }
 
-                popularMeta = absolutePopularTitles;
-            }
+        const allTitlesForGenres = [...mostPopularMovies, ...mostPopularSeries];
+        const nextGenreMap: Record<string, PopularTitleMeta[]> = {};
+        const genreCount: Record<string, number> = {};
 
-            await loadTraktRecommendations();
-            await refreshHeroSourcePool(installedAddons);
-            await loadContinueWatching();
-
-            const allTitlesForGenres = [...mostPopularMovies, ...mostPopularSeries];
-            const genreCount: Record<string, number> = {};
-
-            for (const title of allTitlesForGenres) {
-                if (title.genre && Array.isArray(title.genre)) {
-                    for (const g of title.genre) {
-                        if (!genreMap[g]) {
-                            genreMap[g] = [];
-                            genreCount[g] = 0;
-                        }
-                        genreMap[g].push(title);
-                        genreCount[g]++;
+        for (const title of allTitlesForGenres) {
+            if (title.genre && Array.isArray(title.genre)) {
+                for (const g of title.genre) {
+                    if (!nextGenreMap[g]) {
+                        nextGenreMap[g] = [];
+                        genreCount[g] = 0;
                     }
+                    nextGenreMap[g].push(title);
+                    genreCount[g]++;
                 }
             }
+        }
 
-            topGenres = Object.entries(genreCount)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 10)
-                .map(([genre]) => genre);
+        genreMap = nextGenreMap;
+        topGenres = Object.entries(genreCount)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10)
+            .map(([genre]) => genre);
+    }
 
-            void refreshAddonSections(installedAddons);
-            fetchedTitles = true;
+    async function refreshPersonalHomeSections(installedAddons?: Addon[]) {
+        const selectedSourceId = getStoredHomeHeroSource();
+        void loadContinueWatching();
+        void refreshAddonSections(installedAddons);
+        void loadTraktRecommendations().then(() => refreshHeroSourcePool(installedAddons));
+        if (selectedSourceId !== HOME_HERO_SOURCE_TRAKT_RECOMMENDATIONS) {
+            void refreshHeroSourcePool(installedAddons);
+        }
+    }
+
+    onMount(() => {
+        const loadHomeData = async () => {
+            try {
+                const [mostPopularMovies, mostPopularSeries, installedAddons] =
+                    await Promise.all([
+                        getPopularTitles("movie"),
+                        getPopularTitles("series"),
+                        getAddons().catch(() => []),
+                    ]);
+
+                applyPopularData(mostPopularMovies, mostPopularSeries);
+                fetchedTitles = true;
+                void refreshPersonalHomeSections(installedAddons);
+            } catch (error) {
+                console.error("Failed to load home data", error);
+                fetchedTitles = true;
+                void refreshPersonalHomeSections();
+            }
         };
 
         void loadHomeData();
 
         const handleHomeRefresh = async () => {
             const installedAddons = await getAddons().catch(() => [] as Addon[]);
-            await loadTraktRecommendations();
-            await Promise.all([
-                loadContinueWatching(),
-                refreshAddonSections(installedAddons),
-            ]);
-            await refreshHeroSourcePool(installedAddons);
+            void refreshPersonalHomeSections(installedAddons);
         };
         window.addEventListener(HOME_REFRESH_EVENT, handleHomeRefresh);
 

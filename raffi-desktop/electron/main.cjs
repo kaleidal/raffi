@@ -87,6 +87,7 @@ app.on("child-process-gone", (_event, details) => {
 
 let mainWindow;
 let httpServer;
+let decoderStartupPromise = null;
 let fileToOpen = null;
 let pendingAveAuthPayload = null;
 let pendingTraktAuthPayload = null;
@@ -183,6 +184,9 @@ decoderService.onDecoderStatusChange((status) => {
 });
 
 function createWindow() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    return;
+  }
   mainWindow = createMainWindow({
     BrowserWindow,
     screen,
@@ -220,6 +224,33 @@ function createWindow() {
       httpServer = server;
     },
   });
+}
+
+function startDecoderServerInBackground() {
+  if (decoderStartupPromise) return decoderStartupPromise;
+
+  decoderStartupPromise = (async () => {
+    logToFile("Starting decoder server");
+    try {
+      await decoderService.startDecoderServer();
+    } catch (err) {
+      logToFile("Failed to start decoder server", err);
+      return;
+    }
+
+    logToFile("Waiting for decoder server to be ready");
+    const decoderReady = await decoderService.waitForDecoderReady();
+
+    if (!decoderReady) {
+      logToFile("Decoder server failed to start");
+      console.error("WARNING: Decoder server not responding, playback may not work properly");
+      return;
+    }
+
+    logToFile("Decoder server ready");
+  })();
+
+  return decoderStartupPromise;
 }
 
 app.whenReady().then(async () => {
@@ -263,27 +294,8 @@ app.whenReady().then(async () => {
       fileToOpen = filePath;
     }
   }
-  logToFile("Starting decoder server");
-  try {
-    await decoderService.startDecoderServer();
-  } catch (err) {
-    logToFile("Failed to start decoder server", err);
-    createWindow();
-    return;
-  }
-
-  logToFile("Waiting for decoder server to be ready");
-  const decoderReady = await decoderService.waitForDecoderReady();
-  
-  if (!decoderReady) {
-    logToFile("Decoder server failed to start, but creating window anyway");
-    console.error("WARNING: Decoder server not responding, app may not work properly");
-    createWindow();
-    return;
-  }
-
-  logToFile("Decoder server ready, creating window");
   createWindow();
+  void startDecoderServerInBackground();
 });
 
 app.on("activate", () => {
