@@ -44,6 +44,8 @@
     import ActionButtons from "../../components/meta/ActionButtons.svelte";
     import MetaInfo from "./components/MetaInfo.svelte";
     import UnsupportedTitleModal from "../../components/meta/modals/UnsupportedTitleModal.svelte";
+    import AddonsModal from "../../components/home/modals/AddonsModal.svelte";
+    import { ADDONS_CHANGED_EVENT } from "../../components/home/modals/addons/addonsShared";
 
     // Router params
     $: imdbID = $router.params.imdbId;
@@ -70,6 +72,8 @@
     let viewportAspect = 16 / 9;
     let backgroundAspect: number | null = null;
     let lastBackgroundSrc = "";
+    let showAddonsModal = false;
+    let addonsModalResourceFilter: "all" | "stream" | "subtitles" | "catalog" | "meta" = "all";
     const metaPanelOffsetStyle =
         "transform: translateY(max(0px, calc((1 - var(--raffi-effective-zoom, 1)) * 16rem))); will-change: transform;";
 
@@ -102,6 +106,7 @@
         await DataLoader.loadAddons();
         updateViewportAspect();
         window.addEventListener("resize", updateViewportAspect);
+        window.addEventListener(ADDONS_CHANGED_EVENT, handleAddonsChanged);
     });
 
     onDestroy(() => {
@@ -111,7 +116,17 @@
             scrollContainer.style.overflow = "";
         }
         window.removeEventListener("resize", updateViewportAspect);
+        window.removeEventListener(ADDONS_CHANGED_EVENT, handleAddonsChanged);
     });
+
+    function handleAddonsChanged() {
+        void DataLoader.loadAddons();
+    }
+
+    function openStreamAddons() {
+        addonsModalResourceFilter = "stream";
+        showAddonsModal = true;
+    }
 
     $: if (imdbID) {
         DataLoader.loadMetaData(imdbID, titleType, expectedName).then(
@@ -530,9 +545,15 @@
         onCloseStreamsPopup={StreamLogic.closeStreamsPopup}
         onStreamClick={(stream) =>
             StreamLogic.onStreamClick(stream, $progressMap)}
+        onOpenAddons={openStreamAddons}
         onTorrentConfirm={() =>
             StreamLogic.handleTorrentWarningConfirm($progressMap)}
         onTorrentCancel={StreamLogic.handleTorrentWarningCancel}
+    />
+
+    <AddonsModal
+        bind:showAddonsModal
+        initialResourceFilter={addonsModalResourceFilter}
     />
 
     {#if $showEpisodeContextMenu}
