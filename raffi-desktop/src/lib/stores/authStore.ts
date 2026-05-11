@@ -151,6 +151,35 @@ async function seedDefaultsIfNeeded(user: AppUser | null) {
     await ensureDefaultAddonsForUser(userId);
 }
 
+async function finishSignedInStartup(user: AppUser) {
+    let shouldRefreshHome = false;
+    const hadLocalState = hasLocalState();
+
+    try {
+        await seedDefaultsIfNeeded(user);
+        shouldRefreshHome = true;
+        if (!hadLocalState) {
+            const result = await hydrateLocalBackupFromCloud();
+            shouldRefreshHome = shouldRefreshHome || result.ok;
+        }
+    } catch (error) {
+        console.error("Startup sync failed", error);
+    }
+
+    void syncLocalStateToUser(user.id);
+    void flushPendingLibraryProgress();
+
+    if (hasLocalState()) {
+        void warmRemoteStateCache().then((merged) => {
+            if (merged) emitHomeRefresh();
+        });
+    }
+
+    if (shouldRefreshHome) {
+        emitHomeRefresh();
+    }
+}
+
 const resolveStoredAveUser = async (legacyUser: AppUser | null): Promise<AppUser | null> => {
     try {
         const sessionUser = await restoreAveUserFromSession(legacyUser);
@@ -238,18 +267,10 @@ export async function initAuth() {
         disableLocalMode();
         resetRemoteStateCache();
         startCloudReconciliationLoop();
-        await seedDefaultsIfNeeded(userCache);
-        if (!hasLocalState()) {
-            await hydrateLocalBackupFromCloud();
-        }
-        void syncLocalStateToUser(userCache.id);
-        void flushPendingLibraryProgress();
-        if (hasLocalState()) {
-            void warmRemoteStateCache();
-        }
+        void finishSignedInStartup(userCache);
     } else {
         enableLocalMode();
-        await ensureDefaultAddonsForLocal();
+        void ensureDefaultAddonsForLocal().then(emitHomeRefresh);
     }
 }
 
