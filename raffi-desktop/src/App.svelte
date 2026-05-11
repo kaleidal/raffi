@@ -48,7 +48,7 @@
         updatedAt: 0,
     });
 
-    let checkingAuth = true;
+    let checkingAuth = false;
     let showTitleBar = false;
     let displayZoom = 1;
     let showUpdatePrompt = false;
@@ -158,6 +158,9 @@
         decoderStatus.state === "unavailable" &&
         decoderStatus.updatedAt !== 0 &&
         decoderStatus.updatedAt !== dismissedDecoderStatusAt;
+    $: showDecoderStarting =
+        decoderStatus.state === "starting" &&
+        decoderStatus.updatedAt !== 0;
 
     function handlePointerButtons(event: PointerEvent) {
         if (event.pointerType !== "mouse") return;
@@ -296,6 +299,8 @@
             // ignore
         }
 
+        checkingAuth = false;
+
         const init = async () => {
             try {
                 await initAuth();
@@ -303,9 +308,6 @@
             } catch (err) {
                 console.error("Auth initialization failed", err);
             }
-            if (disposed) return;
-
-            checkingAuth = false;
         };
 
         init();
@@ -476,6 +478,16 @@
     </div>
 
     <ZoomModal />
+
+    {#if showDecoderStarting}
+        <div
+            class="fixed bottom-5 left-1/2 z-[450] flex -translate-x-1/2 items-center gap-3 rounded-2xl bg-[#252525]/86 px-4 py-3 text-sm text-white/80 shadow-[0_18px_60px_rgba(0,0,0,0.35)] backdrop-blur-2xl"
+            style={overlayZoomStyle}
+        >
+            <LoadingSpinner size="18px" color="#D8D8D8" />
+            <span>{decoderStatus.message || "Starting playback server..."}</span>
+        </div>
+    {/if}
 
     {#if showDecoderFailure}
         <div
