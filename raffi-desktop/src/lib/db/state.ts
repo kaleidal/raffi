@@ -11,6 +11,7 @@ import type {
     SyncSection,
     SyncStateSectionMap,
     TraktStatus,
+    UserMeta,
 } from "./types";
 
 export const LOCAL_USER_ID = "local-user";
@@ -18,6 +19,7 @@ export const LOCAL_ADDONS_KEY = "local:addons";
 export const LOCAL_LIBRARY_KEY = "local:library";
 export const LOCAL_LISTS_KEY = "local:lists";
 export const LOCAL_LIST_ITEMS_KEY = "local:list_items";
+export const LOCAL_USER_META_KEY = "local:user_meta";
 export const LOCAL_CLOUD_SYNC_STATE_KEY = "local:cloud_sync_state";
 export const LOCAL_MODE_KEY = "local_mode_enabled";
 
@@ -67,7 +69,8 @@ const countSyncSectionMap = (map: Partial<SyncStateSectionMap> | undefined) =>
     countKeys(map?.addons || {})
     + countKeys(map?.library || {})
     + countKeys(map?.lists || {})
-    + countKeys(map?.listItems || {});
+    + countKeys(map?.listItems || {})
+    + countKeys(map?.userMeta || {});
 
 export const readLocal = <T>(key: string, fallback: T): T => {
     if (typeof window === "undefined") return fallback;
@@ -103,7 +106,8 @@ export const hasPersistedLocalState = () => {
     const library = readLocal<LibraryItem[]>(LOCAL_LIBRARY_KEY, []);
     const lists = readLocal<List[]>(LOCAL_LISTS_KEY, []);
     const listItems = readLocal<ListItem[]>(LOCAL_LIST_ITEMS_KEY, []);
-    return addons.length > 0 || library.length > 0 || lists.length > 0 || listItems.length > 0;
+    const userMeta = readLocal<UserMeta | null>(LOCAL_USER_META_KEY, null);
+    return addons.length > 0 || library.length > 0 || lists.length > 0 || listItems.length > 0 || Boolean(userMeta);
 };
 
 const createEmptySyncSectionMap = (): SyncStateSectionMap => ({
@@ -111,6 +115,7 @@ const createEmptySyncSectionMap = (): SyncStateSectionMap => ({
     library: {},
     lists: {},
     listItems: {},
+    userMeta: {},
 });
 
 const createDefaultSyncState = (): CloudSyncState => ({
@@ -131,12 +136,14 @@ export const readSyncState = (): CloudSyncState => {
             library: { ...(raw.dirty?.library || {}) },
             lists: { ...(raw.dirty?.lists || {}) },
             listItems: { ...(raw.dirty?.listItems || {}) },
+            userMeta: { ...(raw.dirty?.userMeta || {}) },
         },
         tombstones: {
             addons: { ...(raw.tombstones?.addons || {}) },
             library: { ...(raw.tombstones?.library || {}) },
             lists: { ...(raw.tombstones?.lists || {}) },
             listItems: { ...(raw.tombstones?.listItems || {}) },
+            userMeta: { ...(raw.tombstones?.userMeta || {}) },
         },
         lastAttemptAt: raw.lastAttemptAt ?? base.lastAttemptAt,
         lastSuccessAt: raw.lastSuccessAt ?? base.lastSuccessAt,
@@ -195,12 +202,14 @@ export const markDirty = (section: SyncSection, key: string) => {
             library: { ...state.dirty.library, ...(section === "library" ? { [key]: now } : {}) },
             lists: { ...state.dirty.lists, ...(section === "lists" ? { [key]: now } : {}) },
             listItems: { ...state.dirty.listItems, ...(section === "listItems" ? { [key]: now } : {}) },
+            userMeta: { ...state.dirty.userMeta, ...(section === "userMeta" ? { [key]: now } : {}) },
         },
         tombstones: {
             addons: { ...state.tombstones.addons },
             library: { ...state.tombstones.library },
             lists: { ...state.tombstones.lists },
             listItems: { ...state.tombstones.listItems },
+            userMeta: { ...state.tombstones.userMeta },
         },
         lastAttemptAt: state.lastAttemptAt,
         lastSuccessAt: state.lastSuccessAt,
@@ -224,12 +233,14 @@ export const markDeleted = (section: SyncSection, key: string) => {
             library: { ...state.dirty.library },
             lists: { ...state.dirty.lists },
             listItems: { ...state.dirty.listItems },
+            userMeta: { ...state.dirty.userMeta },
         };
         next.tombstones = {
             addons: { ...state.tombstones.addons },
             library: { ...state.tombstones.library },
             lists: { ...state.tombstones.lists },
             listItems: { ...state.tombstones.listItems },
+            userMeta: { ...state.tombstones.userMeta },
         };
         next.lastAttemptAt = state.lastAttemptAt;
         next.lastSuccessAt = state.lastSuccessAt;
@@ -256,6 +267,7 @@ export const clearDirtyMarker = (section: SyncSection, key: string) => {
             library: { ...state.dirty.library },
             lists: { ...state.dirty.lists },
             listItems: { ...state.dirty.listItems },
+            userMeta: { ...state.dirty.userMeta },
         };
         delete next.dirty[section][key];
         return next;
@@ -270,6 +282,7 @@ export const clearTombstone = (section: SyncSection, key: string) => {
             library: { ...state.tombstones.library },
             lists: { ...state.tombstones.lists },
             listItems: { ...state.tombstones.listItems },
+            userMeta: { ...state.tombstones.userMeta },
         };
         delete next.tombstones[section][key];
         return next;
@@ -301,6 +314,7 @@ export const readLocalState = (): RemoteState => ({
     library: readLocal<LibraryItem[]>(LOCAL_LIBRARY_KEY, []),
     lists: readLocal<List[]>(LOCAL_LISTS_KEY, []),
     listItems: readLocal<ListItem[]>(LOCAL_LIST_ITEMS_KEY, []),
+    userMeta: readLocal<UserMeta | null>(LOCAL_USER_META_KEY, null),
 });
 
 export const writeLocalState = (state: RemoteState) => {
@@ -308,12 +322,17 @@ export const writeLocalState = (state: RemoteState) => {
     writeLocal(LOCAL_LIBRARY_KEY, state.library);
     writeLocal(LOCAL_LISTS_KEY, state.lists);
     writeLocal(LOCAL_LIST_ITEMS_KEY, state.listItems);
+    if (state.userMeta) {
+        writeLocal(LOCAL_USER_META_KEY, state.userMeta);
+    } else {
+        removeLocal(LOCAL_USER_META_KEY);
+    }
     publishCloudSyncStatus();
 };
 
 export const hasLocalState = () => {
-    const { addons, library, lists, listItems } = readLocalState();
-    return addons.length > 0 || library.length > 0 || lists.length > 0 || listItems.length > 0;
+    const { addons, library, lists, listItems, userMeta } = readLocalState();
+    return addons.length > 0 || library.length > 0 || lists.length > 0 || listItems.length > 0 || Boolean(userMeta);
 };
 
 export const clearLocalState = () => {
@@ -321,6 +340,7 @@ export const clearLocalState = () => {
     removeLocal(LOCAL_LIBRARY_KEY);
     removeLocal(LOCAL_LISTS_KEY);
     removeLocal(LOCAL_LIST_ITEMS_KEY);
+    removeLocal(LOCAL_USER_META_KEY);
     removeLocal(LOCAL_CLOUD_SYNC_STATE_KEY);
     removeLocal(LOCAL_MODE_KEY);
     publishCloudSyncStatus();
@@ -513,11 +533,31 @@ export const mergeRemoteStateIntoLocal = (remote: RemoteState) => {
         else listItems.set(key, { ...localItem, ...remoteItem, poster: remoteItem.poster ?? localItem.poster });
     }
 
+    const userMetaKey = "settings";
+    let userMeta = local.userMeta ? { ...local.userMeta } : null;
+    if (remote.userMeta && !syncState.tombstones.userMeta[userMetaKey]) {
+        if (!userMeta) {
+            userMeta = { ...remote.userMeta };
+        } else if (syncState.dirty.userMeta[userMetaKey]) {
+            userMeta = {
+                ...remote.userMeta,
+                ...userMeta,
+                settings: {
+                    ...(remote.userMeta.settings || {}),
+                    ...(userMeta.settings || {}),
+                },
+            };
+        } else {
+            userMeta = { ...userMeta, ...remote.userMeta };
+        }
+    }
+
     const merged: RemoteState = {
         addons: Array.from(addons.values()),
         library: Array.from(library.values()),
         lists: Array.from(lists.values()),
         listItems: Array.from(listItems.values()),
+        userMeta,
     };
     writeLocalState(merged);
     return merged;

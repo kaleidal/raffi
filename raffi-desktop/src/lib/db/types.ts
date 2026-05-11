@@ -38,6 +38,7 @@ export interface ListItem {
 export interface UserMeta {
     user_id: string;
     settings: any;
+    updated_at?: string;
 }
 
 export interface WatchParty {
@@ -97,9 +98,10 @@ export type RemoteState = {
     library: LibraryItem[];
     lists: List[];
     listItems: ListItem[];
+    userMeta: UserMeta | null;
 };
 
-export type RemoteStateSection = "addons" | "library" | "lists" | "listItems";
+export type RemoteStateSection = "addons" | "library" | "lists" | "listItems" | "userMeta";
 
 export type RemoteStateChunkResponse<T> = {
     section: RemoteStateSection;
@@ -109,7 +111,7 @@ export type RemoteStateChunkResponse<T> = {
     done: boolean;
 };
 
-export type SyncSection = "addons" | "library" | "lists" | "listItems";
+export type SyncSection = "addons" | "library" | "lists" | "listItems" | "userMeta";
 
 export type SyncStateSectionMap = Record<SyncSection, Record<string, number>>;
 

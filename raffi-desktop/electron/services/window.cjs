@@ -1,3 +1,5 @@
+const { registerContentBlocker } = require("./contentBlocker.cjs");
+
 function createMainWindow({
   BrowserWindow,
   screen,
@@ -9,6 +11,8 @@ function createMainWindow({
   logToFile,
   baseDir,
   resourcesPath,
+  shell,
+  isAllowedExternalUrl,
   defaultWindowWidth,
   defaultWindowHeight,
   minZoom,
@@ -83,6 +87,58 @@ function createMainWindow({
   }
 
   const mainWindow = new BrowserWindow(windowOptions);
+  registerContentBlocker({
+    session: mainWindow.webContents.session,
+    logToFile,
+  });
+
+  const isAppUrl = (value) => {
+    try {
+      const parsed = new URL(value);
+      if (parsed.protocol === "about:" || parsed.protocol === "file:") return true;
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+      const host = parsed.hostname.toLowerCase();
+      if (isDev) {
+        return (host === "localhost" || host === "127.0.0.1") && parsed.port === "5173";
+      }
+      return host === "127.0.0.1" && parsed.port === "11420";
+    } catch {
+      return false;
+    }
+  };
+
+  const isWebUrl = (value) => {
+    try {
+      const parsed = new URL(value);
+      return parsed.protocol === "http:" || parsed.protocol === "https:";
+    } catch {
+      return false;
+    }
+  };
+
+  const handleExternalNavigation = (url, context, referrerUrl) => {
+    const isAppOwnedWindow = context === "window" && isAppUrl(referrerUrl) && isWebUrl(url);
+    if (isAppOwnedWindow || isAllowedExternalUrl?.(url)) {
+      shell?.openExternal(url).catch((error) => {
+        logToFile(`Failed opening external ${context}`, error);
+      });
+      return;
+    }
+
+    logToFile(`Blocked external ${context}`, url);
+  };
+
+  mainWindow.webContents.setWindowOpenHandler((details) => {
+    handleExternalNavigation(details?.url, "window", details?.referrer?.url);
+    return { action: "deny" };
+  });
+
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    if (isAppUrl(url)) return;
+    event.preventDefault();
+    handleExternalNavigation(url, "navigation");
+  });
+
   let currentDisplayZoom = 1;
   const miniPlayerState = {
     enabled: true,
