@@ -1,9 +1,11 @@
 <script lang="ts">
+    import { onMount } from "svelte";
+    import { get, writable } from "svelte/store";
+    import { ChevronDown, ChevronRight } from "@lucide/svelte";
     import {
         lists,
         editingState,
         listItemsMap,
-        selectedListId,
     } from "../listsState";
     import {
         startEditing,
@@ -14,7 +16,42 @@
     import { selectItem } from "../dataLoader";
     import { fade } from "svelte/transition";
 
-    // Helper to get first item of a list for selection
+    const COLLAPSED_LISTS_KEY = "raffi:lists:collapsed";
+    const collapsedListIds = writable<Record<string, true>>({});
+
+    onMount(() => {
+        try {
+            const value = localStorage.getItem(COLLAPSED_LISTS_KEY);
+            const parsed = value ? JSON.parse(value) : [];
+            if (Array.isArray(parsed)) {
+                collapsedListIds.set(Object.fromEntries(
+                    parsed
+                        .filter((id) => typeof id === "string")
+                        .map((id) => [id, true]),
+                ));
+            }
+        } catch {
+            collapsedListIds.set({});
+        }
+    });
+
+    function saveCollapsedLists(next: Record<string, true>) {
+        collapsedListIds.set(next);
+        try {
+            localStorage.setItem(COLLAPSED_LISTS_KEY, JSON.stringify(Object.keys(next)));
+        } catch {}
+    }
+
+    function toggleListCollapsed(listId: string) {
+        const next = { ...get(collapsedListIds) };
+        if (next[listId]) {
+            delete next[listId];
+        } else {
+            next[listId] = true;
+        }
+        saveCollapsedLists(next);
+    }
+
     function selectFirstItem(listId: string) {
         const items = $listItemsMap[listId];
         if (items && items.length > 0) {
@@ -27,7 +64,7 @@
     class="w-full min-w-0 min-h-0 flex flex-col overflow-y-auto no-scrollbar relative z-10 overflow-x-hidden xl:pr-[20px]"
 >
     <div class="flex flex-col gap-12 pb-20 xl:gap-[60px] xl:pb-[100px]">
-        {#each $lists as list}
+        {#each $lists as list (list.list_id)}
             <div class="flex flex-col gap-5">
                 <div
                     class="flex flex-row justify-between items-center group/header"
@@ -45,17 +82,36 @@
                             />
                         </form>
                     {:else}
-                        <div class="flex flex-row gap-4 items-center">
-                            <h3
-                                class="text-[#FFFFFF] text-[28px] xl:text-[32px] font-poppins font-semibold cursor-pointer hover:text-white/80 transition-colors"
-                                on:dblclick={() => startEditing(list)}
+                        <div class="flex flex-row gap-3 items-center min-w-0">
+                            <button
+                                type="button"
+                                class="shrink-0 text-white/55 hover:text-white transition-colors cursor-pointer p-2 rounded-lg hover:bg-white/10"
+                                on:click={() => toggleListCollapsed(list.list_id)}
+                                aria-label={$collapsedListIds[list.list_id]
+                                    ? `Expand ${list.name}`
+                                    : `Collapse ${list.name}`}
                             >
-                                {list.name}
+                                {#if $collapsedListIds[list.list_id]}
+                                    <ChevronRight size={22} strokeWidth={2.2} />
+                                {:else}
+                                    <ChevronDown size={22} strokeWidth={2.2} />
+                                {/if}
+                            </button>
+                            <h3 class="min-w-0">
+                                <button
+                                    type="button"
+                                    class="block min-w-0 max-w-full truncate text-left text-[#FFFFFF] text-[28px] xl:text-[32px] font-poppins font-semibold cursor-pointer hover:text-white/80 transition-colors"
+                                    on:click={() => selectFirstItem(list.list_id)}
+                                    on:dblclick={() => startEditing(list)}
+                                >
+                                    {list.name}
+                                </button>
                             </h3>
                             <div
                                 class="flex flex-col gap-1 opacity-0 group-hover/header:opacity-100 transition-opacity"
                             >
                                 <button
+                                    type="button"
                                     class="text-white/50 hover:text-white cursor-pointer"
                                     on:click={() =>
                                         moveList($lists.indexOf(list), "up")}
@@ -76,6 +132,7 @@
                                     >
                                 </button>
                                 <button
+                                    type="button"
                                     aria-label="Move list down"
                                     class="text-white/50 hover:text-white cursor-pointer"
                                     on:click={() =>
@@ -102,6 +159,7 @@
 
                     <div class="flex flex-row gap-2">
                         <button
+                            type="button"
                             class="text-white/50 hover:text-white transition-colors p-2 hover:bg-white/10 rounded-lg cursor-pointer"
                             on:click={() => startEditing(list)}
                             aria-label="Rename list"
@@ -123,6 +181,7 @@
                             >
                         </button>
                         <button
+                            type="button"
                             class="text-[#FF4444] opacity-50 hover:opacity-100 transition-opacity p-2 hover:bg-[#FF4444]/10 rounded-lg cursor-pointer"
                             on:click={() => handleDeleteList(list.list_id)}
                             aria-label="Delete list"
@@ -147,7 +206,11 @@
 
                 <div class="w-full h-[1px] bg-[#333333]"></div>
 
-                <slot name="grid" listId={list.list_id} />
+                {#if !$collapsedListIds[list.list_id]}
+                    <div transition:fade={{ duration: 160 }}>
+                        <slot name="grid" listId={list.list_id} />
+                    </div>
+                {/if}
             </div>
         {/each}
 
