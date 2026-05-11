@@ -4,6 +4,7 @@ import {
     selectedAddon, metaData, selectedStreamUrl,
     selectedStream, selectedFileIdx, showTorrentWarning, pendingTorrentStream,
     streamFailureMessage,
+    progressMap,
 } from "./metaState";
 import { router } from "../../lib/stores/router";
 
@@ -11,6 +12,8 @@ import type { Stream } from "./types";
 import { getLocalStreamsFor } from "../../lib/localLibrary/localLibrary";
 import { trackEvent } from "../../lib/analytics";
 import * as ProgressLogic from "./progressLogic";
+import { createDirectStream } from "../../lib/streaming/directLinks";
+import { getStreamingSourceSettings } from "../../lib/streaming/sourceSettings";
 import {
     clearStreamFailureMessage,
     isStreamFailed,
@@ -22,12 +25,15 @@ const getStreamAnalyticsProps = (stream: Stream) => {
         stream.infoHash || (stream.url && stream.url.startsWith("magnet:")),
     );
     const isLocal = stream.raffiSource === "local";
+    const isDirect = stream.raffiSource === "direct";
     const sourceType = isLocal ? "local" : isTorrent ? "torrent" : "direct";
 
     return {
         source_type: sourceType,
         is_torrent: isTorrent,
         is_local: isLocal,
+        is_direct_source: isDirect,
+        direct_playback_mode: stream.directPlaybackMode || null,
         has_file_index: stream.fileIdx != null,
         addon: stream.name || null,
         has_binge_group: Boolean(stream.behaviorHints?.bingeGroup),
@@ -39,30 +45,37 @@ const getStreamListStats = (items: Stream[]) => {
     const torrentCount = items.filter((stream) =>
         Boolean(stream.infoHash || (stream.url && stream.url.startsWith("magnet:"))),
     ).length;
+    const directCount = items.filter((stream) => stream.raffiSource === "direct").length;
 
     return {
         total: items.length,
         local: localCount,
-        addon: Math.max(0, items.length - localCount),
+        addon: Math.max(0, items.length - localCount - directCount),
         torrent: torrentCount,
-        direct: Math.max(0, items.length - localCount - torrentCount),
+        direct: directCount,
     };
 };
 
-export const fetchStreams = async (
+const getStartTimeForCurrentSelection = (progressMap: any, data: any, episode: any) => {
+    if (data?.meta?.type === "movie") {
+        const prog = ProgressLogic.getProgress(progressMap);
+        return prog && !prog.watched ? prog.time || 0 : 0;
+    }
 
+    if (!episode) return 0;
+    const key = `${episode.season}:${episode.episode}`;
+    const prog = ProgressLogic.getProgress(progressMap, key);
+    return prog && !prog.watched ? prog.time || 0 : 0;
+};
+
+export const fetchStreams = async (
     episode: any,
     silent: boolean = false,
     setActive: boolean = true,
-    imdbID: string
+    imdbID: string,
 ) => {
     loadingStreams.set(true);
     streams.set([]);
-
-    if (!silent) {
-        streamsPopupVisible.set(true);
-    }
-
 
     if (setActive) {
         selectedEpisode.set(episode);
@@ -73,6 +86,39 @@ export const fetchStreams = async (
         if (!data) return [];
 
         const type = data.meta.type;
+        const settings = await getStreamingSourceSettings();
+        if (settings.mode === "direct") {
+            const localStreams = getLocalStreamsFor(imdbID, type as any, episode);
+            const currentProgressMap = get(progressMap);
+            const directStream = createDirectStream(settings.direct, {
+                metaData: data,
+                imdbId: imdbID,
+                episode,
+                progressSeconds: getStartTimeForCurrentSelection(currentProgressMap, data, episode),
+            });
+            const combined = [...(localStreams as any), ...(directStream ? [directStream] : [])];
+            streams.set(combined);
+            trackEvent("stream_list_loaded", {
+                content_type: type,
+                source_mode: "direct",
+                ...getStreamListStats(combined),
+            });
+
+            if (directStream && !silent) {
+                trackEvent("direct_stream_autoplayed", getStreamAnalyticsProps(directStream));
+                playStream(directStream, currentProgressMap);
+            } else if (!silent) {
+                streamFailureMessage.set("Direct link is not configured for this title.");
+                streamsPopupVisible.set(true);
+            }
+
+            return combined;
+        }
+
+        if (!silent) {
+            streamsPopupVisible.set(true);
+        }
+
         let streamId = imdbID;
         if (type === "series") {
             streamId += `:${episode.season}:${episode.episode}`;
@@ -93,6 +139,7 @@ export const fetchStreams = async (
         streams.set(combined);
         trackEvent("stream_list_loaded", {
             content_type: type,
+            source_mode: "addons",
             ...getStreamListStats(combined),
         });
         return combined;
@@ -134,6 +181,18 @@ export const fetchStreamListForEpisodeOnly = async (episode: any, imdbID: string
     if (!data) return [];
 
     const type = data.meta.type;
+    const settings = await getStreamingSourceSettings();
+    if (settings.mode === "direct") {
+        const localStreams = getLocalStreamsFor(imdbID, type as any, episode);
+        const directStream = createDirectStream(settings.direct, {
+            metaData: data,
+            imdbId: imdbID,
+            episode,
+            progressSeconds: 0,
+        });
+        return [...(localStreams as any), ...(directStream ? [directStream] : [])];
+    }
+
     let streamId = imdbID;
     if (type === "series") {
         streamId += `:${episode.season}:${episode.episode}`;
@@ -212,7 +271,8 @@ export const playStream = (
         const routeAutoJoin = Boolean(routerState?.params?.autoJoin);
 
         router.navigate("player", {
-            videoSrc: url,
+            videoSrc: stream.directPlaybackMode === "iframe" ? null : url,
+            embedSrc: stream.directPlaybackMode === "iframe" ? url : null,
             fileIdx,
             metaData: data,
             startTime,
@@ -236,9 +296,7 @@ export const onStreamClick = (stream: Stream, progressMap: any) => {
 
     trackEvent("stream_selected", getStreamAnalyticsProps(stream));
 
-    // Check if it's a torrent
     const isTorrent = stream.infoHash || (stream.url && stream.url.startsWith("magnet:"));
-
 
     if (isTorrent) {
         const hasSeenWarning = localStorage.getItem("torrentWarningShown");
@@ -291,4 +349,3 @@ export const closeStreamsPopup = () => {
     streamsPopupVisible.set(false);
     streams.set([]);
 };
-

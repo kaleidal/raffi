@@ -47,6 +47,12 @@ export default defineSchema({
         .index("by_list", ["list_id"])
         .index("by_list_imdb", ["list_id", "imdb_id"]),
 
+    user_meta: defineTable({
+        user_id: v.string(),
+        settings: v.any(),
+        updated_at: v.string(),
+    }).index("by_user", ["user_id"]),
+
     watch_parties: defineTable({
         party_id: v.string(),
         host_user_id: v.string(),

@@ -17,9 +17,12 @@ export interface Stream {
     url?: string;
     infoHash?: string;
     fileIdx?: number;
-    raffiSource?: "local" | "addon";
+    raffiSource?: "local" | "addon" | "direct";
+    directPlaybackMode?: "iframe" | "player";
+    directPlayerFormat?: "auto" | "hls" | "mp4" | "webm" | "dash" | "other";
     behaviorHints?: {
         bingeGroup?: string;
+        filename?: string;
     };
 }
 

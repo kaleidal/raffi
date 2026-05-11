@@ -128,6 +128,7 @@ export function getFilteredAddons(addons: Addon[]): Addon[] {
 
 export function parseStreamMetadata(stream: any): ParsedStreamMetadata {
     const isLocal = stream?.raffiSource === "local";
+    const isDirectSource = stream?.raffiSource === "direct";
     const title = stream?.title ?? "";
     const description = stream?.description ?? "";
     const behaviorFilename = stream?.behaviorHints?.filename ?? "";
@@ -229,6 +230,13 @@ export function parseStreamMetadata(stream: any): ParsedStreamMetadata {
 
     if (isLocal) {
         statusBadges.push({ label: "Local", variant: "accent" });
+    }
+
+    if (isDirectSource) {
+        statusBadges.push({
+            label: stream?.directPlaybackMode === "iframe" ? "Iframe" : "Direct",
+            variant: "accent",
+        });
     }
 
     if (isP2P) {
@@ -394,10 +402,12 @@ export function getActiveFilterLabels(state: StreamFilterState): string[] {
 
 export function getStreamCounts(streams: any[]) {
     const localCount = streams.filter((stream) => stream?.raffiSource === "local").length;
+    const directCount = streams.filter((stream) => stream?.raffiSource === "direct").length;
     return {
         total: streams.length,
         local: localCount,
-        addon: Math.max(0, streams.length - localCount),
+        addon: Math.max(0, streams.length - localCount - directCount),
+        direct: directCount,
     };
 }
 

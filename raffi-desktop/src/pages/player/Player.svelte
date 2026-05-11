@@ -97,6 +97,7 @@
 
     // Props
     export let videoSrc: string | null = null;
+    export let embedSrc: string | null = null;
     export let fileIdx: number | null = null;
     export let metaData: ShowResponse | null = null;
     export let autoPlay: boolean = true;
@@ -237,7 +238,7 @@
     };
 
     const openWatchPartyModal = () => {
-        if ($localMode || !$cloudSyncStatus.cloudFeaturesAvailable) {
+        if (embedSrc || $localMode || !$cloudSyncStatus.cloudFeaturesAvailable) {
             showWatchPartyModal.set(false);
             return;
         }
@@ -262,6 +263,78 @@
         if (!currentVideoSrc) return;
         playbackClosedTracked = true;
         trackEvent("playback_closed", getPlaybackAnalyticsProps());
+    };
+
+    const parseEmbedMessageData = (value: any) => {
+        if (!value) return null;
+        if (typeof value === "string") {
+            try {
+                return JSON.parse(value);
+            } catch {
+                return null;
+            }
+        }
+        return typeof value === "object" ? value : null;
+    };
+
+    const numberFrom = (...values: any[]) => {
+        for (const value of values) {
+            const numeric = Number(value);
+            if (Number.isFinite(numeric) && numeric >= 0) return numeric;
+        }
+        return null;
+    };
+
+    const handleEmbedMessage = (event: MessageEvent) => {
+        if (!embedSrc || !imdbID || !metaData) return;
+
+        const data = parseEmbedMessageData(event.data);
+        if (!data) return;
+
+        const detail = data.data || data.detail || data.payload || data;
+        const time = numberFrom(
+            detail.timestamp,
+            detail.currentTime,
+            detail.current_time,
+            detail.seconds,
+            detail.time,
+            detail.player_progress,
+            data.timestamp,
+            data.currentTime,
+            data.current_time,
+            data.seconds,
+            data.time,
+        );
+        const durationValue = numberFrom(
+            detail.duration,
+            detail.player_duration,
+            detail.durationSeconds,
+            detail.duration_seconds,
+            data.duration,
+            data.durationSeconds,
+        );
+
+        if (time == null) return;
+
+        const nextDuration = durationValue && durationValue > 0 ? durationValue : $duration;
+        const now = Date.now();
+        if (now - lastEmbedProgressAt < 1000) return;
+        lastEmbedProgressAt = now;
+
+        hasStarted = true;
+        currentTime.set(time);
+        if (nextDuration > 0) {
+            duration.set(nextDuration);
+            void ProgressLogic.handleProgress(time, nextDuration, imdbID, true);
+        }
+    };
+
+    const handleEmbedLoaded = () => {
+        loading.set(false);
+        loadingStage.set("");
+        loadingDetails.set("");
+        loadingProgress.set(null);
+        trackEvent("iframe_player_loaded", getPlaybackAnalyticsProps());
     };
 
     let fullscreenCleanupDone = false;
@@ -309,6 +382,7 @@
     let hls: any = null;
     let sessionId: string;
     let currentVideoSrc: string | null = null;
+    let currentEmbedSrc: string | null = null;
     let metadataCheckInterval: any;
     let playbackStartTracked = false;
     let playbackClosedTracked = false;
@@ -317,6 +391,7 @@
     let errorModalOpen = false;
     let reprobeAttempted = false;
     let torrentFailureExitTimeout: ReturnType<typeof setTimeout> | null = null;
+    let lastEmbedProgressAt = 0;
 
     const getTraktMediaType = (): "movie" | "episode" => {
         return metaData?.meta?.type === "series" ? "episode" : "movie";
@@ -635,6 +710,8 @@
             partyEndReason.set,
         );
 
+        window.addEventListener("message", handleEmbedMessage);
+
         metadataCheckInterval = setInterval(() => {
             if (!videoElem) return;
 
@@ -668,6 +745,7 @@
             if (typeof removeMiniPlayerChanged === "function") {
                 removeMiniPlayerChanged();
             }
+            window.removeEventListener("message", handleEmbedMessage);
         };
     });
 
@@ -963,7 +1041,36 @@
         Subtitles.updateCuePositions(videoElem, cueLinePercent);
     };
 
+    $: if (embedSrc && embedSrc !== currentEmbedSrc) {
+        currentEmbedSrc = embedSrc;
+        currentVideoSrc = embedSrc;
+        introDbChapters = [];
+        effectiveChapterMarkers = [];
+        skipButtonLabel = "Skip Intro";
+        hasStarted = false;
+        playbackStartTracked = false;
+        playbackClosedTracked = false;
+        bingeAutoAdvancing = false;
+        lastEmbedProgressAt = 0;
+        disposeNextEpisodePrefetch();
+        Session.cleanupSession(
+            hls,
+            sessionId,
+            Discord.clearDiscordActivity,
+            WatchParty.leaveWatchParty,
+            $watchParty.isActive,
+        );
+        hls = null;
+        sessionId = "";
+        loading.set(true);
+        loadingStage.set("Loading embedded player");
+        loadingDetails.set("");
+        loadingProgress.set(null);
+        showError.set(false);
+    }
+
     $: if (videoSrc && videoSrc !== currentVideoSrc) {
+        currentEmbedSrc = null;
         introDbChapters = [];
         effectiveChapterMarkers = [];
         skipButtonLabel = "Skip Intro";
@@ -1038,7 +1145,7 @@
         pendingAutoJoin = false;
     }
 
-    $: if ($showWatchPartyModal && !$cloudSyncStatus.cloudFeaturesAvailable) {
+    $: if ($showWatchPartyModal && (embedSrc || !$cloudSyncStatus.cloudFeaturesAvailable)) {
         showWatchPartyModal.set(false);
     }
 
@@ -1100,55 +1207,67 @@
     role="presentation"
 >
     <div class="w-full h-full">
-        <video
-            bind:this={nextEpisodePrefetchVideo}
-            class="fixed left-[-9999px] top-0 w-px h-px opacity-0 pointer-events-none"
-            muted
-            playsinline
-            preload="auto"
-            aria-hidden="true"
-        ></video>
-        <PlayerVideo
-            bind:videoElem
-            bind:canvasElem
-            objectFit={$objectFit}
-            showCanvas={$showCanvas}
-            on:timeupdate={handleTimeUpdate}
-            on:play={handlePlay}
-            on:pause={handlePause}
-            on:ended={handleEnded}
-            on:click={() => {
-                if (!miniPlayerActive) {
-                    togglePlayWithFeedback();
-                }
-            }}
-            on:waiting={() => {
-                captureLoadingBackdrop();
-                loading.set(true);
-                loadingStage.set("Buffering");
-                handleBufferStart();
-            }}
-            on:playing={() => {
-                loading.set(false);
-                loadingStage.set("");
-                loadingDetails.set("");
-                loadingProgress.set(null);
-                handleBufferEnd();
-            }}
-            on:canplay={() => {
-                loading.set(false);
-            }}
-        />
+        {#if embedSrc}
+            <iframe
+                src={embedSrc}
+                title={metaData?.meta?.name || "Embedded player"}
+                class="h-full w-full bg-black"
+                allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+                allowfullscreen
+                referrerpolicy="no-referrer"
+                on:load={handleEmbedLoaded}
+            ></iframe>
+        {:else}
+            <video
+                bind:this={nextEpisodePrefetchVideo}
+                class="fixed left-[-9999px] top-0 w-px h-px opacity-0 pointer-events-none"
+                muted
+                playsinline
+                preload="auto"
+                aria-hidden="true"
+            ></video>
+            <PlayerVideo
+                bind:videoElem
+                bind:canvasElem
+                objectFit={$objectFit}
+                showCanvas={$showCanvas}
+                on:timeupdate={handleTimeUpdate}
+                on:play={handlePlay}
+                on:pause={handlePause}
+                on:ended={handleEnded}
+                on:click={() => {
+                    if (!miniPlayerActive) {
+                        togglePlayWithFeedback();
+                    }
+                }}
+                on:waiting={() => {
+                    captureLoadingBackdrop();
+                    loading.set(true);
+                    loadingStage.set("Buffering");
+                    handleBufferStart();
+                }}
+                on:playing={() => {
+                    loading.set(false);
+                    loadingStage.set("");
+                    loadingDetails.set("");
+                    loadingProgress.set(null);
+                    handleBufferEnd();
+                }}
+                on:canplay={() => {
+                    loading.set(false);
+                }}
+            />
+        {/if}
     </div>
 
-    {#if playPauseFeedback}
+    {#if playPauseFeedback && !embedSrc}
         <PlayPauseFeedback
             type={playPauseFeedback.type}
             id={playPauseFeedback.id}
         />
     {/if}
 
-    {#if miniPlayerActive}
+    {#if miniPlayerActive && !embedSrc}
         <MiniPlayerControls
             currentTime={$currentTime}
             duration={$duration}
@@ -1164,7 +1283,7 @@
         />
     {/if}
 
-    {#if $seekFeedback}
+    {#if $seekFeedback && !embedSrc}
         <SeekFeedback type={$seekFeedback.type} id={$seekFeedback.id} />
     {/if}
 
@@ -1194,77 +1313,79 @@
             </button>
         </div>
 
-        <div
-            class="absolute left-1/2 -translate-x-1/2 bottom-12.5 z-50 flex flex-col gap-2.5"
-        >
-            <PlayerOverlays
-                showSkipIntro={$showSkipIntro}
-                showNextEpisode={showNextEpisodeAllowed}
-                isWatchPartyMember={!$localMode && $watchParty.isActive && !$watchParty.isHost}
-                skipLabel={skipButtonLabel}
-                skipChapter={handleSkipIntro}
-                nextEpisode={handleNextEpisodeClick}
-            />
-
+        {#if !embedSrc}
             <div
-                class="transition-all duration-300 ease-in-out transform {$controlsVisible
-                    ? 'translate-y-0 opacity-100'
-                    : 'translate-y-10 opacity-0 pointer-events-none'} will-change-transform will-change-opacity"
-                bind:this={controlsOverlayElem}
+                class="absolute left-1/2 -translate-x-1/2 bottom-12.5 z-50 flex flex-col gap-2.5"
             >
-                <PlayerControls
-                    isPlaying={$isPlaying}
-                    duration={$duration}
-                    currentTime={$currentTime}
-                    pendingSeek={$pendingSeek}
-                    volume={$volume}
-                    {seekBarStyle}
-                    chapterMarkers={effectiveChapterMarkers}
-                    {sessionId}
-                    {videoSrc}
-                    {metaData}
-                    {hasNextEpisode}
-                    currentAudioLabel={$currentAudioLabel}
-                    currentSubtitleLabel={$currentSubtitleLabel}
+                <PlayerOverlays
+                    showSkipIntro={$showSkipIntro}
+                    showNextEpisode={showNextEpisodeAllowed}
                     isWatchPartyMember={!$localMode && $watchParty.isActive && !$watchParty.isHost}
-                    togglePlay={togglePlayWithFeedback}
-                    onSeekInput={(e) =>
-                        controlsManager.onSeekInput(e, $duration, pendingSeek.set)}
-                    onSeekChange={(e) =>
-                        controlsManager.onSeekChange(e, $duration, seekToTime)}
-                    onVolumeChange={(e) => controlsManager.onVolumeChange(e, volume.set)}
-                    toggleFullscreen={handleToggleFullscreen}
-                    objectFit={$objectFit}
-                    toggleObjectFit={handleToggleObjectFit}
-                    onNextEpisode={handleNextEpisodeClick}
-                    showWatchParty={!$localMode && $cloudSyncStatus.cloudFeaturesAvailable}
-                    onAudioClick={openAudioSelection}
-                    onSubtitleClick={openSubtitleSelection}
-                    onWatchPartyClick={() => {
-                        if (!$localMode && $cloudSyncStatus.cloudFeaturesAvailable) {
-                            openWatchPartyModal();
-                        } else {
-                            showWatchPartyModal.set(false);
-                        }
-                    }}
-                    onClipPanelOpenChange={(detail) => {
-                        clipPanelOpen = !!detail?.open;
-                        controlsManager?.setPinned?.(clipPanelOpen, controlsVisible.set);
-                        trackEvent("clip_panel_toggled", {
-                            open: clipPanelOpen,
-                            ...getPlaybackAnalyticsProps(),
-                        });
-                    }}
+                    skipLabel={skipButtonLabel}
+                    skipChapter={handleSkipIntro}
+                    nextEpisode={handleNextEpisodeClick}
                 />
+
+                <div
+                    class="transition-all duration-300 ease-in-out transform {$controlsVisible
+                        ? 'translate-y-0 opacity-100'
+                        : 'translate-y-10 opacity-0 pointer-events-none'} will-change-transform will-change-opacity"
+                    bind:this={controlsOverlayElem}
+                >
+                    <PlayerControls
+                        isPlaying={$isPlaying}
+                        duration={$duration}
+                        currentTime={$currentTime}
+                        pendingSeek={$pendingSeek}
+                        volume={$volume}
+                        {seekBarStyle}
+                        chapterMarkers={effectiveChapterMarkers}
+                        {sessionId}
+                        {videoSrc}
+                        {metaData}
+                        {hasNextEpisode}
+                        currentAudioLabel={$currentAudioLabel}
+                        currentSubtitleLabel={$currentSubtitleLabel}
+                        isWatchPartyMember={!$localMode && $watchParty.isActive && !$watchParty.isHost}
+                        togglePlay={togglePlayWithFeedback}
+                        onSeekInput={(e) =>
+                            controlsManager.onSeekInput(e, $duration, pendingSeek.set)}
+                        onSeekChange={(e) =>
+                            controlsManager.onSeekChange(e, $duration, seekToTime)}
+                        onVolumeChange={(e) => controlsManager.onVolumeChange(e, volume.set)}
+                        toggleFullscreen={handleToggleFullscreen}
+                        objectFit={$objectFit}
+                        toggleObjectFit={handleToggleObjectFit}
+                        onNextEpisode={handleNextEpisodeClick}
+                        showWatchParty={!$localMode && $cloudSyncStatus.cloudFeaturesAvailable && !embedSrc}
+                        onAudioClick={openAudioSelection}
+                        onSubtitleClick={openSubtitleSelection}
+                        onWatchPartyClick={() => {
+                            if (!$localMode && $cloudSyncStatus.cloudFeaturesAvailable && !embedSrc) {
+                                openWatchPartyModal();
+                            } else {
+                                showWatchPartyModal.set(false);
+                            }
+                        }}
+                        onClipPanelOpenChange={(detail) => {
+                            clipPanelOpen = !!detail?.open;
+                            controlsManager?.setPinned?.(clipPanelOpen, controlsVisible.set);
+                            trackEvent("clip_panel_toggled", {
+                                open: clipPanelOpen,
+                                ...getPlaybackAnalyticsProps(),
+                            });
+                        }}
+                    />
+                </div>
             </div>
-        </div>
+        {/if}
     {/if}
 
     <PlayerModals
         showAudioSelection={$showAudioSelection}
         showSubtitleSelection={$showSubtitleSelection}
         showError={$showError}
-        showWatchPartyModal={$showWatchPartyModal && !$localMode && $cloudSyncStatus.cloudFeaturesAvailable}
+        showWatchPartyModal={$showWatchPartyModal && !$localMode && $cloudSyncStatus.cloudFeaturesAvailable && !embedSrc}
         showSeekStyleModal={$showSeekStyleModal}
         audioTracks={$audioTracks}
         subtitleTracks={$subtitleTracks}
@@ -1274,7 +1395,7 @@
         {metaData}
         {season}
         {episode}
-        {videoSrc}
+        videoSrc={videoSrc || embedSrc}
         {fileIdx}
         onSeekStyleChange={handleSeekStyleChange}
         onSeekStyleAcknowledge={handleSeekStyleAcknowledge}

@@ -46,6 +46,7 @@ const getRemoteState = async (force = false): Promise<RemoteState> => {
         library: Array.isArray(snapshot?.library) ? snapshot.library : [],
         lists: Array.isArray(snapshot?.lists) ? snapshot.lists : [],
         listItems: Array.isArray(snapshot?.listItems) ? snapshot.listItems : [],
+        userMeta: snapshot?.userMeta || null,
     };
     remoteStateCache = { userId, data: normalized, updatedAt: now };
     return normalized;
@@ -121,6 +122,7 @@ const buildDirtySyncPayload = (local: RemoteState, syncState: CloudSyncState) =>
     const libraryByImdbId = new Map(local.library.map((item) => [item.imdb_id, item]));
     const listsById = new Map(local.lists.map((list) => [list.list_id, list]));
     const listItemsByKey = new Map(local.listItems.map((item) => [`${item.list_id}::${item.imdb_id}`, item]));
+    const shouldSyncUserMeta = Boolean(local.userMeta && syncState.dirty.userMeta.settings);
 
     return {
         addons: Object.keys(syncState.dirty.addons)
@@ -135,6 +137,7 @@ const buildDirtySyncPayload = (local: RemoteState, syncState: CloudSyncState) =>
         listItems: Object.keys(syncState.dirty.listItems)
             .map((key) => listItemsByKey.get(key))
             .filter((value): value is NonNullable<typeof value> => Boolean(value)),
+        userMeta: shouldSyncUserMeta ? local.userMeta : null,
         deletes: {
             addons: Object.keys(syncState.tombstones.addons),
             library: Object.keys(syncState.tombstones.library),
@@ -151,7 +154,7 @@ const buildDirtySyncPayload = (local: RemoteState, syncState: CloudSyncState) =>
 };
 
 const clearSyncedSnapshot = (snapshot: CloudSyncState) => {
-    const sections: SyncSection[] = ["addons", "library", "lists", "listItems"];
+    const sections: SyncSection[] = ["addons", "library", "lists", "listItems", "userMeta"];
     updateSyncState((state) => {
         const next = {
             ...state,
@@ -208,6 +211,7 @@ export const syncLocalStateToUser = async (userId: string, options?: { forceRemo
                 + payload.library.length
                 + payload.lists.length
                 + payload.listItems.length
+                + (payload.userMeta ? 1 : 0)
                 + payload.deletes.addons.length
                 + payload.deletes.library.length
                 + payload.deletes.lists.length
@@ -218,13 +222,21 @@ export const syncLocalStateToUser = async (userId: string, options?: { forceRemo
                 return { ok: true, skipped: true as const, reason: "clean" as const };
             }
 
-            await convexMutation("raffi:applySyncState", {
+            const mutationPayload: Record<string, any> = {
                 addons: payload.addons.map((addon) => ({ transport_url: addon.transport_url, manifest: addon.manifest, flags: addon.flags, addon_id: addon.addon_id, added_at: addon.added_at, position: addon.position })),
                 library: payload.library.map((item) => ({ imdb_id: item.imdb_id, progress: item.progress, last_watched: item.last_watched, completed_at: item.completed_at, type: item.type, shown: item.shown, poster: item.poster })),
                 lists: payload.lists.map((list) => ({ list_id: list.list_id, name: list.name, position: list.position, created_at: list.created_at })),
                 listItems: payload.listItems.map((item) => ({ list_id: item.list_id, imdb_id: item.imdb_id, position: item.position, type: item.type, poster: item.poster })),
                 deletes: payload.deletes,
-            });
+            };
+            if (payload.userMeta) {
+                mutationPayload.userMeta = {
+                    settings: payload.userMeta.settings,
+                    updated_at: payload.userMeta.updated_at,
+                };
+            }
+
+            await convexMutation("raffi:applySyncState", mutationPayload);
 
             clearSyncedSnapshot(syncState);
             invalidateRemoteCache();
