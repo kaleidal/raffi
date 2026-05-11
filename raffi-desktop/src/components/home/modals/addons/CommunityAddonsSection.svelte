@@ -16,11 +16,15 @@
 		buildConfigureUrl,
 	} from "./addonsShared";
 
+	type ResourceFilter = "all" | "stream" | "subtitles" | "catalog" | "meta";
+	export let initialResourceFilter: ResourceFilter = "all";
+
 	let loadingCommunity = false;
 	let communityAddons: any[] = [];
 	let communitySearch = "";
-	let communityResourceFilter: "all" | "stream" | "subtitles" | "catalog" | "meta" = "all";
-	const filterOptions: Array<"all" | "stream" | "subtitles" | "catalog" | "meta"> = [
+	let communityResourceFilter: ResourceFilter = initialResourceFilter;
+	let appliedInitialResourceFilter: ResourceFilter = initialResourceFilter;
+	const filterOptions: ResourceFilter[] = [
 		"all",
 		"stream",
 		"subtitles",
@@ -47,6 +51,14 @@
 
 	function handleAddonsChanged() {
 		void loadInstalledAddons();
+	}
+
+	$: if (
+		initialResourceFilter !== appliedInitialResourceFilter &&
+		filterOptions.includes(initialResourceFilter)
+	) {
+		communityResourceFilter = initialResourceFilter;
+		appliedInitialResourceFilter = initialResourceFilter;
 	}
 
 	function emitAddonsChanged() {
@@ -157,13 +169,13 @@
 		}, 500);
 	}
 
-	function setCommunityFilter(next: "all" | "stream" | "subtitles" | "catalog" | "meta") {
+	function setCommunityFilter(next: ResourceFilter) {
 		if (communityResourceFilter === next) return;
 		communityResourceFilter = next;
 		trackEvent("community_addon_filter_changed", { filter: next });
 	}
 
-	function handleFilterClick(filter: "all" | "stream" | "subtitles" | "catalog" | "meta") {
+	function handleFilterClick(filter: ResourceFilter) {
 		setCommunityFilter(filter);
 	}
 
