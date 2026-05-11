@@ -17,6 +17,7 @@
 
     export let onCloseStreamsPopup: () => void;
     export let onStreamClick: (stream: any) => void;
+    export let onOpenAddons: () => void;
     export let onTorrentConfirm: () => void;
     export let onTorrentCancel: () => void;
 </script>
@@ -33,6 +34,7 @@
     {progressSignature}
     onClose={onCloseStreamsPopup}
     onStreamClick={onStreamClick}
+    onOpenAddons={onOpenAddons}
 />
 
 {#if showTorrentWarning}
