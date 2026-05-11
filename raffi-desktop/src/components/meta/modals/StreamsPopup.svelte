@@ -44,6 +44,7 @@
 
     export let onClose: () => void = () => {};
     export let onStreamClick: (stream: any) => void = () => {};
+    export let onOpenAddons: () => void = () => {};
 
     export const portal = (node: HTMLElement) => {
         if (typeof document === "undefined") {
@@ -248,6 +249,15 @@
         onStreamClick(stream);
     }
 
+    function handleOpenAddons() {
+        trackEvent("stream_empty_addons_opened", {
+            addon_count: addons.length,
+            stream_addon_count: filteredAddons.length,
+            ...getStreamCountsNow(),
+        });
+        onOpenAddons();
+    }
+
     $: filterState = {
         resolutionFilter,
         providerFilter,
@@ -275,6 +285,10 @@
     $: ({ localFilteredStreams, addonFilteredStreams } = splitStreamsBySource(filteredStreams));
     $: filtersActive = areFiltersActive(filterState);
     $: hasDirectStream = streams.some((stream) => stream?.raffiSource === "direct");
+    $: showAddonSetupGuide =
+        streams.length === 0 &&
+        filteredAddons.length === 0 &&
+        !$streamFailureMessage?.toLowerCase().includes("direct link");
 
     $: releaseInfo = getReleaseInfo(
         selectedEpisode?.released ||
@@ -419,7 +433,9 @@
                         {filteredStreams}
                         {localFilteredStreams}
                         {addonFilteredStreams}
+                        {showAddonSetupGuide}
                         onStreamClick={handleStreamClick}
+                        onOpenAddons={handleOpenAddons}
                     />
                 </section>
             </div>

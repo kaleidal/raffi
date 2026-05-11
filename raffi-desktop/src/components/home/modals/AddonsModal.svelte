@@ -24,6 +24,7 @@
 
 
     export let showAddonsModal = false;
+    export let initialResourceFilter: "all" | "stream" | "subtitles" | "catalog" | "meta" = "all";
 
     let bodyLocked = false;
     let hasTrackedOpen = false;
@@ -154,7 +155,7 @@
 
             <div class="relative z-10 flex-1 min-h-0">
                 <div class="flex h-full flex-col gap-6 overflow-hidden lg:flex-row lg:gap-8">
-                    <CommunityAddonsSection />
+                    <CommunityAddonsSection {initialResourceFilter} />
                     <InstalledAddonsSection />
                 </div>
             </div>
