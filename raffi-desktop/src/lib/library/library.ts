@@ -25,6 +25,7 @@ const SEARCH_LIMIT = 20;
 const ADDON_SEARCH_TIMEOUT_MS = 1800;
 const ADDON_SEARCH_MAX_CATALOGS_PER_TYPE = 8;
 const ADDON_SEARCH_CACHE_TTL_MS = 60 * 1000;
+const POPULAR_CACHE_TTL_MS = 60 * 60 * 1000;
 
 function normalizeType(type: string): CatalogType {
     return type === "series" ? "series" : "movie";
@@ -117,6 +118,36 @@ async function fetchJson(url: string) {
     } finally {
         clearTimeout(timeoutId);
     }
+}
+
+function getPopularCacheKey(type: string) {
+    return `popular:${normalizeType(type)}`;
+}
+
+function readPopularCache(type: string): PopularTitleMeta[] | null {
+    if (typeof localStorage === "undefined") return null;
+    try {
+        const raw = localStorage.getItem(getPopularCacheKey(type));
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed?.data)) return null;
+        if (Date.now() - Number(parsed.timestamp || 0) > POPULAR_CACHE_TTL_MS) {
+            return null;
+        }
+        return parsed.data;
+    } catch {
+        return null;
+    }
+}
+
+function writePopularCache(type: string, data: PopularTitleMeta[]) {
+    if (typeof localStorage === "undefined") return;
+    try {
+        localStorage.setItem(
+            getPopularCacheKey(type),
+            JSON.stringify({ data, timestamp: Date.now() }),
+        );
+    } catch {}
 }
 
 function normalizeMetaPayload(payload: any, fallbackId: string, fallbackType: CatalogType): ShowResponse | null {
@@ -220,10 +251,19 @@ export const getMetaData = async (imdbId: string, type: string): Promise<ShowRes
 }
 
 export const getPopularTitles = async (type: string): Promise<PopularTitleMeta[]> => {
+    const cached = readPopularCache(type);
+    if (cached) return cached;
+
     const popularUrl = `${CINEMETA_BASE_URL}/catalog/${type}/popular.json`;
 
-    const payload = await fetchJson(popularUrl);
-    return Array.isArray(payload?.metas) ? payload.metas : [];
+    try {
+        const payload = await fetchJson(popularUrl);
+        const titles = Array.isArray(payload?.metas) ? payload.metas : [];
+        writePopularCache(type, titles);
+        return titles;
+    } catch (error) {
+        return readPopularCache(type) ?? Promise.reject(error);
+    }
 }
 
 function mapSearchMeta(meta: any, fallbackType: CatalogType): SearchTitleResult | null {
