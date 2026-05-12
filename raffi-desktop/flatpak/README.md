@@ -29,4 +29,10 @@ flatpak run --command=flatpak-builder-lint org.flatpak.Builder appstream al.raff
 desktop-file-validate al.raffi.raffi.desktop
 ```
 
-The current submission manifest targets `v0.9.1` and carries a patch for Flatpak runtime and sync fixes that landed after that tag. Once those fixes are in a new release tag, update the `tag` and `commit` in `al.raffi.raffi.yml` and remove the patch source.
+For future releases:
+
+1. Update the app version and AppStream release entry.
+2. Update screenshot URLs if they point at a versioned tag.
+3. Regenerate `bun-sources.json` and `go-sources.json` if `bun.lock`, `go.mod`, or `go.sum` changed.
+4. Update `tag` in `al.raffi.raffi.yml`.
+5. After the release tag is pushed, pin the Flathub submission manifest to that tag's commit hash.
