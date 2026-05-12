@@ -76,6 +76,7 @@ modules:
       - type: git
         url: https://github.com/kaleidal/raffi.git
         tag: v0.9.2
+        commit: 789f39549593a8bd4331173520d784fb745d0385
       - type: file
         path: run.sh
       - type: file
