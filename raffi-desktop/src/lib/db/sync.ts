@@ -122,7 +122,7 @@ const buildDirtySyncPayload = (local: RemoteState, syncState: CloudSyncState) =>
     const libraryByImdbId = new Map(local.library.map((item) => [item.imdb_id, item]));
     const listsById = new Map(local.lists.map((list) => [list.list_id, list]));
     const listItemsByKey = new Map(local.listItems.map((item) => [`${item.list_id}::${item.imdb_id}`, item]));
-    const shouldSyncUserMeta = Boolean(local.userMeta && syncState.dirty.userMeta.settings);
+    const shouldSyncUserMeta = Boolean(local.userMeta && syncState.dirty.userMeta?.settings);
 
     return {
         addons: Object.keys(syncState.dirty.addons)
@@ -163,12 +163,14 @@ const clearSyncedSnapshot = (snapshot: CloudSyncState) => {
                 library: { ...state.dirty.library },
                 lists: { ...state.dirty.lists },
                 listItems: { ...state.dirty.listItems },
+                userMeta: { ...state.dirty.userMeta },
             },
             tombstones: {
                 addons: { ...state.tombstones.addons },
                 library: { ...state.tombstones.library },
                 lists: { ...state.tombstones.lists },
                 listItems: { ...state.tombstones.listItems },
+                userMeta: { ...state.tombstones.userMeta },
             },
         };
 
