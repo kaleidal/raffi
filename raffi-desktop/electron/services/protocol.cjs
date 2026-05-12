@@ -74,14 +74,42 @@ function createProtocolUrlHandler({
   };
 }
 
-function registerLinuxProtocolHandler({ app, fs, spawn, isDev, logToFile }) {
+function spawnDetached({ spawn, command, args, logToFile }) {
+  let child;
+  try {
+    child = spawn(command, args, {
+      detached: true,
+      stdio: "ignore",
+    });
+  } catch (error) {
+    logToFile(`Failed to run ${command}`, error);
+    return;
+  }
+
+  child.on("error", (error) => {
+    logToFile(`Failed to run ${command}`, error);
+  });
+  child.unref();
+}
+
+function registerLinuxProtocolHandler({
+  app,
+  fs,
+  spawn,
+  isDev,
+  logToFile,
+  desktopId = "raffi",
+  iconName = "raffi",
+  startupWMClass = "Raffi",
+}) {
   if (process.platform !== "linux") return;
 
   try {
     const desktopDir = path.join(app.getPath("home"), ".local", "share", "applications");
     fs.mkdirSync(desktopDir, { recursive: true });
 
-    const localMainDesktop = path.join(desktopDir, "raffi.desktop");
+    const desktopFileName = `${desktopId}.desktop`;
+    const localMainDesktop = path.join(desktopDir, desktopFileName);
     const localHandlerDesktop = path.join(desktopDir, "raffi-url-handler.desktop");
     const launchTarget = isDev ? path.resolve(process.argv[1] || "") : process.execPath;
     const execLine = isDev
@@ -95,8 +123,8 @@ function registerLinuxProtocolHandler({ app, fs, spawn, isDev, logToFile }) {
       "Terminal=false",
       `Exec=${execLine}`,
       `TryExec=${process.execPath}`,
-      "Icon=raffi",
-      "StartupWMClass=Raffi",
+      `Icon=${iconName}`,
+      `StartupWMClass=${startupWMClass}`,
       "StartupNotify=true",
       "NoDisplay=false",
       "MimeType=x-scheme-handler/raffi;",
@@ -115,23 +143,24 @@ function registerLinuxProtocolHandler({ app, fs, spawn, isDev, logToFile }) {
       logToFile("Failed removing stale raffi-url-handler desktop entry", error);
     }
 
-    const xdg = spawn("xdg-mime", ["default", "raffi.desktop", "x-scheme-handler/raffi"], {
-      detached: true,
-      stdio: "ignore",
+    spawnDetached({
+      spawn,
+      command: "xdg-mime",
+      args: ["default", desktopFileName, "x-scheme-handler/raffi"],
+      logToFile,
     });
-    xdg.unref();
-
-    const xdgSettings = spawn("xdg-settings", ["set", "default-url-scheme-handler", "raffi", "raffi.desktop"], {
-      detached: true,
-      stdio: "ignore",
+    spawnDetached({
+      spawn,
+      command: "xdg-settings",
+      args: ["set", "default-url-scheme-handler", "raffi", desktopFileName],
+      logToFile,
     });
-    xdgSettings.unref();
-
-    const updateDb = spawn("update-desktop-database", [desktopDir], {
-      detached: true,
-      stdio: "ignore",
+    spawnDetached({
+      spawn,
+      command: "update-desktop-database",
+      args: [desktopDir],
+      logToFile,
     });
-    updateDb.unref();
   } catch (error) {
     logToFile("Failed Linux x-scheme-handler registration", error);
   }

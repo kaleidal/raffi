@@ -16,11 +16,15 @@ const { createMainWindow } = require("./services/window.cjs");
 
 const { logFallback, logToFile } = createLogger(app);
 
+const isFlatpak = process.platform === "linux" && Boolean(process.env.FLATPAK_ID);
+
 let autoUpdater = null;
-try {
-  ({ autoUpdater } = require("electron-updater"));
-} catch (err) {
-  logFallback("Failed to load electron-updater", err);
+if (!isFlatpak) {
+  try {
+    ({ autoUpdater } = require("electron-updater"));
+  } catch (err) {
+    logFallback("Failed to load electron-updater", err);
+  }
 }
 
 const pendingAppUserModelId =
@@ -112,13 +116,14 @@ const DEFAULT_WINDOW_WIDTH = 1778;
 const DEFAULT_WINDOW_HEIGHT = 1000;
 
 const isDev = !app.isPackaged;
+const linuxDesktopId = process.env.FLATPAK_ID || "raffi";
 if (process.platform === "linux") {
-  app.commandLine.appendSwitch("class", "Raffi");
+  app.commandLine.appendSwitch("class", isFlatpak ? linuxDesktopId : "Raffi");
 }
 app.setName("Raffi");
 if (process.platform === "linux" && !isDev) {
   try {
-    app.setDesktopName("raffi.desktop");
+    app.setDesktopName(`${linuxDesktopId}.desktop`);
   } catch {
     // ignore
   }
@@ -259,18 +264,22 @@ app.whenReady().then(async () => {
     app.setAppUserModelId(pendingAppUserModelId);
   }
 
-  try {
-    if (isDev && (process.platform === "win32" || process.platform === "linux")) {
-      app.setAsDefaultProtocolClient("raffi", process.execPath, [path.resolve(process.argv[1])]);
-    } else {
-      app.setAsDefaultProtocolClient("raffi");
-    }
+  if (!isFlatpak) {
+    try {
+      if (isDev && (process.platform === "win32" || process.platform === "linux")) {
+        app.setAsDefaultProtocolClient("raffi", process.execPath, [path.resolve(process.argv[1])]);
+      } else {
+        app.setAsDefaultProtocolClient("raffi");
+      }
 
-    if (process.platform === "linux") {
-      registerLinuxProtocolHandler({ app, fs, spawn, isDev, logToFile });
+      if (process.platform === "linux") {
+        registerLinuxProtocolHandler({ app, fs, spawn, isDev, logToFile, desktopId: linuxDesktopId });
+      }
+    } catch (error) {
+      logToFile("Failed to register raffi protocol", error);
     }
-  } catch (error) {
-    logToFile("Failed to register raffi protocol", error);
+  } else {
+    logToFile("Skipping host protocol registration inside Flatpak");
   }
 
   if (process.platform === "win32" || process.platform === "linux") {

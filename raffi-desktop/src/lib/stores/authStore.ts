@@ -151,20 +151,28 @@ async function seedDefaultsIfNeeded(user: AppUser | null) {
     await ensureDefaultAddonsForUser(userId);
 }
 
-async function finishSignedInStartup(user: AppUser) {
+async function hydrateSignedInState(user: AppUser, context: string) {
     let shouldRefreshHome = false;
-    const hadLocalState = hasLocalState();
+
+    try {
+        const result = await hydrateLocalBackupFromCloud();
+        shouldRefreshHome = shouldRefreshHome || result.ok;
+    } catch (error) {
+        console.error(`${context} cloud hydrate failed`, error);
+    }
 
     try {
         await seedDefaultsIfNeeded(user);
         shouldRefreshHome = true;
-        if (!hadLocalState) {
-            const result = await hydrateLocalBackupFromCloud();
-            shouldRefreshHome = shouldRefreshHome || result.ok;
-        }
     } catch (error) {
-        console.error("Startup sync failed", error);
+        console.error(`${context} default addon setup failed`, error);
     }
+
+    return shouldRefreshHome;
+}
+
+async function finishSignedInStartup(user: AppUser) {
+    const shouldRefreshHome = await hydrateSignedInState(user, "Startup sync");
 
     void syncLocalStateToUser(user.id);
     void flushPendingLibraryProgress();
@@ -285,22 +293,19 @@ export async function signInWithAve() {
     resetRemoteStateCache();
     startCloudReconciliationLoop();
 
-    try {
-        await seedDefaultsIfNeeded(user);
-        if (!hasLocalState()) {
-            await hydrateLocalBackupFromCloud();
-        }
-    } catch (error) {
-        console.error("Sign-in sync failed", error);
-    }
+    const shouldRefreshHome = await hydrateSignedInState(user, "Sign-in sync");
 
     void syncLocalStateToUser(user.id);
     void flushPendingLibraryProgress();
     if (hasLocalState()) {
-        void warmRemoteStateCache();
+        void warmRemoteStateCache().then((merged) => {
+            if (merged) emitHomeRefresh();
+        });
     }
 
-    emitHomeRefresh();
+    if (shouldRefreshHome) {
+        emitHomeRefresh();
+    }
 }
 
 export function signOutToLocalMode() {
