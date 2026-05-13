@@ -6,11 +6,18 @@ This directory contains Raffi's local Flatpak packaging.
 
 ```sh
 cd raffi-desktop
-flatpak/build-local.sh
+bash flatpak/build-local.sh
 flatpak run al.kaleid.raffi
 ```
 
 The build script expects `flatpak-builder` and the required Flatpak runtimes to be installed locally.
+
+To create a distributable Flatpak bundle from an existing `release/linux-unpacked` build:
+
+```sh
+cd raffi-desktop
+bash flatpak/build-bundle.sh
+```
 
 Validate the desktop and AppStream metadata with:
 

@@ -15,7 +15,7 @@ bun run server:build
 bun run build
 bunx electron-builder --linux --dir
 
-rm -rf "${STAGE_DIR}/linux-unpacked"
+rm -rf "${STAGE_DIR}/linux-unpacked" "${STAGE_DIR}/icons"
 mkdir -p "${STAGE_DIR}/icons"
 cp -a "${APP_DIR}/release/linux-unpacked" "${STAGE_DIR}/linux-unpacked"
 cp -a "${APP_DIR}/build/icons/128x128.png" "${STAGE_DIR}/icons/128x128.png"
