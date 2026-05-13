@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>al.raffi.raffi</id>
+  <id>al.kaleid.raffi</id>
   <name>Raffi</name>
   <summary>Video player and media library</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
-  <developer id="al.raffi">
+  <developer id="al.kaleid">
     <name>Kaleidal</name>
   </developer>
   <url type="homepage">https://raffi.al</url>
   <url type="bugtracker">https://github.com/kaleidal/raffi/issues</url>
   <url type="vcs-browser">https://github.com/kaleidal/raffi</url>
-  <launchable type="desktop-id">al.raffi.raffi.desktop</launchable>
+  <launchable type="desktop-id">al.kaleid.raffi.desktop</launchable>
   <provides>
     <binary>raffi</binary>
   </provides>
