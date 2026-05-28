@@ -16,6 +16,7 @@
         deb: string;
         appimage: string;
         rpm: string;
+        flatpak: string;
         dmg: string;
         macZip: string;
     };
@@ -26,6 +27,7 @@
         deb: "",
         appimage: "",
         rpm: "",
+        flatpak: "",
         dmg: "",
         macZip: ""
     });
@@ -61,6 +63,8 @@
                     downloadUrls.appimage = asset.browser_download_url;
                 } else if (asset.name.endsWith('.rpm')) {
                     downloadUrls.rpm = asset.browser_download_url;
+                } else if (asset.name.endsWith('.flatpak')) {
+                    downloadUrls.flatpak = asset.browser_download_url;
                 } else if (asset.name.endsWith('.dmg')) {
                     downloadUrls.dmg = asset.browser_download_url;
                 } else if (asset.name.endsWith('-mac.zip')) {
@@ -83,6 +87,7 @@
             if (downloadUrls.macZip) return { label: "macOS (.zip)", href: downloadUrls.macZip };
             return null;
         }
+        if (downloadUrls.flatpak) return { label: "Linux (.flatpak)", href: downloadUrls.flatpak };
         if (downloadUrls.deb) return { label: "Linux (.deb)", href: downloadUrls.deb };
         if (downloadUrls.rpm) return { label: "Linux (.rpm)", href: downloadUrls.rpm };
         if (downloadUrls.appimage) return { label: "Linux (.AppImage)", href: downloadUrls.appimage };
@@ -168,6 +173,13 @@
                             class="inline-flex h-9 items-center rounded-xl px-4 text-[13px] ring-1 ring-black/10 hover:ring-black/20 {!downloadUrls.rpm && 'pointer-events-none opacity-40'}"
                         >
                             .rpm
+                        </a>
+                        <a
+                            href={downloadUrls.flatpak}
+                            download
+                            class="inline-flex h-9 items-center rounded-xl px-4 text-[13px] ring-1 ring-black/10 hover:ring-black/20 {!downloadUrls.flatpak && 'pointer-events-none opacity-40'}"
+                        >
+                            .flatpak
                         </a>
                         <a
                             href={downloadUrls.appimage}
