@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import { get, writable } from "svelte/store";
-    import { ChevronDown, ChevronRight } from "@lucide/svelte";
+    import { ChevronDown, ChevronRight, Dices } from "@lucide/svelte";
     import {
         lists,
         editingState,
@@ -57,6 +57,13 @@
         if (items && items.length > 0) {
             selectItem(items[0], listId);
         }
+    }
+
+    function selectRandomItem(listId: string) {
+        const items = $listItemsMap[listId] || [];
+        if (!items.length) return;
+        const randomIndex = Math.floor(Math.random() * items.length);
+        selectItem(items[randomIndex], listId);
     }
 </script>
 
@@ -158,6 +165,15 @@
                     {/if}
 
                     <div class="flex flex-row gap-2">
+                        <button
+                            type="button"
+                            class="text-white/50 hover:text-white transition-colors p-2 hover:bg-white/10 rounded-lg cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                            on:click={() => selectRandomItem(list.list_id)}
+                            disabled={!$listItemsMap[list.list_id]?.length}
+                            aria-label="Pick random title"
+                        >
+                            <Dices size={20} strokeWidth={2} />
+                        </button>
                         <button
                             type="button"
                             class="text-white/50 hover:text-white transition-colors p-2 hover:bg-white/10 rounded-lg cursor-pointer"
