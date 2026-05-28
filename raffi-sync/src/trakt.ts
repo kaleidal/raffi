@@ -1,5 +1,6 @@
 import { deleteTraktIntegration, getTraktIntegration, saveTraktIntegration } from "./db";
 import { HttpError, optionalString } from "./http";
+import { getSyncDatabase } from "./d1Session";
 
 const TRAKT_API_BASE_URL = "https://api.trakt.tv";
 const TRAKT_AUTHORIZE_URL = "https://trakt.tv/oauth/authorize";
@@ -179,7 +180,8 @@ const getProfileValues = (settingsPayload: Record<string, unknown>) => {
 };
 
 export const getTraktStatus = async (env: Env, userId: string) => {
-  const existing = await getTraktIntegration(env.DB, userId);
+  const db = getSyncDatabase(env);
+  const existing = await getTraktIntegration(db, userId);
   const config = getTraktConfig(env);
   return {
     configured: config.configured,
@@ -196,6 +198,7 @@ export const getTraktStatus = async (env: Env, userId: string) => {
 };
 
 export const exchangeTraktCode = async (env: Env, userId: string, code: unknown) => {
+  const db = getSyncDatabase(env);
   const authCode = optionalString(code);
   const config = getTraktConfig(env);
   if (!authCode) throw new HttpError(400, "Missing Trakt authorization code", "missing_code");
@@ -226,7 +229,7 @@ export const exchangeTraktCode = async (env: Env, userId: string, code: unknown)
   }
 
   const expiresAt = toExpiresAtMs(tokenPayload);
-  await saveTraktIntegration(env.DB, userId, {
+  await saveTraktIntegration(db, userId, {
     accessToken,
     refreshToken,
     scope: optionalString(tokenPayload.scope),
@@ -247,12 +250,13 @@ export const exchangeTraktCode = async (env: Env, userId: string, code: unknown)
 };
 
 export const refreshTraktToken = async (env: Env, userId: string) => {
+  const db = getSyncDatabase(env);
   const config = getTraktConfig(env);
   if (!config.clientId || !config.clientSecret) {
     throw new HttpError(500, "Trakt is not configured on the server", "trakt_not_configured");
   }
 
-  const integration = await getTraktIntegration(env.DB, userId);
+  const integration = await getTraktIntegration(db, userId);
   if (!integration) {
     throw new HttpError(404, "Trakt is not connected", "trakt_not_connected");
   }
@@ -272,7 +276,7 @@ export const refreshTraktToken = async (env: Env, userId: string) => {
     throw new HttpError(502, "Trakt refresh returned an invalid payload", "trakt_invalid_payload");
   }
 
-  await saveTraktIntegration(env.DB, userId, {
+  await saveTraktIntegration(db, userId, {
     accessToken,
     refreshToken,
     scope: optionalString(tokenPayload.scope) || integration.scope || undefined,
@@ -286,10 +290,12 @@ export const refreshTraktToken = async (env: Env, userId: string) => {
 };
 
 export const disconnectTrakt = async (env: Env, userId: string) => {
-  return deleteTraktIntegration(env.DB, userId);
+  const db = getSyncDatabase(env);
+  return deleteTraktIntegration(db, userId);
 };
 
 export const getTraktClientAuth = async (env: Env, userId: string, forceRefresh: unknown) => {
+  const db = getSyncDatabase(env);
   const config = getTraktConfig(env);
   if (!config.clientId || !config.clientSecret) {
     return {
@@ -303,7 +309,7 @@ export const getTraktClientAuth = async (env: Env, userId: string, forceRefresh:
     };
   }
 
-  const integration = await getTraktIntegration(env.DB, userId);
+  const integration = await getTraktIntegration(db, userId);
   if (!integration?.access_token || !integration?.refresh_token) {
     return {
       ok: false,
@@ -333,7 +339,7 @@ export const getTraktClientAuth = async (env: Env, userId: string, forceRefresh:
 
   try {
     await refreshTraktToken(env, userId);
-    const refreshed = await getTraktIntegration(env.DB, userId);
+    const refreshed = await getTraktIntegration(db, userId);
     return {
       ok: Boolean(refreshed?.access_token),
       configured: true,
@@ -370,13 +376,14 @@ export const traktScrobble = async (
     appVersion?: unknown;
   },
 ) => {
+  const db = getSyncDatabase(env);
   try {
     const config = getTraktConfig(env);
     if (!config.clientId || !config.clientSecret) {
       return { ok: false, reason: "not_configured" };
     }
 
-    const integration = await getTraktIntegration(env.DB, userId);
+    const integration = await getTraktIntegration(db, userId);
     if (!integration?.access_token || !integration?.refresh_token) {
       return { ok: false, reason: "not_connected" };
     }
@@ -432,7 +439,7 @@ export const traktScrobble = async (
         const refreshedAccess = optionalString(tokenPayload.access_token);
         const refreshedRefresh = optionalString(tokenPayload.refresh_token);
         if (refreshedAccess && refreshedRefresh) {
-          await saveTraktIntegration(env.DB, userId, {
+          await saveTraktIntegration(db, userId, {
             accessToken: refreshedAccess,
             refreshToken: refreshedRefresh,
             scope: optionalString(tokenPayload.scope) || integration.scope || undefined,

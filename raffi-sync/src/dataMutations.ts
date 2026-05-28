@@ -1,5 +1,6 @@
 import { HttpError, optionalString } from "./http";
 import type { Addon, JsonValue, LibraryItem, List, ListItem } from "./types";
+import type { SyncD1Database } from "./d1Session";
 
 type AddonRow = {
   user_id: string;
@@ -68,13 +69,13 @@ const requireString = (value: unknown, field: string) => {
   return text;
 };
 
-const getListForUser = async (db: D1Database, userId: string, listId: string) => {
+const getListForUser = async (db: SyncD1Database, userId: string, listId: string) => {
   return db.prepare("SELECT * FROM lists WHERE user_id = ? AND list_id = ?")
     .bind(userId, listId)
     .first<ListRow>();
 };
 
-export const addAddon = async (db: D1Database, userId: string, addon: Partial<Addon>) => {
+export const addAddon = async (db: SyncD1Database, userId: string, addon: Partial<Addon>) => {
   const transportUrl = requireString(addon.transport_url, "addon transport_url");
   const existing = await db.prepare("SELECT * FROM addons WHERE user_id = ? AND transport_url = ?")
     .bind(userId, transportUrl)
@@ -111,21 +112,21 @@ export const addAddon = async (db: D1Database, userId: string, addon: Partial<Ad
   return next;
 };
 
-export const removeAddon = async (db: D1Database, userId: string, transportUrl: unknown) => {
+export const removeAddon = async (db: SyncD1Database, userId: string, transportUrl: unknown) => {
   await db.prepare("DELETE FROM addons WHERE user_id = ? AND transport_url = ?")
     .bind(userId, requireString(transportUrl, "transport_url"))
     .run();
   return { ok: true };
 };
 
-export const hideFromContinueWatching = async (db: D1Database, userId: string, imdbId: unknown) => {
+export const hideFromContinueWatching = async (db: SyncD1Database, userId: string, imdbId: unknown) => {
   await db.prepare("UPDATE libraries SET shown = 0 WHERE user_id = ? AND imdb_id = ?")
     .bind(userId, requireString(imdbId, "imdb_id"))
     .run();
   return { ok: true };
 };
 
-export const forgetProgress = async (db: D1Database, userId: string, imdbId: unknown) => {
+export const forgetProgress = async (db: SyncD1Database, userId: string, imdbId: unknown) => {
   await db.prepare("DELETE FROM libraries WHERE user_id = ? AND imdb_id = ?")
     .bind(userId, requireString(imdbId, "imdb_id"))
     .run();
@@ -133,7 +134,7 @@ export const forgetProgress = async (db: D1Database, userId: string, imdbId: unk
 };
 
 export const updateLibraryProgress = async (
-  db: D1Database,
+  db: SyncD1Database,
   userId: string,
   input: {
     imdb_id?: unknown;
@@ -188,7 +189,7 @@ export const updateLibraryProgress = async (
 };
 
 export const updateLibraryPoster = async (
-  db: D1Database,
+  db: SyncD1Database,
   userId: string,
   input: { imdb_id?: unknown; poster?: unknown },
 ) => {
@@ -198,7 +199,7 @@ export const updateLibraryPoster = async (
   return { ok: true };
 };
 
-export const createList = async (db: D1Database, userId: string, name: unknown) => {
+export const createList = async (db: SyncD1Database, userId: string, name: unknown) => {
   const currentMax = await db.prepare("SELECT MAX(position) AS position FROM lists WHERE user_id = ?")
     .bind(userId)
     .first<{ position: number | null }>();
@@ -217,7 +218,7 @@ export const createList = async (db: D1Database, userId: string, name: unknown) 
 };
 
 export const addToList = async (
-  db: D1Database,
+  db: SyncD1Database,
   userId: string,
   input: {
     list_id?: unknown;
@@ -252,7 +253,7 @@ export const addToList = async (
 };
 
 export const removeFromList = async (
-  db: D1Database,
+  db: SyncD1Database,
   userId: string,
   input: { list_id?: unknown; imdb_id?: unknown },
 ) => {

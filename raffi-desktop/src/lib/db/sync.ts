@@ -168,6 +168,138 @@ const buildFullSyncPayload = (local: RemoteState) => ({
     },
 });
 
+const stableStringify = (value: unknown) => {
+    const normalize = (input: unknown): unknown => {
+        if (input === null || input === undefined) return null;
+        if (Array.isArray(input)) return input.map(normalize);
+        if (typeof input !== "object") return input;
+        const entries = Object.entries(input as Record<string, unknown>)
+            .filter(([_, itemValue]) => itemValue !== undefined)
+            .sort(([left], [right]) => left.localeCompare(right))
+            .map(([itemKey, itemValue]) => [itemKey, normalize(itemValue)] as const);
+        return Object.fromEntries(entries);
+    };
+
+    return JSON.stringify(normalize(value));
+};
+
+const areRecordsEqual = (left: unknown, right: unknown) =>
+    stableStringify(left) === stableStringify(right);
+
+const buildMismatchSyncPayload = (local: RemoteState, remote: RemoteState) => {
+    const remoteAddons = new Map(remote.addons.map((item) => [item.transport_url, item]));
+    for (const item of remote.addons) {
+        remoteAddons.set(item.transport_url, item);
+    }
+
+    const remoteLibrary = new Map(remote.library.map((item) => [item.imdb_id, item]));
+    for (const item of remote.library) {
+        remoteLibrary.set(item.imdb_id, item);
+    }
+
+    const remoteLists = new Map(remote.lists.map((item) => [item.list_id, item]));
+    for (const item of remote.lists) {
+        remoteLists.set(item.list_id, item);
+    }
+
+    const remoteListItems = new Map(remote.listItems.map((item) => [`${item.list_id}::${item.imdb_id}`, item]));
+    for (const item of remote.listItems) {
+        remoteListItems.set(`${item.list_id}::${item.imdb_id}`, item);
+    }
+
+    const remoteAddonMismatch: RemoteState["addons"] = [];
+    const remoteLibraryMismatch: RemoteState["library"] = [];
+    const remoteListMismatch: RemoteState["lists"] = [];
+    const remoteListItemMismatch: RemoteState["listItems"] = [];
+
+    for (const item of local.addons) {
+        const remoteItem = remoteAddons.get(item.transport_url);
+        if (!remoteItem) {
+            remoteAddonMismatch.push(item);
+            continue;
+        }
+        const hasAddonDiff = remoteItem.addon_id !== item.addon_id
+            || remoteItem.added_at !== item.added_at
+            || remoteItem.position !== item.position
+            || !areRecordsEqual(remoteItem.manifest, item.manifest)
+            || !areRecordsEqual(remoteItem.flags, item.flags);
+
+        if (hasAddonDiff) {
+            remoteAddonMismatch.push(item);
+        }
+    }
+
+    for (const item of local.library) {
+        const remoteItem = remoteLibrary.get(item.imdb_id);
+        if (!remoteItem) {
+            remoteLibraryMismatch.push(item);
+            continue;
+        }
+        const hasLibraryDiff = remoteItem.last_watched !== item.last_watched
+            || remoteItem.type !== item.type
+            || remoteItem.shown !== item.shown
+            || remoteItem.poster !== item.poster
+            || remoteItem.completed_at !== item.completed_at
+            || !areRecordsEqual(remoteItem.progress, item.progress);
+
+        if (hasLibraryDiff) {
+            remoteLibraryMismatch.push(item);
+        }
+    }
+
+    for (const item of local.lists) {
+        const remoteItem = remoteLists.get(item.list_id);
+        if (!remoteItem) {
+            remoteListMismatch.push(item);
+            continue;
+        }
+        const hasListDiff = remoteItem.created_at !== item.created_at
+            || remoteItem.name !== item.name
+            || remoteItem.position !== item.position;
+
+        if (hasListDiff) {
+            remoteListMismatch.push(item);
+        }
+    }
+
+    for (const item of local.listItems) {
+        const remoteItem = remoteListItems.get(`${item.list_id}::${item.imdb_id}`);
+        if (!remoteItem) {
+            remoteListItemMismatch.push(item);
+            continue;
+        }
+        const hasListItemDiff = remoteItem.position !== item.position
+            || remoteItem.type !== item.type
+            || remoteItem.poster !== item.poster;
+
+        if (hasListItemDiff) {
+            remoteListItemMismatch.push(item);
+        }
+    }
+
+    const localMeta = local.userMeta;
+    const remoteMeta = remote.userMeta;
+    const shouldSyncUserMeta = localMeta && (
+        !remoteMeta
+        || remoteMeta.updated_at !== localMeta.updated_at
+        || stableStringify(remoteMeta.settings) !== stableStringify(localMeta.settings)
+    );
+
+    return {
+        addons: remoteAddonMismatch,
+        library: remoteLibraryMismatch,
+        lists: remoteListMismatch,
+        listItems: remoteListItemMismatch,
+        userMeta: shouldSyncUserMeta ? localMeta : null,
+        deletes: {
+            addons: [],
+            library: [],
+            lists: [],
+            listItems: [],
+        },
+    };
+};
+
 const isRemoteStateEmpty = (state: RemoteState) =>
     state.addons.length === 0
     && state.library.length === 0
@@ -264,8 +396,9 @@ export const syncLocalStateToUser = async (userId: string, options?: { forceRemo
             mergeRemoteStateIntoLocal(remote);
             const local = readLocalState();
             const syncState = readSyncState();
-            const payload = pending.uploads + pending.deletes === 0 && isRemoteStateBootstrapTarget(remote)
-                ? buildFullSyncPayload(local)
+            const needsBootstrap = pending.uploads + pending.deletes === 0 && isRemoteStateBootstrapTarget(remote);
+            const payload = pending.uploads + pending.deletes === 0
+                ? needsBootstrap ? buildFullSyncPayload(local) : buildMismatchSyncPayload(local, remote)
                 : buildDirtySyncPayload(local, syncState);
 
             if (!hasSyncPayloadChanges(payload)) {

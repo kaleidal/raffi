@@ -1,8 +1,10 @@
 import { verifyAveIdTokenFromAuthHeader } from "@ave-id/sdk/server";
 import { HttpError } from "./http";
 import type { AuthedUser } from "./types";
+import { getSyncDatabase } from "./d1Session";
 
 export const requireUser = async (request: Request, env: Env): Promise<AuthedUser> => {
+  const db = getSyncDatabase(env);
   const clientId = env.AVE_CLIENT_ID;
   if (!clientId) {
     throw new HttpError(500, "Ave client ID is not configured", "auth_not_configured");
@@ -32,7 +34,7 @@ export const requireUser = async (request: Request, env: Env): Promise<AuthedUse
     avatar: typeof principal.claims.picture === "string" ? principal.claims.picture : null,
   };
 
-  await env.DB.prepare(`
+  await db.prepare(`
     INSERT INTO users (id, email, name, avatar, updated_at)
     VALUES (?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET

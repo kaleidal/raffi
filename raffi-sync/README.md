@@ -32,6 +32,37 @@ Apply D1 migrations to Cloudflare:
 bunx wrangler d1 migrations apply raffi-sync --remote
 ```
 
+### Import Convex snapshot into D1 (one-time)
+
+Use this when you have a Convex export and want to backfill D1 data in one pass.
+The default behavior imports all `user_id` values found in the snapshot so every user in the export is imported.
+
+```bash
+bun run import:convex
+```
+
+By default it reads `snapshot.zip` and writes `scripts/convex-import.sql`.
+
+Works with both zip and extracted folders:
+
+```bash
+bun run import:convex -- --input snapshot.zip --apply --db raffi-sync --out scripts/convex-import.sql
+```
+
+```bash
+bun run import:convex -- --input /path/to/snapshot-folder --apply --db raffi-sync --out scripts/convex-import.sql
+```
+
+Useful flags:
+
+- `--input PATH` custom snapshot file or folder.
+- `--db NAME` Wrangler D1 database name (default `raffi-sync`).
+- `--user-id ID` force all rows to one target user id (optional). Use when you want to restore into a single account.
+- `--out PATH` custom SQL output path.
+- `--apply` execute the generated SQL with `wrangler d1 execute`.
+- `--local` execute against local D1 bindings.
+- `--no-replace` skip deleting existing rows for matching user ids before import.
+
 ## Configuration
 
 `wrangler.jsonc` declares the D1 binding and Durable Object binding. Set these values before deploying:

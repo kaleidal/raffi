@@ -9,6 +9,7 @@ import type {
   SyncPayload,
   UserMeta,
 } from "./types";
+import type { SyncD1Database } from "./d1Session";
 
 type AddonRow = {
   user_id: string;
@@ -146,7 +147,7 @@ const toUserMeta = (row: UserMetaRow | null): UserMeta | null => {
   };
 };
 
-export const getState = async (db: D1Database, userId: string): Promise<RemoteState> => {
+export const getState = async (db: SyncD1Database, userId: string): Promise<RemoteState> => {
   const [addons, library, lists, listItems, userMeta] = await Promise.all([
     db.prepare("SELECT * FROM addons WHERE user_id = ? ORDER BY position ASC, added_at ASC")
       .bind(userId)
@@ -178,7 +179,7 @@ export const getState = async (db: D1Database, userId: string): Promise<RemoteSt
 };
 
 export const ensureDefaultAddon = async (
-  db: D1Database,
+  db: SyncD1Database,
   userId: string,
   addon: { transportUrl?: unknown; manifest?: unknown },
 ) => {
@@ -210,7 +211,7 @@ export const ensureDefaultAddon = async (
   return { ok: true, addon_id: addonId };
 };
 
-export const applySyncState = async (db: D1Database, userId: string, payload: SyncPayload) => {
+export const applySyncState = async (db: SyncD1Database, userId: string, payload: SyncPayload) => {
   const addons = uniqueBy(Array.isArray(payload.addons) ? payload.addons : [], (item) => item.transport_url || "");
   const library = uniqueBy(Array.isArray(payload.library) ? payload.library : [], (item) => item.imdb_id || "");
   const lists = uniqueBy(Array.isArray(payload.lists) ? payload.lists : [], (item) => item.list_id || "");
@@ -355,7 +356,7 @@ export const applySyncState = async (db: D1Database, userId: string, payload: Sy
   };
 };
 
-export const getTraktIntegration = async (db: D1Database, userId: string) => {
+export const getTraktIntegration = async (db: SyncD1Database, userId: string) => {
   return db.prepare(`
     SELECT user_id, username, slug, access_token, refresh_token, scope, token_type, expires_at, created_at, updated_at
     FROM trakt_integrations
@@ -375,7 +376,7 @@ export const getTraktIntegration = async (db: D1Database, userId: string) => {
 };
 
 export const saveTraktIntegration = async (
-  db: D1Database,
+  db: SyncD1Database,
   userId: string,
   values: {
     accessToken: string;
@@ -416,7 +417,7 @@ export const saveTraktIntegration = async (
   ).run();
 };
 
-export const deleteTraktIntegration = async (db: D1Database, userId: string) => {
+export const deleteTraktIntegration = async (db: SyncD1Database, userId: string) => {
   await db.prepare("DELETE FROM trakt_integrations WHERE user_id = ?").bind(userId).run();
   return { ok: true };
 };

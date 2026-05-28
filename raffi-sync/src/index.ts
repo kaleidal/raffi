@@ -22,6 +22,7 @@ import {
 } from "./trakt";
 import type { Addon, SyncPayload } from "./types";
 import { WatchPartyObject } from "./watchParty";
+import { getSyncDatabase } from "./d1Session";
 
 export { WatchPartyObject };
 
@@ -99,42 +100,43 @@ const routeWatchParty = async (
 const routeAuthedRequest = async (request: Request, env: Env) => {
   const user = await requireUser(request, env);
   const parts = getPathParts(request);
+  const db = getSyncDatabase(env);
 
   if (request.method === "GET" && parts[0] === "state") {
-    return json(await getState(env.DB, user.id));
+    return json(await getState(db, user.id));
   }
 
   if (request.method === "POST" && parts[0] === "sync") {
-    return json(await applySyncState(env.DB, user.id, await readJson<SyncPayload>(request)));
+    return json(await applySyncState(db, user.id, await readJson<SyncPayload>(request)));
   }
 
   if (request.method === "POST" && parts[0] === "addons" && parts[1] === "default") {
     const body = await readJson<{ addon?: { transportUrl?: unknown; manifest?: unknown } }>(request);
-    return json(await ensureDefaultAddon(env.DB, user.id, body.addon || {}));
+    return json(await ensureDefaultAddon(db, user.id, body.addon || {}));
   }
 
   if (request.method === "POST" && parts[0] === "addons" && parts.length === 1) {
     const body = await readJson<{ addon?: Partial<Addon> }>(request);
-    return json(await addAddon(env.DB, user.id, body.addon || {}));
+    return json(await addAddon(db, user.id, body.addon || {}));
   }
 
   if (request.method === "POST" && parts[0] === "addons" && parts[1] === "remove") {
     const body = await readJson<{ transport_url?: unknown }>(request);
-    return json(await removeAddon(env.DB, user.id, body.transport_url));
+    return json(await removeAddon(db, user.id, body.transport_url));
   }
 
   if (request.method === "POST" && parts[0] === "library" && parts[1] === "hide") {
     const body = await readJson<{ imdb_id?: unknown }>(request);
-    return json(await hideFromContinueWatching(env.DB, user.id, body.imdb_id));
+    return json(await hideFromContinueWatching(db, user.id, body.imdb_id));
   }
 
   if (request.method === "POST" && parts[0] === "library" && parts[1] === "forget") {
     const body = await readJson<{ imdb_id?: unknown }>(request);
-    return json(await forgetProgress(env.DB, user.id, body.imdb_id));
+    return json(await forgetProgress(db, user.id, body.imdb_id));
   }
 
   if (request.method === "POST" && parts[0] === "library" && parts[1] === "progress") {
-    return json(await updateLibraryProgress(env.DB, user.id, await readJson<{
+    return json(await updateLibraryProgress(db, user.id, await readJson<{
       imdb_id?: unknown;
       progress?: unknown;
       type?: unknown;
@@ -144,7 +146,7 @@ const routeAuthedRequest = async (request: Request, env: Env) => {
   }
 
   if (request.method === "POST" && parts[0] === "library" && parts[1] === "poster") {
-    return json(await updateLibraryPoster(env.DB, user.id, await readJson<{
+    return json(await updateLibraryPoster(db, user.id, await readJson<{
       imdb_id?: unknown;
       poster?: unknown;
     }>(request)));
@@ -152,11 +154,11 @@ const routeAuthedRequest = async (request: Request, env: Env) => {
 
   if (request.method === "POST" && parts[0] === "lists" && parts[1] === "create") {
     const body = await readJson<{ name?: unknown }>(request);
-    return json(await createList(env.DB, user.id, body.name));
+    return json(await createList(db, user.id, body.name));
   }
 
   if (request.method === "POST" && parts[0] === "lists" && parts[1] === "items" && parts[2] === "add") {
-    return json(await addToList(env.DB, user.id, await readJson<{
+    return json(await addToList(db, user.id, await readJson<{
       list_id?: unknown;
       imdb_id?: unknown;
       position?: unknown;
@@ -166,7 +168,7 @@ const routeAuthedRequest = async (request: Request, env: Env) => {
   }
 
   if (request.method === "POST" && parts[0] === "lists" && parts[1] === "items" && parts[2] === "remove") {
-    return json(await removeFromList(env.DB, user.id, await readJson<{
+    return json(await removeFromList(db, user.id, await readJson<{
       list_id?: unknown;
       imdb_id?: unknown;
     }>(request)));
