@@ -1,6 +1,6 @@
 # Raffi Mobile
 
-Raffi Mobile is the Expo client for phones, tablets, and Android TV. It uses Ave authentication with Convex-backed sync for addons, library state, lists, and watch progress.
+Raffi Mobile is the Expo client for phones, tablets, and Android TV. It uses Ave authentication with Raffi Sync for addons, library state, lists, and watch progress.
 
 ## Features
 
@@ -76,7 +76,8 @@ app/player.tsx        Shared player
 components/home/      Phone home sections
 components/tv/        TV-focused controls and rows
 lib/api.ts            Cinemeta and addon API helpers
-lib/db.ts             Convex-backed app data access
+lib/db.ts             Raffi Sync-backed app data access
+lib/raffiSync.ts      Authenticated sync API client
 lib/stores/           Zustand auth, library, addons, and downloads state
 lib/torrent/          JavaScript interface for native torrent streaming
 modules/torrent-streamer/ Native Android torrent streaming module

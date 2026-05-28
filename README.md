@@ -109,6 +109,7 @@ chmod +x Raffi-x.x.x.AppImage
 raffi/
 ├── raffi-desktop/     # Desktop app (Electron + Svelte 5)
 ├── raffi-mobile/      # Mobile app (React Native + Expo)
+├── raffi-sync/        # Cloud sync API (Cloudflare Workers + D1)
 ├── raffi-server/      # Streaming server (Go)
 └── raffi-site/        # Marketing website (SvelteKit)
 ```
@@ -123,8 +124,13 @@ raffi/
 - **Framework**: React Native with Expo SDK 54
 - **Platforms**: iOS and Android
 - **Features**: Browse content, search, continue watching, native video playback
-- **Sync**: Shares authentication and watch progress with desktop via Supabase
+- **Sync**: Shares authentication and watch progress with desktop through Raffi Sync
 - **Native Module**: Custom torrent-streamer module for on-device streaming
+
+#### Sync Service (`raffi-sync/`)
+- **Runtime**: Cloudflare Workers
+- **Storage**: Cloudflare D1 for account data and Durable Objects for watch-party state
+- **Features**: Ave-authenticated cloud sync, Trakt token integration, watch-party coordination
 
 #### Streaming Server (`raffi-server/`)
 - **Language**: Go
@@ -177,20 +183,20 @@ bun run dist
 cd raffi-mobile
 
 # Install dependencies
-npm install
+bun install
 
 # Start Expo development server
-npm start
+bun run start
 
 # Run on iOS simulator
-npm run ios
+bun run ios
 
 # Run on Android emulator
-npm run android
+bun run android
 
 # Build for production
-npx expo build:ios
-npx expo build:android
+bunx expo build:ios
+bunx expo build:android
 ```
 
 **Note**: Mobile app requires the desktop server running for torrent streams. Update `STREAMING_SERVER` in `app/player.tsx` with your local IP.
@@ -213,13 +219,13 @@ go build -o decoder .
 cd raffi-site
 
 # Install dependencies
-npm install
+bun install
 
 # Run development server
-npm run dev
+bun run dev
 
 # Build for production
-npm run build
+bun run build
 ```
 
 ## Architecture
@@ -230,7 +236,7 @@ npm run build
 - **Frontend**: Svelte 5, TypeScript, Tailwind CSS
 - **Desktop Runtime**: Electron 39
 - **Video Player**: HLS.js for adaptive streaming
-- **Database**: Supabase (PostgreSQL)
+- **Storage**: Local app data with Raffi Sync cloud backup
 - **Build**: Vite + electron-builder
 - **Key Libraries**: `@lucide/svelte`, `posthog-js`, `@ryuziii/discord-rpc`
 
@@ -240,9 +246,15 @@ npm run build
 - **Video Player**: Expo Video (native)
 - **Navigation**: Expo Router (file-based routing)
 - **State Management**: Zustand
-- **Database**: Supabase (shared with desktop)
+- **Sync**: Raffi Sync API shared with desktop
 - **Native Module**: Custom torrent-streamer for on-device torrenting
 - **Key Features**: Tab navigation, dark theme, cross-device sync
+
+#### Sync Service
+- **Runtime**: Cloudflare Workers
+- **Database**: Cloudflare D1
+- **State Coordination**: Durable Objects for active watch parties
+- **Auth**: Ave ID tokens verified at the API edge
 
 #### Streaming Server
 - **Language**: Go 1.21+
@@ -266,8 +278,8 @@ npm run build
 - Seek bar with time-remaining display
 
 #### Watch Parties
-- Real-time synchronization via Supabase
-- WebSocket-based state management
+- Synchronized playback state through Raffi Sync
+- Durable Object-backed party state
 - Host/participant role system
 - Automatic reconnection
 
@@ -278,7 +290,7 @@ npm run build
 - Watched/unwatched states
 
 #### Cross-Device Synchronization
-- **Shared authentication** via Supabase across desktop and mobile
+- **Shared authentication** via Ave across desktop and mobile
 - **Watch progress sync** - Start on desktop, continue on mobile
 - **Library sync** - Custom lists and favorites across devices
 - **Addon settings** - Configured addons available on all platforms
@@ -311,12 +323,12 @@ Output will be in `raffi-desktop/release/`
 cd raffi-mobile
 
 # Development builds
-npx expo run:ios       # iOS
-npx expo run:android   # Android
+bunx expo run:ios       # iOS
+bunx expo run:android   # Android
 
 # Production builds (requires EAS account)
-eas build --platform ios
-eas build --platform android
+bunx eas build --platform ios
+bunx eas build --platform android
 ```
 
 Builds will be available via Expo Application Services (EAS) dashboard.

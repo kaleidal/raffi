@@ -1,0 +1,21 @@
+{
+  "name": "raffi-sync",
+  "module": "src/index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260526.1",
+    "@types/bun": "latest",
+    "wrangler": "^4.94.0",
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "@ave-id/sdk": "^0.9.2"
+  },
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "check": "tsc --noEmit",
+    "types": "wrangler types"
+  }
+}

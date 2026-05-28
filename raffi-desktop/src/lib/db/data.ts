@@ -1,4 +1,3 @@
-import { convexMutation } from "./convex";
 import type { Addon, LibraryItem, List, ListItem, UserMeta } from "./types";
 import {
     DEFAULT_ADDON,
@@ -17,6 +16,7 @@ import {
     writeLocal,
     publishCloudSyncStatus,
 } from "./state";
+import { syncPost } from "./raffiSync";
 import { scheduleCloudBackupSync } from "./sync";
 
 export { hasLocalState } from "./state";
@@ -47,7 +47,7 @@ export const ensureDefaultAddonsForUser = async (userId: string) => {
     await ensureDefaultAddonsForLocal();
     if (!userId) return;
     try {
-        await convexMutation("raffi:ensureDefaultAddon", { addon: DEFAULT_ADDON });
+        await syncPost("/addons/default", { addon: DEFAULT_ADDON });
     } catch (error) {
         console.warn("Failed to seed default addons", error);
     }

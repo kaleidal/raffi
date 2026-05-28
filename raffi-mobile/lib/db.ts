@@ -1,5 +1,5 @@
 import type { AppUser } from './auth/types';
-import { convexAction, convexMutation, convexQuery } from './convex';
+import { syncGet, syncPost } from './raffiSync';
 import type { Addon, LibraryItem, List, ListItem } from './types';
 
 export interface TraktStatus {
@@ -68,7 +68,7 @@ const getRemoteState = async (force = false): Promise<RemoteState> => {
     return remoteStateCache.data;
   }
 
-  const data = await convexQuery<RemoteState>('raffi:getState', {});
+  const data = await syncGet<RemoteState>('/state');
   const normalized: RemoteState = {
     addons: data?.addons || [],
     library: data?.library || [],
@@ -88,14 +88,14 @@ export const getAddons = async () => {
 
 export const addAddon = async (addon: Omit<Addon, 'user_id' | 'added_at'>) => {
   requireUserId();
-  const data = await convexMutation<Addon>('raffi:addAddon', { addon });
+  const data = await syncPost<Addon>('/addons', { addon });
   invalidateRemoteCache();
   return data;
 };
 
 export const removeAddon = async (transport_url: string) => {
   requireUserId();
-  await convexMutation('raffi:removeAddon', { transport_url });
+  await syncPost('/addons/remove', { transport_url });
   invalidateRemoteCache();
 };
 
@@ -116,13 +116,13 @@ export const getLibraryItem = async (imdb_id: string) => {
 
 export const hideFromContinueWatching = async (imdb_id: string) => {
   requireUserId();
-  await convexMutation('raffi:hideFromContinueWatching', { imdb_id });
+  await syncPost('/library/hide', { imdb_id });
   invalidateRemoteCache();
 };
 
 export const forgetProgress = async (imdb_id: string) => {
   requireUserId();
-  await convexMutation('raffi:forgetProgress', { imdb_id });
+  await syncPost('/library/forget', { imdb_id });
   invalidateRemoteCache();
 };
 
@@ -134,7 +134,7 @@ export const updateLibraryProgress = async (
   poster?: string
 ) => {
   requireUserId();
-  const data = await convexMutation<LibraryItem>('raffi:updateLibraryProgress', { imdb_id,
+  const data = await syncPost<LibraryItem>('/library/progress', { imdb_id,
     progress,
     type,
     completed,
@@ -146,34 +146,34 @@ export const updateLibraryProgress = async (
 
 export const updateLibraryPoster = async (imdb_id: string, poster: string) => {
   requireUserId();
-  await convexMutation('raffi:updateLibraryPoster', { imdb_id, poster });
+  await syncPost('/library/poster', { imdb_id, poster });
   invalidateRemoteCache();
 };
 
 export const getTraktStatus = async (): Promise<TraktStatus> => {
   requireUserId();
-  const status = await convexQuery<TraktStatus>('raffi:getTraktStatus', {});
+  const status = await syncGet<TraktStatus>('/trakt/status');
   return status;
 };
 
 export const exchangeTraktCode = async (code: string) => {
   requireUserId();
-  return convexAction('raffi:exchangeTraktCode', { code });
+  return syncPost('/trakt/exchange-code', { code });
 };
 
 export const disconnectTrakt = async () => {
   requireUserId();
-  return convexMutation('raffi:disconnectTrakt', {});
+  return syncPost('/trakt/disconnect', {});
 };
 
 export const refreshTraktToken = async () => {
   requireUserId();
-  return convexAction('raffi:refreshTraktToken', {});
+  return syncPost('/trakt/refresh', {});
 };
 
 export const traktScrobble = async (args: TraktScrobbleArgs) => {
   requireUserId();
-  return convexAction('raffi:traktScrobble', args as any);
+  return syncPost('/trakt/scrobble', args as any);
 };
 
 export const getLists = async () => {
@@ -190,7 +190,7 @@ export const getListItems = async (list_id: string) => {
 
 export const createList = async (name: string) => {
   requireUserId();
-  const data = await convexMutation<List>('raffi:createList', { name });
+  const data = await syncPost<List>('/lists/create', { name });
   invalidateRemoteCache();
   return data;
 };
@@ -207,24 +207,18 @@ export const addToList = async (
   if (exists) return exists;
 
   const position = items.length;
-  await convexMutation('raffi:addToList', { list_id,
+  const item = await syncPost<ListItem>('/lists/items/add', { list_id,
     imdb_id,
     position,
     type,
     poster,
   });
   invalidateRemoteCache();
-  return {
-    list_id,
-    imdb_id,
-    type,
-    position,
-    poster,
-  } as ListItem;
+  return item;
 };
 
 export const removeFromList = async (list_id: string, imdb_id: string) => {
   requireUserId();
-  await convexMutation('raffi:removeFromList', { list_id, imdb_id });
+  await syncPost('/lists/items/remove', { list_id, imdb_id });
   invalidateRemoteCache();
 };
