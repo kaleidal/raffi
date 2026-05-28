@@ -22,7 +22,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "raffi-sync"
+      "database_name": "raffi-sync",
+      "database_id": "f7754da9-3ab3-4c10-a6a5-c8e78740a353"
     }
   ],
   "durable_objects": {
