@@ -19,11 +19,16 @@ const getTraktConfig = (env: Env) => {
   };
 };
 
-const parseJsonSafe = async (response: Response) => {
+const readResponseBody = async (response: Response) => {
   try {
-    return await response.json();
+    const rawBody = await response.text();
+    try {
+      return { payload: JSON.parse(rawBody) as unknown, rawBody };
+    } catch {
+      return { payload: null, rawBody };
+    }
   } catch {
-    return null;
+    return { payload: null, rawBody: "" };
   }
 };
 
@@ -39,9 +44,40 @@ const buildTraktHeaders = (clientId: string, accessToken?: string) => {
   return headers;
 };
 
-const getTraktErrorMessage = (status: number, payload: unknown) => {
+const buildTokenPayload = (body: Record<string, unknown>) =>
+  Object.entries(body).reduce<Record<string, string>>((acc, [key, value]) => {
+    if (value === undefined || value === null) return acc;
+    acc[key] = String(value);
+    return acc;
+  }, {});
+
+const normalizeCloudflareBlockedMessage = (rawBody: string) => {
+  if (!rawBody.includes("Cloudflare")) return null;
+  const rayMatch = rawBody.match(/Cloudflare Ray ID:\s*<strong[^>]*>([^<]+)<\/strong>/i);
+  const rayId = rayMatch?.[1]?.trim();
+  return rayId ? `Cloudflare blocked the request (Ray ID: ${rayId})` : "Cloudflare blocked the request";
+};
+
+const getTraktErrorMessage = (status: number, payload: unknown, response?: Response) => {
   const body = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
   const message = optionalString(body.error_description) || optionalString(body.error) || optionalString(body.message);
+  const rawMessage = optionalString(body.raw_body);
+  if (rawMessage) {
+    const cloudflare = normalizeCloudflareBlockedMessage(rawMessage);
+    if (cloudflare) {
+      return cloudflare;
+    }
+    return rawMessage;
+  }
+  if (message) {
+    return message;
+  }
+
+  const authChallenge = response?.headers.get("WWW-Authenticate");
+  if (authChallenge) {
+    return `Trakt request failed (${status}): ${authChallenge}`;
+  }
+
   return message || `Trakt request failed (${status})`;
 };
 
@@ -49,20 +85,59 @@ const exchangeOrRefreshToken = async (
   body: Record<string, unknown>,
   config: { clientId: string; clientSecret: string },
 ) => {
-  const response = await fetch(`${TRAKT_API_BASE_URL}/oauth/token`, {
-    method: "POST",
-    headers: buildTraktHeaders(config.clientId),
-    body: JSON.stringify({
-      ...body,
-      client_id: config.clientId,
-      client_secret: config.clientSecret,
-    }),
+  const tokenEndpoint = `${TRAKT_API_BASE_URL}/oauth/token`;
+  const baseBody = buildTokenPayload({
+    ...body,
+    client_id: config.clientId,
+    client_secret: config.clientSecret,
   });
-  const payload = await parseJsonSafe(response);
-  if (!response.ok) {
-    throw new HttpError(response.status, getTraktErrorMessage(response.status, payload), "trakt_error");
+
+  const requestWithJsonHeaders = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+    "trakt-api-version": "2",
+    "trakt-api-key": config.clientId,
+    "User-Agent": "Raffi Sync",
+  };
+  const requestWithFormHeaders = {
+    "Content-Type": "application/x-www-form-urlencoded",
+    Accept: "application/json",
+    "trakt-api-version": "2",
+    "trakt-api-key": config.clientId,
+    "User-Agent": "Raffi Sync",
+  };
+
+  const formResponse = await fetch(tokenEndpoint, {
+    method: "POST",
+    headers: requestWithFormHeaders,
+    body: new URLSearchParams(baseBody).toString(),
+  });
+  const { payload: formPayload, rawBody: formRawBody } = await readResponseBody(formResponse);
+  if (formResponse.ok) {
+    return formPayload && typeof formPayload === "object"
+      ? formPayload as Record<string, unknown>
+      : {};
   }
-  return payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
+
+  const fallbackResponse = await fetch(tokenEndpoint, {
+    method: "POST",
+    headers: requestWithJsonHeaders,
+    body: JSON.stringify(baseBody),
+  });
+  const { payload, rawBody } = await readResponseBody(fallbackResponse);
+  if (fallbackResponse.ok) {
+    return payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
+  }
+
+  const resolvedPayload = payload ?? {
+    raw_body: rawBody,
+    message: `${formRawBody || ""}${formRawBody && rawBody ? "\n---\n" : ""}${rawBody || ""}`.trim() || null,
+  };
+  throw new HttpError(
+    fallbackResponse.status,
+    getTraktErrorMessage(fallbackResponse.status, resolvedPayload, fallbackResponse),
+    "trakt_error",
+  );
 };
 
 const fetchTraktSettings = async (clientId: string, accessToken: string) => {
@@ -70,9 +145,14 @@ const fetchTraktSettings = async (clientId: string, accessToken: string) => {
     method: "GET",
     headers: buildTraktHeaders(clientId, accessToken),
   });
-  const payload = await parseJsonSafe(response);
+  const { payload, rawBody } = await readResponseBody(response);
   if (!response.ok) {
-    throw new HttpError(response.status, getTraktErrorMessage(response.status, payload), "trakt_error");
+    const resolvedPayload = payload ?? (rawBody ? { message: rawBody } : null);
+    throw new HttpError(
+      response.status,
+      getTraktErrorMessage(response.status, resolvedPayload, response),
+      "trakt_error",
+    );
   }
   return payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
 };
