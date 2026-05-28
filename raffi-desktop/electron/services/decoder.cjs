@@ -61,6 +61,11 @@ function createDecoderService({ isDev, path, fs, spawn, logToFile, baseDir }) {
     return path.join(rootDir, fileName);
   }
 
+  function getDecoderServerUrl() {
+    const serverAddr = process.env.RAFFI_SERVER_ADDR || "127.0.0.1:6969";
+    return serverAddr.startsWith("http") ? serverAddr : `http://${serverAddr}`;
+  }
+
   function getDecoderPath() {
     const platform = process.platform;
     const arch = process.arch;
@@ -106,8 +111,30 @@ function createDecoderService({ isDev, path, fs, spawn, logToFile, baseDir }) {
     }
   }
 
+  async function isDecoderServerHealthy({ timeoutMs = 500 } = {}) {
+    const serverUrl = getDecoderServerUrl();
+
+    try {
+      await new Promise((resolve, reject) => {
+        const req = http.get(`${serverUrl}/`, (res) => {
+          if (res.statusCode) resolve();
+          else reject(new Error(`Unexpected status code: ${res.statusCode}`));
+        });
+        req.on("error", reject);
+        req.setTimeout(timeoutMs, () => {
+          req.destroy();
+          reject(new Error("Timeout"));
+        });
+      });
+      return true;
+    } catch (err) {
+      logToFile(`Decoder health check failed`, err);
+      return false;
+    }
+  }
+
   async function waitForDecoderReady(maxRetries = 30, retryDelayMs = 500) {
-    const serverUrl = "http://127.0.0.1:6969";
+    const serverUrl = getDecoderServerUrl();
 
     for (let i = 0; i < maxRetries; i++) {
       try {
@@ -156,12 +183,26 @@ function createDecoderService({ isDev, path, fs, spawn, logToFile, baseDir }) {
     const ffmpegPath = getBundledToolPath("ffmpeg");
     const ffprobePath = getBundledToolPath("ffprobe");
     cleanupInProgress = false;
+
     setDecoderStatus({
       state: "starting",
       reason: "starting",
-      message: "Starting playback server...",
+      message: "Checking existing playback server...",
       detail: "",
     });
+
+    const alreadyRunning = await isDecoderServerHealthy({ timeoutMs: 500 });
+    if (alreadyRunning) {
+      logToFile("Found existing playback server, attaching instead of spawning");
+      setDecoderStatus({
+        state: "ready",
+        reason: "already_running",
+        message: "",
+        detail: "Using an already running Raffi playback server.",
+      });
+      return;
+    }
+
     console.log("Binary path:", binPath);
     logToFile("Decoder binary path", binPath);
 
