@@ -39,7 +39,11 @@
 				? "Sync failed"
 				: "Sync ready";
 	$: syncStatusDetail = $cloudSyncStatus.lastError
-		? $cloudSyncStatus.lastError
+		? (
+			$cloudSyncStatus.lastSuccessAt
+				? `Last successful sync: ${formatTimestamp($cloudSyncStatus.lastSuccessAt)}`
+				: "No successful sync yet"
+		)
 		: `Last sync ${formatTimestamp($cloudSyncStatus.lastSuccessAt)}`;
 	$: showSyncNow = !$localMode && $cloudSyncStatus.cloudFeaturesAvailable;
 	$: traktActionLabel = traktLoading

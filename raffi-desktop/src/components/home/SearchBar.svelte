@@ -15,8 +15,13 @@
 	import ListsPopup from "../meta/modals/ListsPopup.svelte";
 	import PlayModal from "./modals/PlayModal.svelte";
 	import { trackEvent } from "../../lib/analytics";
-	import { currentUser, updateStatus } from "../../lib/stores/authStore";
+	import {
+		currentUser,
+		authInitializing,
+		updateStatus,
+	} from "../../lib/stores/authStore";
     import { userZoom } from "../../lib/stores/settingsStore";
+	import LoadingSpinner from "../common/LoadingSpinner.svelte";
     import {
         HOME_SEARCH_BAR_POSITION_AUTO,
         HOME_SEARCH_BAR_POSITION_BOTTOM,
@@ -730,11 +735,20 @@
 
         <div class="flex flex-col items-center">
             <button
-                class={`group relative bg-[#2C2C2C]/80 rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer ${$currentUser ? 'p-0 overflow-hidden w-[80px] h-[80px]' : 'p-[20px]'}`}
+                class={`group relative bg-[#2C2C2C]/80 rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 ${$authInitializing
+                    ? "cursor-wait pointer-events-none p-0 overflow-hidden w-[80px] h-[80px]"
+                    : $currentUser
+                        ? "cursor-pointer p-0 overflow-hidden w-[80px] h-[80px]"
+                        : "cursor-pointer p-[20px]"}`
+                }
                 aria-label="settings"
                 onclick={openSettings}
             >
-                {#if $currentUser}
+                {#if $authInitializing}
+                    <div class="w-full h-full bg-white/10 flex items-center justify-center">
+                        <LoadingSpinner size="30px" />
+                    </div>
+                {:else if $currentUser}
                     <div class="w-full h-full bg-white/10 group-hover:bg-black/35 transition-colors duration-300 flex items-center justify-center">
                         {#if $currentUser.avatar}
                             <img

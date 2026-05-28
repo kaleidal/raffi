@@ -1,0 +1,42 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "raffi-sync",
+  "main": "src/index.ts",
+  "routes": [
+    {
+      "pattern": "sync.raffi.al",
+      "custom_domain": true
+    }
+  ],
+  "compatibility_date": "2026-05-26",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "vars": {
+    "AVE_CLIENT_ID": "app_13afc5b8884e9985d89eac0f4ca4b5af",
+    "AVE_ISSUER": "https://aveid.net",
+    "TRAKT_REDIRECT_URI": "raffi://trakt/callback"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "raffi-sync"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "WATCH_PARTIES",
+        "class_name": "WatchPartyObject"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["WatchPartyObject"]
+    }
+  ]
+}

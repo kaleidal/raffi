@@ -3,8 +3,8 @@ import { create } from 'zustand';
 
 import type { AppUser } from '@/lib/auth/types';
 import { signInWithAve } from '@/lib/auth/aveAuth';
-import { setConvexAuthToken } from '@/lib/convex';
 import { setCachedUser } from '@/lib/db';
+import { setRaffiSyncAuthToken } from '@/lib/raffiSync';
 
 const AVE_USER_KEY = 'ave_user_mobile';
 const AVE_TOKEN_KEY = 'ave_token_mobile';
@@ -73,7 +73,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ loading: true });
     const user = await readSession();
     if (user?.token) {
-      setConvexAuthToken(user.token);
+      setRaffiSyncAuthToken(user.token);
     }
     setCachedUser(user);
     set({ user, loading: false, initialized: true });
@@ -83,7 +83,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ loading: true });
     try {
       const user = await signInWithAve();
-      setConvexAuthToken(user.token);
+      setRaffiSyncAuthToken(user.token);
       setCachedUser(user);
       await persistSession(user);
       set({ user, loading: false });
@@ -100,7 +100,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   signOut: async () => {
     set({ loading: true });
-    setConvexAuthToken(null);
+    setRaffiSyncAuthToken(null);
     setCachedUser(null);
     await persistSession(null);
     set({ user: null, loading: false });

@@ -12,19 +12,21 @@
 		syncUserStateToLocal,
 	} from "../../../lib/db/db";
 	import {
-		currentUser,
-		signInWithAve,
-		signOutToLocalMode,
-		localMode,
-		updateStatus,
-	} from "../../../lib/stores/authStore";
+        currentUser,
+        signInWithAve,
+        signOutToLocalMode,
+        localMode,
+		authInitializing,
+        updateStatus,
+    } from "../../../lib/stores/authStore";
 	import { router } from "../../../lib/stores/router";
 	import {
 		trackEvent,
 	} from "../../../lib/analytics";
 	import { withOverlayZoomStyle } from "../../../lib/overlayZoom";
 	import ActivitySection from "./settings/ActivitySection.svelte";
-	import FeedbackSection from "./settings/FeedbackSection.svelte";
+    import FeedbackSection from "./settings/FeedbackSection.svelte";
+    import LoadingSpinner from "../../common/LoadingSpinner.svelte";
 	import UpdateSection from "./settings/UpdateSection.svelte";
 	import LocalModeSignInSection from "./settings/LocalModeSignInSection.svelte";
 	import PreferencesSection from "./settings/PreferencesSection.svelte";
@@ -343,6 +345,11 @@
 						<div class="flex flex-col gap-5 pb-1">
 								{#if $localMode}
 									<LocalModeSignInSection aveLoading={aveLoading} onAveLogin={handleAveLogin} />
+								{:else if $authInitializing}
+									<div class="rounded-[28px] bg-white/4 p-6 flex flex-col items-center justify-center gap-3 text-center">
+										<LoadingSpinner size="30px" />
+										<p class="text-white/62 text-sm">Restoring your account…</p>
+									</div>
 								{:else if $currentUser}
 									<AccountSection
 										{error}

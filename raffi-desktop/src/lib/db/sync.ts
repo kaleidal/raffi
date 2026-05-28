@@ -1,4 +1,3 @@
-import { convexMutation, convexQuery } from "./convex";
 import type { CloudSyncState, RemoteState, SyncSection } from "./types";
 import {
     clearDirtyMarker,
@@ -19,7 +18,9 @@ import {
     setSyncResult,
     canUseCloudFeatures,
     updateSyncState,
+    DEFAULT_ADDON,
 } from "./state";
+import { syncGet, syncPost } from "./raffiSync";
 import { get } from "svelte/store";
 import { getCachedUser } from "../stores/authStore";
 
@@ -40,7 +41,7 @@ const getRemoteState = async (force = false): Promise<RemoteState> => {
     if (!force && remoteStateCache && remoteStateCache.userId === userId && now - remoteStateCache.updatedAt < CACHE_TTL_MS) {
         return remoteStateCache.data;
     }
-    const snapshot = await convexQuery<RemoteState>("raffi:getState", {});
+    const snapshot = await syncGet<RemoteState>("/state");
     const normalized = {
         addons: Array.isArray(snapshot?.addons) ? snapshot.addons : [],
         library: Array.isArray(snapshot?.library) ? snapshot.library : [],
@@ -153,6 +154,66 @@ const buildDirtySyncPayload = (local: RemoteState, syncState: CloudSyncState) =>
     };
 };
 
+const buildFullSyncPayload = (local: RemoteState) => ({
+    addons: local.addons,
+    library: local.library,
+    lists: local.lists,
+    listItems: local.listItems,
+    userMeta: local.userMeta,
+    deletes: {
+        addons: [],
+        library: [],
+        lists: [],
+        listItems: [],
+    },
+});
+
+const isRemoteStateEmpty = (state: RemoteState) =>
+    state.addons.length === 0
+    && state.library.length === 0
+    && state.lists.length === 0
+    && state.listItems.length === 0
+    && !state.userMeta;
+
+const isRemoteStateBootstrapTarget = (state: RemoteState) =>
+    isRemoteStateEmpty(state)
+    || (
+        state.addons.length === 1
+        && state.addons[0]?.transport_url === DEFAULT_ADDON.transportUrl
+        && state.library.length === 0
+        && state.lists.length === 0
+        && state.listItems.length === 0
+        && !state.userMeta
+    );
+
+const hasSyncPayloadChanges = (payload: ReturnType<typeof buildDirtySyncPayload> | ReturnType<typeof buildFullSyncPayload>) =>
+    payload.addons.length
+    + payload.library.length
+    + payload.lists.length
+    + payload.listItems.length
+    + (payload.userMeta ? 1 : 0)
+    + payload.deletes.addons.length
+    + payload.deletes.library.length
+    + payload.deletes.lists.length
+    + payload.deletes.listItems.length > 0;
+
+const toMutationPayload = (payload: ReturnType<typeof buildDirtySyncPayload> | ReturnType<typeof buildFullSyncPayload>) => {
+    const mutationPayload: Record<string, any> = {
+        addons: payload.addons.map((addon) => ({ transport_url: addon.transport_url, manifest: addon.manifest, flags: addon.flags, addon_id: addon.addon_id, added_at: addon.added_at, position: addon.position })),
+        library: payload.library.map((item) => ({ imdb_id: item.imdb_id, progress: item.progress, last_watched: item.last_watched, completed_at: item.completed_at, type: item.type, shown: item.shown, poster: item.poster })),
+        lists: payload.lists.map((list) => ({ list_id: list.list_id, name: list.name, position: list.position, created_at: list.created_at })),
+        listItems: payload.listItems.map((item) => ({ list_id: item.list_id, imdb_id: item.imdb_id, position: item.position, type: item.type, poster: item.poster })),
+        deletes: payload.deletes,
+    };
+    if (payload.userMeta) {
+        mutationPayload.userMeta = {
+            settings: payload.userMeta.settings,
+            updated_at: payload.userMeta.updated_at,
+        };
+    }
+    return mutationPayload;
+};
+
 const clearSyncedSnapshot = (snapshot: CloudSyncState) => {
     const sections: SyncSection[] = ["addons", "library", "lists", "listItems", "userMeta"];
     updateSyncState((state) => {
@@ -196,49 +257,23 @@ export const syncLocalStateToUser = async (userId: string, options?: { forceRemo
     const active = getCloudSyncPromise();
     if (active) return active;
     const pending = getPendingCloudSyncCounts();
-    if (pending.uploads + pending.deletes === 0) {
-        publishCloudSyncStatus();
-        return { ok: true, skipped: true as const, reason: "clean" as const };
-    }
 
     const promise = (async () => {
         try {
-            await persistMergedRemoteState(options?.forceRemoteRefresh ?? true);
+            const remote = await getRemoteState(options?.forceRemoteRefresh ?? true);
+            mergeRemoteStateIntoLocal(remote);
             const local = readLocalState();
             const syncState = readSyncState();
-            const payload = buildDirtySyncPayload(local, syncState);
+            const payload = pending.uploads + pending.deletes === 0 && isRemoteStateBootstrapTarget(remote)
+                ? buildFullSyncPayload(local)
+                : buildDirtySyncPayload(local, syncState);
 
-            if (
-                payload.addons.length
-                + payload.library.length
-                + payload.lists.length
-                + payload.listItems.length
-                + (payload.userMeta ? 1 : 0)
-                + payload.deletes.addons.length
-                + payload.deletes.library.length
-                + payload.deletes.lists.length
-                + payload.deletes.listItems.length
-                === 0
-            ) {
+            if (!hasSyncPayloadChanges(payload)) {
                 publishCloudSyncStatus();
                 return { ok: true, skipped: true as const, reason: "clean" as const };
             }
 
-            const mutationPayload: Record<string, any> = {
-                addons: payload.addons.map((addon) => ({ transport_url: addon.transport_url, manifest: addon.manifest, flags: addon.flags, addon_id: addon.addon_id, added_at: addon.added_at, position: addon.position })),
-                library: payload.library.map((item) => ({ imdb_id: item.imdb_id, progress: item.progress, last_watched: item.last_watched, completed_at: item.completed_at, type: item.type, shown: item.shown, poster: item.poster })),
-                lists: payload.lists.map((list) => ({ list_id: list.list_id, name: list.name, position: list.position, created_at: list.created_at })),
-                listItems: payload.listItems.map((item) => ({ list_id: item.list_id, imdb_id: item.imdb_id, position: item.position, type: item.type, poster: item.poster })),
-                deletes: payload.deletes,
-            };
-            if (payload.userMeta) {
-                mutationPayload.userMeta = {
-                    settings: payload.userMeta.settings,
-                    updated_at: payload.userMeta.updated_at,
-                };
-            }
-
-            await convexMutation("raffi:applySyncState", mutationPayload);
+            await syncPost("/sync", toMutationPayload(payload));
 
             clearSyncedSnapshot(syncState);
             invalidateRemoteCache();

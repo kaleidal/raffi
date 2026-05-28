@@ -18,7 +18,7 @@ import {
     syncLocalStateToUser,
     warmRemoteStateCache,
 } from "../db/db";
-import { setConvexAuthRefreshHandler, setConvexAuthToken } from "../db/convex";
+import { setRaffiSyncAuthRefreshHandler, setRaffiSyncAuthToken } from "../db/raffiSync";
 import { writable } from "svelte/store";
 
 export type UpdateStatus = {
@@ -32,6 +32,7 @@ export type UpdateStatus = {
 
 export const currentUser = writable<AppUser | null>(null);
 export const localMode = writable(false);
+export const authInitializing = writable(false);
 export const updateStatus = writable<UpdateStatus>({
     available: false,
     downloaded: false,
@@ -73,7 +74,7 @@ export const enableLocalMode = () => {
     stopCloudReconciliationLoop();
     localMode.set(true);
     persistLocalMode(true);
-    setConvexAuthToken(null);
+    setRaffiSyncAuthToken(null);
     ensureDefaultAddonsForLocal().catch(() => {
         // ignore
     });
@@ -151,7 +152,7 @@ async function seedDefaultsIfNeeded(user: AppUser | null) {
     await ensureDefaultAddonsForUser(userId);
 }
 
-async function hydrateSignedInState(user: AppUser, context: string) {
+async function hydrateSignedInState(context: string) {
     let shouldRefreshHome = false;
 
     try {
@@ -161,20 +162,25 @@ async function hydrateSignedInState(user: AppUser, context: string) {
         console.error(`${context} cloud hydrate failed`, error);
     }
 
-    try {
-        await seedDefaultsIfNeeded(user);
-        shouldRefreshHome = true;
-    } catch (error) {
-        console.error(`${context} default addon setup failed`, error);
-    }
-
     return shouldRefreshHome;
 }
 
-async function finishSignedInStartup(user: AppUser) {
-    const shouldRefreshHome = await hydrateSignedInState(user, "Startup sync");
+async function seedSignedInDefaults(user: AppUser, context: string) {
+    try {
+        await seedDefaultsIfNeeded(user);
+        return true;
+    } catch (error) {
+        console.error(`${context} default addon setup failed`, error);
+        return false;
+    }
+}
 
-    void syncLocalStateToUser(user.id);
+async function finishSignedInStartup(user: AppUser) {
+    let shouldRefreshHome = await hydrateSignedInState("Startup sync");
+
+    const syncResult = await syncLocalStateToUser(user.id);
+    shouldRefreshHome = shouldRefreshHome || syncResult.ok;
+    shouldRefreshHome = await seedSignedInDefaults(user, "Startup sync") || shouldRefreshHome;
     void flushPendingLibraryProgress();
 
     if (hasLocalState()) {
@@ -207,13 +213,13 @@ const clearAveSession = () => {
     currentUser.set(null);
     persistAveSession(null);
     void clearAveSessionStorage();
-    setConvexAuthToken(null);
+    setRaffiSyncAuthToken(null);
 };
 
 const tryRefreshAveSession = async (user: AppUser): Promise<AppUser | null> => {
     try {
         const refreshedUser = await refreshAveUserSession(user);
-        setConvexAuthToken(refreshedUser.token);
+        setRaffiSyncAuthToken(refreshedUser.token);
         persistAveSession(refreshedUser);
         return refreshedUser;
     } catch (error) {
@@ -228,10 +234,10 @@ const tryRefreshAveSession = async (user: AppUser): Promise<AppUser | null> => {
 const applyRefreshedUser = (refreshed: AppUser) => {
     userCache = refreshed;
     currentUser.set(refreshed);
-    setConvexAuthToken(refreshed.token);
+    setRaffiSyncAuthToken(refreshed.token);
 };
 
-const refreshSessionFromConvexAuthFailure = async (): Promise<string | null> => {
+const refreshSessionFromSyncAuthFailure = async (): Promise<string | null> => {
     const activeUser = userCache;
     if (!activeUser) return null;
 
@@ -250,35 +256,40 @@ const refreshSessionFromConvexAuthFailure = async (): Promise<string | null> => 
 export async function initAuth() {
     if (initialized) return;
     initialized = true;
+    authInitializing.set(true);
 
-    const storedLocalMode = readLocalMode();
-    const hasStoredLocalMode = typeof window !== "undefined" && localStorage.getItem(LOCAL_MODE_KEY) !== null;
-    localMode.set(hasStoredLocalMode ? storedLocalMode : true);
-    if (!hasStoredLocalMode) {
-        persistLocalMode(true);
-    }
+    try {
+        const storedLocalMode = readLocalMode();
+        const hasStoredLocalMode = typeof window !== "undefined" && localStorage.getItem(LOCAL_MODE_KEY) !== null;
+        localMode.set(hasStoredLocalMode ? storedLocalMode : true);
+        if (!hasStoredLocalMode) {
+            persistLocalMode(true);
+        }
 
-    const legacyUser = readLegacyAveSession();
-    const activeUser = await resolveStoredAveUser(legacyUser);
+        const legacyUser = readLegacyAveSession();
+        const activeUser = await resolveStoredAveUser(legacyUser);
 
-    if (activeUser) {
-        userCache = activeUser;
-        currentUser.set(activeUser);
-        setConvexAuthToken(activeUser.token);
-        persistAveSession(activeUser);
-    } else if (legacyUser) {
-        clearAveSession();
-        enableLocalMode();
-    }
+        if (activeUser) {
+            userCache = activeUser;
+            currentUser.set(activeUser);
+            setRaffiSyncAuthToken(activeUser.token);
+            persistAveSession(activeUser);
+        } else if (legacyUser) {
+            clearAveSession();
+            enableLocalMode();
+        }
 
-    if (userCache) {
-        disableLocalMode();
-        resetRemoteStateCache();
-        startCloudReconciliationLoop();
-        void finishSignedInStartup(userCache);
-    } else {
-        enableLocalMode();
-        void ensureDefaultAddonsForLocal().then(emitHomeRefresh);
+        if (userCache) {
+            disableLocalMode();
+            resetRemoteStateCache();
+            startCloudReconciliationLoop();
+            void finishSignedInStartup(userCache);
+        } else {
+            enableLocalMode();
+            void ensureDefaultAddonsForLocal().then(emitHomeRefresh);
+        }
+    } finally {
+        authInitializing.set(false);
     }
 }
 
@@ -286,16 +297,18 @@ export async function signInWithAve() {
     const user = await signInWithAveViaBrowser();
     userCache = user;
     currentUser.set(user);
-    setConvexAuthToken(user.token);
+    setRaffiSyncAuthToken(user.token);
     persistAveSession(user);
 
     disableLocalMode();
     resetRemoteStateCache();
     startCloudReconciliationLoop();
 
-    const shouldRefreshHome = await hydrateSignedInState(user, "Sign-in sync");
+    let shouldRefreshHome = await hydrateSignedInState("Sign-in sync");
 
-    void syncLocalStateToUser(user.id);
+    const syncResult = await syncLocalStateToUser(user.id);
+    shouldRefreshHome = shouldRefreshHome || syncResult.ok;
+    shouldRefreshHome = await seedSignedInDefaults(user, "Sign-in sync") || shouldRefreshHome;
     void flushPendingLibraryProgress();
     if (hasLocalState()) {
         void warmRemoteStateCache().then((merged) => {
@@ -323,4 +336,4 @@ export function getCachedUser(): AppUser | null {
     return userCache;
 }
 
-setConvexAuthRefreshHandler(refreshSessionFromConvexAuthFailure);
+setRaffiSyncAuthRefreshHandler(refreshSessionFromSyncAuthFailure);

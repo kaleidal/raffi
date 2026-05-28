@@ -1,6 +1,6 @@
 import type { TraktRecommendation, TraktScrobbleArgs } from "./types";
-import { convexAction } from "./convex";
 import { canUseCloudFeatures, getRequiredUserId, isLocalModeActive } from "./state";
+import { syncPost } from "./raffiSync";
 
 const TRAKT_API_BASE_URL = "https://api.trakt.tv";
 const TOKEN_EXPIRY_SKEW_MS = 30_000;
@@ -64,7 +64,7 @@ const requestClientAuth = async (forceRefresh = false): Promise<CachedAuth | nul
 
     getRequiredUserId();
 
-    const result = await convexAction<TraktClientAuthResponse>("raffi:getTraktClientAuth", {
+    const result = await syncPost<TraktClientAuthResponse>("/trakt/client-auth", {
         forceRefresh,
     });
 

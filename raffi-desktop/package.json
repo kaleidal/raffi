@@ -12,11 +12,11 @@
   "homepage": "https://raffi.al",
   "scripts": {
     "dev": "vite",
-    "electron:dev": "npm run server:build && cross-env NODE_ENV=development concurrently \"npm run dev\" \"wait-on http://localhost:5173 && cross-env ELECTRON_DISABLE_SANDBOX=1 electron .\"",
+    "electron:dev": "bun run server:build && cross-env NODE_ENV=development concurrently \"bun run dev\" \"wait-on http://localhost:5173 && cross-env ELECTRON_DISABLE_SANDBOX=1 electron .\"",
     "electron:dev:only": "cross-env ELECTRON_DISABLE_SANDBOX=1 electron .",
     "build": "vite build",
     "server:build": "node build_binary.cjs",
-    "dist": "npm run server:build && npm run build && electron-builder",
+    "dist": "bun run server:build && bun run build && electron-builder",
     "check": "svelte-check --tsconfig ./tsconfig.json"
   },
   "devDependencies": {
@@ -182,7 +182,6 @@
     "@lucide/svelte": "^1.9.0",
     "@ryuziii/discord-rpc": "^1.0.1-rc.1",
     "@tailwindcss/vite": "^4.2.4",
-    "convex": "^1.36.1",
     "electron-updater": "^6.8.3",
     "eventemitter3": "^5.0.4",
     "express": "^5.2.1",
