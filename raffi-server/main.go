@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path"
 	"path/filepath"
@@ -119,36 +120,46 @@ func main() {
 }
 
 func resolveMediaToolPaths() (string, string, error) {
-	ffmpegPath, err := resolveMediaToolPath("RAFFI_FFMPEG_BIN", executableToolName("ffmpeg"), "ffmpeg")
-	if err != nil {
-		return "", "", err
-	}
+	ffmpegPath := resolveMediaToolPathSmart("RAFFI_FFMPEG_BIN", "ffmpeg")
+	ffprobePath := resolveMediaToolPathSmart("RAFFI_FFPROBE_BIN", "ffprobe")
 
-	ffprobePath, err := resolveMediaToolPath("RAFFI_FFPROBE_BIN", executableToolName("ffprobe"), "ffprobe")
-	if err != nil {
-		return "", "", err
-	}
+	log.Printf("Resolved ffmpeg: %s", ffmpegPath)
+	log.Printf("Resolved ffprobe: %s", ffprobePath)
 
 	return ffmpegPath, ffprobePath, nil
 }
 
-func resolveMediaToolPath(envKey, siblingName, fallback string) (string, error) {
+// resolveMediaToolPathSmart implements a robust priority order:
+// 1. Explicit env var (highest priority, for power users / testing)
+// 2. System binary found on PATH (most reliable on Linux, common via brew on macOS)
+// 3. Sibling binary next to the current executable (what we bundle)
+// 4. Plain command name (final fallback to whatever is in PATH)
+func resolveMediaToolPathSmart(envKey, baseName string) string {
+	toolName := executableToolName(baseName)
+
+	// 1. Explicit override
 	if configured := strings.TrimSpace(os.Getenv(envKey)); configured != "" {
-		if _, err := os.Stat(configured); err != nil {
-			return "", fmt.Errorf("%s points to %q but it is not usable: %w", envKey, configured, err)
+		if _, err := os.Stat(configured); err == nil {
+			return configured
 		}
-		return configured, nil
+		log.Printf("%s=%s is set but the file does not exist, ignoring", envKey, configured)
 	}
 
-	exePath, err := os.Executable()
-	if err == nil {
-		candidate := filepath.Join(filepath.Dir(exePath), siblingName)
+	// 2. Try to find a good system binary first (best on Linux)
+	if systemPath, err := exec.LookPath(toolName); err == nil {
+		return systemPath
+	}
+
+	// 3. Sibling next to our own binary (the bundled one we ship)
+	if exePath, err := os.Executable(); err == nil {
+		candidate := filepath.Join(filepath.Dir(exePath), toolName)
 		if _, statErr := os.Stat(candidate); statErr == nil {
-			return candidate, nil
+			return candidate
 		}
 	}
 
-	return fallback, nil
+	// 4. Last resort — just use the name and let the system resolve it
+	return toolName
 }
 
 func executableToolName(base string) string {
@@ -484,6 +495,7 @@ func (s *Server) handleHLSSessionAsset(w http.ResponseWriter, r *http.Request, s
 			}
 		} else {
 			if _, _, err := s.hlsController.EnsureSession(r.Context(), sess.ID, sess.Source, sess.StartTime); err != nil {
+				log.Printf("failed to prepare stream for session %s (source=%s): %v", sess.ID, sess.Source, err)
 				http.Error(w, "failed to prepare stream", http.StatusInternalServerError)
 				return
 			}
@@ -535,6 +547,7 @@ func (s *Server) handleHLSSessionAsset(w http.ResponseWriter, r *http.Request, s
 	}
 
 	if _, _, err := s.hlsController.EnsureSession(r.Context(), sess.ID, sess.Source, sess.StartTime); err != nil {
+		log.Printf("failed to prepare stream for session %s (source=%s): %v", sess.ID, sess.Source, err)
 		http.Error(w, "failed to prepare stream", http.StatusInternalServerError)
 		return
 	}

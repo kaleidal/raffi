@@ -3,9 +3,15 @@ package hls
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
+	"syscall"
 )
 
 type Metadata struct {
@@ -50,6 +56,11 @@ func ProbeDuration(ctx context.Context, source string) (*Metadata, string, error
 }
 
 func NewProbeDuration(ffprobePath string) func(ctx context.Context, source string) (*Metadata, string, error) {
+	// On Linux we keep a fallback candidate (system ffprobe) in case the
+	// bundled static build segfaults on certain debrid resolver URLs.
+	var fallbackOnce sync.Once
+	var fallbackPath string
+
 	return func(ctx context.Context, source string) (*Metadata, string, error) {
 		probeSource := source
 		if strings.Contains(source, "/torrents/") {
@@ -60,41 +71,70 @@ func NewProbeDuration(ffprobePath string) func(ctx context.Context, source strin
 			}
 		}
 
-		cmd := exec.CommandContext(ctx, ffprobePath,
-			"-v", "quiet",
-			"-analyzeduration", "1000000",
-			"-probesize", "1000000",
-			"-print_format", "json",
-			"-show_format",
-			"-show_streams",
-			"-show_chapters",
-			probeSource,
-		)
-		out, err := cmd.Output()
-		if err != nil {
-			return nil, "", err
+		attemptPaths := []string{ffprobePath}
+		if runtime.GOOS == "linux" {
+			fallbackOnce.Do(func() {
+				if p, _ := exec.LookPath("ffprobe"); p != "" && p != ffprobePath {
+					fallbackPath = p
+					log.Printf("ffprobe fallback available: %s (will be used if bundled binary crashes)", fallbackPath)
+				}
+			})
+			if fallbackPath != "" {
+				attemptPaths = append(attemptPaths, fallbackPath)
+			}
 		}
 
-		var data Metadata
-		if err := json.Unmarshal(out, &data); err != nil {
-			return nil, "", err
-		}
+		var lastErr error
+		for _, p := range attemptPaths {
+			cmd := exec.CommandContext(ctx, p,
+				"-v", "quiet",
+				"-analyzeduration", "1000000",
+				"-probesize", "1000000",
+				"-print_format", "json",
+				"-show_format",
+				"-show_streams",
+				"-show_chapters",
+				probeSource,
+			)
+			out, err := cmd.Output()
+			if err == nil {
+				// Success — if we used fallback, remember it for future calls
+				if p != ffprobePath && fallbackPath != "" {
+					ffprobePath = p // switch primary for this process
+				}
+				var data Metadata
+				if uerr := json.Unmarshal(out, &data); uerr != nil {
+					return nil, "", uerr
+				}
+				dur, _ := strconv.ParseFloat(data.Format.Duration, 64)
+				data.Format.DurationSeconds = dur
 
-		dur, _ := strconv.ParseFloat(data.Format.Duration, 64)
-		data.Format.DurationSeconds = dur
+				videoCodec := "libx264"
+				for _, st := range data.Streams {
+					if st.CodecType != "video" {
+						continue
+					}
+					if st.CodecName == "h264" && st.Profile != "High 10" && st.Profile != "High 4:2:2" && st.Profile != "High 4:4:4 Predictive" {
+						videoCodec = "h264"
+					}
+					break
+				}
+				return &data, videoCodec, nil
+			}
 
-		videoCodec := "libx264"
-		for _, st := range data.Streams {
-			if st.CodecType != "video" {
+			lastErr = wrapProbeError(p, err)
+
+			// If this was a hard crash (segfault etc.) on the primary Linux binary,
+			// try the fallback on the next iteration of the loop.
+			if p == ffprobePath && strings.Contains(lastErr.Error(), "signal") && runtime.GOOS == "linux" {
+				log.Printf("primary ffprobe crashed (%v), will try fallback on next attempt", lastErr)
 				continue
 			}
-			if st.CodecName == "h264" && st.Profile != "High 10" && st.Profile != "High 4:2:2" && st.Profile != "High 4:4:4 Predictive" {
-				videoCodec = "h264"
-			}
+			// For non-crash errors or non-Linux, stop after first failure
 			break
 		}
 
-		return &data, videoCodec, nil
+		return nil, "", lastErr
 	}
 }
 
@@ -104,4 +144,19 @@ func (c *Controller) ProbeMetadata(ctx context.Context, id, source string) (*Met
 
 	meta, _, err := c.getOrProbeLocked(ctx, source)
 	return meta, err
+}
+
+// wrapProbeError turns exec errors from ffprobe into clearer messages,
+// especially when the binary itself crashed (e.g. segfault from a bad static build).
+func wrapProbeError(ffprobePath string, err error) error {
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		if ws, ok := exitErr.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
+			sig := ws.Signal()
+			return fmt.Errorf("ffprobe binary crashed (signal %s) at %s: %w", sig, ffprobePath, err)
+		}
+		return fmt.Errorf("ffprobe exited with error (code %d) at %s: %w", exitErr.ExitCode(), ffprobePath, err)
+	}
+	// Other errors (context deadline, binary not found, etc.)
+	return fmt.Errorf("ffprobe failed at %s: %w", ffprobePath, err)
 }

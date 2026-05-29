@@ -22,6 +22,7 @@ type TranscoderFunc func(
 	audioIndex int,
 	audioCodec string,
 	appendMode bool,
+	hasAudio bool,
 ) (*exec.Cmd, error)
 
 func DefaultTranscoder(
@@ -34,6 +35,7 @@ func DefaultTranscoder(
 	audioIndex int,
 	audioCodec string,
 	appendMode bool,
+	hasAudio bool,
 ) (*exec.Cmd, error) {
 	return NewTranscoder("ffmpeg")(
 		ctx,
@@ -47,6 +49,7 @@ func DefaultTranscoder(
 		audioIndex,
 		audioCodec,
 		appendMode,
+		hasAudio,
 	)
 }
 
@@ -61,6 +64,7 @@ func NewTranscoder(ffmpegPath string) TranscoderFunc {
 		audioIndex int,
 		audioCodec string,
 		appendMode bool,
+		hasAudio bool,
 	) (*exec.Cmd, error) {
 		if !appendMode {
 			_ = os.RemoveAll(outDir)
@@ -109,9 +113,15 @@ func NewTranscoder(ffmpegPath string) TranscoderFunc {
 		args = append(args,
 			"-i", source,
 			"-map", "0:v:0",
-			"-map", fmt.Sprintf("0:a:%d", audioIndex),
-			"-c:v", videoCodec,
 		)
+
+		if hasAudio {
+			args = append(args, "-map", fmt.Sprintf("0:a:%d", audioIndex))
+		} else {
+			args = append(args, "-an")
+		}
+
+		args = append(args, "-c:v", videoCodec)
 		if videoCodec == "copy" {
 			args = append(args,
 				"-copytb", "1",
@@ -124,17 +134,19 @@ func NewTranscoder(ffmpegPath string) TranscoderFunc {
 			hlsFlags += "+append_list"
 		}
 
-		// Audio transcoding logic
-		if audioCodec == "aac" {
-			args = append(args, []string{"-c:a", "copy"}...)
-		} else {
-			args = append(args, []string{
-				"-c:a", "aac",
-				"-ac", "2",
-				"-ar", "48000",
-				"-b:a", "160k",
-				"-af", "aresample=async=1,pan=stereo|FL=FC+0.30*FL+0.30*BL|FR=FC+0.30*FR+0.30*BR,loudnorm=I=-16:TP=-1.5:LRA=11",
-			}...)
+		// Audio transcoding logic (only if the source has audio)
+		if hasAudio {
+			if audioCodec == "aac" {
+				args = append(args, []string{"-c:a", "copy"}...)
+			} else {
+				args = append(args, []string{
+					"-c:a", "aac",
+					"-ac", "2",
+					"-ar", "48000",
+					"-b:a", "160k",
+					"-af", "aresample=async=1,pan=stereo|FL=FC+0.30*FL+0.30*BL|FR=FC+0.30*FR+0.30*BR,loudnorm=I=-16:TP=-1.5:LRA=11",
+				}...)
+			}
 		}
 
 		args = append(args,

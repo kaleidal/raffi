@@ -81,7 +81,7 @@ func (c *Controller) EnsureSession(ctx context.Context, id, source string, start
 		meta, codec, err := c.getOrProbeLocked(probeCtx, source)
 		if err != nil {
 			c.mu.Unlock()
-			return 0, "", err
+			return 0, "", fmt.Errorf("probe failed: %w", err)
 		}
 		duration := meta.Format.DurationSeconds
 
@@ -154,7 +154,7 @@ func (c *Controller) EnsureSession(ctx context.Context, id, source string, start
 		return 0, "", err
 	}
 
-	if err := c.ensureCmdLocked(id, source, sess, sess.Slices[sess.SliceIndex].StartTime, sliceDir, false); err != nil {
+	if err := c.ensureCmdLocked(id, source, sess, sess.Slices[sess.SliceIndex].StartTime, sliceDir, false, len(sess.AvailableStreams) > 0); err != nil {
 		c.mu.Unlock()
 		return 0, "", err
 	}
@@ -196,7 +196,7 @@ func (c *Controller) Seek(ctx context.Context, id, source string, target float64
 		meta, codec, err := c.getOrProbeLocked(probeCtx, source)
 		if err != nil {
 			c.mu.Unlock()
-			return 0, 0, "", err
+			return 0, 0, "", fmt.Errorf("probe failed: %w", err)
 		}
 		duration := meta.Format.DurationSeconds
 
@@ -248,7 +248,7 @@ func (c *Controller) Seek(ctx context.Context, id, source string, target float64
 			return 0, 0, "", err
 		}
 
-		if err := c.ensureCmdLocked(id, source, sess, target, sliceDir, false); err != nil {
+		if err := c.ensureCmdLocked(id, source, sess, target, sliceDir, false, len(sess.AvailableStreams) > 0); err != nil {
 			c.mu.Unlock()
 			return 0, 0, "", err
 		}
@@ -327,7 +327,7 @@ func (c *Controller) Seek(ctx context.Context, id, source string, target float64
 
 			if sess.Cmd == nil && !sess.Finished && endTime < sess.DurationHint {
 				resumeTime := endTime
-				if err := c.ensureCmdLocked(id, source, sess, resumeTime, sliceDir, true); err != nil {
+				if err := c.ensureCmdLocked(id, source, sess, resumeTime, sliceDir, true, len(sess.AvailableStreams) > 0); err != nil {
 					log.Printf("Failed to resume slice %d: %v", slice.Index, err)
 				}
 			}
@@ -352,7 +352,7 @@ func (c *Controller) Seek(ctx context.Context, id, source string, target float64
 		return 0, 0, "", err
 	}
 
-	if err := c.ensureCmdLocked(id, source, sess, target, sliceDir, false); err != nil {
+	if err := c.ensureCmdLocked(id, source, sess, target, sliceDir, false, len(sess.AvailableStreams) > 0); err != nil {
 		c.mu.Unlock()
 		return 0, 0, "", err
 	}

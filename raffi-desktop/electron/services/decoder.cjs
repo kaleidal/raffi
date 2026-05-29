@@ -61,6 +61,42 @@ function createDecoderService({ isDev, path, fs, spawn, logToFile, baseDir }) {
     return path.join(rootDir, fileName);
   }
 
+  /**
+   * Decides whether to use a system binary or the bundled one.
+   * Priority:
+   *   1. If a good system binary exists on PATH → use it (best on Linux, good on macOS)
+   *   2. If the bundled binary we staged exists → use it
+   *   3. Fall back to whatever the name resolves to
+   */
+  function resolveBestBinary(toolName, bundledPath) {
+    // Try system first (most reliable when the user has a decent one)
+    try {
+      const { execSync } = require("child_process");
+      const whichCmd = process.platform === "win32" ? "where" : "which";
+      const systemPath = execSync(`${whichCmd} ${toolName}`, {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      })
+        .toString()
+        .split(/\r?\n/)[0]
+        .trim();
+
+      if (systemPath && fs.existsSync(systemPath)) {
+        return { path: systemPath, source: "system" };
+      }
+    } catch {
+      // which failed or binary not in PATH — that's fine
+    }
+
+    if (bundledPath && fs.existsSync(bundledPath)) {
+      return { path: bundledPath, source: "bundled" };
+    }
+
+    // Final fallback — just use the bare name
+    const ext = process.platform === "win32" ? ".exe" : "";
+    return { path: toolName + ext, source: "path" };
+  }
+
   function getDecoderServerUrl() {
     const serverAddr = process.env.RAFFI_SERVER_ADDR || "127.0.0.1:6969";
     return serverAddr.startsWith("http") ? serverAddr : `http://${serverAddr}`;
@@ -231,20 +267,26 @@ function createDecoderService({ isDev, path, fs, spawn, logToFile, baseDir }) {
           : [inheritedGoDebug, "netdns=go"].filter(Boolean).join(","),
       };
 
-      if (fs.existsSync(ffmpegPath)) {
-        await ensureDecoderExecutable(ffmpegPath);
-        decoderEnv.RAFFI_FFMPEG_BIN = ffmpegPath;
-        logToFile("Using bundled ffmpeg", ffmpegPath);
+      // Smart resolution (mirrors what the Go server does):
+      // Prefer system binaries when they exist and are usable.
+      // Only force the bundled ones via env var if we explicitly decide to use them.
+      const resolvedFfmpeg = resolveBestBinary("ffmpeg", ffmpegPath);
+      const resolvedFfprobe = resolveBestBinary("ffprobe", ffprobePath);
+
+      if (resolvedFfmpeg.source === "bundled") {
+        await ensureDecoderExecutable(resolvedFfmpeg.path);
+        decoderEnv.RAFFI_FFMPEG_BIN = resolvedFfmpeg.path;
+        logToFile("Using bundled ffmpeg", resolvedFfmpeg.path);
       } else {
-        logToFile("Bundled ffmpeg not found; falling back to PATH", ffmpegPath);
+        logToFile(`Using ${resolvedFfmpeg.source} ffmpeg`, resolvedFfmpeg.path);
       }
 
-      if (fs.existsSync(ffprobePath)) {
-        await ensureDecoderExecutable(ffprobePath);
-        decoderEnv.RAFFI_FFPROBE_BIN = ffprobePath;
-        logToFile("Using bundled ffprobe", ffprobePath);
+      if (resolvedFfprobe.source === "bundled") {
+        await ensureDecoderExecutable(resolvedFfprobe.path);
+        decoderEnv.RAFFI_FFPROBE_BIN = resolvedFfprobe.path;
+        logToFile("Using bundled ffprobe", resolvedFfprobe.path);
       } else {
-        logToFile("Bundled ffprobe not found; falling back to PATH", ffprobePath);
+        logToFile(`Using ${resolvedFfprobe.source} ffprobe`, resolvedFfprobe.path);
       }
 
       logToFile("Spawning decoder process");

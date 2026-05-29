@@ -2,10 +2,15 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
+const { execSync } = require('child_process');
+
 const ffmpegStaticPkg = require('ffmpeg-static/package.json');
 const ffmpegTag = ffmpegStaticPkg['ffmpeg-static']['binary-release-tag'];
 const ffmpegBinary = require('ffmpeg-static');
 const ffprobeBinary = require('ffprobe-static').path;
+
+// Import the reusable bundler
+const { downloadFfmpeg } = require('./scripts/ffmpeg-bundler.cjs');
 
 function runCommand(command, args, options = {}) {
   return new Promise((resolve, reject) => {
@@ -104,8 +109,28 @@ async function build() {
   }
 
   if (platform === 'darwin') {
-    await stageDarwinFfmpegPair(electronDir);
-    await stageDarwinFfprobePair(electronDir);
+    const success = await downloadFfmpeg({ platform: 'darwin', destDir: electronDir });
+    if (!success) {
+      console.log('Falling back to npm package binaries for macOS');
+      await stageMediaTool(ffmpegBinary, path.join(electronDir, 'ffmpeg-arm64'));
+      await stageMediaTool(ffmpegBinary, path.join(electronDir, 'ffmpeg-x64'));
+      await stageMediaTool(ffprobeBinary, path.join(electronDir, 'ffprobe-arm64'));
+      await stageMediaTool(ffprobeBinary, path.join(electronDir, 'ffprobe-x64'));
+    }
+  } else if (platform === 'linux') {
+    const success = await downloadFfmpeg({ platform: 'linux', arch: 'amd64', destDir: electronDir });
+    if (!success) {
+      console.log('Falling back to npm package binaries for Linux');
+      await stageMediaTool(ffmpegBinary, path.join(electronDir, executableName('ffmpeg')));
+      await stageMediaTool(ffprobeBinary, path.join(electronDir, executableName('ffprobe')));
+    }
+  } else if (platform === 'win32') {
+    const success = await downloadFfmpeg({ platform: 'win32', arch: 'x64', destDir: electronDir });
+    if (!success) {
+      console.log('Falling back to npm package binaries for Windows');
+      await stageMediaTool(ffmpegBinary, path.join(electronDir, executableName('ffmpeg')));
+      await stageMediaTool(ffprobeBinary, path.join(electronDir, executableName('ffprobe')));
+    }
   } else {
     await stageMediaTool(ffmpegBinary, path.join(electronDir, executableName('ffmpeg')));
     await stageMediaTool(ffprobeBinary, path.join(electronDir, executableName('ffprobe')));
@@ -126,47 +151,70 @@ async function stageMediaTool(sourcePath, targetPath) {
   console.log(`Staged ${path.basename(targetPath)} from ${sourcePath}`);
 }
 
-async function downloadFfmpegDarwinGz(arch, destPath) {
-  const url = `https://github.com/eugeneware/ffmpeg-static/releases/download/${ffmpegTag}/ffmpeg-darwin-${arch}.gz`;
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`ffmpeg download failed ${res.status}: ${url}`);
-  }
-  const buf = Buffer.from(await res.arrayBuffer());
-  const unpacked = zlib.gunzipSync(buf);
-  await fs.promises.writeFile(destPath, unpacked);
-  await fs.promises.chmod(destPath, 0o755);
-  console.log(`Downloaded ffmpeg for darwin-${arch} to ${path.basename(destPath)}`);
-}
+/**
+ * Download fresh static FFmpeg builds for macOS using Martin Riedl’s service.
+ * This is currently one of the best sources for up-to-date, signed macOS builds
+ * (both arm64 and x64).
+ *
+ * Note: As of mid-2026, arm64 builds are updated much more actively than x64.
+ */
+async function downloadFreshMacosFfmpeg(arch, destPath) {
+  const archName = arch === 'arm64' ? 'arm64' : 'amd64';
+  // Prefer snapshot for freshness (you can change to "release" if you want stable only)
+  const url = `https://ffmpeg.martin-riedl.de/redirect/latest/macos/${archName}/snapshot/ffmpeg.zip`;
 
-async function stageDarwinFfmpegPair(electronDir) {
-  const hostArch = process.arch === 'arm64' ? 'arm64' : 'x64';
-  const pairs = [
-    { arch: 'arm64', dest: path.join(electronDir, 'ffmpeg-arm64') },
-    { arch: 'x64', dest: path.join(electronDir, 'ffmpeg-x64') },
-  ];
-  for (const { arch, dest } of pairs) {
-    if (arch === hostArch) {
-      await fs.promises.copyFile(ffmpegBinary, dest);
-      await fs.promises.chmod(dest, 0o755);
-      console.log(`Staged ${path.basename(dest)} (native ${arch})`);
-    } else {
-      await downloadFfmpegDarwinGz(arch, dest);
+  console.log(`Downloading fresh macOS FFmpeg (snapshot) for ${arch} from Martin Riedl...`);
+  console.log(`  ${url}`);
+
+  const tmpZip = path.join(path.dirname(destPath), `ffmpeg-macos-${arch}.zip`);
+
+  try {
+    try {
+      execSync(`curl -L --fail --progress-bar -o "${tmpZip}" "${url}"`, { stdio: 'inherit' });
+    } catch {
+      execSync(`wget --show-progress -O "${tmpZip}" "${url}"`, { stdio: 'inherit' });
     }
-  }
-}
 
-async function stageDarwinFfprobePair(electronDir) {
-  const root = path.join(__dirname, 'node_modules', 'ffprobe-static', 'bin', 'darwin');
-  const pairs = [
-    { arch: 'arm64', dest: path.join(electronDir, 'ffprobe-arm64') },
-    { arch: 'x64', dest: path.join(electronDir, 'ffprobe-x64') },
-  ];
-  for (const { arch, dest } of pairs) {
-    const src = path.join(root, arch, 'ffprobe');
-    await fs.promises.copyFile(src, dest);
-    await fs.promises.chmod(dest, 0o755);
-    console.log(`Staged ffprobe-${arch}`);
+    // Extract the zip (we'll use a small node unzip or shell)
+    const extractDir = path.join(path.dirname(destPath), `macos-extract-${arch}-${Date.now()}`);
+    fs.mkdirSync(extractDir, { recursive: true });
+
+    // Use unzip if available, otherwise fall back to node (but unzip is usually there on mac dev machines)
+    try {
+      execSync(`unzip -o "${tmpZip}" -d "${extractDir}"`, { stdio: 'inherit' });
+    } catch {
+      // Very basic fallback using adm-zip would require adding a dep. For build scripts, unzip is fine.
+      throw new Error('unzip command not found. Please install it (brew install unzip).');
+    }
+
+    // The zip usually contains the binary directly or in a folder
+    const findBin = (name) => {
+      try {
+        const out = execSync(
+          `find "${extractDir}" -type f -name "${name}" -perm -111 | head -1`,
+          { encoding: 'utf8' }
+        ).trim();
+        return out || null;
+      } catch { return null; }
+    };
+
+    const found = findBin('ffmpeg');
+    if (!found) {
+      throw new Error('Could not find ffmpeg binary inside downloaded macOS zip');
+    }
+
+    fs.copyFileSync(found, destPath);
+    fs.chmodSync(destPath, 0o755);
+
+    fs.rmSync(tmpZip, { force: true });
+    fs.rmSync(extractDir, { recursive: true, force: true });
+
+    console.log(`  → Downloaded fresh macOS ffmpeg for ${arch}`);
+    return true;
+  } catch (err) {
+    console.warn(`  → Failed to download fresh macOS ffmpeg for ${arch}: ${err.message}`);
+    try { fs.rmSync(tmpZip, { force: true }); } catch {}
+    return false;
   }
 }
 

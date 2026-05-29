@@ -21,6 +21,7 @@ type Session struct {
 	AudioIndex       int
 	AudioCodec       string
 	AvailableStreams []session.StreamInfo
+	HasAudio         bool
 	Finished         bool
 
 	LastServedSeq     int

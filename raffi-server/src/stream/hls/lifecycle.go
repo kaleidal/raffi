@@ -83,6 +83,7 @@ func (c *Controller) ensureCmdLocked(
 	seek float64,
 	outDir string,
 	append bool,
+	hasAudio bool,
 ) error {
 	if sess.Cmd != nil {
 		sess.CmdCancel()
@@ -93,7 +94,7 @@ func (c *Controller) ensureCmdLocked(
 	ctxCmd, cancel := context.WithCancel(context.Background())
 	sess.CmdCancel = cancel
 
-	cmd, err := c.startCmd(ctxCmd, source, outDir, seek, sess.SliceIndex, DefaultSegmentDuration, MaxBufferAhead, sess.Codec, sess.AudioIndex, sess.AudioCodec, append)
+	cmd, err := c.startCmd(ctxCmd, source, outDir, seek, sess.SliceIndex, DefaultSegmentDuration, MaxBufferAhead, sess.Codec, sess.AudioIndex, sess.AudioCodec, append, hasAudio)
 	if err != nil {
 		cancel()
 		return err
