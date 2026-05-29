@@ -375,7 +375,6 @@
                             {sortOption}
                             {excludeDubbed}
                             {excludeHDR}
-                            {filtersActive}
                             {providerFilterOptions}
                             {audioLanguageFilterOptions}
                             resolutionFilters={RESOLUTION_FILTERS}
@@ -390,7 +389,6 @@
                             onSetSortOption={setSortOption}
                             onToggleExcludeDubbed={toggleExcludeDubbed}
                             onToggleExcludeHDR={toggleExcludeHDR}
-                            onResetFilters={resetFilters}
                         />
                     </div>
                 </section>

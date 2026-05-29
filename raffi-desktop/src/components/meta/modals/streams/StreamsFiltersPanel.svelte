@@ -14,7 +14,6 @@
     export let sortOption: StreamSortOption = "recommended";
     export let excludeDubbed = false;
     export let excludeHDR = false;
-    export let filtersActive = false;
     export let providerFilterOptions: string[] = ["all"];
     export let audioLanguageFilterOptions: string[] = ["all"];
     export let resolutionFilters: Array<{ label: string; value: ResolutionFilter }> = [];
@@ -30,7 +29,6 @@
     export let onSetSortOption: (value: StreamSortOption) => void = () => {};
     export let onToggleExcludeDubbed: () => void = () => {};
     export let onToggleExcludeHDR: () => void = () => {};
-    export let onResetFilters: () => void = () => {};
 
     $: sortSelectOptions = sortOptions.map((option) => ({ label: option.label, value: option.value }));
     $: resolutionSelectOptions = resolutionFilters.map((option) => ({ label: option.label, value: option.value }));
@@ -71,16 +69,6 @@
                     <ChevronUp size={16} strokeWidth={2} />
                 {/if}
             </button>
-
-            {#if filtersActive}
-                <button
-                    type="button"
-                    class="rounded-full bg-white/8 px-3 py-2 text-sm text-white/65 hover:bg-white/12 hover:text-white transition-colors duration-200 cursor-pointer"
-                    on:click={onResetFilters}
-                >
-                    Clear all
-                </button>
-            {/if}
         </div>
     </div>
 
@@ -130,48 +118,52 @@
     </div>
 
     {#if !filtersCollapsed}
-        <div class="grid gap-3 border-t border-white/6 pt-4 lg:grid-cols-[118px_132px_max-content_max-content] lg:items-end">
-            <label class="flex min-w-0 flex-col gap-2">
-                <span class="text-xs text-white/45">Source</span>
-                <CustomSelect
-                    value={sourceFilter}
-                    options={sourceSelectOptions}
-                    buttonClass="w-full rounded-full bg-white/8 px-3 py-2 text-sm text-white hover:bg-white/12"
-                    menuClass="min-w-[180px]"
-                    on:change={(event) => onSetSourceFilter(event.detail.value as SourceFilter)}
-                />
-            </label>
+        <div class="flex flex-col gap-3 border-t border-white/6 pt-4 lg:flex-row lg:items-end">
+            <div class="grid flex-1 gap-3 lg:grid-cols-2">
+                <label class="flex min-w-0 flex-col gap-2">
+                    <span class="text-xs text-white/45">Source</span>
+                    <CustomSelect
+                        value={sourceFilter}
+                        options={sourceSelectOptions}
+                        buttonClass="w-full rounded-full bg-white/8 px-3 py-2 text-sm text-white hover:bg-white/12"
+                        menuClass="min-w-[180px]"
+                        on:change={(event) => onSetSourceFilter(event.detail.value as SourceFilter)}
+                    />
+                </label>
 
-            <label class="flex min-w-0 flex-col gap-2">
-                <span class="text-xs text-white/45">Provider</span>
-                <CustomSelect
-                    value={providerFilter}
-                    options={providerSelectOptions}
-                    buttonClass="w-full rounded-full bg-white/8 px-3 py-2 text-sm text-white hover:bg-white/12"
-                    menuClass="min-w-[220px]"
-                    on:change={(event) => onSetProviderFilter(event.detail.value)}
-                />
-            </label>
+                <label class="flex min-w-0 flex-col gap-2">
+                    <span class="text-xs text-white/45">Provider</span>
+                    <CustomSelect
+                        value={providerFilter}
+                        options={providerSelectOptions}
+                        buttonClass="w-full rounded-full bg-white/8 px-3 py-2 text-sm text-white hover:bg-white/12"
+                        menuClass="min-w-[220px]"
+                        on:change={(event) => onSetProviderFilter(event.detail.value)}
+                    />
+                </label>
+            </div>
 
-            <button
-                type="button"
-                class="whitespace-nowrap rounded-full px-3 py-2.5 text-sm transition-colors duration-200 cursor-pointer {excludeDubbed
-                    ? 'bg-[#FFDD57] text-black'
-                    : 'bg-white/8 text-white/72 hover:bg-white/14'}"
-                on:click={onToggleExcludeDubbed}
-            >
-                {excludeDubbed ? 'Hiding dubbed' : 'Hide dubbed'}
-            </button>
+            <div class="flex gap-2 lg:pb-0.5">
+                <button
+                    type="button"
+                    class="whitespace-nowrap rounded-full px-3 py-2.5 text-sm transition-colors duration-200 cursor-pointer {excludeDubbed
+                        ? 'bg-[#FFDD57] text-black'
+                        : 'bg-white/8 text-white/72 hover:bg-white/14'}"
+                    on:click={onToggleExcludeDubbed}
+                >
+                    {excludeDubbed ? 'Hiding dubbed' : 'Hide dubbed'}
+                </button>
 
-            <button
-                type="button"
-                class="whitespace-nowrap rounded-full px-3 py-2.5 text-sm transition-colors duration-200 cursor-pointer {excludeHDR
-                    ? 'bg-[#FFDD57] text-black'
-                    : 'bg-white/8 text-white/72 hover:bg-white/14'}"
-                on:click={onToggleExcludeHDR}
-            >
-                {excludeHDR ? 'Skipping HDR' : 'Skip HDR'}
-            </button>
+                <button
+                    type="button"
+                    class="whitespace-nowrap rounded-full px-3 py-2.5 text-sm transition-colors duration-200 cursor-pointer {excludeHDR
+                        ? 'bg-[#FFDD57] text-black'
+                        : 'bg-white/8 text-white/72 hover:bg-white/14'}"
+                    on:click={onToggleExcludeHDR}
+                >
+                    {excludeHDR ? 'Skipping HDR' : 'Skip HDR'}
+                </button>
+            </div>
         </div>
     {/if}
 </div>
