@@ -1,0 +1,7 @@
+[install]
+# Use the root node_modules for the whole monorepo
+linkWorkspacePackages = true
+
+[install.scopes]
+# If you ever publish scoped packages
+"@raffi" = "https://registry.npmjs.org/"

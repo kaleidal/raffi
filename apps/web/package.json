@@ -1,0 +1,36 @@
+{
+  "name": "@raffi/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "sync": "svelte-kit sync",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "postinstall": "svelte-kit sync || true",
+    "deploy": "bun run build && wrangler pages deploy .svelte-kit/cloudflare"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-cloudflare": "^7.2.8",
+    "@sveltejs/kit": "^2.61.1",
+    "@sveltejs/vite-plugin-svelte": "^7.1.2",
+    "@tailwindcss/vite": "^4.3.0",
+    "@types/node": "^25.9.1",
+    "svelte": "^5.56.0",
+    "svelte-check": "^4.4.8",
+    "tailwindcss": "^4.3.0",
+    "typescript": "~6.0.3",
+    "vite": "^8.0.14",
+    "wrangler": "^4.95.0"
+  },
+  "dependencies": {
+    "@raffi/app": "workspace:*",
+    "@ave-id/sdk": "^0.9.2",
+    "@lucide/svelte": "^1.17.0",
+    "eventemitter3": "^5.0.4",
+    "hls.js": "^1.6.16",
+    "posthog-js": "^1.376.4"
+  }
+}

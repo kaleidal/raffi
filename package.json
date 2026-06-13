@@ -1,3 +1,21 @@
 {
-  "name": "raffi"
+  "name": "raffi",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:web": "bun --filter @raffi/web dev",
+    "build:web": "bun --filter @raffi/web build",
+    "check:web": "bun --filter @raffi/web check",
+    "dev:desktop": "bun --filter @raffi/desktop electron:dev",
+    "build:desktop": "bun --filter @raffi/desktop build",
+    "check:desktop": "bun --filter @raffi/desktop check",
+    "check:app": "bun --filter @raffi/app check",
+    "check": "bun run check:app && bun run check:web && bun run check:desktop"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "services/*",
+    "marketing"
+  ]
 }

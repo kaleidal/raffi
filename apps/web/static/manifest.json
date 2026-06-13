@@ -1,0 +1,16 @@
+{
+  "name": "Raffi",
+  "short_name": "Raffi",
+  "description": "Beautiful media player for debrid and direct streams. Installable web version of Raffi.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#000000",
+  "icons": [
+    {
+      "src": "https://raffi.al/raffi.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

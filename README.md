@@ -107,38 +107,56 @@ chmod +x Raffi-x.x.x.AppImage
 
 ```
 raffi/
-├── raffi-desktop/     # Desktop app (Electron + Svelte 5)
-├── raffi-mobile/      # Mobile app (React Native + Expo)
-├── raffi-sync/        # Cloud sync API (Cloudflare Workers + D1)
-├── raffi-server/      # Streaming server (Go)
-└── raffi-site/        # Marketing website (SvelteKit)
+├── apps/
+│   ├── desktop/       # Electron desktop shell
+│   ├── web/           # SvelteKit + Cloudflare web app
+│   └── mobile/        # React Native + Expo
+├── packages/
+│   ├── app/           # Shared Svelte Raffi UI and app logic
+│   ├── shared/        # Platform-agnostic utilities and types
+│   └── platform-types/
+├── services/
+│   ├── sync/          # Cloud sync API (Cloudflare Workers + D1)
+│   └── server/        # Local streaming server (Go)
+└── marketing/         # Public raffi.al site
 ```
 
-#### Desktop App (`raffi-desktop/`)
+#### Desktop App (`apps/desktop/`)
 - **Framework**: Electron 39 with Svelte 5 and TypeScript
 - **Platforms**: Windows, macOS, Linux
 - **Features**: Full desktop experience with watch parties, Discord integration, local file playback
 - **Build**: electron-builder for multi-platform releases
 
-#### Mobile App (`raffi-mobile/`)
+#### Web App (`apps/web/`)
+- **Framework**: SvelteKit with Cloudflare adapter
+- **Purpose**: Browser-first Raffi for direct HTTP and debrid streams
+- **UI**: Consumes the same shared Svelte package as desktop
+- **Installable**: PWA manifest and Cloudflare deployment target
+
+#### Mobile App (`apps/mobile/`)
 - **Framework**: React Native with Expo SDK 54
 - **Platforms**: iOS and Android
 - **Features**: Browse content, search, continue watching, native video playback
 - **Sync**: Shares authentication and watch progress with desktop through Raffi Sync
 - **Native Module**: Custom torrent-streamer module for on-device streaming
 
-#### Sync Service (`raffi-sync/`)
+#### Shared App (`packages/app/`)
+- **Framework**: Svelte 5
+- **Purpose**: The reusable Raffi app experience mounted by desktop and web
+- **Playback**: Browser-compatible direct playback where possible, desktop-only gates for local/server-dependent features
+
+#### Sync Service (`services/sync/`)
 - **Runtime**: Cloudflare Workers
 - **Storage**: Cloudflare D1 for account data and Durable Objects for watch-party state
 - **Features**: Ave-authenticated cloud sync, Trakt token integration, watch-party coordination
 
-#### Streaming Server (`raffi-server/`)
+#### Streaming Server (`services/server/`)
 - **Language**: Go
 - **Purpose**: HLS transcoding server for video streams
 - **Bundled**: Compiled binaries included with desktop app
 - **Mobile**: Can be used as remote transcoding server for mobile devices
 
-#### Website (`raffi-site/`)
+#### Marketing Site (`marketing/`)
 - **Framework**: SvelteKit
 - **Purpose**: Marketing site and download page
 - **Hosted at**: [raffi.al](https://raffi.al)
@@ -150,37 +168,51 @@ raffi/
 git clone https://github.com/kaleidal/raffi.git
 cd raffi
 
-# Desktop app
-cd raffi-desktop
 bun install
-bun run electron:dev
+
+# Desktop app
+bun run dev:desktop
+
+# Web app
+bun run dev:web
 
 # Build for production
-bun run dist
+bun run build:desktop
+bun run build:web
 ```
 
 ### Desktop Development
 
 ```bash
-cd raffi-desktop
-
-# Install dependencies
 bun install
 
 # Run in development mode (builds server + starts electron)
-bun run electron:dev
+bun run dev:desktop
 
 # Run electron only (if server already built)
-bun run electron:dev:only
+bun --filter @raffi/desktop electron:dev:only
 
 # Build production release
-bun run dist
+bun --filter @raffi/desktop dist
+```
+
+### Web Development
+
+```bash
+bun install
+
+# Start the browser app
+bun run dev:web
+
+# Typecheck and build for Cloudflare
+bun run check:web
+bun run build:web
 ```
 
 ### Mobile Development
 
 ```bash
-cd raffi-mobile
+cd apps/mobile
 
 # Install dependencies
 bun install
@@ -199,12 +231,12 @@ bunx expo build:ios
 bunx expo build:android
 ```
 
-**Note**: Mobile app requires the desktop server running for torrent streams. Update `STREAMING_SERVER` in `app/player.tsx` with your local IP.
+**Note**: Mobile app requires the desktop server running for torrent streams. Update `STREAMING_SERVER` in `apps/mobile/app/player.tsx` with your local IP.
 
 ### Server Development
 
 ```bash
-cd raffi-server
+cd services/server
 
 # Build server binary
 go build -o decoder .
@@ -216,7 +248,7 @@ go build -o decoder .
 ### Website Development
 
 ```bash
-cd raffi-site
+cd marketing
 
 # Install dependencies
 bun install
@@ -239,6 +271,12 @@ bun run build
 - **Storage**: Local app data with Raffi Sync cloud backup
 - **Build**: Vite + electron-builder
 - **Key Libraries**: `@lucide/svelte`, `posthog-js`, `@ryuziii/discord-rpc`
+
+#### Web App
+- **Frontend**: SvelteKit, TypeScript, Tailwind CSS
+- **Deployment**: Cloudflare Pages/Workers
+- **Playback**: Native video and HLS.js for direct HTTP/debrid streams
+- **Limitations**: Torrent, local file, export, and local server features stay desktop-only
 
 #### Mobile App
 - **Frontend**: React Native (React 19), TypeScript
@@ -290,8 +328,8 @@ bun run build
 - Watched/unwatched states
 
 #### Cross-Device Synchronization
-- **Shared authentication** via Ave across desktop and mobile
-- **Watch progress sync** - Start on desktop, continue on mobile
+- **Shared authentication** via Ave across desktop, web, and mobile
+- **Watch progress sync** - Start on desktop or web, continue on another client
 - **Library sync** - Custom lists and favorites across devices
 - **Addon settings** - Configured addons available on all platforms
 
@@ -300,27 +338,25 @@ bun run build
 ### Build Desktop App
 
 ```bash
-cd raffi-desktop
-
 # Windows
-bun run dist -- --win
+bun --filter @raffi/desktop dist -- --win
 
 # Linux
-bun run dist -- --linux
+bun --filter @raffi/desktop dist -- --linux
 
 # macOS  
-bun run dist -- --mac
+bun --filter @raffi/desktop dist -- --mac
 
 # All platforms
-bun run dist
+bun --filter @raffi/desktop dist
 ```
 
-Output will be in `raffi-desktop/release/`
+Output will be in `apps/desktop/release/`
 
 ### Build Mobile App
 
 ```bash
-cd raffi-mobile
+cd apps/mobile
 
 # Development builds
 bunx expo run:ios       # iOS
@@ -335,13 +371,13 @@ Builds will be available via Expo Application Services (EAS) dashboard.
 
 ### Build Configuration
 
-**Desktop** (`raffi-desktop/package.json`):
+**Desktop** (`apps/desktop/package.json`):
 - App metadata (name, version, author)
 - Build targets (Windows, Linux, macOS)
 - Icon paths and file associations
 - Auto-update settings
 
-**Mobile** (`raffi-mobile/app.json`):
+**Mobile** (`apps/mobile/app.json`):
 - App metadata and identifiers
 - iOS bundle ID: `al.kaleid.mobile`
 - Android package: `al.kaleid.raffimobile`
@@ -370,7 +406,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](raffi-desktop/LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](apps/desktop/LICENSE) file for details.
 
 ## Acknowledgments
 

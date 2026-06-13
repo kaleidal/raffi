@@ -1,6 +1,10 @@
 node_modules
 .env.local
 .bun
+.svelte-kit
+dist
+release
 Raffi/*.log
+apps/*/Raffi/*.log
 ffmpeg.exe
 ffprobe.exe

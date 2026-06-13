@@ -1,0 +1,9 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "raffi-web",
+	"compatibility_date": "2026-05-10",
+	"assets": {
+		"directory": ".svelte-kit/cloudflare",
+		"not_found_handling": "single-page-application"
+	}
+}

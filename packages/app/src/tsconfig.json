@@ -1,0 +1,9 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    // This file exists so that bundlers (Vite + Rolldown/esbuild) and TS tools
+    // that resolve a tsconfig relative to a source file inside src/ (e.g. index.ts)
+    // can find a tsconfig immediately instead of walking up and failing.
+  },
+  "include": ["**/*.ts", "**/*.js", "**/*.svelte"]
+}
