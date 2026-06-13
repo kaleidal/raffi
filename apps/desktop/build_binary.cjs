@@ -35,7 +35,7 @@ async function build() {
       '-ldflags=-s -w -extldflags "-static"',
       '-tags=sqlite_omit_load_extension',
       '-o',
-      '../raffi-desktop/electron/decoder-windows-amd64.exe',
+      '../../apps/desktop/electron/decoder-windows-amd64.exe',
       '.'
     ], {
       cwd: serverDir,
@@ -58,7 +58,7 @@ async function build() {
       '-buildvcs=false',
       '-tags=sqlite_omit_load_extension netgo osusergo',
       '-o',
-      '../raffi-desktop/electron/decoder-x86_64-unknown-linux-gnu',
+      '../../apps/desktop/electron/decoder-x86_64-unknown-linux-gnu',
       '.'
     ];
 
@@ -91,7 +91,7 @@ async function build() {
         '-ldflags=-s -w',
         '-tags=sqlite_omit_load_extension',
         '-o',
-        `../raffi-desktop/electron/${outputName}`,
+        `../../apps/desktop/electron/${outputName}`,
         '.'
       ], {
         cwd: serverDir,

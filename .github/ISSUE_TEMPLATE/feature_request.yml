@@ -27,9 +27,11 @@ body:
       label: Area
       description: Which part of the project would this change affect?
       options:
-        - raffi-desktop/
-        - raffi-mobile/
-        - raffi-server/
+        - apps/desktop/
+        - apps/mobile/
+        - apps/web/
+        - services/server/
+        - services/sync/
         - Build, CI, or release tooling
         - Not sure
     validations:

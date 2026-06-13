@@ -12,60 +12,62 @@ jobs:
 
     strategy:
       matrix:
-        os: [blacksmith-4vcpu-ubuntu-2404, blacksmith-4vcpu-windows-2025, macos-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: '1.25.4'
 
       - name: Install MinGW (Windows)
-        if: matrix.os == 'blacksmith-4vcpu-windows-2025'
+        if: matrix.os == 'windows-latest'
         run: choco install mingw
 
       - name: Install dependencies
         run: bun install
-        working-directory: raffi-desktop
+        working-directory: apps/desktop
 
       - name: Build and publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
         run: bun run dist -- --publish always
-        working-directory: raffi-desktop
+        working-directory: apps/desktop
 
       - name: Install Flatpak tools
-        if: matrix.os == 'blacksmith-4vcpu-ubuntu-2404'
+        if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y flatpak flatpak-builder gh
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 
       - name: Build Flatpak bundle
-        if: matrix.os == 'blacksmith-4vcpu-ubuntu-2404'
+        if: matrix.os == 'ubuntu-latest'
         env:
           RAFFI_FLATPAK_INSTALL_DEPS_FROM: flathub
           RAFFI_FLATPAK_RUNTIME_REPO: https://dl.flathub.org/repo/flathub.flatpakrepo
         run: bash flatpak/build-bundle.sh
-        working-directory: raffi-desktop
+        working-directory: apps/desktop
 
       - name: Upload Flatpak workflow artifact
-        if: matrix.os == 'blacksmith-4vcpu-ubuntu-2404'
-        uses: actions/upload-artifact@v4
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v7
         with:
           name: raffi-flatpak-x86_64
-          path: raffi-desktop/flatpak/artifacts/*.flatpak
+          path: apps/desktop/flatpak/artifacts/*.flatpak
           if-no-files-found: error
 
       - name: Upload Flatpak to GitHub Release
-        if: matrix.os == 'blacksmith-4vcpu-ubuntu-2404'
+        if: matrix.os == 'ubuntu-latest'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -73,4 +75,4 @@ jobs:
           TAG="v${VERSION}"
           gh release view "${TAG}" >/dev/null 2>&1 || gh release create "${TAG}" --title "Raffi ${VERSION}" --notes ""
           gh release upload "${TAG}" flatpak/artifacts/*.flatpak --clobber
-        working-directory: raffi-desktop
+        working-directory: apps/desktop
