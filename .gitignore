@@ -1,10 +1,89 @@
+# Dependencies
 node_modules
-.env.local
-.bun
-.svelte-kit
+.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# Build outputs
 dist
+build
+out
 release
-Raffi/*.log
-apps/*/Raffi/*.log
+*.tsbuildinfo
+
+# Framework / tooling caches
+.svelte-kit
+.next
+.nuxt
+.vite
+.turbo
+.cache
+.parcel-cache
+.eslintcache
+.bun
+.zig-cache
+zig-out
+target
+
+# Test / coverage
+coverage
+.nyc_output
+*.lcov
+
+# Logs
+*.log
+logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+bun-debug.log*
+lerna-debug.log*
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Decoded / staged binaries
+ffmpeg
 ffmpeg.exe
+ffprobe
 ffprobe.exe
+decoder
+decoder-*
+*.AppImage
+*.dmg
+*.deb
+*.rpm
+*.snap
+
+# App-specific build outputs
+apps/desktop/electron/decoder-*
+apps/desktop/electron/ffmpeg
+apps/desktop/electron/ffmpeg.exe
+apps/desktop/electron/ffprobe
+apps/desktop/electron/ffprobe.exe
+apps/desktop/electron/main
+apps/desktop/electron/raffi
+apps/desktop/release/
+
+# Legacy / stale paths from pre-refactor layouts
+Raffi/
+raffi-desktop/
+raffi-server/
+services/raffi-desktop/
+services/raffi-server/
+
+# Misc
+tmp/
+temp/
+*.local
