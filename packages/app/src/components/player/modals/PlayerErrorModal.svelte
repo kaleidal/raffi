@@ -1,6 +1,7 @@
 <script lang="ts">
     import { fade, scale } from "svelte/transition";
     import { overlayZoomStyle } from "../../../lib/overlayZoom";
+    import { isDesktopPlatform } from "../../../lib/platform";
     import { MonitorDown } from "@lucide/svelte";
 
     const portal = (node: HTMLElement) => {
@@ -92,13 +93,15 @@
             >
                 Back to Streams
             </button>
-            <button
-                class="w-full py-3 px-4 bg-white/8 text-white text-[15px] font-semibold rounded-xl hover:bg-white/14 transition-colors cursor-pointer flex items-center justify-center gap-2"
-                on:click={downloadDesktop}
-            >
-                <MonitorDown size={18} strokeWidth={2} />
-                Download Desktop App
-            </button>
+            {#if !isDesktopPlatform}
+                <button
+                    class="w-full py-3 px-4 bg-white/8 text-white text-[15px] font-semibold rounded-xl hover:bg-white/14 transition-colors cursor-pointer flex items-center justify-center gap-2"
+                    on:click={downloadDesktop}
+                >
+                    <MonitorDown size={18} strokeWidth={2} />
+                    Download Desktop App
+                </button>
+            {/if}
         </div>
     </div>
 </div>

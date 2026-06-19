@@ -34,6 +34,7 @@
 	import LocalLibrarySection from "./settings/LocalLibrarySection.svelte";
 	import AccountSection from "./settings/AccountSection.svelte";
 	import AccountStateMismatchSection from "./settings/AccountStateMismatchSection.svelte";
+	import StremioImportModal from "./StremioImportModal.svelte";
 
 	const portal = (node: HTMLElement) => {
 		if (typeof document === "undefined") {
@@ -61,6 +62,7 @@
 	let error = "";
 	let showUpdateNotes = false;
 	let showSignOutModal = false;
+	let showStremioImport = false;
 	let aveLoading = false;
 	let bodyLocked = false;
 
@@ -355,6 +357,7 @@
 										{error}
 										onSyncNow={syncNow}
 										onDownloadData={downloadData}
+										onImportStremio={() => (showStremioImport = true)}
 										onRequestSignOut={openSignOutModal}
 									/>
 								{:else}
@@ -444,5 +447,11 @@
 			{/if}
 		</div>
 	</div>
+
+	<StremioImportModal
+		open={showStremioImport}
+		on:close={() => (showStremioImport = false)}
+		on:imported={() => refreshStats()}
+	/>
 {/if}
 

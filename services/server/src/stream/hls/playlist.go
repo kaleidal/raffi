@@ -118,10 +118,13 @@ func readPlaylistTimelineFromReader(r io.Reader, sliceStart float64) (int, []Pla
 	return mediaSeq, segments, nil
 }
 
-func waitForManifestReady(manifestPath string, timeout time.Duration) error {
+func waitForManifestReady(manifestPath string, timeout time.Duration, shouldAbort func() bool) error {
 	deadline := time.Now().Add(timeout)
 
 	for {
+		if shouldAbort != nil && shouldAbort() {
+			return fmt.Errorf("transcoder exited before manifest was ready: %s", manifestPath)
+		}
 		if _, err := os.Stat(manifestPath); err == nil {
 			break
 		}
@@ -133,6 +136,9 @@ func waitForManifestReady(manifestPath string, timeout time.Duration) error {
 
 	// best-effort: wait for at least 2 segments to ensure smooth start
 	for {
+		if shouldAbort != nil && shouldAbort() {
+			return fmt.Errorf("transcoder exited before manifest had segments: %s", manifestPath)
+		}
 		_, segCount, err := readPlaylistState(manifestPath)
 		if err == nil && segCount >= 2 {
 			return nil

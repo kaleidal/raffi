@@ -26,6 +26,7 @@
     import * as ProgressLogic from "../meta/progressLogic";
     import { progressMap as metaProgressMap, streamsPopupVisible, selectedStream } from "../meta/metaState";
     import { markCurrentStreamAsFailed } from "../meta/streamLogic";
+    import { isDesktopPlatform } from "../../lib/platform";
 
     import {
         isPlaying,
@@ -246,10 +247,13 @@
     const getBrowserPlaybackDetails = () => {
         const src = currentVideoSrc || videoSrc || "";
         const support = src ? Session.getDirectMediaSupport(src, videoElem) : null;
+        const altStreamHint = isDesktopPlatform
+            ? "Try an MP4, WebM, or HLS stream. MKV/E-AC-3/DTS streams can be remuxed via the local playback server's transcoder settings."
+            : "Try an MP4, WebM, or HLS stream, or use the desktop app for MKV/E-AC-3/DTS streams.";
         if (support && !support.supported) {
-            return `This browser does not report support for ${support.container}. Browser playback needs a supported container and audio codec. Try an MP4, WebM, or HLS stream, or use the desktop app for MKV/E-AC-3/DTS streams.`;
+            return `This browser does not report support for ${support.container}. ${altStreamHint}`;
         }
-        return "The browser rejected this stream. Browser playback depends on the container and audio codec being natively supported. Try an MP4, WebM, or HLS stream, or use the desktop app for MKV/E-AC-3/DTS streams.";
+        return `The browser rejected this stream. ${altStreamHint}`;
     };
 
     const showBrowserPlaybackError = (reason: string) => {

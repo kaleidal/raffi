@@ -7,6 +7,7 @@ import {
     getPendingCloudSyncCounts,
     hasPendingCloudSyncChanges,
     isCloudBackupEnabled,
+    isCloudSyncPaused,
     publishCloudSyncStatus,
     readLocalState,
     readSyncState,
@@ -80,6 +81,7 @@ export const startCloudReconciliationLoop = () => {
     if (remoteReconcileTimer) return;
     remoteReconcileTimer = setInterval(() => {
         if (!isCloudBackupEnabled()) return;
+        if (isCloudSyncPaused()) return;
         if (getCloudSyncPromise()) return;
         void warmRemoteStateCache();
     }, REMOTE_RECONCILE_INTERVAL_MS);
@@ -106,11 +108,13 @@ export const getCloudSyncStatus = () => get(cloudSyncStatus);
 
 export const scheduleCloudBackupSync = (delayMs = DEFAULT_SYNC_DELAY_MS) => {
     if (!isCloudBackupEnabled()) return;
+    if (isCloudSyncPaused()) return;
     if (!hasPendingCloudSyncChanges()) return;
     const currentTimer = getCloudSyncTimer();
     if (currentTimer) clearTimeout(currentTimer);
     setCloudSyncTimer(setTimeout(() => {
         setCloudSyncTimer(null);
+        if (isCloudSyncPaused()) return;
         const userId = getCachedUser()?.id;
         if (!userId) return;
         if (!hasPendingCloudSyncChanges()) return;
@@ -386,6 +390,7 @@ const clearSyncedSnapshot = (snapshot: CloudSyncState) => {
 
 export const syncLocalStateToUser = async (userId: string, options?: { forceRemoteRefresh?: boolean }) => {
     if (!userId || !isCloudBackupEnabled()) return { ok: false };
+    if (isCloudSyncPaused()) return { ok: false, paused: true as const };
     const active = getCloudSyncPromise();
     if (active) return active;
     const pending = getPendingCloudSyncCounts();
@@ -439,6 +444,10 @@ export const syncCloudBackupNow = async () => {
     if (!userId) {
         publishCloudSyncStatus();
         return { ok: false as const, reason: "disabled" as const };
+    }
+    if (isCloudSyncPaused()) {
+        publishCloudSyncStatus();
+        return { ok: false as const, reason: "paused" as const };
     }
     return syncLocalStateToUser(userId, { forceRemoteRefresh: true });
 };

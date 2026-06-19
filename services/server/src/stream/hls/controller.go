@@ -161,13 +161,14 @@ func (c *Controller) EnsureSession(ctx context.Context, id, source string, start
 
 	duration := sess.DurationHint
 	manifestPath := filepath.Join(sliceDir, "child.m3u8")
+	abortFn := c.transcoderAbortFn(id)
 	c.mu.Unlock()
 
 	manifestTimeout := 10 * time.Second
 	if isTorrentSource(source) {
 		manifestTimeout = 60 * time.Second
 	}
-	if err := waitForManifestReady(manifestPath, manifestTimeout); err != nil {
+	if err := waitForManifestReady(manifestPath, manifestTimeout, abortFn); err != nil {
 		return 0, "", err
 	}
 
@@ -254,13 +255,14 @@ func (c *Controller) Seek(ctx context.Context, id, source string, target float64
 		}
 
 		manifestPath := filepath.Join(sliceDir, "child.m3u8")
+		abortFn := c.transcoderAbortFn(id)
 		c.mu.Unlock()
 
 		manifestTimeout := 10 * time.Second
 		if isTorrentSource(source) {
 			manifestTimeout = 60 * time.Second
 		}
-		if err := waitForManifestReady(manifestPath, manifestTimeout); err != nil {
+		if err := waitForManifestReady(manifestPath, manifestTimeout, abortFn); err != nil {
 			return 0, 0, "", err
 		}
 
@@ -359,13 +361,30 @@ func (c *Controller) Seek(ctx context.Context, id, source string, target float64
 
 	duration := sess.DurationHint
 	manifestPath := filepath.Join(sliceDir, "child.m3u8")
+	abortFn := c.transcoderAbortFn(id)
 	c.mu.Unlock()
 
-	if err := waitForManifestReady(manifestPath, 10*time.Second); err != nil {
+	if err := waitForManifestReady(manifestPath, 10*time.Second, abortFn); err != nil {
 		return 0, 0, "", err
 	}
 
 	return duration, target, manifestPath, nil
+}
+
+// transcoderAbortFn returns a callback suitable for waitForManifestReady that
+// reports true once the ffmpeg process for the given session has exited.
+// It snapshots the live state under the controller lock so concurrent
+// cleanupProcess calls are observed immediately.
+func (c *Controller) transcoderAbortFn(id string) func() bool {
+	return func() bool {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		sess := c.sessions[id]
+		if sess == nil {
+			return true
+		}
+		return sess.Cmd == nil
+	}
 }
 
 func (c *Controller) IsDuplicateSeek(id, seekID string) bool {

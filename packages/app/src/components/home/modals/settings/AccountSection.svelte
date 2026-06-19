@@ -20,6 +20,7 @@
 	export let error = "";
 	export let onSyncNow: () => void | Promise<void> = () => {};
 	export let onDownloadData: () => void = () => {};
+	export let onImportStremio: () => void = () => {};
 	export let onRequestSignOut: () => void = () => {};
 
 	const formatTimestamp = (value: number | null) => {
@@ -194,6 +195,12 @@
 				on:click={onDownloadData}
 			>
 				Export library and lists
+			</button>
+			<button
+				class="bg-white/10 text-white px-4 py-2 rounded-2xl font-semibold hover:bg-white/20 transition-colors cursor-pointer"
+				on:click={onImportStremio}
+			>
+				Import from Stremio
 			</button>
 			<button
 				class="bg-white/10 text-white px-4 py-2 rounded-2xl font-semibold hover:bg-white/20 transition-colors cursor-pointer"

@@ -7,17 +7,25 @@ import {
     LOCAL_LISTS_KEY,
     LOCAL_USER_META_KEY,
     getLocalUserId,
+    isCloudBackupEnabled,
     listItemKey,
     markDeleted,
     markDirty,
+    pauseCloudSync,
     readLocal,
     readLocalState,
+    resumeCloudSync,
     upsertLibraryItem,
     writeLocal,
     publishCloudSyncStatus,
 } from "./state";
 import { syncPost } from "./raffiSync";
-import { scheduleCloudBackupSync } from "./sync";
+import { scheduleCloudBackupSync, syncCloudBackupNow } from "./sync";
+import {
+    mergeStremioImportIntoLibrary,
+    parseStremioExport,
+    type StremioImportSummary,
+} from "../import/stremioImport";
 
 export { hasLocalState } from "./state";
 
@@ -286,3 +294,196 @@ export const updateListItemPoster = async (list_id: string, imdb_id: string, pos
     markDirty("listItems", listItemKey(list_id, imdb_id));
     scheduleCloudBackupSync();
 };
+
+export type StremioImportProgressEvent =
+    | { phase: "parsing"; rawCount?: number }
+    | { phase: "applying"; processed: number; total: number; current?: string }
+    | { phase: "reconciling" }
+    | { phase: "uploading"; uploaded: number; total: number }
+    | { phase: "done" }
+    | { phase: "error"; message: string };
+
+export interface StremioImportOptions {
+    onProgress?: (event: StremioImportProgressEvent) => void;
+    signal?: AbortSignal;
+    pushToCloud?: boolean;
+}
+
+const yieldToBrowser = () => new Promise<void>((resolve) => {
+    if (typeof requestAnimationFrame === "function") {
+        requestAnimationFrame(() => resolve());
+    } else {
+        setTimeout(resolve, 0);
+    }
+});
+
+export const importStremioLibrary = async (
+    raw: string | unknown,
+    options: StremioImportOptions = {},
+): Promise<StremioImportSummary> => {
+    const { onProgress, signal, pushToCloud = true } = options;
+    const report = (event: StremioImportProgressEvent) => {
+        if (onProgress) onProgress(event);
+    };
+
+    report({ phase: "parsing" });
+    const { items: previews, warnings, rawCount } = parseStremioExport(raw);
+    if (signal?.aborted) {
+        throw new Error("Import was cancelled.");
+    }
+    report({ phase: "parsing", rawCount });
+    if (previews.length === 0) {
+        const summary: StremioImportSummary = {
+            total: 0,
+            rawCount,
+            added: 0,
+            merged: 0,
+            skipped: 0,
+            movies: 0,
+            series: 0,
+            watched: 0,
+            items: [],
+            lastWatched: null,
+            poster: null,
+            warnings,
+        };
+        report({ phase: "done" });
+        return summary;
+    }
+
+    const shouldPauseCloud = pushToCloud && isCloudBackupEnabled();
+    if (shouldPauseCloud) pauseCloudSync();
+    publishCloudSyncStatus();
+
+    try {
+        const existingLibrary = readLocal<LibraryItem[]>(LOCAL_LIBRARY_KEY, []);
+        const total = previews.length;
+        let processed = 0;
+        let lastYielded = 0;
+        const userId = getLocalUserId();
+        const nextLibrary: LibraryItem[] = [...existingLibrary];
+        const summary: StremioImportSummary = {
+            total,
+            rawCount,
+            added: 0,
+            merged: 0,
+            skipped: 0,
+            movies: previews.filter((item) => item.type === "movie").length,
+            series: previews.filter((item) => item.type === "series").length,
+            watched: previews.filter((item) => item.watched).length,
+            items: [],
+            lastWatched: null,
+            poster: null,
+            warnings,
+        };
+
+        for (const preview of previews) {
+            if (signal?.aborted) {
+                throw new Error("Import was cancelled.");
+            }
+
+            processed += 1;
+            report({
+                phase: "applying",
+                processed,
+                total,
+                current: preview.name,
+            });
+
+            const existingIndex = nextLibrary.findIndex((item) => item.imdb_id === preview.imdbId);
+            const existing = existingIndex >= 0 ? nextLibrary[existingIndex] : null;
+            const lastWatched = preview.lastWatched || new Date().toISOString();
+
+            const baseLastWatched = existing?.last_watched || "";
+            const nextLastWatched = (() => {
+                if (!baseLastWatched) return lastWatched;
+                const a = Date.parse(baseLastWatched) || 0;
+                const b = Date.parse(lastWatched) || 0;
+                return b > a ? lastWatched : baseLastWatched;
+            })();
+
+            const { library, summary: mergeSummary } = mergeStremioImportIntoLibrary(
+                existing ? [existing] : [],
+                [preview],
+            );
+            const mergedItem = library.find((item) => item.imdb_id === preview.imdbId);
+            const mergedProgress = mergedItem?.progress ?? existing?.progress;
+            const completedAt = mergedItem?.completed_at ?? existing?.completed_at ?? null;
+            const progressChanged = Boolean(mergeSummary.items[0]?.progressChanged);
+
+            let action: "added" | "merged" | "skipped";
+            if (!existing) {
+                action = "added";
+                summary.added += 1;
+            } else if (progressChanged || nextLastWatched !== baseLastWatched) {
+                action = "merged";
+                summary.merged += 1;
+            } else {
+                action = "skipped";
+                summary.skipped += 1;
+            }
+
+            const nextItem: LibraryItem = {
+                user_id: userId,
+                imdb_id: preview.imdbId,
+                progress: mergedProgress,
+                last_watched: nextLastWatched,
+                completed_at: completedAt,
+                type: preview.type,
+                shown: existing?.shown !== false,
+                poster: existing?.poster || preview.poster,
+            };
+
+            if (existingIndex >= 0) nextLibrary[existingIndex] = nextItem;
+            else nextLibrary.push(nextItem);
+
+            summary.items.push({
+                ...preview,
+                progressChanged,
+                mergedProgress,
+                newLastWatched: nextLastWatched,
+                completedAt,
+                action,
+            });
+            if (!summary.lastWatched || (nextLastWatched && nextLastWatched > summary.lastWatched)) {
+                summary.lastWatched = nextLastWatched;
+            }
+            if (!summary.poster && nextItem.poster) summary.poster = nextItem.poster;
+
+            if (processed - lastYielded >= 25 || processed === total) {
+                lastYielded = processed;
+                await yieldToBrowser();
+            }
+        }
+
+        writeLocal(LOCAL_LIBRARY_KEY, nextLibrary);
+        for (const preview of previews) {
+            markDirty("library", preview.imdbId);
+        }
+        publishCloudSyncStatus();
+        report({ phase: "reconciling" });
+
+        if (pushToCloud && isCloudBackupEnabled()) {
+            try {
+                const result = await syncCloudBackupNow();
+                report({
+                    phase: "uploading",
+                    uploaded: summary.added + summary.merged,
+                    total: summary.added + summary.merged,
+                });
+                if (!result?.ok && (result as { reason?: string })?.reason !== "paused") {
+                    console.warn("Stremio import cloud push did not complete cleanly", result);
+                }
+            } catch (error) {
+                console.warn("Stremio import cloud push failed", error);
+            }
+        }
+
+        report({ phase: "done" });
+        return summary;
+    } finally {
+        if (shouldPauseCloud) resumeCloudSync();
+        publishCloudSyncStatus();
+    }
+};
+
