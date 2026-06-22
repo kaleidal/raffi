@@ -92,6 +92,96 @@ function spawnDetached({ spawn, command, args, logToFile }) {
   child.unref();
 }
 
+function readDesktopFile(fs, desktopPath) {
+  try {
+    if (!fs.existsSync(desktopPath)) return null;
+    return fs.readFileSync(desktopPath, "utf8");
+  } catch {
+    return null;
+  }
+}
+
+function isDevDesktopEntry(content) {
+  if (!content) return false;
+  return (
+    content.includes("/node_modules/.bun/electron") ||
+    content.includes("/node_modules/electron/") ||
+    (content.includes("Categories=Development") && content.includes("electron"))
+  );
+}
+
+function isPackagedDesktopEntry(content) {
+  if (!content) return false;
+  return content.includes("/opt/Raffi/raffi");
+}
+
+function removeDesktopFile(fs, desktopPath, logToFile, reason) {
+  try {
+    if (!fs.existsSync(desktopPath)) return false;
+    fs.unlinkSync(desktopPath);
+    logToFile(reason);
+    return true;
+  } catch (error) {
+    logToFile(`Failed removing ${desktopPath}`, error);
+    return false;
+  }
+}
+
+function writeUrlHandlerDesktop({
+  fs,
+  desktopPath,
+  execLine,
+  tryExec,
+  iconName,
+  startupWMClass,
+  isDev,
+}) {
+  const desktopFile = [
+    "[Desktop Entry]",
+    isDev ? "Name=Raffi (Dev URL Handler)" : "Name=Raffi URL Handler",
+    "Type=Application",
+    "Terminal=false",
+    `Exec=${execLine}`,
+    `TryExec=${tryExec}`,
+    `Icon=${iconName}`,
+    `StartupWMClass=${startupWMClass}`,
+    "StartupNotify=true",
+    "NoDisplay=true",
+    "MimeType=x-scheme-handler/raffi;",
+    isDev ? "Categories=Development;" : "Categories=Network;",
+    "Comment=Handle raffi:// links",
+    "",
+  ].join("\n");
+
+  fs.writeFileSync(desktopPath, desktopFile, "utf8");
+}
+
+function writePackagedLauncherDesktop({
+  fs,
+  desktopPath,
+  execPath,
+  iconName,
+  startupWMClass,
+}) {
+  const desktopFile = [
+    "[Desktop Entry]",
+    "Name=Raffi",
+    "Type=Application",
+    "Terminal=false",
+    `Exec="${execPath}" %U`,
+    `TryExec=${execPath}`,
+    `Icon=${iconName}`,
+    `StartupWMClass=${startupWMClass}`,
+    "StartupNotify=true",
+    "NoDisplay=false",
+    "Categories=Video;",
+    "Comment=A modern video player",
+    "",
+  ].join("\n");
+
+  fs.writeFileSync(desktopPath, desktopFile, "utf8");
+}
+
 function registerLinuxProtocolHandler({
   app,
   fs,
@@ -108,51 +198,77 @@ function registerLinuxProtocolHandler({
     const desktopDir = path.join(app.getPath("home"), ".local", "share", "applications");
     fs.mkdirSync(desktopDir, { recursive: true });
 
-    const desktopFileName = `${desktopId}.desktop`;
-    const localMainDesktop = path.join(desktopDir, desktopFileName);
-    const localHandlerDesktop = path.join(desktopDir, "raffi-url-handler.desktop");
+    const localMainDesktop = path.join(desktopDir, `${desktopId}.desktop`);
+    const handlerFileName = isDev ? "raffi-dev-url-handler.desktop" : "raffi-url-handler.desktop";
+    const localHandlerDesktop = path.join(desktopDir, handlerFileName);
+    const staleHandlerDesktop = path.join(
+      desktopDir,
+      isDev ? "raffi-url-handler.desktop" : "raffi-dev-url-handler.desktop",
+    );
     const launchTarget = isDev ? path.resolve(process.argv[1] || "") : process.execPath;
     const execLine = isDev
       ? `\"${process.execPath}\" \"${launchTarget}\" %U`
       : `\"${process.execPath}\" %U`;
+    const existingMainDesktop = readDesktopFile(fs, localMainDesktop);
 
-    const desktopFile = [
-      "[Desktop Entry]",
-      "Name=Raffi",
-      "Type=Application",
-      "Terminal=false",
-      `Exec=${execLine}`,
-      `TryExec=${process.execPath}`,
-      `Icon=${iconName}`,
-      `StartupWMClass=${startupWMClass}`,
-      "StartupNotify=true",
-      "NoDisplay=false",
-      "MimeType=x-scheme-handler/raffi;",
-      isDev ? "Categories=Development;Video;" : "Categories=Video;",
-      "Comment=A modern video player",
-      "",
-    ].join("\n");
-
-    fs.writeFileSync(localMainDesktop, desktopFile, "utf8");
-
-    try {
-      if (fs.existsSync(localHandlerDesktop)) {
-        fs.unlinkSync(localHandlerDesktop);
+    if (isDev) {
+      if (isDevDesktopEntry(existingMainDesktop)) {
+        removeDesktopFile(
+          fs,
+          localMainDesktop,
+          logToFile,
+          "Removed dev-overwritten raffi.desktop launcher entry",
+        );
+      } else if (isPackagedDesktopEntry(existingMainDesktop)) {
+        logToFile("Keeping packaged raffi.desktop launcher entry");
       }
-    } catch (error) {
-      logToFile("Failed removing stale raffi-url-handler desktop entry", error);
+    } else {
+      if (isDevDesktopEntry(existingMainDesktop)) {
+        removeDesktopFile(
+          fs,
+          localMainDesktop,
+          logToFile,
+          "Removed dev-overwritten raffi.desktop launcher entry",
+        );
+      }
+
+      writePackagedLauncherDesktop({
+        fs,
+        desktopPath: localMainDesktop,
+        execPath: process.execPath,
+        iconName,
+        startupWMClass,
+      });
+      logToFile("Updated packaged raffi.desktop launcher entry");
     }
+
+    writeUrlHandlerDesktop({
+      fs,
+      desktopPath: localHandlerDesktop,
+      execLine,
+      tryExec: process.execPath,
+      iconName,
+      startupWMClass,
+      isDev,
+    });
+
+    removeDesktopFile(
+      fs,
+      staleHandlerDesktop,
+      logToFile,
+      `Removed stale ${path.basename(staleHandlerDesktop)} entry`,
+    );
 
     spawnDetached({
       spawn,
       command: "xdg-mime",
-      args: ["default", desktopFileName, "x-scheme-handler/raffi"],
+      args: ["default", handlerFileName, "x-scheme-handler/raffi"],
       logToFile,
     });
     spawnDetached({
       spawn,
       command: "xdg-settings",
-      args: ["set", "default-url-scheme-handler", "raffi", desktopFileName],
+      args: ["set", "default-url-scheme-handler", "raffi", handlerFileName],
       logToFile,
     });
     spawnDetached({
