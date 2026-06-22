@@ -63,6 +63,8 @@
         "AppImage",
         "rpm"
       ],
+      "artifactName": "Raffi-${version}-${arch}.${ext}",
+      "packageName": "raffi",
       "icon": "build/icons",
       "category": "Video",
       "extraResources": [
