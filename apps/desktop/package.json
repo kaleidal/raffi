@@ -64,6 +64,7 @@
         "rpm"
       ],
       "artifactName": "Raffi-${version}-${arch}.${ext}",
+      "executableName": "raffi",
       "icon": "build/icons",
       "category": "Video",
       "extraResources": [
