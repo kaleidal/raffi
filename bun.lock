@@ -7,7 +7,7 @@
     },
     "apps/desktop": {
       "name": "@raffi/desktop",
-      "version": "0.10.0",
+      "version": "0.11.0",
       "dependencies": {
         "@raffi/app": "workspace:*",
         "@ryuziii/discord-rpc": "^1.0.1-rc.1",
@@ -132,7 +132,7 @@
     },
     "packages/app": {
       "name": "@raffi/app",
-      "version": "0.10.0",
+      "version": "0.11.0",
       "dependencies": {
         "@ave-id/sdk": "^0.9.2",
         "@lucide/svelte": "^1.17.0",
