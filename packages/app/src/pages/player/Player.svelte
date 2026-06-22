@@ -94,7 +94,7 @@
         type NextEpisodePrefetchHandoff,
     } from "./nextEpisodePrefetch";
     import { serverUrl } from "../../lib/client";
-    import type { Chapter } from "./types";
+    import type { Chapter, LiveChannelMetadata } from "./types";
 
     // Props
     export let videoSrc: string | null = null;
@@ -111,10 +111,14 @@
     export let joinPartyId: string | null = null;
     export let autoJoin: boolean = false;
     export let autoSkipFromNextEpisode: boolean = false;
+    export let liveMode: boolean = false;
+    export let liveChannel: LiveChannelMetadata | null = null;
 
-    const imdbID = metaData?.meta?.imdb_id || null;
+    let imdbID: string | null = null;
+    $: imdbID = liveMode ? null : metaData?.meta?.imdb_id || null;
 
     const handleProgressInternal = (time: number, dur: number) => {
+        if (liveMode) return;
         if (onProgress) {
             onProgress(time, dur);
         } else if (imdbID) {
@@ -123,6 +127,7 @@
     };
 
     const handleNextEpisodeInternal = () => {
+        if (liveMode) return;
         if (onNextEpisode) {
             return onNextEpisode();
         }
@@ -247,6 +252,9 @@
     const getBrowserPlaybackDetails = () => {
         const src = currentVideoSrc || videoSrc || "";
         const support = src ? Session.getDirectMediaSupport(src, videoElem) : null;
+        if (liveMode) {
+            return "This live stream may use a container or codec this player cannot decode.";
+        }
         const altStreamHint = isDesktopPlatform
             ? "Try an MP4, WebM, or HLS stream. MKV/E-AC-3/DTS streams can be remuxed via the local playback server's transcoder settings."
             : "Try an MP4, WebM, or HLS stream, or use the desktop app for MKV/E-AC-3/DTS streams.";
@@ -265,8 +273,10 @@
         loading.set(false);
         showCanvas.set(false);
         showError.set(true);
-        errorMessage.set("Browser cannot play this stream");
-        errorDetails.set(`${reason} ${getBrowserPlaybackDetails()}`);
+        errorMessage.set(liveMode ? "Live stream failed" : "Browser cannot play this stream");
+        errorDetails.set(
+            `${liveMode && liveChannel?.name ? `${liveChannel.name}: ` : ""}${reason} ${getBrowserPlaybackDetails()}`,
+        );
         trackEvent("browser_direct_stream_failed", {
             reason,
             ...getPlaybackAnalyticsProps(),
@@ -292,7 +302,7 @@
     };
 
     const openWatchPartyModal = () => {
-        if (embedSrc || $localMode || !$cloudSyncStatus.cloudFeaturesAvailable) {
+        if (liveMode || embedSrc || $localMode || !$cloudSyncStatus.cloudFeaturesAvailable) {
             showWatchPartyModal.set(false);
             return;
         }
@@ -324,6 +334,7 @@
             season,
             episode,
             watchPartyActive: $watchParty.isActive,
+            liveMode,
         });
 
     const trackPlaybackClosed = () => {
@@ -354,6 +365,7 @@
     };
 
     const handleEmbedMessage = (event: MessageEvent) => {
+        if (liveMode) return;
         if (!embedSrc || !imdbID || !metaData) return;
 
         const data = parseEmbedMessageData(event.data);
@@ -453,10 +465,10 @@
 
     const handleClose = async () => {
         getWindowControls()?.exitMiniPlayer?.();
-        if (imdbID) {
+        if (!liveMode && imdbID) {
             void flushPendingLibraryProgress(imdbID);
         }
-        if (hasStarted && !traktScrobbler.isStopSent()) {
+        if (!liveMode && hasStarted && !traktScrobbler.isStopSent()) {
             void traktScrobbler.send("stop", true);
         }
         trackPlaybackClosed();
@@ -504,7 +516,7 @@
     });
 
     const computeHasNextEpisode = (): boolean => {
-        if (!metaData || metaData.meta?.type !== "series") return false;
+        if (liveMode || !metaData || metaData.meta?.type !== "series") return false;
         const videos: any[] = Array.isArray((metaData as any).meta?.videos)
             ? ((metaData as any).meta.videos as any[])
             : [];
@@ -522,6 +534,7 @@
     $: hasNextEpisode = computeHasNextEpisode();
 
     $: bingeNextSupported =
+        !liveMode &&
         metaData?.meta?.type === "series" &&
         Boolean($selectedStream?.behaviorHints?.bingeGroup) &&
         !$watchParty.isActive;
@@ -532,7 +545,7 @@
         introDbChapters,
     );
 
-    $: showNextEpisodeAllowed = $showNextEpisode && hasNextEpisode;
+    $: showNextEpisodeAllowed = !liveMode && $showNextEpisode && hasNextEpisode;
 
     const disposeNextEpisodePrefetch = (opts?: { transfer?: boolean }) => {
         nextEpisodePrefetchRunId += 1;
@@ -600,7 +613,7 @@
         },
         getSessionId: () => sessionId,
         getCueLinePercent: () => cueLinePercent,
-        shouldShowSeekStyleInfoModal,
+        shouldShowSeekStyleInfoModal: () => !liveMode && shouldShowSeekStyleInfoModal(),
         setPendingStartAfterSeekStyleModal: (value) => {
             pendingStartAfterSeekStyleModal = value;
         },
@@ -609,6 +622,13 @@
             introDbChapters = chapters;
         },
         resolvePlaybackStart: async ({ sessionData, startTime, metaData, season, episode }) => {
+            if (liveMode) {
+                return {
+                    effectiveStartTime: 0,
+                    introDbChapters: [],
+                };
+            }
+
             let nextIntroDbChapters: Chapter[] = [];
 
             if (metaData?.meta?.type === "series" && metaData.meta.imdb_id && season != null && episode != null) {
@@ -690,7 +710,7 @@
 
         if ($showSeekStyleModal) return;
 
-        if (shouldShowSeekStyleInfoModal()) {
+        if (!liveMode && shouldShowSeekStyleInfoModal()) {
             showSeekStyleModal.set(true);
             pendingStartAfterSeekStyleModal = true;
             return;
@@ -806,6 +826,7 @@
 
         metadataCheckInterval = setInterval(() => {
             if (!videoElem) return;
+            if (liveMode) return;
 
             const currentTime = videoElem.currentTime;
             const durationVal = videoElem.duration;
@@ -847,10 +868,10 @@
             canEnter: false,
         });
         getWindowControls()?.exitMiniPlayer?.();
-        if (imdbID) {
+        if (!liveMode && imdbID) {
             void flushPendingLibraryProgress(imdbID);
         }
-        if (hasStarted && !traktScrobbler.isStopSent()) {
+        if (!liveMode && hasStarted && !traktScrobbler.isStopSent()) {
             void traktScrobbler.send("stop", true);
         }
         trackPlaybackClosed();
@@ -881,9 +902,12 @@
         }
         const time = $playbackOffset + videoElem.currentTime;
         currentTime.set(time);
-        handleProgressInternal(time, $duration);
+        if (!liveMode) {
+            handleProgressInternal(time, $duration);
+        }
 
         if (
+            !liveMode &&
             !traktScrobbler.isStopSent() &&
             $duration > 0 &&
             time / $duration >= TRAKT_COMPLETION_THRESHOLD
@@ -891,7 +915,7 @@
             void traktScrobbler.send("stop", true);
         }
 
-        if (!$seekGuard) {
+        if (!liveMode && !$seekGuard) {
             const result = Chapters.checkChapters(
                 time,
                 $sessionData,
@@ -974,7 +998,9 @@
     const handlePlay = () => {
         isPlaying.set(true);
         hasStarted = true;
-        void traktScrobbler.send("start");
+        if (!liveMode) {
+            void traktScrobbler.send("start");
+        }
         if (!playbackStartTracked) {
             trackEvent("playback_started", getPlaybackAnalyticsProps());
             playbackStartTracked = true;
@@ -995,6 +1021,7 @@
     const handlePause = () => {
         isPlaying.set(false);
         if (
+            !liveMode &&
             !traktScrobbler.isStopSent() &&
             !(
                 $duration > 0 &&
@@ -1070,6 +1097,7 @@
     };
 
     const handleSkipIntro = () => {
+        if (liveMode) return;
         trackEvent("skip_chapter_clicked", {
             chapter_kind: $currentChapter?.kind || null,
             chapter_source: $currentChapter?.source || null,
@@ -1092,10 +1120,10 @@
     });
 
     const handleEnded = () => {
-        if (hasStarted && !traktScrobbler.isStopSent()) {
+        if (!liveMode && hasStarted && !traktScrobbler.isStopSent()) {
             void traktScrobbler.send("stop", true);
         }
-        if (bingeNextSupported && hasNextEpisode && !bingeAutoAdvancing) {
+        if (!liveMode && bingeNextSupported && hasNextEpisode && !bingeAutoAdvancing) {
             bingeAutoAdvancing = true;
             handleNextEpisodeClick();
         }
@@ -1179,6 +1207,7 @@
 
         const handoff = nextEpisodePrefetchHandoff;
         const canReuseHandoff =
+            !liveMode &&
             handoff &&
             handoff.src === videoSrc &&
             handoff.fileIdx === fileIdx &&
@@ -1202,7 +1231,9 @@
         loadVideo(videoSrc, reuseSession ? { reuseSession } : undefined);
     }
 
-    $: effectiveChapterMarkers = Chapters.getEffectiveChapterSegments($sessionData, introDbChapters);
+    $: effectiveChapterMarkers = liveMode
+        ? []
+        : Chapters.getEffectiveChapterSegments($sessionData, introDbChapters);
 
     $: if (videoElem) {
         videoElem.muted = false;
@@ -1237,12 +1268,12 @@
         resizeCounter += 1;
     }
 
-    $: if (pendingAutoJoin && joinPartyId && autoJoin && !$localMode && $cloudSyncStatus.cloudFeaturesAvailable) {
+    $: if (!liveMode && pendingAutoJoin && joinPartyId && autoJoin && !$localMode && $cloudSyncStatus.cloudFeaturesAvailable) {
         showWatchPartyModal.set(true);
         pendingAutoJoin = false;
     }
 
-    $: if ($showWatchPartyModal && (embedSrc || !$cloudSyncStatus.cloudFeaturesAvailable)) {
+    $: if ($showWatchPartyModal && (liveMode || embedSrc || !$cloudSyncStatus.cloudFeaturesAvailable)) {
         showWatchPartyModal.set(false);
     }
 
@@ -1390,6 +1421,7 @@
         loading={$loading && !miniPlayerActive}
         onClose={handleClose}
         {metaData}
+        liveTitle={liveMode ? liveChannel?.name ?? "Live TV" : null}
         backdropSrc={loadingBackdropSrc}
         backdropMode={loadingBackdropMode}
         stage={$loadingStage}
@@ -1419,7 +1451,7 @@
                 <PlayerOverlays
                     showSkipIntro={$showSkipIntro}
                     showNextEpisode={showNextEpisodeAllowed}
-                    isWatchPartyMember={!$localMode && $watchParty.isActive && !$watchParty.isHost}
+                    isWatchPartyMember={!liveMode && !$localMode && $watchParty.isActive && !$watchParty.isHost}
                     skipLabel={skipButtonLabel}
                     skipChapter={handleSkipIntro}
                     nextEpisode={handleNextEpisodeClick}
@@ -1442,10 +1474,10 @@
                         {sessionId}
                         {videoSrc}
                         {metaData}
-                        {hasNextEpisode}
+                        hasNextEpisode={!liveMode && hasNextEpisode}
                         currentAudioLabel={$currentAudioLabel}
                         currentSubtitleLabel={$currentSubtitleLabel}
-                        isWatchPartyMember={!$localMode && $watchParty.isActive && !$watchParty.isHost}
+                        isWatchPartyMember={!liveMode && !$localMode && $watchParty.isActive && !$watchParty.isHost}
                         togglePlay={togglePlayWithFeedback}
                         onSeekInput={(e) =>
                             controlsManager.onSeekInput(e, $duration, pendingSeek.set)}
@@ -1456,11 +1488,11 @@
                         objectFit={$objectFit}
                         toggleObjectFit={handleToggleObjectFit}
                         onNextEpisode={handleNextEpisodeClick}
-                        showWatchParty={!$localMode && $cloudSyncStatus.cloudFeaturesAvailable && !embedSrc}
+                        showWatchParty={!liveMode && !$localMode && $cloudSyncStatus.cloudFeaturesAvailable && !embedSrc}
                         onAudioClick={openAudioSelection}
                         onSubtitleClick={openSubtitleSelection}
                         onWatchPartyClick={() => {
-                            if (!$localMode && $cloudSyncStatus.cloudFeaturesAvailable && !embedSrc) {
+                            if (!liveMode && !$localMode && $cloudSyncStatus.cloudFeaturesAvailable && !embedSrc) {
                                 openWatchPartyModal();
                             } else {
                                 showWatchPartyModal.set(false);
@@ -1484,7 +1516,7 @@
         showAudioSelection={$showAudioSelection}
         showSubtitleSelection={$showSubtitleSelection}
         showError={$showError}
-        showWatchPartyModal={$showWatchPartyModal && !$localMode && $cloudSyncStatus.cloudFeaturesAvailable && !embedSrc}
+        showWatchPartyModal={$showWatchPartyModal && !liveMode && !$localMode && $cloudSyncStatus.cloudFeaturesAvailable && !embedSrc}
         showSeekStyleModal={$showSeekStyleModal}
         audioTracks={$audioTracks}
         subtitleTracks={$subtitleTracks}

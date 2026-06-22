@@ -32,6 +32,14 @@ export interface SessionData {
     audioIndex?: number;
 }
 
+export interface LiveChannelMetadata {
+    name: string;
+    group?: string | null;
+    logo?: string | null;
+    tvgId?: string | null;
+    programmeTitle?: string | null;
+}
+
 export interface SeekFeedback {
     type: "forward" | "backward";
     id: number;
