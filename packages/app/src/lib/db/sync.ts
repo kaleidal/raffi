@@ -32,6 +32,15 @@ const DEFAULT_SYNC_DELAY_MS = 1_200;
 let remoteStateCache: { userId: string; data: RemoteState; updatedAt: number } | null = null;
 let remoteReconcileTimer: ReturnType<typeof setInterval> | null = null;
 
+type RemoteListWithItems = RemoteState["lists"][number] & {
+    list_items?: RemoteState["listItems"];
+};
+
+type RemoteStateSnapshot = Partial<Omit<RemoteState, "lists">> & {
+    lists?: RemoteListWithItems[];
+    list_items?: RemoteState["listItems"];
+};
+
 const invalidateRemoteCache = () => {
     remoteStateCache = null;
 };
@@ -42,12 +51,25 @@ const getRemoteState = async (force = false): Promise<RemoteState> => {
     if (!force && remoteStateCache && remoteStateCache.userId === userId && now - remoteStateCache.updatedAt < CACHE_TTL_MS) {
         return remoteStateCache.data;
     }
-    const snapshot = await syncGet<RemoteState>("/state");
+    const snapshot = await syncGet<RemoteStateSnapshot>("/state");
+    const rawLists = Array.isArray(snapshot?.lists) ? snapshot.lists : [];
+    const lists = rawLists.map(({ list_items, ...list }) => list);
+    const listItems = Array.isArray(snapshot?.listItems)
+        ? snapshot.listItems
+        : Array.isArray(snapshot?.list_items)
+            ? snapshot.list_items
+            : rawLists.length > 0
+                ? rawLists.flatMap((list) =>
+                    Array.isArray(list.list_items)
+                        ? list.list_items.map((item) => ({ ...item, list_id: item.list_id || list.list_id }))
+                        : [],
+                )
+                : [];
     const normalized = {
         addons: Array.isArray(snapshot?.addons) ? snapshot.addons : [],
         library: Array.isArray(snapshot?.library) ? snapshot.library : [],
-        lists: Array.isArray(snapshot?.lists) ? snapshot.lists : [],
-        listItems: Array.isArray(snapshot?.listItems) ? snapshot.listItems : [],
+        lists,
+        listItems,
         userMeta: snapshot?.userMeta || null,
     };
     remoteStateCache = { userId, data: normalized, updatedAt: now };
@@ -96,7 +118,13 @@ export const stopCloudReconciliationLoop = () => {
 export const hydrateLocalBackupFromCloud = async () => {
     if (!isCloudBackupEnabled()) return { ok: false, reason: "disabled" as const };
     try {
-        await persistMergedRemoteState(true);
+        const remote = await getRemoteState(true);
+        if (isRemoteStateBootstrapTarget(remote) && hasStateData(readLocalState())) {
+            setSyncResult(null);
+            return { ok: true as const };
+        }
+        mergeRemoteStateIntoLocal(remote);
+        setSyncResult(null);
         return { ok: true as const };
     } catch (error) {
         setSyncResult(error);
@@ -139,9 +167,9 @@ const buildDirtySyncPayload = (local: RemoteState, syncState: CloudSyncState) =>
         lists: Object.keys(syncState.dirty.lists)
             .map((key) => listsById.get(key))
             .filter((value): value is NonNullable<typeof value> => Boolean(value)),
-        listItems: Object.keys(syncState.dirty.listItems)
-            .map((key) => listItemsByKey.get(key))
-            .filter((value): value is NonNullable<typeof value> => Boolean(value)),
+        listItems: Array.from(listItemsByKey.entries())
+            .filter(([key, item]) => Boolean(syncState.dirty.listItems[key] || syncState.dirty.lists[item.list_id]))
+            .map(([_, item]) => item),
         userMeta: shouldSyncUserMeta ? local.userMeta : null,
         deletes: {
             addons: Object.keys(syncState.tombstones.addons),
@@ -322,6 +350,13 @@ const isRemoteStateBootstrapTarget = (state: RemoteState) =>
         && !state.userMeta
     );
 
+const hasStateData = (state: RemoteState) =>
+    state.addons.length > 0
+    || state.library.length > 0
+    || state.lists.length > 0
+    || state.listItems.length > 0
+    || Boolean(state.userMeta);
+
 const hasSyncPayloadChanges = (payload: ReturnType<typeof buildDirtySyncPayload> | ReturnType<typeof buildFullSyncPayload>) =>
     payload.addons.length
     + payload.library.length
@@ -398,13 +433,21 @@ export const syncLocalStateToUser = async (userId: string, options?: { forceRemo
     const promise = (async () => {
         try {
             const remote = await getRemoteState(options?.forceRemoteRefresh ?? true);
-            mergeRemoteStateIntoLocal(remote);
-            const local = readLocalState();
-            const syncState = readSyncState();
-            const needsBootstrap = pending.uploads + pending.deletes === 0 && isRemoteStateBootstrapTarget(remote);
-            const payload = pending.uploads + pending.deletes === 0
-                ? needsBootstrap ? buildFullSyncPayload(local) : buildMismatchSyncPayload(local, remote)
-                : buildDirtySyncPayload(local, syncState);
+            const localBeforeMerge = readLocalState();
+            const syncStateBeforeMerge = readSyncState();
+            const needsBootstrap = isRemoteStateBootstrapTarget(remote) && hasStateData(localBeforeMerge);
+
+            if (!needsBootstrap) {
+                mergeRemoteStateIntoLocal(remote);
+            }
+
+            const local = needsBootstrap ? localBeforeMerge : readLocalState();
+            const syncState = needsBootstrap ? syncStateBeforeMerge : readSyncState();
+            const payload = needsBootstrap
+                ? buildFullSyncPayload(local)
+                : pending.uploads + pending.deletes === 0
+                    ? buildMismatchSyncPayload(local, remote)
+                    : buildDirtySyncPayload(local, syncState);
 
             if (!hasSyncPayloadChanges(payload)) {
                 publishCloudSyncStatus();

@@ -571,7 +571,10 @@ export const mergeRemoteStateIntoLocal = (remote: RemoteState) => {
 
     const listItems = new Map(
         local.listItems
-            .filter((item) => syncState.dirty.listItems[listItemKey(item.list_id, item.imdb_id)])
+            .filter((item) => {
+                const key = listItemKey(item.list_id, item.imdb_id);
+                return syncState.dirty.listItems[key] || syncState.dirty.lists[item.list_id];
+            })
             .map((item) => [listItemKey(item.list_id, item.imdb_id), item]),
     );
     for (const remoteItem of remote.listItems) {

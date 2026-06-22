@@ -13,9 +13,29 @@
     import { loaded, lists, showAddonsModal, showSettingsModal } from "./listsState";
     import SettingsModal from "../../components/home/modals/SettingsModal.svelte";
 
-    onMount(async () => {
+    const HOME_REFRESH_EVENT = "raffi:home-refresh";
+
+    let refreshRequestId = 0;
+
+    async function refreshLists(showLoading = false) {
+        const requestId = ++refreshRequestId;
+        if (showLoading) loaded.set(false);
         await loadLists();
-        loaded.set(true);
+        if (requestId === refreshRequestId) loaded.set(true);
+    }
+
+    onMount(() => {
+        void refreshLists(true);
+
+        const handleRefresh = () => {
+            void refreshLists();
+        };
+
+        window.addEventListener(HOME_REFRESH_EVENT, handleRefresh);
+
+        return () => {
+            window.removeEventListener(HOME_REFRESH_EVENT, handleRefresh);
+        };
     });
 </script>
 

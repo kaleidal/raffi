@@ -5,6 +5,22 @@ import { get } from "svelte/store";
 import type { List, ExtendedListItem } from "./types";
 import { trackEvent } from "../../lib/analytics";
 
+const getFallbackPoster = (item: any) => {
+    if (typeof item?.poster === "string" && item.poster.trim()) return item.poster;
+    const imdbId = typeof item?.imdb_id === "string" ? item.imdb_id.trim() : "";
+    if (!/^tt\d+$/i.test(imdbId)) return "";
+    return `https://images.metahub.space/poster/small/${encodeURIComponent(imdbId)}/img`;
+};
+
+const createPartialListItem = (listId: string, item: any): ExtendedListItem => ({
+    poster: getFallbackPoster(item),
+    imdb_id: item.imdb_id,
+    type: item.type,
+    list_id: listId,
+    db_item: item,
+    _partial: true,
+    position: item.position,
+});
 
 export async function loadLists() {
     try {
@@ -45,17 +61,8 @@ export async function loadListItems(listId: string, items?: any[]) {
         }
 
         const metaPromises = items!.map(async (item: any) => {
-            if (item.poster) {
-                return {
-                    poster: item.poster,
-                    imdb_id: item.imdb_id,
-                    type: item.type,
-                    list_id: listId,
-                    db_item: item,
-                    _partial: true,
-                    position: item.position,
-                } as ExtendedListItem;
-            }
+            const partialItem = createPartialListItem(listId, item);
+            if (partialItem.poster) return partialItem;
 
             try {
                 const data = await getCachedMetaData(
@@ -81,11 +88,10 @@ export async function loadListItems(listId: string, items?: any[]) {
             } catch (e) {
                 console.error(`Failed to load meta for ${item.imdb_id}`, e);
             }
-            return null;
+            return partialItem;
         });
 
-        const metas = await Promise.all(metaPromises);
-        const resolved = metas.filter((m): m is NonNullable<typeof m> => !!m);
+        const resolved = await Promise.all(metaPromises);
 
         listItemsMap.update(map => ({
             ...map,
@@ -168,4 +174,3 @@ export async function selectItem(item: ExtendedListItem, listId: string) {
         selectedItem.set(item);
     }
 }
-
