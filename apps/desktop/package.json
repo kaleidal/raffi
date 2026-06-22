@@ -64,7 +64,6 @@
         "rpm"
       ],
       "artifactName": "Raffi-${version}-${arch}.${ext}",
-      "packageName": "raffi",
       "icon": "build/icons",
       "category": "Video",
       "extraResources": [
@@ -81,6 +80,12 @@
           "to": "ffprobe"
         }
       ]
+    },
+    "deb": {
+      "packageName": "raffi"
+    },
+    "rpm": {
+      "packageName": "raffi"
     },
     "mac": {
       "target": [
