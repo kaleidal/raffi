@@ -75,6 +75,8 @@ apps/desktop/electron/ffprobe.exe
 apps/desktop/electron/main
 apps/desktop/electron/raffi
 apps/desktop/release/
+apps/mobile/modules/**/android/.gradle/
+apps/mobile/modules/**/android/build/
 
 # Legacy / stale paths from pre-refactor layouts
 Raffi/
