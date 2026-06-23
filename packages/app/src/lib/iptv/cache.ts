@@ -4,7 +4,9 @@ import type {
     IptvRefreshResult,
     IptvRefreshStats,
     IptvSource,
+    IptvSourceKind,
 } from "./types";
+import { normalizeXtreamServerUrl } from "./xtream";
 
 const IPTV_REFRESH_CACHE_KEY_PREFIX = "raffi_iptv_refresh_result_v1";
 const CACHE_VERSION = 1;
@@ -12,8 +14,11 @@ const CACHE_VERSION = 1;
 type StoredIptvRefreshResult = {
     version: typeof CACHE_VERSION;
     sourceId: string;
-    m3uUrl: string;
-    epgUrl: string | null;
+    sourceKind: IptvSourceKind;
+    m3uUrl?: string;
+    epgUrl?: string | null;
+    serverUrl?: string;
+    credentialFingerprint?: string;
     channels: IptvChannel[];
     groups: IptvGroup[];
     loadedAt: string;
@@ -37,8 +42,53 @@ function normalizeOptionalUrl(url: string | undefined): string | null {
     return trimmed || null;
 }
 
-function getSourceUrls(source: IptvSource) {
+function hashString(input: string): string {
+    let hash = 0x811c9dc5;
+    for (let index = 0; index < input.length; index += 1) {
+        hash ^= input.charCodeAt(index);
+        hash = Math.imul(hash, 0x01000193);
+    }
+    return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function fingerprintXtreamCredentials(source: IptvSource): string {
+    if (source.kind !== "xtream") return "";
+    return hashString(
+        [
+            normalizeXtreamServerUrl(source.serverUrl),
+            source.username,
+            source.credential,
+        ].join("\n"),
+    );
+}
+
+export function getIptvSourceCacheFingerprint(source: IptvSource): string {
+    if (source.kind === "xtream") {
+        return [
+            source.kind,
+            normalizeXtreamServerUrl(source.serverUrl),
+            fingerprintXtreamCredentials(source),
+        ].join("\n");
+    }
+
+    return [
+        source.kind,
+        source.m3uUrl.trim(),
+        normalizeOptionalUrl(source.epgUrl) ?? "",
+    ].join("\n");
+}
+
+function getStoredSourceMetadata(source: IptvSource) {
+    if (source.kind === "xtream") {
+        return {
+            sourceKind: source.kind,
+            serverUrl: normalizeXtreamServerUrl(source.serverUrl),
+            credentialFingerprint: fingerprintXtreamCredentials(source),
+        };
+    }
+
     return {
+        sourceKind: source.kind,
         m3uUrl: source.m3uUrl.trim(),
         epgUrl: normalizeOptionalUrl(source.epgUrl),
     };
@@ -128,11 +178,26 @@ function sanitizeStoredResult(value: unknown): StoredIptvRefreshResult | null {
     if (
         value.version !== CACHE_VERSION ||
         typeof value.sourceId !== "string" ||
-        typeof value.m3uUrl !== "string" ||
-        (value.epgUrl !== null && typeof value.epgUrl !== "string") ||
         typeof value.loadedAt !== "string" ||
         !Array.isArray(value.channels) ||
         !Array.isArray(value.groups)
+    ) {
+        return null;
+    }
+
+    const sourceKind = value.sourceKind === "xtream" ? "xtream" : "m3u";
+    if (
+        sourceKind === "xtream" &&
+        (typeof value.serverUrl !== "string" ||
+            typeof value.credentialFingerprint !== "string")
+    ) {
+        return null;
+    }
+
+    if (
+        sourceKind === "m3u" &&
+        (typeof value.m3uUrl !== "string" ||
+            (value.epgUrl !== null && typeof value.epgUrl !== "string"))
     ) {
         return null;
     }
@@ -147,8 +212,17 @@ function sanitizeStoredResult(value: unknown): StoredIptvRefreshResult | null {
     return {
         version: CACHE_VERSION,
         sourceId: value.sourceId,
-        m3uUrl: value.m3uUrl,
-        epgUrl: value.epgUrl,
+        sourceKind,
+        m3uUrl: typeof value.m3uUrl === "string" ? value.m3uUrl : undefined,
+        epgUrl:
+            typeof value.epgUrl === "string" || value.epgUrl === null
+                ? value.epgUrl
+                : undefined,
+        serverUrl: typeof value.serverUrl === "string" ? value.serverUrl : undefined,
+        credentialFingerprint:
+            typeof value.credentialFingerprint === "string"
+                ? value.credentialFingerprint
+                : undefined,
         channels: channels as IptvChannel[],
         groups: groups as IptvGroup[],
         loadedAt: value.loadedAt,
@@ -157,24 +231,27 @@ function sanitizeStoredResult(value: unknown): StoredIptvRefreshResult | null {
 }
 
 function storedResultMatchesSource(source: IptvSource, stored: StoredIptvRefreshResult): boolean {
-    const urls = getSourceUrls(source);
-    return (
-        stored.sourceId === source.id &&
-        stored.m3uUrl === urls.m3uUrl &&
-        stored.epgUrl === urls.epgUrl
-    );
+    if (stored.sourceId !== source.id || stored.sourceKind !== source.kind) return false;
+
+    const metadata = getStoredSourceMetadata(source);
+    if (source.kind === "xtream") {
+        return (
+            stored.serverUrl === metadata.serverUrl &&
+            stored.credentialFingerprint === metadata.credentialFingerprint
+        );
+    }
+
+    return stored.m3uUrl === metadata.m3uUrl && stored.epgUrl === metadata.epgUrl;
 }
 
 export function persistIptvRefreshResult(source: IptvSource, result: IptvRefreshResult): void {
     const storage = getStorage();
     if (!storage) return;
 
-    const urls = getSourceUrls(source);
     const stored: StoredIptvRefreshResult = {
         version: CACHE_VERSION,
         sourceId: source.id,
-        m3uUrl: urls.m3uUrl,
-        epgUrl: urls.epgUrl,
+        ...getStoredSourceMetadata(source),
         channels: result.channels,
         groups: result.groups,
         loadedAt: result.loadedAt,

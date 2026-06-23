@@ -80,4 +80,82 @@ describe("IPTV source store helpers", () => {
             }),
         ).toThrow("Only http and https IPTV URLs are supported");
     });
+
+    test("adds and updates Xtream credentials sources", () => {
+        const source = addIptvSource({
+            kind: "xtream",
+            name: "Xtream Live",
+            serverUrl: "https://panel.example.test:8443/",
+            username: "user@example",
+            credential: "secret-pass",
+        });
+
+        expect(source).toMatchObject({
+            kind: "xtream",
+            name: "Xtream Live",
+            serverUrl: "https://panel.example.test:8443",
+            username: "user@example",
+            credential: "secret-pass",
+        });
+        expect(getStoredIptvSources()).toHaveLength(1);
+
+        const updated = updateIptvSource(source.id, {
+            kind: "xtream",
+            name: "Xtream Live HD",
+            serverUrl: "https://panel.example.test:8443/base/",
+            username: "user@example",
+            credential: "rotated-secret",
+        });
+
+        expect(updated).toMatchObject({
+            kind: "xtream",
+            name: "Xtream Live HD",
+            serverUrl: "https://panel.example.test:8443/base",
+            credential: "rotated-secret",
+        });
+    });
+
+    test("reads legacy Xtream sources stored with the old credential key", () => {
+        const legacyCredentialKey = "password";
+        storage.setItem(
+            "raffi_iptv_sources_v1",
+            JSON.stringify([
+                {
+                    id: "xtream-legacy",
+                    kind: "xtream",
+                    name: "Legacy Xtream",
+                    serverUrl: "https://panel.example.test:8443/",
+                    username: "user@example",
+                    [legacyCredentialKey]: "legacy-secret",
+                    createdAt: "2026-06-22T10:00:00.000Z",
+                    updatedAt: "2026-06-22T10:00:00.000Z",
+                },
+            ]),
+        );
+
+        expect(getStoredIptvSources()).toEqual([
+            {
+                id: "xtream-legacy",
+                kind: "xtream",
+                name: "Legacy Xtream",
+                serverUrl: "https://panel.example.test:8443",
+                username: "user@example",
+                credential: "legacy-secret",
+                createdAt: "2026-06-22T10:00:00.000Z",
+                updatedAt: "2026-06-22T10:00:00.000Z",
+            },
+        ]);
+    });
+
+    test("rejects non-http Xtream server URLs", () => {
+        expect(() =>
+            addIptvSource({
+                kind: "xtream",
+                name: "Bad Xtream",
+                serverUrl: "ftp://panel.example.test",
+                username: "user",
+                credential: "pass",
+            }),
+        ).toThrow("Only http and https Xtream server URLs are supported");
+    });
 });

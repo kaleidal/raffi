@@ -117,4 +117,29 @@ describe("IPTV refresh result cache", () => {
 
         expect(getStoredIptvRefreshResult(source)).toBeNull();
     });
+
+    test("matches Xtream caches by credentials without storing the plain password in cache metadata", () => {
+        const xtreamSource: IptvSource = {
+            id: "xtream-1",
+            kind: "xtream",
+            name: "Xtream Live",
+            serverUrl: "https://panel.example.test:8443/",
+            username: "user@example",
+            credential: "secret-pass",
+            createdAt: "2026-06-22T10:00:00.000Z",
+            updatedAt: "2026-06-22T10:00:00.000Z",
+        };
+
+        persistIptvRefreshResult(xtreamSource, result);
+
+        expect(getStoredIptvRefreshResult(xtreamSource)?.channels.map((channel) => channel.name)).toEqual(["ABC"]);
+        expect(getStoredIptvRefreshResult({
+            ...xtreamSource,
+            credential: "rotated-secret",
+        })).toBeNull();
+
+        const rawStored = storage.getItem("raffi_iptv_refresh_result_v1:xtream-1") ?? "";
+        expect(rawStored).not.toContain("secret-pass");
+        expect(rawStored).not.toContain("user@example");
+    });
 });

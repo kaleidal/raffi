@@ -1,14 +1,27 @@
-export type IptvSourceKind = "m3u";
+export type IptvSourceKind = "m3u" | "xtream";
 
-export interface IptvSource {
+interface IptvBaseSource {
     id: string;
     name: string;
     kind: IptvSourceKind;
-    m3uUrl: string;
-    epgUrl?: string;
     createdAt: string;
     updatedAt: string;
 }
+
+export interface IptvM3uSource extends IptvBaseSource {
+    kind: "m3u";
+    m3uUrl: string;
+    epgUrl?: string;
+}
+
+export interface IptvXtreamSource extends IptvBaseSource {
+    kind: "xtream";
+    serverUrl: string;
+    username: string;
+    credential: string;
+}
+
+export type IptvSource = IptvM3uSource | IptvXtreamSource;
 
 export interface IptvChannel {
     id: string;

@@ -21,6 +21,7 @@
     import { refreshIptvSource } from "../../lib/iptv/refresh";
     import {
         getStoredIptvRefreshResult,
+        getIptvSourceCacheFingerprint,
         persistIptvRefreshResult,
     } from "../../lib/iptv/cache";
     import {
@@ -34,6 +35,7 @@
         IptvChannel,
         IptvRefreshResult,
         IptvSource,
+        IptvSourceKind,
     } from "../../lib/iptv/types";
 
     const ALL_GROUPS = "__all__";
@@ -62,9 +64,13 @@
     let refreshError = "";
     let formError = "";
     let editingSourceId: string | null = null;
+    let formKind: IptvSourceKind = "m3u";
     let formName = "";
     let formM3uUrl = "";
     let formEpgUrl = "";
+    let formXtreamServerUrl = "";
+    let formXtreamUsername = "";
+    let formXtreamCredential = "";
     let selectedGroup = ALL_GROUPS;
     let searchQuery = "";
     let guideNow = new Date();
@@ -145,7 +151,7 @@
     }
 
     function getLiveSourceCacheKey(source: IptvSource) {
-        return `${source.id}\n${source.m3uUrl.trim()}\n${source.epgUrl?.trim() ?? ""}`;
+        return `${source.id}\n${getIptvSourceCacheFingerprint(source)}`;
     }
 
     function getGuideViewport(now: Date): GuideGridViewport {
@@ -221,22 +227,44 @@
 
     function resetForm() {
         editingSourceId = null;
+        formKind = "m3u";
         formName = "";
         formM3uUrl = "";
         formEpgUrl = "";
+        formXtreamServerUrl = "";
+        formXtreamUsername = "";
+        formXtreamCredential = "";
         formError = "";
     }
 
     function editSource(source: IptvSource) {
         editingSourceId = source.id;
+        formKind = source.kind;
         formName = source.name;
-        formM3uUrl = source.m3uUrl;
-        formEpgUrl = source.epgUrl ?? "";
+        if (source.kind === "xtream") {
+            formM3uUrl = "";
+            formEpgUrl = "";
+            formXtreamServerUrl = source.serverUrl;
+            formXtreamUsername = source.username;
+            formXtreamCredential = source.credential;
+        } else {
+            formM3uUrl = source.m3uUrl;
+            formEpgUrl = source.epgUrl ?? "";
+            formXtreamServerUrl = "";
+            formXtreamUsername = "";
+            formXtreamCredential = "";
+        }
+        formError = "";
+    }
+
+    function setFormKind(kind: IptvSourceKind) {
+        formKind = kind;
         formError = "";
     }
 
     function fillDispatcharrExample() {
         if (!IPTV_EXAMPLE) return;
+        formKind = "m3u";
         formName = IPTV_EXAMPLE.name;
         formM3uUrl = IPTV_EXAMPLE.m3uUrl;
         formEpgUrl = IPTV_EXAMPLE.epgUrl;
@@ -246,22 +274,42 @@
     function saveSource() {
         try {
             if (editingSourceId) {
-                const updated = updateIptvSource(editingSourceId, {
-                    name: formName,
-                    m3uUrl: formM3uUrl,
-                    epgUrl: formEpgUrl,
-                });
+                const updated =
+                    formKind === "xtream"
+                        ? updateIptvSource(editingSourceId, {
+                              kind: "xtream",
+                              name: formName,
+                              serverUrl: formXtreamServerUrl,
+                              username: formXtreamUsername,
+                              credential: formXtreamCredential,
+                          })
+                        : updateIptvSource(editingSourceId, {
+                              kind: "m3u",
+                              name: formName,
+                              m3uUrl: formM3uUrl,
+                              epgUrl: formEpgUrl,
+                          });
                 if (!updated) {
                     throw new Error("The selected IPTV source no longer exists");
                 }
                 selectedSourceId = updated.id;
                 trackEvent("iptv_source_updated");
             } else {
-                const source = addIptvSource({
-                    name: formName,
-                    m3uUrl: formM3uUrl,
-                    epgUrl: formEpgUrl,
-                });
+                const source =
+                    formKind === "xtream"
+                        ? addIptvSource({
+                              kind: "xtream",
+                              name: formName,
+                              serverUrl: formXtreamServerUrl,
+                              username: formXtreamUsername,
+                              credential: formXtreamCredential,
+                          })
+                        : addIptvSource({
+                              kind: "m3u",
+                              name: formName,
+                              m3uUrl: formM3uUrl,
+                              epgUrl: formEpgUrl,
+                          });
                 selectedSourceId = source.id;
                 trackEvent("iptv_source_added");
             }
@@ -503,22 +551,67 @@
                         bind:value={formName}
                     />
                 </label>
-                <label class="flex flex-col gap-2 text-sm text-white/62">
-                    M3U URL
-                    <input
-                        class="h-11 rounded-lg border border-white/10 bg-black/35 px-3 text-white outline-none focus:border-white/35"
-                        bind:value={formM3uUrl}
-                        inputmode="url"
-                    />
-                </label>
-                <label class="flex flex-col gap-2 text-sm text-white/62">
-                    XMLTV URL
-                    <input
-                        class="h-11 rounded-lg border border-white/10 bg-black/35 px-3 text-white outline-none focus:border-white/35"
-                        bind:value={formEpgUrl}
-                        inputmode="url"
-                    />
-                </label>
+                <div class="grid grid-cols-2 gap-1 rounded-lg border border-white/10 bg-black/35 p-1">
+                    <button
+                        class={`h-9 rounded-md text-sm font-semibold transition-colors ${formKind === "m3u" ? "bg-white text-black" : "text-white/62 hover:bg-white/8 hover:text-white"}`}
+                        aria-pressed={formKind === "m3u"}
+                        onclick={() => setFormKind("m3u")}
+                    >
+                        M3U URL
+                    </button>
+                    <button
+                        class={`h-9 rounded-md text-sm font-semibold transition-colors ${formKind === "xtream" ? "bg-white text-black" : "text-white/62 hover:bg-white/8 hover:text-white"}`}
+                        aria-pressed={formKind === "xtream"}
+                        onclick={() => setFormKind("xtream")}
+                    >
+                        Xtream
+                    </button>
+                </div>
+
+                {#if formKind === "m3u"}
+                    <label class="flex flex-col gap-2 text-sm text-white/62">
+                        M3U URL
+                        <input
+                            class="h-11 rounded-lg border border-white/10 bg-black/35 px-3 text-white outline-none focus:border-white/35"
+                            bind:value={formM3uUrl}
+                            inputmode="url"
+                        />
+                    </label>
+                    <label class="flex flex-col gap-2 text-sm text-white/62">
+                        XMLTV URL
+                        <input
+                            class="h-11 rounded-lg border border-white/10 bg-black/35 px-3 text-white outline-none focus:border-white/35"
+                            bind:value={formEpgUrl}
+                            inputmode="url"
+                        />
+                    </label>
+                {:else}
+                    <label class="flex flex-col gap-2 text-sm text-white/62">
+                        Server URL
+                        <input
+                            class="h-11 rounded-lg border border-white/10 bg-black/35 px-3 text-white outline-none focus:border-white/35"
+                            bind:value={formXtreamServerUrl}
+                            inputmode="url"
+                        />
+                    </label>
+                    <label class="flex flex-col gap-2 text-sm text-white/62">
+                        Username
+                        <input
+                            class="h-11 rounded-lg border border-white/10 bg-black/35 px-3 text-white outline-none focus:border-white/35"
+                            bind:value={formXtreamUsername}
+                            autocomplete="off"
+                        />
+                    </label>
+                    <label class="flex flex-col gap-2 text-sm text-white/62">
+                        Password
+                        <input
+                            class="h-11 rounded-lg border border-white/10 bg-black/35 px-3 text-white outline-none focus:border-white/35"
+                            bind:value={formXtreamCredential}
+                            type="password"
+                            autocomplete="off"
+                        />
+                    </label>
+                {/if}
 
                 {#if formError}
                     <div class="rounded-lg border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
