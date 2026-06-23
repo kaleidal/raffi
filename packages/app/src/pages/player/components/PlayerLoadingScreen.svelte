@@ -21,6 +21,7 @@
     export let loading: boolean;
     export let onClose: () => void;
     export let metaData: ShowResponse | null;
+    export let liveTitle: string | null = null;
 
 	export let stage: string = "Loading...";
 	export let details: string = "";
@@ -58,6 +59,15 @@
                     alt="Logo"
                     class="w-100 object-contain animate-pulse drop-shadow-[0_10px_40px_rgba(0,0,0,0.45)]"
                 />
+            </div>
+        {:else if liveTitle}
+            <div class="relative z-10 flex flex-col items-center gap-2 px-8 text-center">
+                <div class="text-white/92 text-[28px] font-poppins font-semibold leading-tight">
+                    {liveTitle}
+                </div>
+                <div class="text-white/55 text-[14px] uppercase tracking-[0.18em]">
+                    Live TV
+                </div>
             </div>
         {/if}
 

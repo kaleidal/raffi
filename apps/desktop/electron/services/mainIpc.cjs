@@ -1,3 +1,147 @@
+const dns = require("dns").promises;
+const net = require("net");
+
+const IPTV_MAX_REDIRECTS = 5;
+const IPTV_REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+const IPTV_BLOCKED_HOSTNAMES = new Set([
+  "localhost",
+  "localhost.localdomain",
+  "ip6-localhost",
+  "ip6-loopback",
+  "loopback",
+  "broadcasthost",
+  "metadata",
+  "metadata.google.internal",
+  "instance-data",
+  "instance-data.ec2.internal",
+]);
+const IPTV_BLOCKED_HOSTNAME_SUFFIXES = [
+  ".localhost",
+  ".metadata.google.internal",
+];
+const iptvBlockedAddressList = new net.BlockList();
+iptvBlockedAddressList.addSubnet("0.0.0.0", 8, "ipv4");
+iptvBlockedAddressList.addSubnet("127.0.0.0", 8, "ipv4");
+iptvBlockedAddressList.addSubnet("169.254.0.0", 16, "ipv4");
+iptvBlockedAddressList.addSubnet("224.0.0.0", 4, "ipv4");
+iptvBlockedAddressList.addSubnet("240.0.0.0", 4, "ipv4");
+iptvBlockedAddressList.addSubnet("::", 96, "ipv6");
+iptvBlockedAddressList.addAddress("::", "ipv6");
+iptvBlockedAddressList.addAddress("::1", "ipv6");
+iptvBlockedAddressList.addSubnet("fe80::", 10, "ipv6");
+iptvBlockedAddressList.addSubnet("ff00::", 8, "ipv6");
+
+function normalizeIptvHostname(hostname) {
+  let normalized = String(hostname || "").trim().toLowerCase();
+  if (normalized.startsWith("[") && normalized.endsWith("]")) {
+    normalized = normalized.slice(1, -1);
+  }
+  return normalized.replace(/\.+$/, "");
+}
+
+function isBlockedIptvHostname(hostname) {
+  const normalized = normalizeIptvHostname(hostname);
+  return (
+    IPTV_BLOCKED_HOSTNAMES.has(normalized) ||
+    IPTV_BLOCKED_HOSTNAME_SUFFIXES.some((suffix) => normalized.endsWith(suffix))
+  );
+}
+
+function isBlockedIptvAddress(address) {
+  const normalized = normalizeIptvHostname(address);
+  const version = net.isIP(normalized);
+  if (!version) return true;
+  return iptvBlockedAddressList.check(normalized, version === 4 ? "ipv4" : "ipv6");
+}
+
+function parseIptvFetchUrl(target) {
+  let parsed;
+
+  try {
+    parsed = new URL(target);
+  } catch {
+    throw new Error("Enter a valid IPTV URL");
+  }
+
+  if (!["http:", "https:"].includes(parsed.protocol)) {
+    throw new Error("Only http/https IPTV URLs are supported");
+  }
+
+  if (!normalizeIptvHostname(parsed.hostname)) {
+    throw new Error("Enter a valid IPTV URL");
+  }
+
+  return parsed;
+}
+
+async function assertSafeIptvFetchUrl(parsed) {
+  const hostname = normalizeIptvHostname(parsed.hostname);
+
+  if (isBlockedIptvHostname(hostname)) {
+    throw new Error("IPTV URL host is not allowed");
+  }
+
+  if (net.isIP(hostname)) {
+    if (isBlockedIptvAddress(hostname)) {
+      throw new Error("IPTV URL host is not allowed");
+    }
+    return;
+  }
+
+  let addresses;
+  try {
+    addresses = await dns.lookup(hostname, {
+      all: true,
+      verbatim: true,
+    });
+  } catch {
+    throw new Error("IPTV URL host could not be resolved");
+  }
+
+  if (!Array.isArray(addresses) || addresses.length === 0) {
+    throw new Error("IPTV URL host could not be resolved");
+  }
+
+  for (const entry of addresses) {
+    if (isBlockedIptvAddress(entry.address)) {
+      throw new Error("IPTV URL host is not allowed");
+    }
+  }
+}
+
+async function getSafeIptvFetchResponse(initialUrl, signal) {
+  let currentUrl = initialUrl;
+
+  for (let redirectCount = 0; redirectCount <= IPTV_MAX_REDIRECTS; redirectCount += 1) {
+    await assertSafeIptvFetchUrl(currentUrl);
+
+    const response = await fetch(currentUrl.toString(), {
+      signal,
+      redirect: "manual",
+    });
+
+    if (!IPTV_REDIRECT_STATUSES.has(response.status)) {
+      return { response, url: currentUrl };
+    }
+
+    if (redirectCount >= IPTV_MAX_REDIRECTS) {
+      await response.body?.cancel?.().catch(() => {});
+      throw new Error("IPTV redirect limit exceeded");
+    }
+
+    const location = response.headers.get("location");
+    await response.body?.cancel?.().catch(() => {});
+
+    if (!location) {
+      throw new Error("IPTV redirect did not include a target");
+    }
+
+    currentUrl = parseIptvFetchUrl(new URL(location, currentUrl).toString());
+  }
+
+  throw new Error("IPTV redirect limit exceeded");
+}
+
 function registerMainIpcHandlers({
   ipcMain,
   dialog,
@@ -104,6 +248,89 @@ function registerMainIpcHandlers({
       status: response.status,
       data: await response.json(),
     };
+  });
+
+  ipcMain.handle("IPTV_FETCH_TEXT", async (_event, payload) => {
+    const target = typeof payload?.url === "string" ? payload.url.trim() : "";
+    const initialUrl = parseIptvFetchUrl(target);
+
+    const timeoutMs = Math.min(
+      Math.max(Number(payload?.options?.timeoutMs) || 30000, 1000),
+      120000,
+    );
+    const maxBytes = Math.min(
+      Math.max(Number(payload?.options?.maxBytes) || 64 * 1024 * 1024, 1024),
+      128 * 1024 * 1024,
+    );
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const { response, url: responseUrl } = await getSafeIptvFetchResponse(
+        initialUrl,
+        controller.signal,
+      );
+      const responseHost = normalizeIptvHostname(responseUrl.hostname);
+
+      if (!response.ok) {
+        logToFile("IPTV fetch failed", {
+          host: responseHost,
+          status: response.status,
+        });
+        throw new Error(`Fetch failed with HTTP ${response.status}`);
+      }
+
+      const reader = response.body?.getReader?.();
+      if (!reader) {
+        const arrayBuffer = await response.arrayBuffer();
+        if (arrayBuffer.byteLength > maxBytes) {
+          throw new Error("IPTV response exceeded maximum size");
+        }
+        logToFile("IPTV fetch completed", {
+          host: responseHost,
+          status: response.status,
+          bytes: arrayBuffer.byteLength,
+        });
+        return {
+          ok: true,
+          status: response.status,
+          text: Buffer.from(arrayBuffer).toString("utf8"),
+        };
+      }
+
+      const chunks = [];
+      let totalBytes = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (!value) continue;
+        totalBytes += value.byteLength;
+        if (totalBytes > maxBytes) {
+          throw new Error("IPTV response exceeded maximum size");
+        }
+        chunks.push(Buffer.from(value));
+      }
+
+      logToFile("IPTV fetch completed", {
+        host: responseHost,
+        status: response.status,
+        bytes: totalBytes,
+      });
+
+      return {
+        ok: true,
+        status: response.status,
+        text: Buffer.concat(chunks, totalBytes).toString("utf8"),
+      };
+    } catch (error) {
+      if (error?.name === "AbortError") {
+        throw new Error("IPTV fetch timed out");
+      }
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
   });
 
   ipcMain.handle("OPEN_EXTERNAL_URL", async (_event, targetUrl) => {

@@ -2,6 +2,7 @@
     import Meta from "./pages/meta/Meta.svelte";
     import Home from "./pages/Home.svelte";
     import Player from "./pages/player/Player.svelte";
+    import LiveTV from "./pages/live/LiveTV.svelte";
     import { router } from "./lib/stores/router";
     import { onMount, tick } from "svelte";
     import { get } from "svelte/store";
@@ -28,6 +29,7 @@
         meta: Meta,
         player: Player,
         lists: Lists,
+        live: LiveTV,
     };
 
     type DecoderStatus = {

@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { Search, Link, Blocks, Library, Settings } from "@lucide/svelte";
+    import { Search, Link, Blocks, Library, Settings, Tv } from "@lucide/svelte";
     import {
         searchAddonTitlesSplit,
         searchTitlesSplit,
@@ -323,6 +323,11 @@
 	function openLists() {
 		trackEvent("lists_opened", { source: "search_bar" });
 		router.navigate("lists");
+	}
+
+	function openLiveTv() {
+		trackEvent("live_tv_opened", { source: "search_bar" });
+		router.navigate("live");
 	}
 
 	function openSettings() {
@@ -723,6 +728,14 @@
             onclick={openAddons}
         >
             <Blocks size={40} strokeWidth={2} color="#C3C3C3" />
+        </button>
+
+        <button
+            class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
+            aria-label="live tv"
+            onclick={openLiveTv}
+        >
+            <Tv size={40} strokeWidth={2} color="#C3C3C3" />
         </button>
 
         <button
