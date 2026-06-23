@@ -1,5 +1,5 @@
 import type { IptvChannel, XmltvGuide, XmltvProgramme } from "./types";
-import { normalizeIptvText } from "./utils";
+import { resolveXmltvChannelId } from "./xmltv";
 
 export type GuideProgrammeState = "past" | "current" | "future";
 
@@ -27,28 +27,6 @@ export interface GuideGridProgramme {
 export interface GuideGridRow {
     channel: IptvChannel;
     programmes: GuideGridProgramme[];
-}
-
-function hasGuideChannelId(guide: XmltvGuide, channelId: string): boolean {
-    return guide.channels.has(channelId) || guide.programmesByChannel.has(channelId);
-}
-
-function resolveGuideChannelId(channel: IptvChannel, guide: XmltvGuide): string | null {
-    if (channel.tvgId && hasGuideChannelId(guide, channel.tvgId)) {
-        return channel.tvgId;
-    }
-
-    const tvgName = normalizeIptvText(channel.tvgName);
-    if (tvgName && guide.displayNameToChannelId.has(tvgName)) {
-        return guide.displayNameToChannelId.get(tvgName) ?? null;
-    }
-
-    const channelName = normalizeIptvText(channel.name);
-    if (channelName && guide.displayNameToChannelId.has(channelName)) {
-        return guide.displayNameToChannelId.get(channelName) ?? null;
-    }
-
-    return null;
 }
 
 function roundPercent(value: number): number {
@@ -91,6 +69,10 @@ function toGridProgramme(
     const startMs = programme.start.getTime();
     const stopMs = programme.stop.getTime();
 
+    if (stopMs <= startMs) {
+        return null;
+    }
+
     if (viewportDurationMs <= 0 || stopMs <= viewportStartMs || startMs >= viewportEndMs) {
         return null;
     }
@@ -125,7 +107,7 @@ export function buildGuideRows(
     viewport: GuideGridViewport,
 ): GuideGridRow[] {
     return channels.map((channel) => {
-        const guideChannelId = guide ? resolveGuideChannelId(channel, guide) : null;
+        const guideChannelId = guide ? resolveXmltvChannelId(channel, guide) : null;
         const programmes = guideChannelId ? guide?.programmesByChannel.get(guideChannelId) ?? [] : [];
 
         return {

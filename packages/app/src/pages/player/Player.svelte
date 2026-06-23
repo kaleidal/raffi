@@ -1273,7 +1273,10 @@
         pendingAutoJoin = false;
     }
 
-    $: if ($showWatchPartyModal && (liveMode || embedSrc || !$cloudSyncStatus.cloudFeaturesAvailable)) {
+    $: if (
+        $showWatchPartyModal &&
+        (liveMode || embedSrc || $localMode || !$cloudSyncStatus.cloudFeaturesAvailable)
+    ) {
         showWatchPartyModal.set(false);
     }
 

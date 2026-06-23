@@ -102,6 +102,10 @@ function optionalString(value: unknown): string | undefined {
     return typeof value === "string" && value ? value : undefined;
 }
 
+function isValidDateString(value: string): boolean {
+    return !Number.isNaN(new Date(value).getTime());
+}
+
 function sanitizeChannel(value: unknown): IptvChannel | null {
     if (!isRecord(value)) return null;
     if (
@@ -179,6 +183,7 @@ function sanitizeStoredResult(value: unknown): StoredIptvRefreshResult | null {
         value.version !== CACHE_VERSION ||
         typeof value.sourceId !== "string" ||
         typeof value.loadedAt !== "string" ||
+        !isValidDateString(value.loadedAt) ||
         !Array.isArray(value.channels) ||
         !Array.isArray(value.groups)
     ) {
@@ -209,6 +214,15 @@ function sanitizeStoredResult(value: unknown): StoredIptvRefreshResult | null {
         return null;
     }
 
+    const sanitizedChannels = channels as IptvChannel[];
+    const sanitizedGroups = groups as IptvGroup[];
+    if (
+        sanitizedChannels.some((channel) => channel.sourceId !== value.sourceId) ||
+        sanitizedGroups.some((group) => group.sourceId !== value.sourceId)
+    ) {
+        return null;
+    }
+
     return {
         version: CACHE_VERSION,
         sourceId: value.sourceId,
@@ -223,8 +237,8 @@ function sanitizeStoredResult(value: unknown): StoredIptvRefreshResult | null {
             typeof value.credentialFingerprint === "string"
                 ? value.credentialFingerprint
                 : undefined,
-        channels: channels as IptvChannel[],
-        groups: groups as IptvGroup[],
+        channels: sanitizedChannels,
+        groups: sanitizedGroups,
         loadedAt: value.loadedAt,
         stats,
     };

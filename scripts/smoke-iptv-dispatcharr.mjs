@@ -3,6 +3,7 @@ import { getNowNext, getProgrammeCount, parseXmltv } from "../packages/app/src/l
 
 const MAX_M3U_BYTES = 64 * 1024 * 1024;
 const MAX_EPG_BYTES = 128 * 1024 * 1024;
+const REQUEST_TIMEOUT_MS = 30_000;
 
 function requireEnv(name) {
     const value = String(process.env[name] || "").trim();
@@ -13,25 +14,36 @@ function requireEnv(name) {
 }
 
 async function fetchText(label, target, maxBytes) {
-    let response;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
     try {
-        response = await fetch(target, { redirect: "follow" });
+        const response = await fetch(target, {
+            redirect: "follow",
+            signal: controller.signal,
+        });
+        const arrayBuffer = await response.arrayBuffer();
+
+        if (arrayBuffer.byteLength > maxBytes) {
+            throw new Error("IPTV response exceeded maximum size");
+        }
+
+        return {
+            status: response.status,
+            ok: response.ok,
+            text: new TextDecoder("utf-8").decode(arrayBuffer),
+        };
     } catch (error) {
+        if (error?.name === "AbortError") {
+            throw new Error(
+                `${label} fetch timed out after ${REQUEST_TIMEOUT_MS / 1000} seconds`,
+            );
+        }
         const message = error instanceof Error ? error.message : String(error);
-        throw new Error(`${label} fetch failed before HTTP response: ${message}`);
+        throw new Error(`${label} fetch failed: ${message}`);
+    } finally {
+        clearTimeout(timeout);
     }
-
-    const arrayBuffer = await response.arrayBuffer();
-
-    if (arrayBuffer.byteLength > maxBytes) {
-        throw new Error("IPTV response exceeded maximum size");
-    }
-
-    return {
-        status: response.status,
-        ok: response.ok,
-        text: new TextDecoder("utf-8").decode(arrayBuffer),
-    };
 }
 
 async function main() {
@@ -44,6 +56,9 @@ async function main() {
     }
 
     const parsed = parseM3U(m3u.text, "smoke");
+    if (parsed.channels.length === 0) {
+        throw new Error("The IPTV playlist did not contain any channels");
+    }
 
     const epg = await fetchText("EPG", epgUrl, MAX_EPG_BYTES);
     if (!epg.ok) {

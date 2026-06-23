@@ -70,6 +70,19 @@ describe("parseXmltv", () => {
         expect(programmes[0].title).toBe("Morning <News> & Weather");
         expect(programmes[0].description).toBe("Headlines <local> & forecast.");
     });
+
+    test("skips programmes with malformed timestamps", () => {
+        const xml = `<tv>
+  <channel id="abc.us"><display-name>ABC</display-name></channel>
+  <programme channel="abc.us" start="bad-time" stop="20260622100000 -0400"><title>Broken</title></programme>
+  <programme channel="abc.us" start="20260622100000 -0400" stop="20260622110000 -0400"><title>Valid</title></programme>
+</tv>`;
+
+        const guide = parseXmltv(xml);
+        const programmes = guide.programmesByChannel.get("abc.us") ?? [];
+
+        expect(programmes.map((programme) => programme.title)).toEqual(["Valid"]);
+    });
 });
 
 describe("getNowNext", () => {
@@ -91,6 +104,15 @@ describe("getNowNext", () => {
 
         expect(result.now?.title).toBe("ABC Now");
         expect(result.next?.title).toBe("ABC Next");
+    });
+
+    test("matches tvg-id programme keys even without channel metadata", () => {
+        const guideWithoutChannel = parseXmltv(`<tv>
+  <programme channel="orphan" start="20260622090000 -0400" stop="20260622100000 -0400"><title>Orphan Now</title></programme>
+</tv>`);
+        const result = getNowNext(channel({ tvgId: "orphan", name: "Orphan" }), guideWithoutChannel, at);
+
+        expect(result.now?.title).toBe("Orphan Now");
     });
 
     test("matches by tvg-name display name", () => {

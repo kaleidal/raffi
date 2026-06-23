@@ -159,10 +159,19 @@ export function parseXmltv(xml: string): XmltvGuide {
         if (!channelId || !startRaw || !stopRaw) continue;
 
         const title = getTagText(programmeMatch[2], "title") || "Untitled";
+        let start: Date;
+        let stop: Date;
+        try {
+            start = parseXmltvTime(startRaw);
+            stop = parseXmltvTime(stopRaw);
+        } catch {
+            continue;
+        }
+
         const programme: XmltvProgramme = {
             channelId,
-            start: parseXmltvTime(startRaw),
-            stop: parseXmltvTime(stopRaw),
+            start,
+            stop,
             startOffsetMinutes: getXmltvOffsetMinutes(startRaw),
             stopOffsetMinutes: getXmltvOffsetMinutes(stopRaw),
             title,
@@ -182,8 +191,12 @@ export function parseXmltv(xml: string): XmltvGuide {
     return guide;
 }
 
-function resolveGuideChannelId(channel: IptvChannel, guide: XmltvGuide): string | null {
-    if (channel.tvgId && guide.channels.has(channel.tvgId)) {
+function hasGuideChannelId(guide: XmltvGuide, channelId: string): boolean {
+    return guide.channels.has(channelId) || guide.programmesByChannel.has(channelId);
+}
+
+export function resolveXmltvChannelId(channel: IptvChannel, guide: XmltvGuide): string | null {
+    if (channel.tvgId && hasGuideChannelId(guide, channel.tvgId)) {
         return channel.tvgId;
     }
 
@@ -205,7 +218,7 @@ export function getNowNext(
     guide: XmltvGuide,
     at: Date = new Date(),
 ): { now: XmltvProgramme | null; next: XmltvProgramme | null } {
-    const guideChannelId = resolveGuideChannelId(channel, guide);
+    const guideChannelId = resolveXmltvChannelId(channel, guide);
     if (!guideChannelId) {
         return { now: null, next: null };
     }

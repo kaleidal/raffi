@@ -105,7 +105,7 @@ export function parseM3U(input: string, sourceId: string): IptvParseResult {
     const groups: IptvGroup[] = Array.from(groupOrder.entries())
         .sort((a, b) => a[1] - b[1])
         .map(([name, order]) => ({
-            id: `${sourceId}:group:${slugForId(name)}`,
+            id: `${sourceId}:group:${order}:${slugForId(name)}`,
             sourceId,
             name,
             channelCount: groupCounts.get(name) ?? 0,

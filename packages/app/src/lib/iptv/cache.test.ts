@@ -72,6 +72,8 @@ const result: IptvRefreshResult = {
     },
 };
 
+const cacheKey = "raffi_iptv_refresh_result_v1:source-1";
+
 describe("IPTV refresh result cache", () => {
     let storage: MemoryStorage;
 
@@ -97,7 +99,49 @@ describe("IPTV refresh result cache", () => {
             programmeCount: 42,
         });
         expect(cached?.guide).toBeUndefined();
-        expect(JSON.stringify(storage)).not.toContain("programmesByChannel");
+
+        const rawStored = storage.getItem(cacheKey) ?? "";
+        const stored = JSON.parse(rawStored) as Record<string, unknown>;
+        expect(Object.hasOwn(stored, "guide")).toBe(false);
+        expect(Object.hasOwn(stored, "programmesByChannel")).toBe(false);
+    });
+
+    test("ignores cached results with mismatched child source ids", () => {
+        persistIptvRefreshResult(source, result);
+        const stored = JSON.parse(storage.getItem(cacheKey) ?? "{}");
+
+        storage.setItem(
+            cacheKey,
+            JSON.stringify({
+                ...stored,
+                channels: [{ ...stored.channels[0], sourceId: "other-source" }],
+            }),
+        );
+        expect(getStoredIptvRefreshResult(source)).toBeNull();
+
+        storage.setItem(
+            cacheKey,
+            JSON.stringify({
+                ...stored,
+                groups: [{ ...stored.groups[0], sourceId: "other-source" }],
+            }),
+        );
+        expect(getStoredIptvRefreshResult(source)).toBeNull();
+    });
+
+    test("ignores cached results with invalid loaded timestamps", () => {
+        persistIptvRefreshResult(source, result);
+        const stored = JSON.parse(storage.getItem(cacheKey) ?? "{}");
+
+        storage.setItem(
+            cacheKey,
+            JSON.stringify({
+                ...stored,
+                loadedAt: "not-a-date",
+            }),
+        );
+
+        expect(getStoredIptvRefreshResult(source)).toBeNull();
     });
 
     test("ignores cached channels after the source URL changes", () => {
@@ -130,7 +174,21 @@ describe("IPTV refresh result cache", () => {
             updatedAt: "2026-06-22T10:00:00.000Z",
         };
 
-        persistIptvRefreshResult(xtreamSource, result);
+        const xtreamResult: IptvRefreshResult = {
+            ...result,
+            channels: result.channels.map((channel) => ({
+                ...channel,
+                id: channel.id.replace(source.id, xtreamSource.id),
+                sourceId: xtreamSource.id,
+            })),
+            groups: result.groups.map((group) => ({
+                ...group,
+                id: group.id.replace(source.id, xtreamSource.id),
+                sourceId: xtreamSource.id,
+            })),
+        };
+
+        persistIptvRefreshResult(xtreamSource, xtreamResult);
 
         expect(getStoredIptvRefreshResult(xtreamSource)?.channels.map((channel) => channel.name)).toEqual(["ABC"]);
         expect(getStoredIptvRefreshResult({

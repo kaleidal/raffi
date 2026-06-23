@@ -74,6 +74,21 @@ describe("guide grid layout", () => {
         });
     });
 
+    test("skips malformed programme intervals", () => {
+        const guide = parseXmltv(`<tv>
+  <channel id="abc.us"><display-name>ABC News</display-name></channel>
+  <programme channel="abc.us" start="20260622193000 -0400" stop="20260622190000 -0400"><title>Backwards</title></programme>
+</tv>`);
+
+        const [row] = buildGuideRows(
+            [channel({ tvgId: "abc.us", name: "ABC News" })],
+            guide,
+            { viewportStart, viewportEnd, now },
+        );
+
+        expect(row.programmes).toEqual([]);
+    });
+
     test("falls back to normalized channel display-name matching", () => {
         const guide = parseXmltv(`<tv>
   <channel id="cnn"><display-name>CNN International</display-name></channel>

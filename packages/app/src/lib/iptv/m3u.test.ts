@@ -68,4 +68,22 @@ stream-working
         expect(result.channels.map((c) => c.name)).toEqual(["Working"]);
         expect(result.groups.map((g) => g.name)).toEqual(["Live"]);
     });
+
+    test("keeps group ids distinct when names normalize to the same slug", () => {
+        const playlist = `#EXTM3U
+#EXTINF:-1 group-title="Caf\u00e9",One
+stream-one
+#EXTINF:-1 group-title="Cafe",Two
+stream-two
+`;
+
+        const result = parseM3U(playlist, "source-1");
+
+        expect(result.groups.map((group) => group.name)).toEqual(["Caf\u00e9", "Cafe"]);
+        expect(result.groups.map((group) => group.id)).toEqual([
+            "source-1:group:0:cafe",
+            "source-1:group:1:cafe",
+        ]);
+        expect(new Set(result.groups.map((group) => group.id)).size).toBe(2);
+    });
 });

@@ -1,10 +1,44 @@
-import { beforeEach, describe, expect, test } from "bun:test";
-import {
+import { beforeEach, describe, expect, mock, test } from "bun:test";
+import type { IptvSource } from "./types";
+
+mock.module("svelte/store", () => ({
+    writable<T>(initialValue: T) {
+        let value = initialValue;
+        const subscribers = new Set<(value: T) => void>();
+
+        function notify() {
+            for (const subscriber of subscribers) {
+                subscriber(value);
+            }
+        }
+
+        return {
+            set(nextValue: T) {
+                value = nextValue;
+                notify();
+            },
+            update(updater: (value: T) => T) {
+                value = updater(value);
+                notify();
+            },
+            subscribe(subscriber: (value: T) => void) {
+                subscribers.add(subscriber);
+                subscriber(value);
+                return () => {
+                    subscribers.delete(subscriber);
+                };
+            },
+        };
+    },
+}));
+
+const {
     addIptvSource,
     getStoredIptvSources,
+    iptvSources,
     removeIptvSource,
     updateIptvSource,
-} from "./store";
+} = await import("./store");
 
 class MemoryStorage {
     private values = new Map<string, string>();
@@ -26,6 +60,21 @@ class MemoryStorage {
     }
 }
 
+class ThrowingStorage extends MemoryStorage {
+    setItem() {
+        throw new Error("Storage unavailable");
+    }
+}
+
+function getIptvSources(): IptvSource[] {
+    let sources: IptvSource[] = [];
+    const unsubscribe = iptvSources.subscribe((value) => {
+        sources = value;
+    });
+    unsubscribe();
+    return sources;
+}
+
 describe("IPTV source store helpers", () => {
     let storage: MemoryStorage;
 
@@ -35,6 +84,7 @@ describe("IPTV source store helpers", () => {
             value: storage,
             configurable: true,
         });
+        iptvSources.set([]);
     });
 
     test("adds, updates, and removes source config without fetched bodies", () => {
@@ -157,5 +207,20 @@ describe("IPTV source store helpers", () => {
                 credential: "pass",
             }),
         ).toThrow("Only http and https Xtream server URLs are supported");
+    });
+
+    test("keeps in-memory sources when storage writes fail", () => {
+        Object.defineProperty(globalThis, "localStorage", {
+            value: new ThrowingStorage(),
+            configurable: true,
+        });
+
+        const source = addIptvSource({
+            name: "Resilient",
+            m3uUrl: "https://iptv.example.test/playlist.m3u",
+        });
+
+        expect(getIptvSources().map((storedSource) => storedSource.id)).toContain(source.id);
+        expect(getStoredIptvSources()).toEqual([]);
     });
 });

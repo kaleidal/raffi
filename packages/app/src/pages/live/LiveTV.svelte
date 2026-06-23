@@ -409,11 +409,16 @@
     }
 
     function formatLoadedAt(value: string) {
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) {
+            return "Unknown";
+        }
+
         return new Intl.DateTimeFormat(undefined, {
             hour: "numeric",
             minute: "2-digit",
             second: "2-digit",
-        }).format(new Date(value));
+        }).format(parsed);
     }
 
     onMount(() => {

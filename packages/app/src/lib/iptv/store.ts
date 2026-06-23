@@ -100,12 +100,16 @@ function sanitizeSource(value: any): IptvSource | null {
 function persistSources(sources: IptvSource[]) {
     const storage = getStorage();
     if (!storage) return;
-    storage.setItem(IPTV_SOURCES_STORAGE_KEY, JSON.stringify(sources));
+    try {
+        storage.setItem(IPTV_SOURCES_STORAGE_KEY, JSON.stringify(sources));
+    } catch {
+        // Source changes should remain usable even when persistence is unavailable.
+    }
 }
 
 function setSources(sources: IptvSource[]) {
-    persistSources(sources);
     iptvSources.set(sources);
+    persistSources(sources);
 }
 
 export function getStoredIptvSources(): IptvSource[] {

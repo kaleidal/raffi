@@ -8,6 +8,42 @@ export type IptvFetchText = (url: string, options?: IptvFetchOptions) => Promise
 const DEFAULT_TIMEOUT_MS = 60_000;
 const DEFAULT_MAX_BYTES = 64 * 1024 * 1024;
 
+async function readResponseText(response: Response, maxBytes: number): Promise<string> {
+    const reader = response.body?.getReader();
+    if (!reader) {
+        const text = await response.text();
+        if (new TextEncoder().encode(text).byteLength > maxBytes) {
+            throw new Error("IPTV response exceeded maximum size");
+        }
+        return text;
+    }
+
+    const chunks: Uint8Array[] = [];
+    let totalBytes = 0;
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (!value) continue;
+
+        totalBytes += value.byteLength;
+        if (totalBytes > maxBytes) {
+            await reader.cancel().catch(() => {});
+            throw new Error("IPTV response exceeded maximum size");
+        }
+        chunks.push(value);
+    }
+
+    const buffer = new Uint8Array(totalBytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+        buffer.set(chunk, offset);
+        offset += chunk.byteLength;
+    }
+
+    return new TextDecoder().decode(buffer);
+}
+
 export function validateIptvUrl(url: string): string {
     const trimmed = String(url ?? "").trim();
     if (!trimmed) {
@@ -46,14 +82,11 @@ async function fetchTextWithBrowser(url: string, options: IptvFetchOptions): Pro
 
         const contentLength = Number(response.headers.get("content-length"));
         if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+            await response.body?.cancel().catch(() => {});
             throw new Error("IPTV response exceeded maximum size");
         }
 
-        const text = await response.text();
-        if (new TextEncoder().encode(text).byteLength > maxBytes) {
-            throw new Error("IPTV response exceeded maximum size");
-        }
-        return text;
+        return readResponseText(response, maxBytes);
     } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
             throw new Error("IPTV fetch timed out");

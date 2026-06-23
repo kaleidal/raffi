@@ -1,5 +1,8 @@
 const dns = require("dns").promises;
+const http = require("http");
+const https = require("https");
 const net = require("net");
+const { Readable } = require("stream");
 
 const IPTV_MAX_REDIRECTS = 5;
 const IPTV_REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
@@ -30,6 +33,12 @@ iptvBlockedAddressList.addAddress("::", "ipv6");
 iptvBlockedAddressList.addAddress("::1", "ipv6");
 iptvBlockedAddressList.addSubnet("fe80::", 10, "ipv6");
 iptvBlockedAddressList.addSubnet("ff00::", 8, "ipv6");
+
+function createAbortError() {
+  const error = new Error("The operation was aborted");
+  error.name = "AbortError";
+  return error;
+}
 
 function normalizeIptvHostname(hostname) {
   let normalized = String(hostname || "").trim().toLowerCase();
@@ -85,7 +94,7 @@ async function assertSafeIptvFetchUrl(parsed) {
     if (isBlockedIptvAddress(hostname)) {
       throw new Error("IPTV URL host is not allowed");
     }
-    return;
+    return [{ address: hostname, family: net.isIP(hostname) }];
   }
 
   let addresses;
@@ -107,18 +116,142 @@ async function assertSafeIptvFetchUrl(parsed) {
       throw new Error("IPTV URL host is not allowed");
     }
   }
+
+  return addresses.map((entry) => ({
+    address: entry.address,
+    family: entry.family,
+  }));
+}
+
+function getIptvFetchPort(parsed) {
+  if (parsed.port) return parsed.port;
+  return parsed.protocol === "https:" ? "443" : "80";
+}
+
+function getIptvFetchAuth(parsed) {
+  if (!parsed.username && !parsed.password) return undefined;
+  return `${decodeURIComponent(parsed.username)}:${decodeURIComponent(parsed.password)}`;
+}
+
+function headersFromNodeHeaders(nodeHeaders) {
+  const headers = new Headers();
+
+  for (const [name, value] of Object.entries(nodeHeaders)) {
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        headers.append(name, item);
+      }
+      continue;
+    }
+
+    if (value !== undefined) {
+      headers.set(name, String(value));
+    }
+  }
+
+  return headers;
+}
+
+function fetchIptvUrlAtResolvedAddress(parsed, resolvedAddress, signal) {
+  const client = parsed.protocol === "https:" ? https : http;
+  const hostname = normalizeIptvHostname(parsed.hostname);
+
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(createAbortError());
+      return;
+    }
+
+    let settled = false;
+    let request;
+    const cleanupRequestAbort = () => {
+      signal?.removeEventListener?.("abort", onRequestAbort);
+    };
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      cleanupRequestAbort();
+      reject(error);
+    };
+    const onRequestAbort = () => {
+      request?.destroy(createAbortError());
+    };
+
+    request = client.request(
+      {
+        protocol: parsed.protocol,
+        hostname: resolvedAddress.address,
+        port: getIptvFetchPort(parsed),
+        path: `${parsed.pathname}${parsed.search}`,
+        method: "GET",
+        auth: getIptvFetchAuth(parsed),
+        headers: {
+          Host: parsed.host,
+        },
+        servername: parsed.protocol === "https:" && !net.isIP(hostname) ? hostname : undefined,
+      },
+      (incoming) => {
+        if (settled) {
+          incoming.destroy();
+          return;
+        }
+
+        settled = true;
+        cleanupRequestAbort();
+
+        const onBodyAbort = () => {
+          incoming.destroy(createAbortError());
+        };
+        if (signal?.aborted) {
+          incoming.destroy(createAbortError());
+        } else if (signal) {
+          signal.addEventListener("abort", onBodyAbort, { once: true });
+          incoming.once("close", () => {
+            signal.removeEventListener("abort", onBodyAbort);
+          });
+        }
+
+        const status = incoming.statusCode || 500;
+        const body = [204, 205, 304].includes(status) ? null : Readable.toWeb(incoming);
+        resolve(
+          new Response(body, {
+            status,
+            statusText: incoming.statusMessage,
+            headers: headersFromNodeHeaders(incoming.headers),
+          }),
+        );
+      },
+    );
+
+    request.once("error", fail);
+    signal?.addEventListener?.("abort", onRequestAbort, { once: true });
+    request.end();
+  });
 }
 
 async function getSafeIptvFetchResponse(initialUrl, signal) {
   let currentUrl = initialUrl;
 
   for (let redirectCount = 0; redirectCount <= IPTV_MAX_REDIRECTS; redirectCount += 1) {
-    await assertSafeIptvFetchUrl(currentUrl);
+    const resolvedAddresses = await assertSafeIptvFetchUrl(currentUrl);
+    let response;
+    let lastFetchError;
 
-    const response = await fetch(currentUrl.toString(), {
-      signal,
-      redirect: "manual",
-    });
+    for (const resolvedAddress of resolvedAddresses) {
+      try {
+        response = await fetchIptvUrlAtResolvedAddress(currentUrl, resolvedAddress, signal);
+        break;
+      } catch (error) {
+        lastFetchError = error;
+        if (error?.name === "AbortError") {
+          throw error;
+        }
+      }
+    }
+
+    if (!response) {
+      throw lastFetchError || new Error("IPTV URL host could not be reached");
+    }
 
     if (!IPTV_REDIRECT_STATUSES.has(response.status)) {
       return { response, url: currentUrl };
@@ -273,6 +406,7 @@ function registerMainIpcHandlers({
       const responseHost = normalizeIptvHostname(responseUrl.hostname);
 
       if (!response.ok) {
+        await response.body?.cancel?.().catch(() => {});
         logToFile("IPTV fetch failed", {
           host: responseHost,
           status: response.status,
@@ -284,6 +418,7 @@ function registerMainIpcHandlers({
       if (!reader) {
         const arrayBuffer = await response.arrayBuffer();
         if (arrayBuffer.byteLength > maxBytes) {
+          await response.body?.cancel?.().catch(() => {});
           throw new Error("IPTV response exceeded maximum size");
         }
         logToFile("IPTV fetch completed", {
@@ -307,6 +442,7 @@ function registerMainIpcHandlers({
         if (!value) continue;
         totalBytes += value.byteLength;
         if (totalBytes > maxBytes) {
+          await reader.cancel().catch(() => {});
           throw new Error("IPTV response exceeded maximum size");
         }
         chunks.push(Buffer.from(value));
