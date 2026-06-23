@@ -93,6 +93,18 @@ export function parseXmltvTime(value: string): Date {
     return new Date(utc - offsetMs);
 }
 
+function getXmltvOffsetMinutes(value: string): number | undefined {
+    const match = String(value ?? "").trim().match(
+        /^\d{14}\s*([+-])(\d{2})(\d{2})/,
+    );
+
+    if (!match) return undefined;
+
+    const [, sign, offsetHour, offsetMinute] = match;
+    const minutes = Number(offsetHour) * 60 + Number(offsetMinute);
+    return minutes * (sign === "+" ? 1 : -1);
+}
+
 function countProgrammes(guide: XmltvGuide): number {
     let count = 0;
     for (const programmes of guide.programmesByChannel.values()) {
@@ -151,6 +163,8 @@ export function parseXmltv(xml: string): XmltvGuide {
             channelId,
             start: parseXmltvTime(startRaw),
             stop: parseXmltvTime(stopRaw),
+            startOffsetMinutes: getXmltvOffsetMinutes(startRaw),
+            stopOffsetMinutes: getXmltvOffsetMinutes(stopRaw),
             title,
             subTitle: getTagText(programmeMatch[2], "sub-title"),
             description: getTagText(programmeMatch[2], "desc"),

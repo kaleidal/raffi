@@ -1,9 +1,8 @@
 <script lang="ts">
-    import { onDestroy, onMount } from "svelte";
+    import { onDestroy, onMount, tick } from "svelte";
     import {
         ChevronLeft,
         Pencil,
-        Play,
         Plus,
         RefreshCw,
         Search,
@@ -20,15 +19,26 @@
         updateIptvSource,
     } from "../../lib/iptv/store";
     import { refreshIptvSource } from "../../lib/iptv/refresh";
+    import {
+        getStoredIptvRefreshResult,
+        persistIptvRefreshResult,
+    } from "../../lib/iptv/cache";
+    import {
+        buildGuideRows,
+        getNowLinePercent,
+        type GuideGridViewport,
+        type GuideProgrammeState,
+    } from "../../lib/iptv/guideGrid";
     import { getNowNext } from "../../lib/iptv/xmltv";
     import type {
         IptvChannel,
         IptvRefreshResult,
         IptvSource,
-        XmltvProgramme,
     } from "../../lib/iptv/types";
 
     const ALL_GROUPS = "__all__";
+    const GUIDE_VIEWPORT_HOURS = 2;
+    const GUIDE_TIMELINE_MIN_WIDTH = 680;
     const IPTV_EXAMPLE_M3U_URL = (
         import.meta.env.VITE_RAFFI_IPTV_EXAMPLE_M3U_URL as string | undefined
     )?.trim();
@@ -46,6 +56,7 @@
 
     let selectedSourceId = "";
     let loadedSourceId = "";
+    let loadedSourceCacheKey = "";
     let refreshResult: IptvRefreshResult | null = null;
     let refreshing = false;
     let refreshError = "";
@@ -58,13 +69,20 @@
     let searchQuery = "";
     let guideNow = new Date();
     let guideTimer: ReturnType<typeof setInterval> | null = null;
+    let showSourceManager = false;
 
     const isDev = import.meta.env.DEV;
 
     $: selectedSource =
         $iptvSources.find((source) => source.id === selectedSourceId) ?? null;
+    $: selectedSourceCacheKey = selectedSource ? getLiveSourceCacheKey(selectedSource) : "";
     $: currentResult =
-        refreshResult && loadedSourceId === selectedSourceId ? refreshResult : null;
+        refreshResult &&
+        loadedSourceId === selectedSourceId &&
+        loadedSourceCacheKey === selectedSourceCacheKey
+            ? refreshResult
+            : null;
+    $: showFullSourcePanel = !currentResult || showSourceManager;
     $: availableGroups = currentResult?.groups ?? [];
     $: sourceSummary = currentResult
         ? `${currentResult.stats.channelCount} channels / ${currentResult.stats.groupCount} groups`
@@ -74,11 +92,31 @@
         selectedGroup,
         searchQuery,
     );
+    $: guideTitle = selectedGroup === ALL_GROUPS ? "Live TV" : selectedGroup;
+    $: guideViewport = getGuideViewport(guideNow);
+    $: guideRows = currentResult
+        ? buildGuideRows(visibleChannels, currentResult.guide, guideViewport)
+        : [];
+    $: guideNowLinePercent = getNowLinePercent(guideViewport);
+    $: showGuideNowLine = guideNowLinePercent >= 0 && guideNowLinePercent <= 100;
+    $: guideTimeTicks = buildGuideTimeTicks(guideViewport);
     $: if (!selectedSourceId && $iptvSources.length > 0) {
         selectedSourceId = $iptvSources[0].id;
     }
     $: if (selectedSourceId && !$iptvSources.some((source) => source.id === selectedSourceId)) {
         selectedSourceId = $iptvSources[0]?.id ?? "";
+    }
+    $: if (
+        selectedSource &&
+        (loadedSourceId !== selectedSource.id ||
+            loadedSourceCacheKey !== selectedSourceCacheKey)
+    ) {
+        hydrateStoredSource(selectedSource, selectedSourceCacheKey);
+    }
+    $: if (!selectedSource && refreshResult) {
+        loadedSourceId = "";
+        loadedSourceCacheKey = "";
+        refreshResult = null;
     }
     $: if (
         selectedGroup !== ALL_GROUPS &&
@@ -104,6 +142,81 @@
                 (channel.tvgId ?? "").toLowerCase().includes(normalizedQuery)
             );
         });
+    }
+
+    function getLiveSourceCacheKey(source: IptvSource) {
+        return `${source.id}\n${source.m3uUrl.trim()}\n${source.epgUrl?.trim() ?? ""}`;
+    }
+
+    function getGuideViewport(now: Date): GuideGridViewport {
+        const viewportStart = new Date(now);
+        viewportStart.setMinutes(0, 0, 0);
+
+        return {
+            viewportStart,
+            viewportEnd: new Date(viewportStart.getTime() + GUIDE_VIEWPORT_HOURS * 60 * 60_000),
+            now,
+        };
+    }
+
+    function getTimePercent(value: Date, viewport: GuideGridViewport) {
+        const viewportStartMs = viewport.viewportStart.getTime();
+        const viewportDurationMs = viewport.viewportEnd.getTime() - viewportStartMs;
+
+        if (viewportDurationMs <= 0) return 0;
+
+        return ((value.getTime() - viewportStartMs) / viewportDurationMs) * 100;
+    }
+
+    function buildGuideTimeTicks(viewport: GuideGridViewport) {
+        const ticks: { value: Date; label: string; leftPercent: number }[] = [];
+        const tickMs = 30 * 60_000;
+
+        for (
+            let timestamp = viewport.viewportStart.getTime();
+            timestamp <= viewport.viewportEnd.getTime();
+            timestamp += tickMs
+        ) {
+            const value = new Date(timestamp);
+            ticks.push({
+                value,
+                label: formatTime(value),
+                leftPercent: getTimePercent(value, viewport),
+            });
+        }
+
+        return ticks;
+    }
+
+    function timeTickClass(leftPercent: number) {
+        const base = "absolute top-1/2 -translate-y-1/2 whitespace-nowrap text-[11px] tabular-nums text-white/42";
+        if (leftPercent <= 1) return `${base} translate-x-0`;
+        if (leftPercent >= 99) return `${base} -translate-x-full`;
+        return `${base} -translate-x-1/2`;
+    }
+
+    function programmeBlockClass(state: GuideProgrammeState) {
+        if (state === "current") {
+            return "border-[#a8b99b]/35 bg-[#809278]/78 text-white shadow-[0_10px_24px_rgba(128,146,120,0.16)] hover:bg-[#8ea084]/86";
+        }
+
+        if (state === "future") {
+            return "border-white/[0.08] bg-[#20262b] text-white/84 hover:bg-[#293039]";
+        }
+
+        return "border-white/[0.06] bg-[#161b20] text-white/46 hover:bg-[#1d2329]";
+    }
+
+    function guideFallbackLabel(hasGuide: boolean) {
+        return hasGuide ? "No guide data" : "Live";
+    }
+
+    function hydrateStoredSource(source: IptvSource, cacheKey: string) {
+        refreshResult = getStoredIptvRefreshResult(source);
+        loadedSourceId = source.id;
+        loadedSourceCacheKey = cacheKey;
+        selectedGroup = ALL_GROUPS;
+        refreshError = "";
     }
 
     function resetForm() {
@@ -167,6 +280,7 @@
         removeIptvSource(source.id);
         if (loadedSourceId === source.id) {
             loadedSourceId = "";
+            loadedSourceCacheKey = "";
             refreshResult = null;
         }
         if (editingSourceId === source.id) {
@@ -181,13 +295,17 @@
             return;
         }
 
+        const source = selectedSource;
+        const sourceCacheKey = selectedSourceCacheKey;
         refreshing = true;
         refreshError = "";
 
         try {
-            const result = await refreshIptvSource(selectedSource);
+            const result = await refreshIptvSource(source);
+            persistIptvRefreshResult(source, result);
             refreshResult = result;
-            loadedSourceId = selectedSource.id;
+            loadedSourceId = source.id;
+            loadedSourceCacheKey = sourceCacheKey;
             selectedGroup = ALL_GROUPS;
             trackEvent("iptv_source_refreshed", {
                 channel_count: result.stats.channelCount,
@@ -250,15 +368,19 @@
         }).format(new Date(value));
     }
 
-    function programmeText(programme: XmltvProgramme | null) {
-        if (!programme) return "";
-        return `${formatTime(programme.start)} ${programme.title}`;
-    }
-
     onMount(() => {
         guideTimer = setInterval(() => {
             guideNow = new Date();
         }, 60_000);
+
+        void tick().then(() => {
+            const source = selectedSource ?? $iptvSources[0] ?? null;
+            if (!source) return;
+            if (!selectedSourceId) {
+                selectedSourceId = source.id;
+            }
+            hydrateStoredSource(source, getLiveSourceCacheKey(source));
+        });
     });
 
     onDestroy(() => {
@@ -285,7 +407,7 @@
                     <Tv size={28} strokeWidth={2} class="text-white/70" />
                     <div class="min-w-0">
                         <h1 class="truncate font-poppins text-[28px] font-semibold leading-tight">
-                            Live TV
+                            {guideTitle}
                         </h1>
                         <p class="truncate text-sm text-white/48">
                             {sourceSummary || "No channels loaded"}
@@ -316,7 +438,10 @@
         </div>
     </div>
 
-    <div class="grid min-h-[calc(100vh-89px)] grid-cols-1 lg:grid-cols-[360px_minmax(0,1fr)]">
+    <div class={showFullSourcePanel
+        ? "grid min-h-[calc(100vh-89px)] grid-cols-1 lg:grid-cols-[360px_minmax(0,1fr)]"
+        : "grid min-h-[calc(100vh-89px)] grid-cols-1"}>
+        {#if showFullSourcePanel}
         <aside class="border-b border-white/10 bg-[#111111] p-6 lg:border-b-0 lg:border-r">
             <section class="flex flex-col gap-4">
                 <div class="flex items-center justify-between gap-3">
@@ -428,6 +553,7 @@
                 {/if}
             </section>
         </aside>
+        {/if}
 
         <main class="min-w-0 p-6 lg:p-8">
             <div class="mb-5 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -459,8 +585,16 @@
                 </div>
 
                 {#if currentResult}
-                    <div class="text-sm text-white/45">
-                        Showing {visibleChannels.length} of {currentResult.stats.channelCount}
+                    <div class="flex items-center gap-3 text-sm text-white/45">
+                        <button
+                            class="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-white/70 transition-colors hover:bg-white/[0.09] hover:text-white"
+                            onclick={() => (showSourceManager = !showSourceManager)}
+                        >
+                            {showSourceManager ? "Hide Sources" : "Sources"}
+                        </button>
+                        <span>
+                            Showing {visibleChannels.length} of {currentResult.stats.channelCount}
+                        </span>
                     </div>
                 {/if}
             </div>
@@ -491,62 +625,127 @@
                     No channels match
                 </div>
             {:else}
-                <div class="grid grid-cols-1 gap-3 2xl:grid-cols-2">
-                    {#each visibleChannels as channel (channel.id)}
-                        {@const guide = getChannelGuide(channel)}
-                        <button
-                            class="grid min-h-[92px] grid-cols-[58px_minmax(0,1fr)_auto] items-center gap-4 rounded-lg border border-white/8 bg-white/[0.035] px-4 py-3 text-left transition-colors hover:border-white/20 hover:bg-white/[0.07]"
-                            onclick={() => playChannel(channel)}
-                        >
-                            <div class="flex h-[58px] w-[58px] items-center justify-center overflow-hidden rounded-md bg-black/45">
-                                {#if channel.logo}
-                                    <img
-                                        src={channel.logo}
-                                        alt=""
-                                        class="max-h-full max-w-full object-contain"
-                                        loading="lazy"
-                                        onerror={(event) => {
-                                            (event.currentTarget as HTMLImageElement).style.display = "none";
-                                        }}
-                                    />
-                                {:else}
-                                    <Tv size={24} strokeWidth={2} class="text-white/35" />
-                                {/if}
-                            </div>
+                <section class="overflow-hidden rounded-lg border border-white/10 bg-[#0b1116] shadow-2xl shadow-black/24">
+                    <div class="border-b border-white/10 bg-[#111a20] px-4 py-2 text-center">
+                        <div class="text-xs tabular-nums text-white/46">
+                            {formatTime(guideViewport.viewportStart)} – {formatTime(
+                                guideViewport.viewportEnd,
+                            )}
+                        </div>
+                    </div>
 
-                            <div class="min-w-0">
-                                <div class="flex items-center gap-2">
-                                    {#if channel.number}
-                                        <span class="shrink-0 rounded bg-white/8 px-2 py-0.5 text-xs tabular-nums text-white/52">
-                                            {channel.number}
+                    <div class="grid grid-cols-[88px_minmax(0,1fr)] sm:grid-cols-[108px_minmax(0,1fr)]">
+                        <div class="border-r border-white/10 bg-[#101820]">
+                            <div class="h-10 border-b border-white/10"></div>
+                            {#each guideRows as row (row.channel.id)}
+                                <button
+                                    class="flex h-[86px] w-full flex-col items-center justify-center gap-1 border-b border-white/[0.06] px-2 text-center transition-colors hover:bg-white/[0.06]"
+                                    title={row.channel.name}
+                                    aria-label={`Play ${row.channel.name}`}
+                                    onclick={() => playChannel(row.channel)}
+                                >
+                                    <div class="flex h-12 w-12 items-center justify-center overflow-hidden rounded-md bg-black/42 ring-1 ring-white/[0.06]">
+                                        {#if row.channel.logo}
+                                            <img
+                                                src={row.channel.logo}
+                                                alt=""
+                                                class="max-h-full max-w-full object-contain"
+                                                loading="lazy"
+                                                onerror={(event) => {
+                                                    (event.currentTarget as HTMLImageElement).style.display = "none";
+                                                }}
+                                            />
+                                        {:else}
+                                            <Tv size={22} strokeWidth={2} class="text-white/34" />
+                                        {/if}
+                                    </div>
+                                    {#if row.channel.number}
+                                        <span class="max-w-full truncate rounded bg-white/[0.07] px-1.5 py-0.5 text-[10px] tabular-nums text-white/54">
+                                            {row.channel.number}
+                                        </span>
+                                    {:else}
+                                        <span class="max-w-full truncate text-[10px] leading-none text-white/48">
+                                            {row.channel.name}
                                         </span>
                                     {/if}
-                                    <span class="truncate font-poppins text-[17px] font-medium text-white">
-                                        {channel.name}
-                                    </span>
-                                </div>
-                                <div class="mt-1 truncate text-sm text-white/45">
-                                    {channel.group}
-                                </div>
-                                {#if guide.now}
-                                    <div class="mt-2 truncate text-sm text-white/72">
-                                        {programmeText(guide.now)}
-                                    </div>
-                                {/if}
-                                {#if guide.next}
-                                    <div class="mt-1 truncate text-xs text-white/42">
-                                        Next: {programmeText(guide.next)}
-                                    </div>
-                                {/if}
-                            </div>
+                                </button>
+                            {/each}
+                        </div>
 
-                            <div class="flex h-11 w-11 items-center justify-center rounded-full bg-white text-black">
-                                <Play size={18} strokeWidth={2.4} fill="currentColor" />
+                        <div class="no-scrollbar min-w-0 overflow-x-auto bg-[#0b1116]">
+                            <div class="relative" style={`min-width: ${GUIDE_TIMELINE_MIN_WIDTH}px;`}>
+                                <div class="relative h-10 border-b border-white/10 bg-[#101820]">
+                                    {#each guideTimeTicks as tick (tick.value.getTime())}
+                                        <div
+                                            class={timeTickClass(tick.leftPercent)}
+                                            style={`left: ${tick.leftPercent}%;`}
+                                        >
+                                            {tick.label}
+                                        </div>
+                                    {/each}
+                                </div>
+
+                                <div class="relative">
+                                    {#if showGuideNowLine}
+                                        <div
+                                            class="pointer-events-none absolute bottom-0 top-0 z-30 -translate-x-1/2"
+                                            style={`left: ${guideNowLinePercent}%;`}
+                                        >
+                                            <div class="absolute -top-1 left-1/2 h-2.5 w-2.5 -translate-x-1/2 rounded-full bg-[#a8b99b] shadow-[0_0_16px_rgba(168,185,155,0.75)]"></div>
+                                            <div class="h-full w-px bg-[#a8b99b]/90 shadow-[0_0_12px_rgba(168,185,155,0.45)]"></div>
+                                        </div>
+                                    {/if}
+
+                                    {#each guideRows as row (row.channel.id)}
+                                        <div class="relative h-[86px] border-b border-white/[0.06]">
+                                            {#if row.programmes.length > 0}
+                                                {#each row.programmes as programme (programme.id)}
+                                                    <button
+                                                        class={`absolute inset-y-2 overflow-hidden rounded-md border px-3 py-2 text-left transition-colors ${programmeBlockClass(programme.state)}`}
+                                                        style={`left: ${programme.leftPercent}%; width: ${programme.widthPercent}%;`}
+                                                        title={`${programme.timeRange} ${programme.title}`}
+                                                        onclick={() => playChannel(row.channel)}
+                                                    >
+                                                        <span class="line-clamp-2 font-poppins text-[13px] font-semibold leading-tight">
+                                                            {programme.title}
+                                                        </span>
+                                                        <span class="mt-1 block truncate text-[11px] tabular-nums opacity-68">
+                                                            {programme.timeRange}
+                                                        </span>
+                                                    </button>
+                                                {/each}
+                                            {:else}
+                                                <button
+                                                    class="absolute inset-y-2 left-2 right-2 flex items-center justify-between gap-3 rounded-md border border-white/[0.08] bg-[#20262b] px-3 text-left text-white/78 transition-colors hover:bg-[#293039]"
+                                                    onclick={() => playChannel(row.channel)}
+                                                >
+                                                    <span class="font-poppins text-[13px] font-semibold">
+                                                        {guideFallbackLabel(Boolean(currentResult.guide))}
+                                                    </span>
+                                                    <span class="min-w-0 truncate text-[11px] text-white/42">
+                                                        {row.channel.name}
+                                                    </span>
+                                                </button>
+                                            {/if}
+                                        </div>
+                                    {/each}
+                                </div>
                             </div>
-                        </button>
-                    {/each}
-                </div>
+                        </div>
+                    </div>
+                </section>
             {/if}
         </main>
     </div>
 </div>
+
+<style>
+    .no-scrollbar::-webkit-scrollbar {
+        display: none;
+    }
+
+    .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+    }
+</style>

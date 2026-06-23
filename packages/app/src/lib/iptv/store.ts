@@ -1,6 +1,7 @@
 import { writable } from "svelte/store";
 import type { IptvSource } from "./types";
 import { validateIptvUrl } from "./fetch";
+import { clearStoredIptvRefreshResult } from "./cache";
 
 export const IPTV_SOURCES_STORAGE_KEY = "raffi_iptv_sources_v1";
 
@@ -142,4 +143,5 @@ export function updateIptvSource(
 
 export function removeIptvSource(sourceId: string): void {
     setSources(getStoredIptvSources().filter((source) => source.id !== sourceId));
+    clearStoredIptvRefreshResult(sourceId);
 }

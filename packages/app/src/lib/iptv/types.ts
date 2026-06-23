@@ -40,6 +40,8 @@ export interface XmltvProgramme {
     channelId: string;
     start: Date;
     stop: Date;
+    startOffsetMinutes?: number;
+    stopOffsetMinutes?: number;
     title: string;
     subTitle?: string;
     description?: string;
