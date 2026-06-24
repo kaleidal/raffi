@@ -27,7 +27,9 @@
         HOME_SEARCH_BAR_POSITION_BOTTOM,
         HOME_SEARCH_BAR_POSITION_CHANGED_EVENT,
         HOME_SEARCH_BAR_POSITION_HEADER,
+        HOME_LIVE_TV_SHORTCUT_CHANGED_EVENT,
         type HomeSearchBarPosition,
+        getStoredHomeLiveTvShortcutEnabled,
         getStoredHomeSearchBarPosition,
     } from "../../lib/home/searchBarSettings";
 
@@ -47,6 +49,7 @@
     let totalSearchResults = 0;
     let searchBarPositionPreference: HomeSearchBarPosition =
         HOME_SEARCH_BAR_POSITION_AUTO;
+    let liveTvShortcutEnabled = false;
     let autoDockToBottom = false;
     let searchDockBottom = false;
 
@@ -140,6 +143,10 @@
     function refreshSearchBarPositionPreference() {
         searchBarPositionPreference = getStoredHomeSearchBarPosition();
         updateAutoDockPosition();
+    }
+
+    function refreshLiveTvShortcutPreference() {
+        liveTvShortcutEnabled = getStoredHomeLiveTvShortcutEnabled();
     }
 
     const handleScrollOrResize = () => {
@@ -392,6 +399,7 @@
 
     onMount(() => {
         refreshSearchBarPositionPreference();
+        refreshLiveTvShortcutPreference();
         scrollContainer = document.querySelector(
             "[data-scroll-container]",
         ) as HTMLElement | null;
@@ -405,6 +413,10 @@
             HOME_SEARCH_BAR_POSITION_CHANGED_EVENT,
             refreshSearchBarPositionPreference,
         );
+        window.addEventListener(
+            HOME_LIVE_TV_SHORTCUT_CHANGED_EVENT,
+            refreshLiveTvShortcutPreference,
+        );
 
         return () => {
             (scrollContainer ?? window).removeEventListener(
@@ -415,6 +427,10 @@
             window.removeEventListener(
                 HOME_SEARCH_BAR_POSITION_CHANGED_EVENT,
                 refreshSearchBarPositionPreference,
+            );
+            window.removeEventListener(
+                HOME_LIVE_TV_SHORTCUT_CHANGED_EVENT,
+                refreshLiveTvShortcutPreference,
             );
         };
     });
@@ -730,13 +746,15 @@
             <Blocks size={40} strokeWidth={2} color="#C3C3C3" />
         </button>
 
-        <button
-            class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
-            aria-label="live tv"
-            onclick={openLiveTv}
-        >
-            <Tv size={40} strokeWidth={2} color="#C3C3C3" />
-        </button>
+        {#if liveTvShortcutEnabled}
+            <button
+                class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
+                aria-label="live tv"
+                onclick={openLiveTv}
+            >
+                <Tv size={40} strokeWidth={2} color="#C3C3C3" />
+            </button>
+        {/if}
 
         <button
             class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
