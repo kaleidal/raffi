@@ -63,6 +63,7 @@
 	let showUpdateNotes = false;
 	let showSignOutModal = false;
 	let showStremioImport = false;
+	let stremioConnectionRevision = 0;
 	let aveLoading = false;
 	let bodyLocked = false;
 
@@ -355,6 +356,7 @@
 								{:else if $currentUser}
 									<AccountSection
 										{error}
+										{stremioConnectionRevision}
 										onSyncNow={syncNow}
 										onDownloadData={downloadData}
 										onImportStremio={() => (showStremioImport = true)}
@@ -451,7 +453,10 @@
 	<StremioImportModal
 		open={showStremioImport}
 		on:close={() => (showStremioImport = false)}
-		on:imported={() => refreshStats()}
+		on:imported={() => {
+			refreshStats();
+			stremioConnectionRevision += 1;
+		}}
 	/>
 {/if}
 

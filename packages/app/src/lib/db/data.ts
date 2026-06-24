@@ -24,8 +24,23 @@ import { scheduleCloudBackupSync, syncCloudBackupNow } from "./sync";
 import {
     mergeStremioImportIntoLibrary,
     parseStremioExport,
+    parseStremioLibrary,
     type StremioImportSummary,
+    type StremioLibraryEntry,
 } from "../import/stremioImport";
+import {
+    fetchStremioLibrary,
+    fetchStremioLibraryWithLogin,
+    logoutStremio,
+    StremioApiClientError,
+} from "../import/stremioApi";
+import {
+    clearStremioConnection,
+    getStremioConnection,
+    getStremioConnectionStatus,
+    saveStremioConnection,
+    type StremioConnectionStatus,
+} from "../import/stremioConnection";
 
 export { hasLocalState } from "./state";
 
@@ -296,6 +311,7 @@ export const updateListItemPoster = async (list_id: string, imdb_id: string, pos
 };
 
 export type StremioImportProgressEvent =
+    | { phase: "fetching" }
     | { phase: "parsing"; rawCount?: number }
     | { phase: "applying"; processed: number; total: number; current?: string }
     | { phase: "reconciling" }
@@ -318,7 +334,7 @@ const yieldToBrowser = () => new Promise<void>((resolve) => {
 });
 
 export const importStremioLibrary = async (
-    raw: string | unknown,
+    raw: string | unknown | StremioLibraryEntry[],
     options: StremioImportOptions = {},
 ): Promise<StremioImportSummary> => {
     const { onProgress, signal, pushToCloud = true } = options;
@@ -327,7 +343,10 @@ export const importStremioLibrary = async (
     };
 
     report({ phase: "parsing" });
-    const { items: previews, warnings, rawCount } = parseStremioExport(raw);
+    const parsed = Array.isArray(raw)
+        ? parseStremioLibrary(raw)
+        : parseStremioExport(raw);
+    const { items: previews, warnings, rawCount } = parsed;
     if (signal?.aborted) {
         throw new Error("Import was cancelled.");
     }
@@ -484,6 +503,81 @@ export const importStremioLibrary = async (
     } finally {
         if (shouldPauseCloud) resumeCloudSync();
         publishCloudSyncStatus();
+    }
+};
+
+export { getStremioConnectionStatus, type StremioConnectionStatus };
+
+export const getStremioStatus = (): StremioConnectionStatus => getStremioConnectionStatus();
+
+export const disconnectStremio = async () => {
+    const connection = getStremioConnection();
+    if (connection?.authKey) {
+        await logoutStremio(connection.authKey);
+    }
+    clearStremioConnection();
+};
+
+export const importStremioFromAccount = async (
+    email: string,
+    password: string,
+    options: StremioImportOptions & { keepConnected?: boolean } = {},
+): Promise<StremioImportSummary> => {
+    const { keepConnected = false, ...importOptions } = options;
+    const onProgress = importOptions.onProgress;
+    const report = (event: StremioImportProgressEvent) => {
+        if (onProgress) onProgress(event);
+    };
+
+    report({ phase: "fetching" });
+    try {
+        const { authKey, email: resolvedEmail, library } = await fetchStremioLibraryWithLogin(email, password);
+        if (importOptions.signal?.aborted) {
+            throw new Error("Import was cancelled.");
+        }
+
+        if (keepConnected) {
+            saveStremioConnection({ authKey, email: resolvedEmail });
+        }
+
+        return await importStremioLibrary(library, importOptions);
+    } catch (error) {
+        if (error instanceof StremioApiClientError) {
+            if (error.apiError?.wrongPass) {
+                throw new Error("Wrong email or password.");
+            }
+            throw new Error(error.message);
+        }
+        throw error;
+    }
+};
+
+export const syncStremioLibrary = async (
+    options: StremioImportOptions = {},
+): Promise<StremioImportSummary> => {
+    const connection = getStremioConnection();
+    if (!connection) {
+        throw new Error("Stremio is not connected. Sign in from Import from Stremio first.");
+    }
+
+    const onProgress = options.onProgress;
+    const report = (event: StremioImportProgressEvent) => {
+        if (onProgress) onProgress(event);
+    };
+
+    report({ phase: "fetching" });
+    try {
+        const library = await fetchStremioLibrary(connection.authKey);
+        if (options.signal?.aborted) {
+            throw new Error("Import was cancelled.");
+        }
+        return await importStremioLibrary(library, options);
+    } catch (error) {
+        if (error instanceof StremioApiClientError) {
+            clearStremioConnection();
+            throw new Error("Stremio session expired. Sign in again to keep syncing.");
+        }
+        throw error;
     }
 };
 

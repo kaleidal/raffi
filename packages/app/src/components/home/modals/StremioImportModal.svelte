@@ -1,9 +1,9 @@
 <script lang="ts">
     import { createEventDispatcher, onDestroy, tick } from "svelte";
     import { fade, scale } from "svelte/transition";
-    import { Check, FileJson, X } from "@lucide/svelte";
+    import { Check, X } from "@lucide/svelte";
     import {
-        importStremioLibrary,
+        importStremioFromAccount,
         type StremioImportProgressEvent,
     } from "../../../lib/db/db";
     import { trackEvent } from "../../../lib/analytics";
@@ -31,9 +31,12 @@
 
     export let open = false;
 
-    type Phase = "idle" | "parsing" | "applying" | "reconciling" | "uploading" | "done" | "error";
+    type Phase = "idle" | "fetching" | "parsing" | "applying" | "reconciling" | "uploading" | "done" | "error";
 
     let phase: Phase = "idle";
+    let email = "";
+    let password = "";
+    let keepConnected = true;
     let errorMessage = "";
     let progress: { processed: number; total: number; current?: string } = { processed: 0, total: 0 };
     let rawEntryCount: number | null = null;
@@ -48,8 +51,6 @@
         watched: number;
     } = null;
     let bodyLocked = false;
-    let dragActive = false;
-    let fileInput: HTMLInputElement;
     let abortController: AbortController | null = null;
     let warnings: string[] = [];
 
@@ -57,27 +58,29 @@
         ? Math.min(100, Math.round((progress.processed / progress.total) * 100))
         : 0;
 
-    $: dropzoneLabel = (() => {
+    $: statusLabel = (() => {
+        if (phase === "fetching") return "Signing in to Stremio…";
         if (phase === "parsing") {
             if (rawEntryCount && rawEntryCount > 0) {
                 return `Reading ${rawEntryCount} ${rawEntryCount === 1 ? "entry" : "entries"}…`;
             }
-            return "Reading your export…";
+            return "Reading your library…";
         }
         if (phase === "applying") return `Importing… ${progress.processed}/${progress.total}`;
         if (phase === "reconciling" || phase === "uploading") return "Almost done…";
         if (phase === "done") return "Import complete";
-        if (phase === "error") return "Try again with a different file";
-        return "Drop your Stremio export here";
+        if (phase === "error") return "Could not import";
+        return "Sign in with your Stremio account";
     })();
 
-    $: phaseHint = (() => {
-        if (phase === "parsing") return "Reading the JSON and converting each entry.";
+    $: statusHint = (() => {
+        if (phase === "fetching") return "Connecting to Stremio and loading your library.";
+        if (phase === "parsing") return "Converting each title and its watch progress.";
         if (phase === "applying") return progress.current ? `Adding ${progress.current}` : "Adding entries to your library.";
         if (phase === "reconciling") return "Checking your other devices.";
         if (phase === "uploading") return "Backing up the merged library.";
         if (phase === "done") return "Your library is up to date.";
-        return "…or click to pick a .json file";
+        return "We only use your credentials to read your library. Your password is never stored.";
     })();
 
     const toggleBodyScroll = (active: boolean) => {
@@ -144,7 +147,10 @@
     };
 
     const isBusy = () =>
-        phase === "parsing" || phase === "applying" || phase === "reconciling" || phase === "uploading";
+        phase === "fetching" || phase === "parsing" || phase === "applying" || phase === "reconciling" || phase === "uploading";
+
+    const canSubmit = () =>
+        !isBusy() && email.trim().length > 0 && password.length > 0;
 
     function close() {
         if (isBusy()) return;
@@ -154,67 +160,23 @@
     function reset() {
         phase = "idle";
         errorMessage = "";
+        password = "";
         progress = { processed: 0, total: 0 };
         rawEntryCount = null;
         resultSummary = null;
         warnings = [];
-        if (fileInput) fileInput.value = "";
     }
 
-    function handleFile(file: File | null | undefined) {
-        if (!file) return;
-        if (isBusy()) return;
-        void importFromFile(file);
-    }
-
-    function onFileChange(event: Event) {
-        const target = event.currentTarget as HTMLInputElement;
-        const file = target.files?.[0];
-        handleFile(file);
-    }
-
-    function onDrop(event: DragEvent) {
-        event.preventDefault();
-        dragActive = false;
-        if (isBusy()) return;
-        const file = event.dataTransfer?.files?.[0];
-        if (file) handleFile(file);
-    }
-
-    function onDragOver(event: DragEvent) {
-        event.preventDefault();
-        if (!isBusy()) dragActive = true;
-    }
-
-    function onDragLeave() {
-        dragActive = false;
-    }
-
-    async function importFromFile(file: File) {
+    async function runImport() {
+        if (!canSubmit()) return;
         reset();
         abortController = new AbortController();
-        trackEvent("stremio_import_started", {
-            file_name: file.name,
-            file_size: file.size,
-        });
-        let text = "";
-        try {
-            text = await file.text();
-        } catch (error: any) {
-            errorMessage = "Could not read the file. Make sure it is the JSON export from Stremio.";
-            phase = "error";
-            trackEvent("stremio_import_failed", {
-                stage: "read",
-                error_name: error?.name || "unknown",
-            });
-            return;
-        }
-        await runImport(text);
-    }
+        trackEvent("stremio_import_started", { source: "account_login" });
 
-    async function runImport(text: string) {
         const onProgress = (event: StremioImportProgressEvent) => {
-            if (event.phase === "parsing") {
+            if (event.phase === "fetching") {
+                phase = "fetching";
+            } else if (event.phase === "parsing") {
                 phase = "parsing";
                 if (typeof event.rawCount === "number") rawEntryCount = event.rawCount;
             } else if (event.phase === "applying") {
@@ -231,10 +193,12 @@
                 errorMessage = event.message;
             }
         };
+
         try {
-            const summary = await importStremioLibrary(text, {
+            const summary = await importStremioFromAccount(email, password, {
                 onProgress,
                 signal: abortController?.signal,
+                keepConnected,
             });
             warnings = summary.warnings;
             resultSummary = {
@@ -248,11 +212,13 @@
                 watched: summary.watched,
             };
             phase = "done";
+            password = "";
             trackEvent("stremio_import_completed", {
                 total: summary.total,
                 added: summary.added,
                 merged: summary.merged,
                 skipped: summary.skipped,
+                keep_connected: keepConnected,
             });
             dispatch("imported", {
                 total: summary.total,
@@ -265,12 +231,17 @@
             errorMessage = error?.message || "Something went wrong while importing.";
             phase = "error";
             trackEvent("stremio_import_failed", {
-                stage: "process",
+                stage: "login",
                 error_name: error?.name || "unknown",
             });
         } finally {
             abortController = null;
         }
+    }
+
+    function handleSubmit(event: Event) {
+        event.preventDefault();
+        void runImport();
     }
 
     $: updateBodyLock(open);
@@ -317,50 +288,73 @@
                 </button>
             </div>
 
-            <ol class="flex flex-col gap-2 text-sm text-white/65 list-decimal pl-5">
-                <li>Open the Stremio app and go to <span class="text-white">Settings</span>.</li>
-                <li>Open the <span class="text-white">General</span> tab.</li>
-                <li>Click <span class="text-white">Export user data</span> and save the JSON file.</li>
-                <li>Drop or pick the file below.</li>
-            </ol>
+            <form class="flex flex-col gap-4" on:submit={handleSubmit}>
+                <p class="text-sm text-white/65">{statusHint}</p>
 
-            <div class="flex flex-col gap-2">
-                <label
-                    class={`relative rounded-2xl border-2 border-dashed transition-colors p-6 flex flex-col items-center justify-center gap-2 text-center cursor-pointer ${dragActive ? "border-white/70 bg-white/10" : "border-white/15 hover:border-white/35 bg-black/20"}`}
-                    on:dragover={onDragOver}
-                    on:dragleave={onDragLeave}
-                    on:drop={onDrop}
-                >
-                    <input
-                        bind:this={fileInput}
-                        type="file"
-                        accept="application/json,.json"
-                        class="sr-only"
-                        on:change={onFileChange}
-                        disabled={isBusy()}
-                    />
-                    <div class="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center">
+                {#if phase === "idle" || phase === "error"}
+                    <label class="flex flex-col gap-2">
+                        <span class="text-xs text-white/45">Email</span>
+                        <input
+                            type="email"
+                            autocomplete="username"
+                            bind:value={email}
+                            placeholder="you@example.com"
+                            class="min-h-11 rounded-2xl bg-white/8 px-4 text-sm text-white outline-none placeholder:text-white/30 focus:bg-white/12"
+                            disabled={isBusy()}
+                        />
+                    </label>
+
+                    <label class="flex flex-col gap-2">
+                        <span class="text-xs text-white/45">Password</span>
+                        <input
+                            type="password"
+                            autocomplete="current-password"
+                            bind:value={password}
+                            placeholder="Stremio password"
+                            class="min-h-11 rounded-2xl bg-white/8 px-4 text-sm text-white outline-none placeholder:text-white/30 focus:bg-white/12"
+                            disabled={isBusy()}
+                        />
+                    </label>
+
+                    <label class="flex items-start gap-3 cursor-pointer select-none">
+                        <input
+                            type="checkbox"
+                            bind:checked={keepConnected}
+                            class="sr-only"
+                            disabled={isBusy()}
+                        />
+                        <span
+                            class="mt-0.5 h-5 w-5 shrink-0 rounded-md border transition-colors flex items-center justify-center {keepConnected ? 'bg-white border-white' : 'border-white/25 bg-white/5'}"
+                            aria-hidden="true"
+                        >
+                            {#if keepConnected}
+                                <Check size={14} strokeWidth={2.5} class="text-black" />
+                            {/if}
+                        </span>
+                        <span class="text-sm text-white/70 leading-snug">
+                            Keep connected so you can sync again from settings without signing in each time.
+                        </span>
+                    </label>
+                {:else}
+                    <div class="rounded-2xl bg-black/20 px-4 py-5 flex flex-col items-center gap-3 text-center">
                         {#if phase === "done"}
-                            <Check size={20} strokeWidth={2.2} class="text-emerald-300" />
-                        {:else if isBusy()}
-                            <LoadingSpinner size="22px" />
+                            <Check size={22} strokeWidth={2.2} class="text-emerald-300" />
                         {:else}
-                            <FileJson size={20} strokeWidth={1.6} class="text-white/80" />
+                            <LoadingSpinner size="22px" />
+                        {/if}
+                        <p class="text-white text-sm font-medium">{statusLabel}</p>
+                        {#if isBusy() && progress.total > 0}
+                            <div class="w-full mt-1">
+                                <div class="h-1.5 rounded-full bg-white/10 overflow-hidden">
+                                    <div
+                                        class="h-full bg-white/80 transition-[width] duration-150"
+                                        style="width: {applyPercent}%;"
+                                    ></div>
+                                </div>
+                            </div>
                         {/if}
                     </div>
-                    <p class="text-white text-sm font-medium">{dropzoneLabel}</p>
-                    <p class={`text-xs ${phase === "error" ? "text-red-200" : "text-white/55"}`}>{phaseHint}</p>
-                    {#if isBusy() && progress.total > 0}
-                        <div class="w-full mt-2">
-                            <div class="h-1.5 rounded-full bg-white/10 overflow-hidden">
-                                <div
-                                    class="h-full bg-white/80 transition-[width] duration-150"
-                                    style="width: {applyPercent}%;"
-                                ></div>
-                            </div>
-                        </div>
-                    {/if}
-                </label>
+                {/if}
 
                 {#if phase === "error" && errorMessage}
                     <p class="text-red-200 text-sm">{errorMessage}</p>
@@ -380,7 +374,7 @@
                         <p class="text-emerald-50/80 text-xs">
                             {resultSummary.added} new · {resultSummary.merged} updated · {resultSummary.skipped} unchanged
                             {#if resultSummary.rawCount > resultSummary.total}
-                                · {resultSummary.rawCount} entries in file
+                                · {resultSummary.rawCount} entries in Stremio
                             {/if}
                         </p>
                     </div>
@@ -393,25 +387,35 @@
                         {/each}
                     </ul>
                 {/if}
-            </div>
 
-            <div class="flex flex-wrap items-center justify-end gap-3">
-                <button
-                    class="px-4 py-2 rounded-2xl bg-white/10 text-white font-semibold hover:bg-white/20 transition-colors cursor-pointer"
-                    on:click={close}
-                    disabled={isBusy()}
-                >
-                    {phase === "done" ? "Close" : "Cancel"}
-                </button>
-                {#if phase === "done"}
+                <div class="flex flex-wrap items-center justify-end gap-3 pt-1">
                     <button
-                        class="px-5 py-2 rounded-2xl bg-white text-black font-semibold hover:bg-white/90 transition-colors cursor-pointer"
-                        on:click={reset}
+                        type="button"
+                        class="px-4 py-2 rounded-2xl bg-white/10 text-white font-semibold hover:bg-white/20 transition-colors cursor-pointer"
+                        on:click={close}
+                        disabled={isBusy()}
                     >
-                        Import another
+                        {phase === "done" ? "Close" : "Cancel"}
                     </button>
-                {/if}
-            </div>
+                    {#if phase === "idle" || phase === "error"}
+                        <button
+                            type="submit"
+                            class="px-5 py-2 rounded-2xl bg-white text-black font-semibold hover:bg-white/90 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={!canSubmit()}
+                        >
+                            Import library
+                        </button>
+                    {:else if phase === "done"}
+                        <button
+                            type="button"
+                            class="px-5 py-2 rounded-2xl bg-white text-black font-semibold hover:bg-white/90 transition-colors cursor-pointer"
+                            on:click={reset}
+                        >
+                            Import again
+                        </button>
+                    {/if}
+                </div>
+            </form>
         </div>
     </div>
 {/if}

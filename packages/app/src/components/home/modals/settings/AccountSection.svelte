@@ -6,6 +6,10 @@
 		type TraktStatus,
 		getTraktStatus,
 		disconnectTrakt as disconnectTraktFromDb,
+		getStremioStatus,
+		syncStremioLibrary,
+		disconnectStremio,
+		type StremioConnectionStatus,
 	} from "../../../../lib/db/db";
 	import { signInWithTraktViaBrowser } from "../../../../lib/auth/traktAuth";
 	import { trackEvent } from "../../../../lib/analytics";
@@ -17,7 +21,13 @@
 	let traktError = "";
 	let traktStatusRequested = false;
 
+	let stremioStatus: StremioConnectionStatus = getStremioStatus();
+	let stremioBusy = false;
+	let stremioMessage = "";
+	let stremioError = "";
+
 	export let error = "";
+	export let stremioConnectionRevision = 0;
 	export let onSyncNow: () => void | Promise<void> = () => {};
 	export let onDownloadData: () => void = () => {};
 	export let onImportStremio: () => void = () => {};
@@ -57,7 +67,14 @@
 				? "Disconnect"
 				: "Connect";
 
+	$: if (stremioConnectionRevision >= 0) {
+		stremioStatus = getStremioStatus();
+	}
+
+	$: stremioActionLabel = stremioBusy ? "Syncing..." : "Sync now";
+
 	onMount(() => {
+		stremioStatus = getStremioStatus();
 		if (!$localMode && $currentUser && $cloudSyncStatus.cloudFeaturesAvailable && !traktStatusRequested) {
 			traktStatusRequested = true;
 			void loadTraktStatus();
@@ -131,6 +148,50 @@
 			});
 		} finally {
 			traktBusy = false;
+		}
+	}
+
+	async function syncStremio() {
+		stremioBusy = true;
+		stremioError = "";
+		stremioMessage = "";
+		try {
+			const summary = await syncStremioLibrary();
+			stremioMessage = `Synced ${summary.total} item${summary.total === 1 ? "" : "s"} (${summary.added} new, ${summary.merged} updated).`;
+			trackEvent("stremio_sync_success", {
+				total: summary.total,
+				added: summary.added,
+				merged: summary.merged,
+			});
+		} catch (e: any) {
+			console.error("Failed to sync Stremio", e);
+			stremioError = e?.message || "Failed to sync Stremio";
+			stremioStatus = getStremioStatus();
+			trackEvent("stremio_sync_failed", {
+				error_name: e instanceof Error ? e.name : "unknown",
+			});
+		} finally {
+			stremioBusy = false;
+		}
+	}
+
+	async function disconnectStremioAccount() {
+		stremioBusy = true;
+		stremioError = "";
+		stremioMessage = "";
+		try {
+			await disconnectStremio();
+			stremioStatus = getStremioStatus();
+			stremioMessage = "Stremio disconnected.";
+			trackEvent("stremio_disconnect_success", { source: "settings" });
+		} catch (e: any) {
+			console.error("Failed to disconnect Stremio", e);
+			stremioError = e?.message || "Failed to disconnect Stremio";
+			trackEvent("stremio_disconnect_failed", {
+				error_name: e instanceof Error ? e.name : "unknown",
+			});
+		} finally {
+			stremioBusy = false;
 		}
 	}
 </script>
@@ -257,6 +318,56 @@
 			{/if}
 			{#if traktError}
 				<div class="p-3 rounded-2xl bg-red-500/12 text-red-200 text-sm">{traktError}</div>
+			{/if}
+		</div>
+
+		<div class="rounded-2xl bg-black/20 px-4 py-4 space-y-3">
+			<div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+				<div>
+					<p class="text-white font-medium">Stremio</p>
+					<p class="text-white/60 text-sm">
+						{#if stremioStatus.connected}
+							Connected as {stremioStatus.email}
+							{#if stremioStatus.connectedAt}
+								· since {formatTimestamp(Date.parse(stremioStatus.connectedAt))}
+							{/if}
+						{:else}
+							Import your library once, or stay connected to sync watch progress again later.
+						{/if}
+					</p>
+				</div>
+				<div class="flex flex-wrap gap-2 shrink-0">
+					{#if stremioStatus.connected}
+						<button
+							class="bg-white text-black px-4 py-2 rounded-2xl font-semibold hover:bg-white/90 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+							on:click={syncStremio}
+							disabled={stremioBusy}
+						>
+							{stremioActionLabel}
+						</button>
+						<button
+							class="bg-white/10 text-white px-4 py-2 rounded-2xl font-semibold hover:bg-white/20 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+							on:click={disconnectStremioAccount}
+							disabled={stremioBusy}
+						>
+							Disconnect
+						</button>
+					{:else}
+						<button
+							class="bg-white/10 text-white px-4 py-2 rounded-2xl font-semibold hover:bg-white/20 transition-colors cursor-pointer"
+							on:click={onImportStremio}
+						>
+							Sign in to import
+						</button>
+					{/if}
+				</div>
+			</div>
+
+			{#if stremioMessage}
+				<div class="p-3 rounded-2xl bg-emerald-500/12 text-emerald-200 text-sm">{stremioMessage}</div>
+			{/if}
+			{#if stremioError}
+				<div class="p-3 rounded-2xl bg-red-500/12 text-red-200 text-sm">{stremioError}</div>
 			{/if}
 		</div>
 	</div>

@@ -160,11 +160,55 @@ const buildProgressEntry = (
     };
 };
 
+const readStateField = (state: StremioLibraryState, ...keys: string[]): unknown => {
+    for (const key of keys) {
+        if (key in state && state[key] !== undefined && state[key] !== null) {
+            return state[key];
+        }
+    }
+    return undefined;
+};
+
+const parseVideoIdSeasonEpisode = (videoId: unknown): { season: number | null; episode: number | null } => {
+    if (typeof videoId !== "string") return { season: null, episode: null };
+    const parts = videoId.split(":").map((part) => part.trim()).filter(Boolean);
+    if (parts.length < 3) return { season: null, episode: null };
+    const season = Number(parts[parts.length - 2]);
+    const episode = Number(parts[parts.length - 1]);
+    if (!Number.isFinite(season) || !Number.isFinite(episode) || season <= 0 || episode <= 0) {
+        return { season: null, episode: null };
+    }
+    return { season, episode };
+};
+
+const normalizeLibraryState = (state: unknown): StremioLibraryState => {
+    if (!isPlainObject(state)) return {};
+    return {
+        lastWatched: readStateField(state, "lastWatched", "last_watched") as StremioLibraryState["lastWatched"],
+        season: readStateField(state, "season") as StremioLibraryState["season"],
+        episode: readStateField(state, "episode") as StremioLibraryState["episode"],
+        timeWatched: readStateField(state, "timeWatched", "time_watched") as StremioLibraryState["timeWatched"],
+        duration: readStateField(state, "duration") as StremioLibraryState["duration"],
+        watched: readStateField(state, "watched") as StremioLibraryState["watched"],
+        timesWatched: readStateField(state, "timesWatched", "times_watched") as StremioLibraryState["timesWatched"],
+        timeOffset: readStateField(state, "timeOffset", "time_offset") as StremioLibraryState["timeOffset"],
+        overallTimeWatched: readStateField(state, "overallTimeWatched", "overall_time_watched") as StremioLibraryState["overallTimeWatched"],
+        flaggedWatched: readStateField(state, "flaggedWatched", "flagged_watched") as StremioLibraryState["flaggedWatched"],
+        noNotif: Boolean(readStateField(state, "noNotif", "no_notif")),
+        video_id: readStateField(state, "video_id", "videoId") as StremioLibraryState["video_id"],
+    };
+};
+
 const buildSeriesProgressFromState = (
     state: StremioLibraryState,
 ): { progress: Record<string, StremioImportProgressEntry>; lastWatched: string | null; season: number | null; episode: number | null; } => {
-    const seasonRaw = state.season;
-    const episodeRaw = state.episode;
+    let seasonRaw = state.season;
+    let episodeRaw = state.episode;
+    if ((seasonRaw === undefined || seasonRaw === null) && (episodeRaw === undefined || episodeRaw === null)) {
+        const fromVideo = parseVideoIdSeasonEpisode(state.video_id);
+        seasonRaw = fromVideo.season ?? seasonRaw;
+        episodeRaw = fromVideo.episode ?? episodeRaw;
+    }
     const seasonNumber = Number(seasonRaw);
     const episodeNumber = Number(episodeRaw);
     if (!Number.isFinite(seasonNumber) || !Number.isFinite(episodeNumber) || seasonNumber <= 0 || episodeNumber <= 0) {
@@ -192,22 +236,31 @@ const buildMovieProgressFromState = (state: StremioLibraryState): StremioImportP
     return buildProgressEntry(time, duration, watched, lastWatchedIso);
 };
 
-const convertEntryToPreview = (entry: StremioLibraryEntry): StremioImportPreviewItem | null => {
+const resolveLibraryEntryData = (entry: StremioLibraryEntry): Record<string, unknown> | null => {
     if (!isPlainObject(entry)) return null;
-    const data = isPlainObject(entry.d) ? entry.d : null;
+    if (isPlainObject(entry.d)) return entry.d as Record<string, unknown>;
+    if (entry._id || entry.name || entry.type) return entry as Record<string, unknown>;
+    return null;
+};
+
+const convertEntryToPreview = (entry: StremioLibraryEntry): StremioImportPreviewItem | null => {
+    const data = resolveLibraryEntryData(entry);
+    if (!data) return null;
+    if (data.removed === true) return null;
+
     const imdbId = String(
-        (data && (data._id as string | undefined))
+        (data._id as string | undefined)
             || entry.__id
             || entry._id
             || "",
     ).trim();
     if (!imdbId) return null;
-    const type = normalizeType(data?.type);
+    const type = normalizeType(data.type);
     if (!type) return null;
-    const state = isPlainObject(data?.state) ? (data!.state as StremioLibraryState) : {};
+    const state = normalizeLibraryState(data.state);
     const lastWatched = toIsoString(state.lastWatched);
-    const poster = typeof data?.poster === "string" && data.poster.trim() ? data.poster.trim() : undefined;
-    const name = typeof data?.name === "string" ? data.name : imdbId;
+    const poster = typeof data.poster === "string" && data.poster.trim() ? data.poster.trim() : undefined;
+    const name = typeof data.name === "string" ? data.name : imdbId;
 
     if (type === "series") {
         const { progress, lastWatched: derivedLastWatched, season, episode } = buildSeriesProgressFromState(state);
@@ -270,34 +323,16 @@ export interface StremioParseResult {
     duplicateCount: number;
 }
 
-export const parseStremioExport = (raw: string | unknown): StremioParseResult => {
+export const parseStremioLibrary = (library: StremioLibraryEntry[]): StremioParseResult => {
     const warnings: string[] = [];
-    let parsed: StremioExport;
-    if (typeof raw === "string") {
-        try {
-            parsed = JSON.parse(raw) as StremioExport;
-        } catch (error) {
-            throw new Error("Could not parse the Stremio export file. Make sure it is a valid JSON file.");
-        }
-    } else if (isPlainObject(raw)) {
-        parsed = raw as StremioExport;
-    } else {
-        throw new Error("Unsupported Stremio export format.");
-    }
-
-    if (!isPlainObject(parsed)) {
-        throw new Error("Stremio export must be a JSON object.");
-    }
-
-    const library = Array.isArray(parsed.library) ? parsed.library : [];
     if (!library.length) {
-        warnings.push("No library entries were found in the export.");
+        warnings.push("No library entries were found in your Stremio account.");
     }
 
     const previews: StremioImportPreviewItem[] = [];
     let skippedCount = 0;
     for (const rawEntry of library) {
-        const preview = convertEntryToPreview(rawEntry as StremioLibraryEntry);
+        const preview = convertEntryToPreview(rawEntry);
         if (!preview) {
             skippedCount += 1;
             continue;
@@ -321,6 +356,35 @@ export const parseStremioExport = (raw: string | unknown): StremioParseResult =>
         skippedCount,
         duplicateCount,
     };
+};
+
+export const parseStremioExport = (raw: string | unknown): StremioParseResult => {
+    let parsed: StremioExport;
+    if (typeof raw === "string") {
+        try {
+            parsed = JSON.parse(raw) as StremioExport;
+        } catch (error) {
+            throw new Error("Could not parse the Stremio export file. Make sure it is a valid JSON file.");
+        }
+    } else if (isPlainObject(raw)) {
+        parsed = raw as StremioExport;
+    } else {
+        throw new Error("Unsupported Stremio export format.");
+    }
+
+    if (!isPlainObject(parsed)) {
+        throw new Error("Stremio export must be a JSON object.");
+    }
+
+    const library = Array.isArray(parsed.library) ? parsed.library : [];
+    const parsedLibrary = parseStremioLibrary(library as StremioLibraryEntry[]);
+    if (!library.length) {
+        return {
+            ...parsedLibrary,
+            warnings: ["No library entries were found in the export.", ...parsedLibrary.warnings],
+        };
+    }
+    return parsedLibrary;
 };
 
 const normalizeLocalProgressEntry = (value: unknown): StremioImportProgressEntry | null => {
