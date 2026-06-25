@@ -42,6 +42,8 @@
     const ALL_GROUPS = "__all__";
     const GUIDE_VIEWPORT_HOURS = 2;
     const GUIDE_TIMELINE_MIN_WIDTH = 680;
+    const GUIDE_INITIAL_CHANNEL_LIMIT = 100;
+    const GUIDE_CHANNEL_PAGE_SIZE = 100;
     const IPTV_EXAMPLE_M3U_URL = (
         import.meta.env.VITE_RAFFI_IPTV_EXAMPLE_M3U_URL as string | undefined
     )?.trim();
@@ -77,6 +79,8 @@
     let guideNow = new Date();
     let guideTimer: ReturnType<typeof setInterval> | null = null;
     let showSourceManager = false;
+    let guideChannelLimit = GUIDE_INITIAL_CHANNEL_LIMIT;
+    let guideChannelFilterKey = "";
 
     const isDev = import.meta.env.DEV;
 
@@ -100,10 +104,19 @@
         selectedGroup,
         searchQuery,
     );
+    $: currentGuideChannelFilterKey = `${selectedSourceId}\n${selectedGroup}\n${searchQuery.trim()}`;
+    $: if (guideChannelFilterKey !== currentGuideChannelFilterKey) {
+        guideChannelFilterKey = currentGuideChannelFilterKey;
+        guideChannelLimit = GUIDE_INITIAL_CHANNEL_LIMIT;
+    }
+    $: visibleGuideChannels = visibleChannels.slice(0, guideChannelLimit);
+    $: hasMoreGuideChannels = visibleGuideChannels.length < visibleChannels.length;
+    $: remainingGuideChannels = Math.max(visibleChannels.length - visibleGuideChannels.length, 0);
+    $: nextGuideChannelPageCount = Math.min(GUIDE_CHANNEL_PAGE_SIZE, remainingGuideChannels);
     $: guideTitle = selectedGroup === ALL_GROUPS ? "Live TV" : selectedGroup;
     $: guideViewport = getGuideViewport(guideNow);
     $: guideRows = currentResult
-        ? buildGuideRows(visibleChannels, currentResult.guide, guideViewport)
+        ? buildGuideRows(visibleGuideChannels, currentResult.guide, guideViewport)
         : [];
     $: guideNowLinePercent = getNowLinePercent(guideViewport);
     $: showGuideNowLine = guideNowLinePercent >= 0 && guideNowLinePercent <= 100;
@@ -154,6 +167,13 @@
 
     function getLiveSourceCacheKey(source: IptvSource) {
         return `${source.id}\n${getIptvSourceCacheFingerprint(source)}`;
+    }
+
+    function showMoreGuideChannels() {
+        guideChannelLimit = Math.min(
+            visibleChannels.length,
+            guideChannelLimit + GUIDE_CHANNEL_PAGE_SIZE,
+        );
     }
 
     function getGuideViewport(now: Date): GuideGridViewport {
@@ -217,6 +237,10 @@
 
     function guideFallbackLabel(hasGuide: boolean) {
         return hasGuide ? "No guide data" : "Live";
+    }
+
+    function focusOnMount(node: HTMLElement) {
+        void tick().then(() => node.focus());
     }
 
     function hydrateStoredSource(source: IptvSource, cacheKey: string) {
@@ -445,6 +469,12 @@
     });
 </script>
 
+<svelte:window
+    onkeydown={(event) => {
+        if (showSourceManager && event.key === "Escape") showSourceManager = false;
+    }}
+/>
+
 <div class="min-h-screen bg-[#090909] text-white">
     <main class="mx-auto flex min-h-screen w-full max-w-[1760px] flex-col gap-5 px-5 py-5 lg:px-8 lg:py-7">
         <header class="rounded-[28px] border border-white/10 bg-[#2b2b2b]/56 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.32)] backdrop-blur-xl">
@@ -645,6 +675,9 @@
                         </h2>
                         <p class="text-sm text-white/45">
                             Click a channel or programme to start live playback.
+                            {#if hasMoreGuideChannels}
+                                Showing {visibleGuideChannels.length} of {visibleChannels.length} matching channels.
+                            {/if}
                         </p>
                     </div>
                     <div class="text-sm tabular-nums text-white/46">
@@ -753,6 +786,20 @@
                         </div>
                     </div>
                 </div>
+
+                {#if hasMoreGuideChannels}
+                    <div class="flex flex-col gap-3 border-t border-white/10 bg-white/[0.03] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+                        <p class="text-sm leading-6 text-white/48">
+                            Large playlists are paged to keep the guide responsive. Search or select a group to narrow the list.
+                        </p>
+                        <button
+                            class="h-11 rounded-full border border-white/10 bg-white/8 px-5 text-sm font-semibold text-white/76 transition-colors hover:bg-white/14 hover:text-white"
+                            onclick={showMoreGuideChannels}
+                        >
+                            Show {nextGuideChannelPageCount} more
+                        </button>
+                    </div>
+                {/if}
             </section>
         {/if}
     </main>
@@ -774,6 +821,7 @@
                 role="dialog"
                 aria-modal="true"
                 tabindex="-1"
+                use:focusOnMount
             >
                 <div class="mb-5 flex items-start justify-between gap-4">
                     <div>

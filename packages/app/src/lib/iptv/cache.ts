@@ -262,6 +262,15 @@ export function persistIptvRefreshResult(source: IptvSource, result: IptvRefresh
     const storage = getStorage();
     if (!storage) return;
 
+    if (source.kind === "xtream") {
+        try {
+            storage.removeItem(cacheKeyForSourceId(source.id));
+        } catch {
+            // Best-effort cache clears should not block Live TV refreshes.
+        }
+        return;
+    }
+
     const stored: StoredIptvRefreshResult = {
         version: CACHE_VERSION,
         sourceId: source.id,
@@ -282,6 +291,15 @@ export function persistIptvRefreshResult(source: IptvSource, result: IptvRefresh
 export function getStoredIptvRefreshResult(source: IptvSource): IptvRefreshResult | null {
     const storage = getStorage();
     if (!storage) return null;
+
+    if (source.kind === "xtream") {
+        try {
+            storage.removeItem(cacheKeyForSourceId(source.id));
+        } catch {
+            // Ignore unavailable storage when discarding old Xtream caches.
+        }
+        return null;
+    }
 
     try {
         const raw = storage.getItem(cacheKeyForSourceId(source.id));

@@ -162,24 +162,25 @@ describe("IPTV refresh result cache", () => {
         expect(getStoredIptvRefreshResult(source)).toBeNull();
     });
 
-    test("matches Xtream caches by credentials without storing the plain password in cache metadata", () => {
+    test("does not cache Xtream channels because stream URLs can contain credentials", () => {
         const xtreamSource: IptvSource = {
             id: "xtream-1",
             kind: "xtream",
             name: "Xtream Live",
             serverUrl: "https://panel.example.test:8443/",
-            username: "user@example",
+            username: "xtream-user",
             credential: "secret-pass",
             createdAt: "2026-06-22T10:00:00.000Z",
             updatedAt: "2026-06-22T10:00:00.000Z",
         };
-
+        const xtreamCacheKey = "raffi_iptv_refresh_result_v1:xtream-1";
         const xtreamResult: IptvRefreshResult = {
             ...result,
             channels: result.channels.map((channel) => ({
                 ...channel,
                 id: channel.id.replace(source.id, xtreamSource.id),
                 sourceId: xtreamSource.id,
+                url: "https://panel.example.test:8443/live/xtream-user/secret-pass/1.ts",
             })),
             groups: result.groups.map((group) => ({
                 ...group,
@@ -188,16 +189,15 @@ describe("IPTV refresh result cache", () => {
             })),
         };
 
+        storage.setItem(xtreamCacheKey, "legacy cache containing secret-pass");
         persistIptvRefreshResult(xtreamSource, xtreamResult);
 
-        expect(getStoredIptvRefreshResult(xtreamSource)?.channels.map((channel) => channel.name)).toEqual(["ABC"]);
-        expect(getStoredIptvRefreshResult({
-            ...xtreamSource,
-            credential: "rotated-secret",
-        })).toBeNull();
+        expect(storage.getItem(xtreamCacheKey)).toBeNull();
+        expect(getStoredIptvRefreshResult(xtreamSource)).toBeNull();
 
-        const rawStored = storage.getItem("raffi_iptv_refresh_result_v1:xtream-1") ?? "";
-        expect(rawStored).not.toContain("secret-pass");
-        expect(rawStored).not.toContain("user@example");
+        storage.setItem(xtreamCacheKey, "legacy cache containing secret-pass");
+
+        expect(getStoredIptvRefreshResult(xtreamSource)).toBeNull();
+        expect(storage.getItem(xtreamCacheKey)).toBeNull();
     });
 });
