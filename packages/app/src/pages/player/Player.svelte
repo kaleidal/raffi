@@ -632,7 +632,7 @@
                 Boolean(get(selectedStream)?.behaviorHints?.bingeGroup) &&
                 !get(watchParty).isActive;
             const effectiveStartTime = Chapters.getStartupSkipTarget(startTime, effectiveChapters, {
-                autoSkipIntros: $autoSkipIntros || autoSkipFromNextEpisode || bingeStartup,
+                autoSkipIntros: $autoSkipIntros,
                 autoSkipRecap: autoSkipFromNextEpisode || bingeStartup,
             });
 
@@ -905,11 +905,13 @@
             skipButtonLabel = result.skipButtonLabel;
 
             if (bingeNextSupported) {
-                if (
-                    result.currentChapter?.kind === "intro" ||
-                    result.currentChapter?.kind === "recap"
-                ) {
-                    seekToTime(result.currentChapter.endTime + 0.1);
+                const bingeChapter = result.currentChapter;
+                if (bingeChapter?.kind === "intro" && $autoSkipIntros) {
+                    seekToTime(bingeChapter.endTime + 0.1);
+                    return;
+                }
+                if (bingeChapter?.kind === "recap") {
+                    seekToTime(bingeChapter.endTime + 0.1);
                     return;
                 }
 

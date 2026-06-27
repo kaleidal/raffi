@@ -6,7 +6,6 @@ const OUTRO_FALLBACK_SECONDS = 45;
 export const CREDITS_FALLBACK_SECONDS = 60;
 export const NEXT_EPISODE_PREBUFFER_LEAD_SECONDS = 120;
 export const BINGE_CREDITS_BUFFER_SECONDS = 5;
-const CHAINED_SKIP_TOLERANCE_SECONDS = 1.5;
 
 const classifyChapterKind = (title: string): ChapterKind => {
     const normalized = title.toLowerCase();
@@ -73,10 +72,13 @@ const getRelevantNativeChapters = (sessionData: SessionData | null | undefined) 
 const findChapterAtTime = (chapters: Chapter[], time: number) =>
     chapters.find((chapter) => time >= chapter.startTime && time < chapter.endTime) ?? null;
 
-const isSkippableChapter = (chapter: Chapter | null, allowRecap: boolean) => {
+const shouldAutoSkipChapter = (
+    chapter: Chapter | null,
+    options: { autoSkipIntros: boolean; autoSkipRecap: boolean },
+) => {
     if (!chapter) return false;
-    if (chapter.kind === "intro") return true;
-    if (allowRecap && chapter.kind === "recap") return true;
+    if (chapter.kind === "intro") return options.autoSkipIntros;
+    if (chapter.kind === "recap") return options.autoSkipRecap;
     return false;
 };
 
@@ -122,39 +124,11 @@ export function getStartupSkipTarget(
 
     for (let attempt = 0; attempt < 4; attempt += 1) {
         const currentChapter = findChapterAtTime(chapters, targetTime);
-        if (!currentChapter || !isSkippableChapter(currentChapter, options.autoSkipRecap)) {
+        if (!currentChapter || !shouldAutoSkipChapter(currentChapter, options)) {
             break;
         }
 
         targetTime = currentChapter.endTime + 0.1;
-
-        const nextChapter = chapters.find((chapter) => {
-            if (!isSkippableChapter(chapter, options.autoSkipRecap)) {
-                return false;
-            }
-            return chapter.startTime <= targetTime + CHAINED_SKIP_TOLERANCE_SECONDS && chapter.startTime >= targetTime - 0.1;
-        });
-
-        if (!nextChapter) {
-            continue;
-        }
-
-        if (nextChapter.kind === "intro" && options.autoSkipIntros) {
-            targetTime = nextChapter.endTime + 0.1;
-            continue;
-        }
-
-        if (nextChapter.kind === "recap" && options.autoSkipRecap) {
-            targetTime = nextChapter.endTime + 0.1;
-            continue;
-        }
-
-        break;
-    }
-
-    const currentChapter = findChapterAtTime(chapters, requestedStartTime);
-    if (currentChapter?.kind === "intro" && options.autoSkipIntros) {
-        return Math.max(targetTime, currentChapter.endTime + 0.1);
     }
 
     return targetTime;
