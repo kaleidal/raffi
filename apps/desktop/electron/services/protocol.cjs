@@ -194,6 +194,11 @@ function registerLinuxProtocolHandler({
 }) {
   if (process.platform !== "linux") return;
 
+  // AppImage mounts to a temporary path,
+  // so using execPath messes up our .desktop entry
+  // Use the actual image path in that case
+  const packagedExecPath = process.env.APPIMAGE || process.execPath;
+
   try {
     const desktopDir = path.join(app.getPath("home"), ".local", "share", "applications");
     fs.mkdirSync(desktopDir, { recursive: true });
@@ -208,7 +213,7 @@ function registerLinuxProtocolHandler({
     const launchTarget = isDev ? path.resolve(process.argv[1] || "") : process.execPath;
     const execLine = isDev
       ? `\"${process.execPath}\" \"${launchTarget}\" %U`
-      : `\"${process.execPath}\" %U`;
+      : `\"${packagedExecPath}\" %U`;
     const existingMainDesktop = readDesktopFile(fs, localMainDesktop);
 
     if (isDev) {
@@ -235,7 +240,7 @@ function registerLinuxProtocolHandler({
       writePackagedLauncherDesktop({
         fs,
         desktopPath: localMainDesktop,
-        execPath: process.execPath,
+        execPath: packagedExecPath,
         iconName,
         startupWMClass,
       });
@@ -246,7 +251,7 @@ function registerLinuxProtocolHandler({
       fs,
       desktopPath: localHandlerDesktop,
       execLine,
-      tryExec: process.execPath,
+      tryExec: packagedExecPath,
       iconName,
       startupWMClass,
       isDev,
