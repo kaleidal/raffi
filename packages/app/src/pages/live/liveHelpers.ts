@@ -7,6 +7,8 @@ import type {
 } from "../../lib/iptv/types";
 
 export const ALL_GROUPS = "__all__";
+export const FAVORITES_GROUP = "__favorites__";
+export const FAVORITES_GROUP_LABEL = "Favorites";
 export const GUIDE_VIEWPORT_HOURS = 2;
 export const GUIDE_INITIAL_CHANNEL_LIMIT = 100;
 export const GUIDE_CHANNEL_PAGE_SIZE = 100;
@@ -24,10 +26,11 @@ export interface GuideTimeTick {
 export interface LiveTvSelection {
     sourceId: string;
     groupsBySourceId: Record<string, string>;
+    favoritesBySourceId: Record<string, string[]>;
 }
 
 function createDefaultLiveTvSelection(): LiveTvSelection {
-    return { sourceId: "", groupsBySourceId: {} };
+    return { sourceId: "", groupsBySourceId: {}, favoritesBySourceId: {} };
 }
 
 function getStorage(): Storage | null {
@@ -62,6 +65,32 @@ function cleanGroupsBySourceId(value: unknown): Record<string, string> {
     return groupsBySourceId;
 }
 
+function cleanFavoriteChannelIds(value: unknown): string[] {
+    if (!Array.isArray(value)) return [];
+
+    return Array.from(
+        new Set(
+            value
+                .map(cleanStoredString)
+                .filter((channelId) => Boolean(channelId)),
+        ),
+    );
+}
+
+function cleanFavoritesBySourceId(value: unknown): Record<string, string[]> {
+    if (!isRecord(value)) return {};
+
+    const favoritesBySourceId: Record<string, string[]> = {};
+    for (const [sourceId, channelIds] of Object.entries(value)) {
+        const cleanSourceId = cleanStoredString(sourceId);
+        const cleanChannelIds = cleanFavoriteChannelIds(channelIds);
+        if (cleanSourceId && cleanChannelIds.length > 0) {
+            favoritesBySourceId[cleanSourceId] = cleanChannelIds;
+        }
+    }
+    return favoritesBySourceId;
+}
+
 export function getStoredLiveTvSelection(): LiveTvSelection {
     const storage = getStorage();
     if (!storage) {
@@ -82,6 +111,7 @@ export function getStoredLiveTvSelection(): LiveTvSelection {
         return {
             sourceId: cleanStoredString(parsed.sourceId),
             groupsBySourceId: cleanGroupsBySourceId(parsed.groupsBySourceId),
+            favoritesBySourceId: cleanFavoritesBySourceId(parsed.favoritesBySourceId),
         };
     } catch {
         return createDefaultLiveTvSelection();
@@ -121,6 +151,40 @@ export function setStoredLiveTvGroup(sourceId: string, group: string) {
     persistLiveTvSelection(selection);
 }
 
+export function getStoredLiveTvFavoriteChannelIds(sourceId: string) {
+    const cleanSourceId = sourceId.trim();
+    if (!cleanSourceId) return [];
+    return getStoredLiveTvSelection().favoritesBySourceId[cleanSourceId] ?? [];
+}
+
+export function setStoredLiveTvFavoriteChannelIds(sourceId: string, channelIds: string[]) {
+    const cleanSourceId = sourceId.trim();
+    if (!cleanSourceId) return [];
+
+    const selection = getStoredLiveTvSelection();
+    const cleanChannelIds = cleanFavoriteChannelIds(channelIds);
+    if (cleanChannelIds.length > 0) {
+        selection.favoritesBySourceId[cleanSourceId] = cleanChannelIds;
+    } else {
+        delete selection.favoritesBySourceId[cleanSourceId];
+    }
+    persistLiveTvSelection(selection);
+    return cleanChannelIds;
+}
+
+export function toggleStoredLiveTvFavoriteChannelId(sourceId: string, channelId: string) {
+    const cleanChannelId = channelId.trim();
+    if (!cleanChannelId) {
+        return getStoredLiveTvFavoriteChannelIds(sourceId);
+    }
+
+    const current = getStoredLiveTvFavoriteChannelIds(sourceId);
+    const next = current.includes(cleanChannelId)
+        ? current.filter((favoriteChannelId) => favoriteChannelId !== cleanChannelId)
+        : [...current, cleanChannelId];
+    return setStoredLiveTvFavoriteChannelIds(sourceId, next);
+}
+
 export function isLiveTvRefreshDue(
     loadedAt: string | null | undefined,
     now: Date = new Date(),
@@ -151,10 +215,14 @@ export function getVisibleChannels(
     channels: IptvChannel[],
     group: string,
     query: string,
+    favoriteChannelIds: string[] = [],
 ) {
     const normalizedQuery = query.trim().toLowerCase();
+    const favoriteChannelIdSet =
+        group === FAVORITES_GROUP ? new Set(favoriteChannelIds) : null;
     return channels.filter((channel) => {
-        if (group !== ALL_GROUPS && channel.group !== group) return false;
+        if (favoriteChannelIdSet && !favoriteChannelIdSet.has(channel.id)) return false;
+        if (!favoriteChannelIdSet && group !== ALL_GROUPS && channel.group !== group) return false;
         if (!normalizedQuery) return true;
 
         return (

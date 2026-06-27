@@ -30,6 +30,8 @@
     import LiveSourceSelector from "./components/LiveSourceSelector.svelte";
     import {
         ALL_GROUPS,
+        FAVORITES_GROUP,
+        FAVORITES_GROUP_LABEL,
         GUIDE_CHANNEL_PAGE_SIZE,
         GUIDE_INITIAL_CHANNEL_LIMIT,
         LIVE_TV_AUTO_REFRESH_RETRY_MS,
@@ -39,12 +41,14 @@
         getGuideViewport,
         getLiveSourceCacheKey,
         getLiveSourceSummary,
+        getStoredLiveTvFavoriteChannelIds,
         getStoredLiveTvGroup,
         getStoredLiveTvSelection,
         getVisibleChannels,
         setStoredLiveTvGroup,
         setStoredLiveTvSourceId,
         shouldAutoRefreshLiveTvSource,
+        toggleStoredLiveTvFavoriteChannelId,
     } from "./liveHelpers";
 
     const IPTV_EXAMPLE_M3U_URL = (
@@ -80,6 +84,7 @@
             loadedSourceCacheKey: source ? cacheKey : "",
             refreshResult: cachedResult,
             selectedGroup: source ? getStoredLiveTvGroup(source.id) || ALL_GROUPS : ALL_GROUPS,
+            favoriteChannelIds: source ? getStoredLiveTvFavoriteChannelIds(source.id) : [],
         };
     }
 
@@ -92,6 +97,7 @@
     let refreshing = false;
     let refreshError = "";
     let selectedGroup = initialLiveTvState.selectedGroup;
+    let favoriteChannelIds = initialLiveTvState.favoriteChannelIds;
     let searchQuery = "";
     let guideNow = new Date();
     let guideTimer: ReturnType<typeof setInterval> | null = null;
@@ -116,6 +122,10 @@
             ? refreshResult
             : null;
     $: availableGroups = currentResult?.groups ?? [];
+    $: favoriteChannelIdSet = new Set(favoriteChannelIds);
+    $: favoriteChannelsCount = currentResult
+        ? currentResult.channels.filter((channel) => favoriteChannelIdSet.has(channel.id)).length
+        : 0;
     $: sourceSummary = getLiveSourceSummary(currentResult, selectedSource);
     $: sourceRefreshedLabel = currentResult
         ? `Refreshed ${formatLoadedAt(currentResult.loadedAt)}`
@@ -124,6 +134,7 @@
         currentResult?.channels ?? [],
         selectedGroup,
         searchQuery,
+        favoriteChannelIds,
     );
     $: currentGuideChannelFilterKey = `${selectedSourceId}\n${selectedGroup}\n${searchQuery.trim()}`;
     $: if (guideChannelFilterKey !== currentGuideChannelFilterKey) {
@@ -140,7 +151,12 @@
         GUIDE_CHANNEL_PAGE_SIZE,
         remainingGuideChannels,
     );
-    $: guideTitle = selectedGroup === ALL_GROUPS ? "Live TV" : selectedGroup;
+    $: guideTitle =
+        selectedGroup === ALL_GROUPS
+            ? "Live TV"
+            : selectedGroup === FAVORITES_GROUP
+              ? FAVORITES_GROUP_LABEL
+              : selectedGroup;
     $: guideViewport = getGuideViewport(guideNow);
     $: guideRows = currentResult
         ? buildGuideRows(visibleGuideChannels, currentResult.guide, guideViewport)
@@ -175,6 +191,7 @@
     $: if (
         currentResult &&
         selectedGroup !== ALL_GROUPS &&
+        selectedGroup !== FAVORITES_GROUP &&
         !availableGroups.some((group) => group.name === selectedGroup)
     ) {
         selectedGroup = ALL_GROUPS;
@@ -196,6 +213,7 @@
         loadedSourceId = source.id;
         loadedSourceCacheKey = cacheKey;
         selectedGroup = getStoredLiveTvGroup(source.id) || ALL_GROUPS;
+        favoriteChannelIds = getStoredLiveTvFavoriteChannelIds(source.id);
         searchQuery = "";
         refreshError = "";
         queueMicrotask(() => {
@@ -217,6 +235,7 @@
             loadedSourceId = "";
             loadedSourceCacheKey = "";
             refreshResult = null;
+            favoriteChannelIds = [];
         }
     }
 
@@ -308,6 +327,15 @@
         });
     }
 
+    function toggleFavoriteChannel(channel: IptvChannel) {
+        if (!selectedSource) return;
+        favoriteChannelIds = toggleStoredLiveTvFavoriteChannelId(selectedSource.id, channel.id);
+        trackEvent("live_channel_favorite_toggled", {
+            group: channel.group,
+            is_favorite: favoriteChannelIds.includes(channel.id),
+        });
+    }
+
     onMount(() => {
         guideTimer = setInterval(() => {
             guideNow = new Date();
@@ -375,6 +403,9 @@
                 groups={availableGroups}
                 bind:selectedGroup
                 allGroupsValue={ALL_GROUPS}
+                favoritesGroupValue={FAVORITES_GROUP}
+                favoritesGroupLabel={FAVORITES_GROUP_LABEL}
+                favoritesCount={favoriteChannelsCount}
                 disabled={!currentResult}
                 totalChannels={currentResult?.stats.channelCount ?? 0}
             />
@@ -411,11 +442,13 @@
                     {guideNowLinePercent}
                     {showGuideNowLine}
                     hasGuide={Boolean(currentResult.guide)}
+                    favoriteChannelIds={favoriteChannelIds}
                     {hasMoreGuideChannels}
                     visibleGuideChannelsCount={visibleGuideChannels.length}
                     visibleChannelsCount={visibleChannels.length}
                     {nextGuideChannelPageCount}
                     onPlayChannel={playChannel}
+                    onToggleFavoriteChannel={toggleFavoriteChannel}
                     onShowMoreGuideChannels={showMoreGuideChannels}
                 />
             {/if}

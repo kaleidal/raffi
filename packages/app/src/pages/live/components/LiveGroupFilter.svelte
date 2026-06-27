@@ -6,6 +6,9 @@
     export let groups: IptvGroup[] = [];
     export let selectedGroup = "__all__";
     export let allGroupsValue = "__all__";
+    export let favoritesGroupValue = "__favorites__";
+    export let favoritesGroupLabel = "Favorites";
+    export let favoritesCount = 0;
     export let disabled = false;
     export let totalChannels = 0;
 
@@ -15,11 +18,17 @@
     $: selectedGroupRow =
         groups.find((group) => group.name === selectedGroup) ?? null;
     $: selectedLabel =
-        selectedGroup === allGroupsValue ? "All groups" : selectedGroup;
+        selectedGroup === allGroupsValue
+            ? "All groups"
+            : selectedGroup === favoritesGroupValue
+              ? favoritesGroupLabel
+              : selectedGroup;
     $: selectedCount =
         selectedGroup === allGroupsValue
             ? totalChannels
-            : selectedGroupRow?.channelCount ?? 0;
+            : selectedGroup === favoritesGroupValue
+              ? favoritesCount
+              : selectedGroupRow?.channelCount ?? 0;
 
     function toggleMenu(event: MouseEvent) {
         event.stopPropagation();
@@ -107,6 +116,33 @@
                         </span>
                     </span>
                     {#if selectedGroup === allGroupsValue}
+                        <Check size={18} strokeWidth={2.4} class="shrink-0" />
+                    {/if}
+                </button>
+
+                <button
+                    type="button"
+                    class={`flex w-full items-center gap-3 rounded-[18px] px-3 py-3 text-left transition-colors ${
+                        selectedGroup === favoritesGroupValue
+                            ? "bg-white/[0.12] text-white"
+                            : "text-white/76 hover:bg-white/[0.07] hover:text-white"
+                    }`}
+                    role="option"
+                    aria-selected={selectedGroup === favoritesGroupValue}
+                    onclick={() => selectGroup(favoritesGroupValue)}
+                >
+                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/[0.08] text-sm text-amber-200">
+                        ★
+                    </span>
+                    <span class="min-w-0 flex-1">
+                        <span class="block truncate text-sm font-semibold">
+                            {favoritesGroupLabel}
+                        </span>
+                        <span class="mt-0.5 block text-xs text-white/42">
+                            {favoritesCount} channels
+                        </span>
+                    </span>
+                    {#if selectedGroup === favoritesGroupValue}
                         <Check size={18} strokeWidth={2.4} class="shrink-0" />
                     {/if}
                 </button>

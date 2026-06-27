@@ -1,13 +1,18 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import {
+    FAVORITES_GROUP,
     LIVE_TV_REFRESH_INTERVAL_MS,
     LIVE_TV_SELECTION_STORAGE_KEY,
+    getStoredLiveTvFavoriteChannelIds,
     getStoredLiveTvGroup,
     getStoredLiveTvSelection,
+    getVisibleChannels,
     isLiveTvRefreshDue,
+    setStoredLiveTvFavoriteChannelIds,
     setStoredLiveTvGroup,
     setStoredLiveTvSourceId,
     shouldAutoRefreshLiveTvSource,
+    toggleStoredLiveTvFavoriteChannelId,
 } from "./liveHelpers";
 
 class MemoryStorage {
@@ -52,6 +57,7 @@ describe("Live TV selection persistence", () => {
                 "source-1": "News",
                 "source-2": "Sports",
             },
+            favoritesBySourceId: {},
         });
         expect(getStoredLiveTvGroup("source-1")).toBe("News");
     });
@@ -74,6 +80,7 @@ describe("Live TV selection persistence", () => {
             groupsBySourceId: {
                 good: "Documentaries",
             },
+            favoritesBySourceId: {},
         });
     });
 
@@ -83,7 +90,83 @@ describe("Live TV selection persistence", () => {
         expect(getStoredLiveTvSelection()).toEqual({
             sourceId: "",
             groupsBySourceId: {},
+            favoritesBySourceId: {},
         });
+    });
+
+    test("persists favorite channel ids per source and toggles membership", () => {
+        setStoredLiveTvFavoriteChannelIds(" source-1 ", [
+            " abc ",
+            "abc",
+            " ",
+            "bbc",
+        ]);
+
+        expect(getStoredLiveTvFavoriteChannelIds("source-1")).toEqual(["abc", "bbc"]);
+        expect(toggleStoredLiveTvFavoriteChannelId("source-1", " bbc ")).toEqual(["abc"]);
+        expect(toggleStoredLiveTvFavoriteChannelId("source-1", "cnn")).toEqual(["abc", "cnn"]);
+        expect(getStoredLiveTvFavoriteChannelIds("source-1")).toEqual(["abc", "cnn"]);
+        expect(getStoredLiveTvFavoriteChannelIds("source-2")).toEqual([]);
+    });
+
+    test("drops malformed persisted favorite channel ids", () => {
+        storage.setItem(
+            LIVE_TV_SELECTION_STORAGE_KEY,
+            JSON.stringify({
+                sourceId: "source-1",
+                groupsBySourceId: {},
+                favoritesBySourceId: {
+                    "source-1": ["abc", " ", 42, "bbc", "abc"],
+                    empty: [],
+                    bad: "not-an-array",
+                },
+            }),
+        );
+
+        expect(getStoredLiveTvSelection()).toEqual({
+            sourceId: "source-1",
+            groupsBySourceId: {},
+            favoritesBySourceId: {
+                "source-1": ["abc", "bbc"],
+            },
+        });
+    });
+});
+
+describe("Live TV visible channel filtering", () => {
+    const channels = [
+        {
+            id: "abc",
+            sourceId: "source-1",
+            name: "ABC News",
+            url: "https://example.test/abc.m3u8",
+            group: "News",
+            order: 0,
+        },
+        {
+            id: "espn",
+            sourceId: "source-1",
+            name: "ESPN",
+            url: "https://example.test/espn.m3u8",
+            group: "Sports",
+            order: 1,
+        },
+        {
+            id: "bbc",
+            sourceId: "source-1",
+            name: "BBC World",
+            url: "https://example.test/bbc.m3u8",
+            group: "News",
+            order: 2,
+        },
+    ];
+
+    test("filters the virtual Favorites group by persisted favorite ids", () => {
+        expect(getVisibleChannels(channels, FAVORITES_GROUP, "", ["espn", "missing", "abc"]).map((channel) => channel.id)).toEqual(["abc", "espn"]);
+    });
+
+    test("applies search inside the virtual Favorites group", () => {
+        expect(getVisibleChannels(channels, FAVORITES_GROUP, "news", ["espn", "abc"]).map((channel) => channel.id)).toEqual(["abc"]);
     });
 });
 

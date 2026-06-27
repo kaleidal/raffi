@@ -17,14 +17,34 @@
     export let guideNowLinePercent = 0;
     export let showGuideNowLine = false;
     export let hasGuide = false;
+    export let favoriteChannelIds: string[] = [];
     export let hasMoreGuideChannels = false;
     export let visibleGuideChannelsCount = 0;
     export let visibleChannelsCount = 0;
     export let nextGuideChannelPageCount = 0;
     export let onPlayChannel: (channel: IptvChannel) => void = () => {};
+    export let onToggleFavoriteChannel: (channel: IptvChannel) => void = () => {};
     export let onShowMoreGuideChannels: () => void = () => {};
 
     let failedLogoUrls = new Set<string>();
+
+    $: favoriteChannelIdSet = new Set(favoriteChannelIds);
+
+    function isFavoriteChannel(channel: IptvChannel) {
+        return favoriteChannelIdSet.has(channel.id);
+    }
+
+    function favoriteButtonLabel(channel: IptvChannel) {
+        return `${isFavoriteChannel(channel) ? "Remove" : "Add"} ${channel.name} ${isFavoriteChannel(channel) ? "from" : "to"} Favorites`;
+    }
+
+    function favoriteButtonClass(channel: IptvChannel) {
+        return `flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors ${
+            isFavoriteChannel(channel)
+                ? "border-amber-300/50 bg-amber-300/18 text-amber-200"
+                : "border-white/10 bg-black/36 text-white/48 hover:bg-white/12 hover:text-white"
+        }`;
+    }
 
     function shouldShowLogo(channel: IptvChannel) {
         return Boolean(channel.logo && !failedLogoUrls.has(channel.logo));
@@ -88,26 +108,38 @@
         <div class="p-4">
             <div class="grid grid-cols-[repeat(auto-fill,minmax(86px,1fr))] gap-2 sm:grid-cols-[repeat(auto-fill,minmax(104px,1fr))]">
                 {#each guideRows as row (row.channel.id)}
-                    <button
-                        class="flex h-[104px] min-w-0 flex-col items-center justify-center gap-2 rounded-2xl bg-white/[0.06] px-2 text-center transition-colors hover:bg-white/[0.11]"
-                        title={row.channel.name}
-                        aria-label={`Play ${row.channel.name}`}
-                        onclick={() => onPlayChannel(row.channel)}
-                    >
-                        <LiveChannelLogo
-                            channel={row.channel}
-                            {shouldShowLogo}
-                            {markLogoFailed}
-                        />
-                        <span class="line-clamp-2 max-w-full text-[11px] font-medium leading-tight text-white/72">
-                            {row.channel.name}
-                        </span>
-                        {#if row.channel.number}
-                            <span class="max-w-full truncate rounded bg-white/[0.07] px-1.5 py-0.5 text-[10px] tabular-nums text-white/54">
-                                {row.channel.number}
+                    <div class="relative">
+                        <button
+                            class="flex h-[104px] w-full min-w-0 flex-col items-center justify-center gap-2 rounded-2xl bg-white/[0.06] px-2 text-center transition-colors hover:bg-white/[0.11]"
+                            title={row.channel.name}
+                            aria-label={`Play ${row.channel.name}`}
+                            onclick={() => onPlayChannel(row.channel)}
+                        >
+                            <LiveChannelLogo
+                                channel={row.channel}
+                                {shouldShowLogo}
+                                {markLogoFailed}
+                            />
+                            <span class="line-clamp-2 max-w-full text-[11px] font-medium leading-tight text-white/72">
+                                {row.channel.name}
                             </span>
-                        {/if}
-                    </button>
+                            {#if row.channel.number}
+                                <span class="max-w-full truncate rounded bg-white/[0.07] px-1.5 py-0.5 text-[10px] tabular-nums text-white/54">
+                                    {row.channel.number}
+                                </span>
+                            {/if}
+                        </button>
+                        <button
+                            type="button"
+                            class={`absolute right-2 top-2 ${favoriteButtonClass(row.channel)}`}
+                            aria-label={favoriteButtonLabel(row.channel)}
+                            aria-pressed={isFavoriteChannel(row.channel)}
+                            title={favoriteButtonLabel(row.channel)}
+                            onclick={() => onToggleFavoriteChannel(row.channel)}
+                        >
+                            {isFavoriteChannel(row.channel) ? "★" : "☆"}
+                        </button>
+                    </div>
                 {/each}
             </div>
         </div>
@@ -116,27 +148,39 @@
             <div class="border-r border-white/10 bg-black/18">
                 <div class="h-10 border-b border-white/10 bg-white/[0.03]"></div>
                 {#each guideRows as row (row.channel.id)}
-                    <button
-                        class="flex h-[86px] w-full flex-col items-center justify-center gap-1 border-b border-white/[0.06] px-2 text-center transition-colors hover:bg-white/[0.06]"
-                        title={row.channel.name}
-                        aria-label={`Play ${row.channel.name}`}
-                        onclick={() => onPlayChannel(row.channel)}
-                    >
-                        <LiveChannelLogo
-                            channel={row.channel}
-                            {shouldShowLogo}
-                            {markLogoFailed}
-                        />
-                        {#if row.channel.number}
-                            <span class="max-w-full truncate rounded bg-white/[0.07] px-1.5 py-0.5 text-[10px] tabular-nums text-white/54">
-                                {row.channel.number}
-                            </span>
-                        {:else}
-                            <span class="max-w-full truncate text-[10px] leading-none text-white/48">
-                                {row.channel.name}
-                            </span>
-                        {/if}
-                    </button>
+                    <div class="relative h-[86px] border-b border-white/[0.06]">
+                        <button
+                            class="flex h-full w-full flex-col items-center justify-center gap-1 px-2 text-center transition-colors hover:bg-white/[0.06]"
+                            title={row.channel.name}
+                            aria-label={`Play ${row.channel.name}`}
+                            onclick={() => onPlayChannel(row.channel)}
+                        >
+                            <LiveChannelLogo
+                                channel={row.channel}
+                                {shouldShowLogo}
+                                {markLogoFailed}
+                            />
+                            {#if row.channel.number}
+                                <span class="max-w-full truncate rounded bg-white/[0.07] px-1.5 py-0.5 text-[10px] tabular-nums text-white/54">
+                                    {row.channel.number}
+                                </span>
+                            {:else}
+                                <span class="max-w-full truncate text-[10px] leading-none text-white/48">
+                                    {row.channel.name}
+                                </span>
+                            {/if}
+                        </button>
+                        <button
+                            type="button"
+                            class={`absolute right-1 top-1 ${favoriteButtonClass(row.channel)}`}
+                            aria-label={favoriteButtonLabel(row.channel)}
+                            aria-pressed={isFavoriteChannel(row.channel)}
+                            title={favoriteButtonLabel(row.channel)}
+                            onclick={() => onToggleFavoriteChannel(row.channel)}
+                        >
+                            {isFavoriteChannel(row.channel) ? "★" : "☆"}
+                        </button>
+                    </div>
                 {/each}
             </div>
 
