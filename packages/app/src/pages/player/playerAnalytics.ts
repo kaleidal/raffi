@@ -14,6 +14,7 @@ export const getPlaybackAnalyticsProps = ({
     season,
     episode,
     watchPartyActive,
+    liveMode,
 }: {
     currentVideoSrc: string | null;
     sessionData: any;
@@ -23,8 +24,9 @@ export const getPlaybackAnalyticsProps = ({
     season: number | null;
     episode: number | null;
     watchPartyActive: boolean;
+    liveMode?: boolean;
 }) => {
-    const sourceType = getPlaybackSourceType(currentVideoSrc, sessionData);
+    const sourceType = liveMode ? "live" : getPlaybackSourceType(currentVideoSrc, sessionData);
     const isTorrent = sourceType === "torrent";
     const isLocal = sourceType === "local";
     const progressPercent = duration > 0 ? Math.round((currentTime / duration) * 100) : null;
@@ -34,6 +36,7 @@ export const getPlaybackAnalyticsProps = ({
         is_torrent: isTorrent,
         is_local: isLocal,
         content_type: metaData?.meta?.type ?? null,
+        live_mode: Boolean(liveMode),
         season: season ?? null,
         episode: episode ?? null,
         watch_party: watchPartyActive,

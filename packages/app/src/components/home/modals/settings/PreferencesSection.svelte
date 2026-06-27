@@ -27,14 +27,18 @@
 		HOME_SEARCH_BAR_POSITION_BOTTOM,
 		HOME_SEARCH_BAR_POSITION_CHANGED_EVENT,
 		HOME_SEARCH_BAR_POSITION_HEADER,
+		HOME_LIVE_TV_SHORTCUT_CHANGED_EVENT,
 		type HomeSearchBarPosition,
+		getStoredHomeLiveTvShortcutEnabled,
 		getStoredHomeSearchBarPosition,
+		setStoredHomeLiveTvShortcutEnabled,
 		setStoredHomeSearchBarPosition,
 	} from "../../../../lib/home/searchBarSettings";
 
 	let discordRpcEnabled = true;
 	let seekBarStyle = "raffi";
 	let miniPlayerEnabled = true;
+	let liveTvShortcutEnabled = false;
 	let searchBarPosition: HomeSearchBarPosition = HOME_SEARCH_BAR_POSITION_AUTO;
 	let heroSource = HOME_HERO_SOURCE_CINEMETA;
 	let heroSourceOptions: HeroCatalogSourceOption[] = [];
@@ -48,6 +52,7 @@
 		const storedSeek = localStorage.getItem("seek_bar_style");
 		seekBarStyle = storedSeek || "raffi";
 		miniPlayerEnabled = $miniPlayerOnMinimize;
+		liveTvShortcutEnabled = getStoredHomeLiveTvShortcutEnabled();
 		heroSource = getStoredHomeHeroSource();
 		searchBarPosition = getStoredHomeSearchBarPosition();
 		void loadTraktHeroSourceAvailability();
@@ -88,6 +93,17 @@
 			trackEvent("mini_player_on_minimize_toggled", { enabled: nextValue });
 			return nextValue;
 		});
+	}
+
+	function toggleLiveTvShortcut() {
+		liveTvShortcutEnabled = !liveTvShortcutEnabled;
+		setStoredHomeLiveTvShortcutEnabled(liveTvShortcutEnabled);
+		window.dispatchEvent(
+			new CustomEvent(HOME_LIVE_TV_SHORTCUT_CHANGED_EVENT, {
+				detail: { enabled: liveTvShortcutEnabled },
+			}),
+		);
+		trackEvent("home_live_tv_shortcut_toggled", { enabled: liveTvShortcutEnabled });
 	}
 
 	async function loadHeroSourceOptions() {
@@ -295,6 +311,36 @@
 				}`}
 			>
 				{$autoSkipIntros ? "On" : "Off"}
+			</span>
+		</button>
+	</div>
+
+	<div class="rounded-2xl bg-white/8 p-4 flex flex-wrap items-center gap-4 justify-between">
+		<div>
+			<p class="text-white font-medium">
+				Live TV Shortcut
+			</p>
+			<p class="text-white/60 text-sm">
+				Show the Live TV button on the home search controls.
+			</p>
+		</div>
+		<button
+			class={`relative w-16 h-9 rounded-full border border-white/10 transition-colors duration-200 cursor-pointer ${
+				liveTvShortcutEnabled ? "bg-white" : "bg-white/10"
+			}`}
+			on:click={toggleLiveTvShortcut}
+			aria-label="Toggle Live TV shortcut"
+			role="switch"
+			aria-checked={liveTvShortcutEnabled}
+		>
+			<span
+				class={`absolute top-1 left-1 w-7 h-7 rounded-full text-[10px] font-semibold flex items-center justify-center transition-all duration-200 ${
+					liveTvShortcutEnabled
+						? "translate-x-7 bg-black text-white/90"
+						: "translate-x-0 bg-white/80 text-black"
+				}`}
+			>
+				{liveTvShortcutEnabled ? "On" : "Off"}
 			</span>
 		</button>
 	</div>

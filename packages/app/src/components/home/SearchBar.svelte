@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { Search, Link, Blocks, Library, Settings } from "@lucide/svelte";
+    import { Search, Link, Blocks, Library, Settings, Tv } from "@lucide/svelte";
     import {
         searchAddonTitlesSplit,
         searchTitlesSplit,
@@ -27,13 +27,26 @@
         HOME_SEARCH_BAR_POSITION_BOTTOM,
         HOME_SEARCH_BAR_POSITION_CHANGED_EVENT,
         HOME_SEARCH_BAR_POSITION_HEADER,
+        HOME_LIVE_TV_SHORTCUT_CHANGED_EVENT,
         type HomeSearchBarPosition,
+        getStoredHomeLiveTvShortcutEnabled,
         getStoredHomeSearchBarPosition,
     } from "../../lib/home/searchBarSettings";
 
 
     export let onOpenAddons: () => void = () => {};
     export let onOpenSettings: () => void = () => {};
+    export let controlledSearch = false;
+    export let searchValue = "";
+    export let searchPlaceholder = "search for anything";
+    export let searchDisabled = false;
+    export let searchWidthClass = "w-[680px] max-w-[62vw]";
+    export let onSearchInput: (value: string) => void = () => {};
+    export let showPlayButton = true;
+    export let showAddonsButton = true;
+    export let showLiveTvButton = true;
+    export let showListsButton = true;
+    export let showSettingsButton = true;
 
     let searchQuery = "";
     let searchResults: SplitSearchResults = { movies: [], series: [] };
@@ -47,6 +60,7 @@
     let totalSearchResults = 0;
     let searchBarPositionPreference: HomeSearchBarPosition =
         HOME_SEARCH_BAR_POSITION_AUTO;
+    let liveTvShortcutEnabled = false;
     let autoDockToBottom = false;
     let searchDockBottom = false;
 
@@ -142,6 +156,10 @@
         updateAutoDockPosition();
     }
 
+    function refreshLiveTvShortcutPreference() {
+        liveTvShortcutEnabled = getStoredHomeLiveTvShortcutEnabled();
+    }
+
     const handleScrollOrResize = () => {
         updateAutoDockPosition();
     };
@@ -191,6 +209,12 @@
 
 	function handleSearch(e: Event) {
 		const query = (e.target as HTMLInputElement).value;
+        if (controlledSearch) {
+            searchValue = query;
+            onSearchInput(query);
+            return;
+        }
+
 		searchQuery = query;
 		commandHint = "";
 
@@ -281,6 +305,7 @@
 	}
 
 	const handleSearchKeydown = (event: KeyboardEvent) => {
+        if (controlledSearch) return;
 		if (event.key !== "Enter") return;
 		if (searchQuery.trim().startsWith("/")) {
 			event.preventDefault();
@@ -325,6 +350,11 @@
 		router.navigate("lists");
 	}
 
+	function openLiveTv() {
+		trackEvent("live_tv_opened", { source: "search_bar" });
+		router.navigate("live");
+	}
+
 	function openSettings() {
 		trackEvent("settings_opened", { source: "search_bar" });
         onOpenSettings();
@@ -364,6 +394,11 @@
 	}
 
 	$: totalSearchResults = searchResults.movies.length + searchResults.series.length;
+    $: if (controlledSearch) {
+        commandHint = "";
+        showSearchResults = false;
+        loading = false;
+    }
     $: searchDockBottom =
         searchBarPositionPreference === HOME_SEARCH_BAR_POSITION_BOTTOM ||
         (searchBarPositionPreference === HOME_SEARCH_BAR_POSITION_AUTO &&
@@ -387,6 +422,7 @@
 
     onMount(() => {
         refreshSearchBarPositionPreference();
+        refreshLiveTvShortcutPreference();
         scrollContainer = document.querySelector(
             "[data-scroll-container]",
         ) as HTMLElement | null;
@@ -400,6 +436,10 @@
             HOME_SEARCH_BAR_POSITION_CHANGED_EVENT,
             refreshSearchBarPositionPreference,
         );
+        window.addEventListener(
+            HOME_LIVE_TV_SHORTCUT_CHANGED_EVENT,
+            refreshLiveTvShortcutPreference,
+        );
 
         return () => {
             (scrollContainer ?? window).removeEventListener(
@@ -410,6 +450,10 @@
             window.removeEventListener(
                 HOME_SEARCH_BAR_POSITION_CHANGED_EVENT,
                 refreshSearchBarPositionPreference,
+            );
+            window.removeEventListener(
+                HOME_LIVE_TV_SHORTCUT_CHANGED_EVENT,
+                refreshLiveTvShortcutPreference,
             );
         };
     });
@@ -507,33 +551,39 @@
                     class="pointer-events-none absolute -inset-x-6 -inset-y-4 -z-10 rounded-[48px] bg-white/[0.09] blur-2xl opacity-35"
                 ></div>
             {/if}
-            <div
-                class={`flex flex-row gap-0 rounded-full overflow-clip w-[680px] max-w-[62vw] backdrop-blur-md z-20 transition-shadow duration-300 ${
-                    searchDockBottom
-                        ? "shadow-[0_18px_54px_rgba(0,0,0,0.6)] ring-1 ring-white/12"
-                        : ""
-                }`}
-            >
-                <div class="p-[20px] bg-[#181818]/50">
-                    <Search size={40} strokeWidth={2} color="#C3C3C3" />
+            <div class="flex items-center justify-center gap-3">
+                <slot name="prefix" />
+
+                <div
+                    class={`flex flex-row gap-0 rounded-full overflow-hidden ${searchWidthClass} backdrop-blur-md z-20 transition-shadow duration-300 ${
+                        searchDockBottom
+                            ? "shadow-[0_18px_54px_rgba(0,0,0,0.6)] ring-1 ring-white/12"
+                            : ""
+                    }`}
+                >
+                    <div class="p-[20px] bg-[#181818]/50">
+                        <Search size={40} strokeWidth={2} color="#C3C3C3" />
+                    </div>
+
+                    <input
+                        type="text"
+                        placeholder={searchPlaceholder}
+                        class="bg-[#000000]/50 text-[#D4D4D4] text-center py-[20px] px-[40px] w-full text-[28px] font-poppins font-normal outline-none focus:outline-none focus:ring-0 disabled:cursor-not-allowed disabled:opacity-55"
+                        oninput={handleSearch}
+                        onkeydown={handleSearchKeydown}
+                        onfocus={() => {
+                            if (!controlledSearch && searchQuery) showSearchResults = true;
+                        }}
+                        onblur={() => {
+                            if (!controlledSearch) closeSearch();
+                        }}
+                        value={controlledSearch ? searchValue : searchQuery}
+                        disabled={searchDisabled}
+                    />
                 </div>
-
-                <input
-                    type="text"
-                    placeholder="search for anything"
-                    class="bg-[#000000]/50 text-[#D4D4D4] text-center py-[20px] px-[40px] w-full text-[28px] font-poppins font-normal outline-none focus:outline-none focus:ring-0"
-                    oninput={handleSearch}
-                    onkeydown={handleSearchKeydown}
-                    onfocus={() => {
-                        if (searchQuery) showSearchResults = true;
-                    }}
-                    onblur={closeSearch}
-                    value={searchQuery}
-                />
-
             </div>
 
-            {#if commandHint}
+            {#if !controlledSearch && commandHint}
                 <div
                     class={`absolute left-0 w-full bg-[#181818]/90 backdrop-blur-xl rounded-[24px] p-4 text-white/70 text-sm z-100 ${
                         searchDockBottom ? "bottom-[90px]" : "top-[90px]"
@@ -542,7 +592,7 @@
                 >
                     {commandHint}
                 </div>
-            {:else if showSearchResults && (totalSearchResults > 0 || loading)}
+            {:else if !controlledSearch && showSearchResults && (totalSearchResults > 0 || loading)}
                 <div
                     class={`absolute left-1/2 -translate-x-1/2 w-[780px] max-w-[72vw] bg-[#181818]/90 backdrop-blur-xl rounded-[24px] p-4 z-100 ${
                         searchDockBottom ? "bottom-[90px]" : "top-[90px]"
@@ -709,74 +759,92 @@
     />
 
     <div class="flex flex-row items-start gap-[10px]">
-        <button
-            class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
-            aria-label="addons"
-            onclick={openPlayModal}
-        >
-            <Link size={40} strokeWidth={2} color="#C3C3C3" />
-        </button>
-
-        <button
-            class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
-            aria-label="addons"
-            onclick={openAddons}
-        >
-            <Blocks size={40} strokeWidth={2} color="#C3C3C3" />
-        </button>
-
-        <button
-            class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
-            aria-label="lists"
-            onclick={openLists}
-        >
-            <Library size={40} strokeWidth={2} color="#C3C3C3" />
-        </button>
-
-        <div class="flex flex-col items-center">
+        {#if showPlayButton}
             <button
-                class={`group relative bg-[#2C2C2C]/80 rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 ${$authInitializing
-                    ? "cursor-wait pointer-events-none p-0 overflow-hidden w-[80px] h-[80px]"
-                    : $currentUser
-                        ? "cursor-pointer p-0 overflow-hidden w-[80px] h-[80px]"
-                        : "cursor-pointer p-[20px]"}`
-                }
-                aria-label="settings"
-                onclick={openSettings}
+                class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
+                aria-label="play"
+                onclick={openPlayModal}
             >
-                {#if $authInitializing}
-                    <div class="w-full h-full bg-white/10 flex items-center justify-center">
-                        <LoadingSpinner size="30px" />
-                    </div>
-                {:else if $currentUser}
-                    <div class="w-full h-full bg-white/10 group-hover:bg-black/35 transition-colors duration-300 flex items-center justify-center">
-                        {#if $currentUser.avatar}
-                            <img
-                                src={$currentUser.avatar}
-                                alt="Profile"
-                                class="w-full h-full object-cover"
-                                loading="lazy"
-                            />
-                            <span class="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></span>
-                        {:else}
-                            <span class="text-white text-2xl font-semibold uppercase">
-                                {($currentUser.name || $currentUser.email || "?").slice(0, 1)}
-                            </span>
-                        {/if}
-                    </div>
-                {:else}
-                    <Settings size={40} strokeWidth={2} color="#C3C3C3" />
-                {/if}
+                <Link size={40} strokeWidth={2} color="#C3C3C3" />
             </button>
+        {/if}
 
-            {#if $updateStatus.available}
-                <div class="mt-2 h-[3px] w-[54px] rounded-full bg-white/25 overflow-hidden">
-                    <div
-                        class="h-full bg-white transition-[width] duration-300"
-                        style={`width: ${updateProgressPercent}%`}
-                    ></div>
-                </div>
-            {/if}
-        </div>
+        {#if showAddonsButton}
+            <button
+                class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
+                aria-label="addons"
+                onclick={openAddons}
+            >
+                <Blocks size={40} strokeWidth={2} color="#C3C3C3" />
+            </button>
+        {/if}
+
+        {#if showLiveTvButton && liveTvShortcutEnabled}
+            <button
+                class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
+                aria-label="live tv"
+                onclick={openLiveTv}
+            >
+                <Tv size={40} strokeWidth={2} color="#C3C3C3" />
+            </button>
+        {/if}
+
+        {#if showListsButton}
+            <button
+                class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
+                aria-label="lists"
+                onclick={openLists}
+            >
+                <Library size={40} strokeWidth={2} color="#C3C3C3" />
+            </button>
+        {/if}
+
+        {#if showSettingsButton}
+            <div class="flex flex-col items-center">
+                <button
+                    class={`group relative bg-[#2C2C2C]/80 rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 ${$authInitializing
+                        ? "cursor-wait pointer-events-none p-0 overflow-hidden w-[80px] h-[80px]"
+                        : $currentUser
+                            ? "cursor-pointer p-0 overflow-hidden w-[80px] h-[80px]"
+                            : "cursor-pointer p-[20px]"}`
+                    }
+                    aria-label="settings"
+                    onclick={openSettings}
+                >
+                    {#if $authInitializing}
+                        <div class="w-full h-full bg-white/10 flex items-center justify-center">
+                            <LoadingSpinner size="30px" />
+                        </div>
+                    {:else if $currentUser}
+                        <div class="w-full h-full bg-white/10 group-hover:bg-black/35 transition-colors duration-300 flex items-center justify-center">
+                            {#if $currentUser.avatar}
+                                <img
+                                    src={$currentUser.avatar}
+                                    alt="Profile"
+                                    class="w-full h-full object-cover"
+                                    loading="lazy"
+                                />
+                                <span class="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></span>
+                            {:else}
+                                <span class="text-white text-2xl font-semibold uppercase">
+                                    {($currentUser.name || $currentUser.email || "?").slice(0, 1)}
+                                </span>
+                            {/if}
+                        </div>
+                    {:else}
+                        <Settings size={40} strokeWidth={2} color="#C3C3C3" />
+                    {/if}
+                </button>
+
+                {#if $updateStatus.available}
+                    <div class="mt-2 h-[3px] w-[54px] rounded-full bg-white/25 overflow-hidden">
+                        <div
+                            class="h-full bg-white transition-[width] duration-300"
+                            style={`width: ${updateProgressPercent}%`}
+                        ></div>
+                    </div>
+                {/if}
+            </div>
+        {/if}
     </div>
 </div>
