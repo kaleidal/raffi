@@ -762,7 +762,7 @@
         {#if showPlayButton}
             <button
                 class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
-                aria-label="addons"
+                aria-label="play"
                 onclick={openPlayModal}
             >
                 <Link size={40} strokeWidth={2} color="#C3C3C3" />

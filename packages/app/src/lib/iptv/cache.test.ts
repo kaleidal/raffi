@@ -61,14 +61,32 @@ const result: IptvRefreshResult = {
         },
     ],
     guide: {
-        channels: new Map(),
-        programmesByChannel: new Map(),
-        displayNameToChannelId: new Map(),
+        channels: new Map([
+            ["abc.us", { id: "abc.us", displayNames: ["ABC"] }],
+        ]),
+        programmesByChannel: new Map([
+            [
+                "abc.us",
+                [
+                    {
+                        channelId: "abc.us",
+                        start: new Date("2026-06-22T14:00:00.000Z"),
+                        stop: new Date("2026-06-22T15:00:00.000Z"),
+                        startOffsetMinutes: -240,
+                        stopOffsetMinutes: -240,
+                        title: "Morning News",
+                        subTitle: "Top stories",
+                        description: "Daily update",
+                    },
+                ],
+            ],
+        ]),
+        displayNameToChannelId: new Map([["abc", "abc.us"]]),
     },
     stats: {
         channelCount: 1,
         groupCount: 1,
-        programmeCount: 42,
+        programmeCount: 1,
     },
 };
 
@@ -85,7 +103,7 @@ describe("IPTV refresh result cache", () => {
         });
     });
 
-    test("hydrates cached channels and groups for the same source without persisting guide maps", () => {
+    test("hydrates cached channels, groups, and guide for the same source", () => {
         persistIptvRefreshResult(source, result);
 
         const cached = getStoredIptvRefreshResult(source);
@@ -96,14 +114,20 @@ describe("IPTV refresh result cache", () => {
         expect(cached?.stats).toEqual({
             channelCount: 1,
             groupCount: 1,
-            programmeCount: 42,
+            programmeCount: 1,
         });
-        expect(cached?.guide).toBeUndefined();
+        expect(cached?.guide?.channels.get("abc.us")?.displayNames).toEqual(["ABC"]);
+        expect(cached?.guide?.displayNameToChannelId.get("abc")).toBe("abc.us");
+        const programme = cached?.guide?.programmesByChannel.get("abc.us")?.[0];
+        expect(programme?.title).toBe("Morning News");
+        expect(programme?.start).toEqual(new Date("2026-06-22T14:00:00.000Z"));
+        expect(programme?.stop).toEqual(new Date("2026-06-22T15:00:00.000Z"));
+        expect(programme?.subTitle).toBe("Top stories");
+        expect(programme?.description).toBe("Daily update");
 
         const rawStored = storage.getItem(cacheKey) ?? "";
         const stored = JSON.parse(rawStored) as Record<string, unknown>;
-        expect(Object.hasOwn(stored, "guide")).toBe(false);
-        expect(Object.hasOwn(stored, "programmesByChannel")).toBe(false);
+        expect(Object.hasOwn(stored, "guide")).toBe(true);
     });
 
     test("ignores cached results with mismatched child source ids", () => {

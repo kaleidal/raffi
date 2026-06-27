@@ -12,7 +12,10 @@
         getNowLinePercent,
     } from "../../lib/iptv/guideGrid";
     import { refreshIptvSource } from "../../lib/iptv/refresh";
-    import { iptvSources } from "../../lib/iptv/store";
+    import {
+        getStoredIptvSources,
+        iptvSources,
+    } from "../../lib/iptv/store";
     import type {
         IptvChannel,
         IptvRefreshResult,
@@ -29,12 +32,19 @@
         ALL_GROUPS,
         GUIDE_CHANNEL_PAGE_SIZE,
         GUIDE_INITIAL_CHANNEL_LIMIT,
+        LIVE_TV_AUTO_REFRESH_RETRY_MS,
+        LIVE_TV_REFRESH_CHECK_INTERVAL_MS,
         buildGuideTimeTicks,
         formatLoadedAt,
         getGuideViewport,
         getLiveSourceCacheKey,
         getLiveSourceSummary,
+        getStoredLiveTvGroup,
+        getStoredLiveTvSelection,
         getVisibleChannels,
+        setStoredLiveTvGroup,
+        setStoredLiveTvSourceId,
+        shouldAutoRefreshLiveTvSource,
     } from "./liveHelpers";
 
     const IPTV_EXAMPLE_M3U_URL = (
@@ -54,16 +64,40 @@
 
     const isDev = import.meta.env.DEV;
 
-    let selectedSourceId = "";
-    let loadedSourceId = "";
-    let loadedSourceCacheKey = "";
-    let refreshResult: IptvRefreshResult | null = null;
+    function getInitialLiveTvState() {
+        const storedSelection = getStoredLiveTvSelection();
+        const storedSources = getStoredIptvSources();
+        const source =
+            storedSources.find((candidate) => candidate.id === storedSelection.sourceId) ??
+            storedSources[0] ??
+            null;
+        const cacheKey = source ? getLiveSourceCacheKey(source) : "";
+        const cachedResult = source ? getStoredIptvRefreshResult(source) : null;
+
+        return {
+            selectedSourceId: source?.id ?? storedSelection.sourceId,
+            loadedSourceId: source ? source.id : "",
+            loadedSourceCacheKey: source ? cacheKey : "",
+            refreshResult: cachedResult,
+            selectedGroup: source ? getStoredLiveTvGroup(source.id) || ALL_GROUPS : ALL_GROUPS,
+        };
+    }
+
+    const initialLiveTvState = getInitialLiveTvState();
+
+    let selectedSourceId = initialLiveTvState.selectedSourceId;
+    let loadedSourceId = initialLiveTvState.loadedSourceId;
+    let loadedSourceCacheKey = initialLiveTvState.loadedSourceCacheKey;
+    let refreshResult: IptvRefreshResult | null = initialLiveTvState.refreshResult;
     let refreshing = false;
     let refreshError = "";
-    let selectedGroup = ALL_GROUPS;
+    let selectedGroup = initialLiveTvState.selectedGroup;
     let searchQuery = "";
     let guideNow = new Date();
     let guideTimer: ReturnType<typeof setInterval> | null = null;
+    let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
+    let lastAutoRefreshAttemptKey = "";
+    let lastAutoRefreshAttemptAt = 0;
     let showSourceManager = false;
     let sourceManagerResetRequest = 0;
     let showSettingsModal = false;
@@ -123,6 +157,9 @@
     ) {
         selectedSourceId = $iptvSources[0]?.id ?? "";
     }
+    $: if (selectedSource) {
+        setStoredLiveTvSourceId(selectedSource.id);
+    }
     $: if (
         selectedSource &&
         (loadedSourceId !== selectedSource.id ||
@@ -136,10 +173,14 @@
         refreshResult = null;
     }
     $: if (
+        currentResult &&
         selectedGroup !== ALL_GROUPS &&
         !availableGroups.some((group) => group.name === selectedGroup)
     ) {
         selectedGroup = ALL_GROUPS;
+    }
+    $: if (selectedSource && currentResult) {
+        setStoredLiveTvGroup(selectedSource.id, selectedGroup);
     }
 
     function showMoreGuideChannels() {
@@ -150,11 +191,16 @@
     }
 
     function hydrateStoredSource(source: IptvSource, cacheKey: string) {
-        refreshResult = getStoredIptvRefreshResult(source);
+        const cachedResult = getStoredIptvRefreshResult(source);
+        refreshResult = cachedResult;
         loadedSourceId = source.id;
         loadedSourceCacheKey = cacheKey;
-        selectedGroup = ALL_GROUPS;
+        selectedGroup = getStoredLiveTvGroup(source.id) || ALL_GROUPS;
+        searchQuery = "";
         refreshError = "";
+        queueMicrotask(() => {
+            maybeAutoRefreshSelectedSource();
+        });
     }
 
     function openSourceManager() {
@@ -174,7 +220,7 @@
         }
     }
 
-    async function refreshSelectedSource() {
+    async function refreshSelectedSource(refreshReason: "manual" | "auto" = "manual") {
         if (!selectedSource) {
             refreshError = "No IPTV source configured";
             return;
@@ -182,8 +228,11 @@
 
         const source = selectedSource;
         const sourceCacheKey = selectedSourceCacheKey;
+        const hadUsableResult = Boolean(currentResult);
         refreshing = true;
-        refreshError = "";
+        if (refreshReason === "manual" || !hadUsableResult) {
+            refreshError = "";
+        }
 
         try {
             const result = await refreshIptvSource(source);
@@ -191,21 +240,42 @@
             refreshResult = result;
             loadedSourceId = source.id;
             loadedSourceCacheKey = sourceCacheKey;
-            selectedGroup = ALL_GROUPS;
-            trackEvent("iptv_source_refreshed", {
+            lastAutoRefreshAttemptKey = "";
+            lastAutoRefreshAttemptAt = 0;
+            trackEvent(refreshReason === "auto" ? "iptv_source_auto_refreshed" : "iptv_source_refreshed", {
                 channel_count: result.stats.channelCount,
                 group_count: result.stats.groupCount,
                 programme_count: result.stats.programmeCount,
                 has_epg: Boolean(result.guide),
             });
         } catch (error) {
-            refreshError = error instanceof Error ? error.message : String(error);
-            trackEvent("iptv_source_refresh_failed", {
+            if (refreshReason === "manual" || !hadUsableResult) {
+                refreshError = error instanceof Error ? error.message : String(error);
+            }
+            trackEvent(refreshReason === "auto" ? "iptv_source_auto_refresh_failed" : "iptv_source_refresh_failed", {
                 error_name: error instanceof Error ? error.name : "unknown",
             });
         } finally {
             refreshing = false;
         }
+    }
+
+    function maybeAutoRefreshSelectedSource() {
+        if (!selectedSource || refreshing) return;
+        if (!shouldAutoRefreshLiveTvSource(selectedSource, currentResult)) return;
+
+        const now = Date.now();
+        const attemptKey = `${selectedSourceCacheKey}\n${currentResult?.loadedAt ?? "missing"}`;
+        if (
+            lastAutoRefreshAttemptKey === attemptKey &&
+            now - lastAutoRefreshAttemptAt < LIVE_TV_AUTO_REFRESH_RETRY_MS
+        ) {
+            return;
+        }
+
+        lastAutoRefreshAttemptKey = attemptKey;
+        lastAutoRefreshAttemptAt = now;
+        void refreshSelectedSource("auto");
     }
 
     function getChannelGuide(channel: IptvChannel) {
@@ -243,19 +313,27 @@
             guideNow = new Date();
         }, 60_000);
 
+        autoRefreshTimer = setInterval(() => {
+            maybeAutoRefreshSelectedSource();
+        }, LIVE_TV_REFRESH_CHECK_INTERVAL_MS);
+
         void tick().then(() => {
-            const source = selectedSource ?? $iptvSources[0] ?? null;
-            if (!source) return;
-            if (!selectedSourceId) {
-                selectedSourceId = source.id;
+            if (selectedSource) {
+                const sourceCacheKey = selectedSourceCacheKey;
+                if (loadedSourceId !== selectedSource.id || loadedSourceCacheKey !== sourceCacheKey) {
+                    hydrateStoredSource(selectedSource, sourceCacheKey);
+                }
             }
-            hydrateStoredSource(source, getLiveSourceCacheKey(source));
+            maybeAutoRefreshSelectedSource();
         });
     });
 
     onDestroy(() => {
         if (guideTimer) {
             clearInterval(guideTimer);
+        }
+        if (autoRefreshTimer) {
+            clearInterval(autoRefreshTimer);
         }
     });
 </script>
@@ -303,7 +381,7 @@
         </svelte:fragment>
     </SearchBar>
 
-    <main class="relative z-10 min-h-0 flex-1 px-5 pb-5 pt-2 lg:px-8 lg:pt-4">
+    <main class="relative z-10 min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-2 lg:px-8 lg:pt-4">
         <div class="mx-auto flex w-full max-w-[1760px] flex-col gap-4">
             {#if refreshError}
                 <div class="rounded-[20px] border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
@@ -311,7 +389,7 @@
                 </div>
             {/if}
 
-            {#if refreshing}
+            {#if refreshing && !currentResult}
                 <LiveEmptyState state="refreshing" />
             {:else if !selectedSource}
                 <LiveEmptyState state="no-source" onAddSource={openCreateSourceManager} />

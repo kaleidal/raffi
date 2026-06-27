@@ -5,11 +5,35 @@ import type {
     IptvRefreshStats,
     IptvSource,
     IptvSourceKind,
+    XmltvGuide,
+    XmltvProgramme,
 } from "./types";
+import { normalizeIptvText } from "./utils";
 import { normalizeXtreamServerUrl } from "./xtream";
 
 const IPTV_REFRESH_CACHE_KEY_PREFIX = "raffi_iptv_refresh_result_v1";
 const CACHE_VERSION = 1;
+
+type StoredXmltvChannel = {
+    id: string;
+    displayNames: string[];
+};
+
+type StoredXmltvProgramme = {
+    channelId: string;
+    start: string;
+    stop: string;
+    startOffsetMinutes?: number;
+    stopOffsetMinutes?: number;
+    title: string;
+    subTitle?: string;
+    description?: string;
+};
+
+type StoredXmltvGuide = {
+    channels: StoredXmltvChannel[];
+    programmesByChannel: Record<string, StoredXmltvProgramme[]>;
+};
 
 type StoredIptvRefreshResult = {
     version: typeof CACHE_VERSION;
@@ -21,6 +45,7 @@ type StoredIptvRefreshResult = {
     credentialFingerprint?: string;
     channels: IptvChannel[];
     groups: IptvGroup[];
+    guide?: StoredXmltvGuide;
     loadedAt: string;
     stats: IptvRefreshStats;
 };
@@ -177,7 +202,120 @@ function sanitizeStats(value: unknown): IptvRefreshStats | null {
     };
 }
 
-function sanitizeStoredResult(value: unknown): StoredIptvRefreshResult | null {
+function optionalNumber(value: unknown): number | undefined {
+    return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function sanitizeStoredProgramme(value: unknown): XmltvProgramme | null {
+    if (!isRecord(value)) return null;
+    if (
+        typeof value.channelId !== "string" ||
+        typeof value.start !== "string" ||
+        typeof value.stop !== "string" ||
+        typeof value.title !== "string" ||
+        !isValidDateString(value.start) ||
+        !isValidDateString(value.stop)
+    ) {
+        return null;
+    }
+
+    return {
+        channelId: value.channelId,
+        start: new Date(value.start),
+        stop: new Date(value.stop),
+        startOffsetMinutes: optionalNumber(value.startOffsetMinutes),
+        stopOffsetMinutes: optionalNumber(value.stopOffsetMinutes),
+        title: value.title,
+        subTitle: optionalString(value.subTitle),
+        description: optionalString(value.description),
+    };
+}
+
+function sanitizeStoredProgrammes(value: unknown): XmltvProgramme[] | null {
+    if (!Array.isArray(value)) return null;
+
+    const programmes: XmltvProgramme[] = [];
+    for (const rawProgramme of value) {
+        const programme = sanitizeStoredProgramme(rawProgramme);
+        if (!programme) return null;
+        programmes.push(programme);
+    }
+
+    return programmes.sort((a, b) => a.start.getTime() - b.start.getTime());
+}
+
+function sanitizeStoredGuide(value: unknown): XmltvGuide | null | undefined {
+    if (value === undefined) return undefined;
+    if (!isRecord(value) || !Array.isArray(value.channels) || !isRecord(value.programmesByChannel)) {
+        return null;
+    }
+
+    const guide: XmltvGuide = {
+        channels: new Map(),
+        programmesByChannel: new Map(),
+        displayNameToChannelId: new Map(),
+    };
+
+    for (const channel of value.channels) {
+        if (!isRecord(channel) || typeof channel.id !== "string" || !Array.isArray(channel.displayNames)) {
+            return null;
+        }
+        const displayNames = channel.displayNames.filter(
+            (displayName): displayName is string => typeof displayName === "string" && Boolean(displayName.trim()),
+        );
+        guide.channels.set(channel.id, { id: channel.id, displayNames });
+        for (const displayName of displayNames) {
+            const key = normalizeIptvText(displayName);
+            if (key && !guide.displayNameToChannelId.has(key)) {
+                guide.displayNameToChannelId.set(key, channel.id);
+            }
+        }
+    }
+
+    for (const [channelId, rawProgrammes] of Object.entries(value.programmesByChannel)) {
+        const programmes = sanitizeStoredProgrammes(rawProgrammes);
+        if (!programmes) return null;
+        guide.programmesByChannel.set(channelId, programmes);
+    }
+
+    return guide;
+}
+
+function serializeProgramme(programme: XmltvProgramme): StoredXmltvProgramme {
+    return {
+        channelId: programme.channelId,
+        start: programme.start.toISOString(),
+        stop: programme.stop.toISOString(),
+        startOffsetMinutes: programme.startOffsetMinutes,
+        stopOffsetMinutes: programme.stopOffsetMinutes,
+        title: programme.title,
+        subTitle: programme.subTitle,
+        description: programme.description,
+    };
+}
+
+function serializeGuide(guide: XmltvGuide | undefined): StoredXmltvGuide | undefined {
+    if (!guide) return undefined;
+
+    const programmesByChannel: Record<string, StoredXmltvProgramme[]> = {};
+    for (const [channelId, programmes] of guide.programmesByChannel.entries()) {
+        programmesByChannel[channelId] = programmes.map(serializeProgramme);
+    }
+
+    return {
+        channels: Array.from(guide.channels.values()).map((channel) => ({
+            id: channel.id,
+            displayNames: channel.displayNames,
+        })),
+        programmesByChannel,
+    };
+}
+
+type HydratedStoredIptvRefreshResult = Omit<StoredIptvRefreshResult, "guide"> & {
+    guide?: XmltvGuide;
+};
+
+function sanitizeStoredResult(value: unknown): HydratedStoredIptvRefreshResult | null {
     if (!isRecord(value)) return null;
     if (
         value.version !== CACHE_VERSION ||
@@ -210,7 +348,13 @@ function sanitizeStoredResult(value: unknown): StoredIptvRefreshResult | null {
     const channels = value.channels.map(sanitizeChannel);
     const groups = value.groups.map(sanitizeGroup);
     const stats = sanitizeStats(value.stats);
-    if (!stats || channels.some((channel) => !channel) || groups.some((group) => !group)) {
+    const guide = sanitizeStoredGuide(value.guide);
+    if (
+        !stats ||
+        guide === null ||
+        channels.some((channel) => !channel) ||
+        groups.some((group) => !group)
+    ) {
         return null;
     }
 
@@ -239,12 +383,13 @@ function sanitizeStoredResult(value: unknown): StoredIptvRefreshResult | null {
                 : undefined,
         channels: sanitizedChannels,
         groups: sanitizedGroups,
+        guide,
         loadedAt: value.loadedAt,
         stats,
     };
 }
 
-function storedResultMatchesSource(source: IptvSource, stored: StoredIptvRefreshResult): boolean {
+function storedResultMatchesSource(source: IptvSource, stored: HydratedStoredIptvRefreshResult): boolean {
     if (stored.sourceId !== source.id || stored.sourceKind !== source.kind) return false;
 
     const metadata = getStoredSourceMetadata(source);
@@ -277,6 +422,7 @@ export function persistIptvRefreshResult(source: IptvSource, result: IptvRefresh
         ...getStoredSourceMetadata(source),
         channels: result.channels,
         groups: result.groups,
+        guide: serializeGuide(result.guide),
         loadedAt: result.loadedAt,
         stats: result.stats,
     };
@@ -284,7 +430,13 @@ export function persistIptvRefreshResult(source: IptvSource, result: IptvRefresh
     try {
         storage.setItem(cacheKeyForSourceId(source.id), JSON.stringify(stored));
     } catch {
-        // Best-effort cache writes should not block Live TV refreshes.
+        try {
+            const fallbackStored = { ...stored };
+            delete fallbackStored.guide;
+            storage.setItem(cacheKeyForSourceId(source.id), JSON.stringify(fallbackStored));
+        } catch {
+            // Best-effort cache writes should not block Live TV refreshes.
+        }
     }
 }
 
@@ -313,6 +465,7 @@ export function getStoredIptvRefreshResult(source: IptvSource): IptvRefreshResul
         return {
             channels: stored.channels,
             groups: stored.groups,
+            guide: stored.guide,
             loadedAt: stored.loadedAt,
             stats: stored.stats,
         };

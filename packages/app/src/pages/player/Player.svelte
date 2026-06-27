@@ -603,6 +603,7 @@
         getMetaData: () => metaData,
         getSeason: () => season,
         getEpisode: () => episode,
+        isLiveMode: () => liveMode,
         getVideoElem: () => videoElem,
         getHls: () => hls,
         setHls: (value) => {

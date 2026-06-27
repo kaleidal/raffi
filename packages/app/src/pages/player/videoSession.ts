@@ -75,6 +75,10 @@ const getMediaPathname = (src: string) => {
   }
 };
 
+export function isHlsManifestUrl(src: string): boolean {
+  return getMediaPathname(src).split(/[?#]/)[0].endsWith(".m3u8");
+}
+
 export function getDirectMediaSupport(src: string, videoElem?: HTMLVideoElement) {
   const elem = videoElem ?? document.createElement("video");
   const pathname = getMediaPathname(src);
@@ -121,8 +125,8 @@ export function shouldBypassServerForHttpStream(
   if (!src) return false;
   if (!/^https?:\/\//i.test(src)) return false;
 
-  // If the addon already provides an HLS manifest, let the existing pipeline handle it.
-  if (/\.m3u8(\?|$)/i.test(src)) return false;
+  // For movies and shows, keep HLS manifests on the existing local pipeline.
+  if (isHlsManifestUrl(src)) return false;
 
   if (isWeb) return true;
 
@@ -192,6 +196,7 @@ export async function loadVideoSession(
   options?: {
     reuseSession?: { sessionId: string; sessionData: any };
     directHttp?: boolean;
+    directHls?: boolean;
   },
 ): Promise<{ sessionId: string; sessionData: any }> {
   const {
@@ -258,6 +263,7 @@ export async function loadVideoSession(
     if (options?.directHttp) {
       const sessionData = {
         isDirectHttp: true,
+        isDirectHls: Boolean(options.directHls),
         sourceUrl: src,
         durationSeconds: 0,
       };
@@ -404,6 +410,176 @@ export async function loadVideoSession(
     setLoading(false);
     throw err;
   }
+}
+
+const DIRECT_HLS_START_TIMEOUT_MS = 12_000;
+
+function getDirectHlsErrorDetails(data: any): string {
+  const details = typeof data?.details === "string" ? data.details : "";
+  const error = data?.error instanceof Error ? data.error.message : "";
+  return details || error || "The HLS manifest could not be loaded directly.";
+}
+
+export function initDirectHLS(
+  videoElem: HTMLVideoElement,
+  src: string,
+  autoPlay: boolean,
+  setStates: {
+    setLoading: (loading: boolean) => void;
+    setShowCanvas: (show: boolean) => void;
+    setShowError: (show: boolean) => void;
+    setErrorMessage: (msg: string) => void;
+    setErrorDetails: (details: string) => void;
+  },
+): Hls | null {
+  const {
+    setLoading,
+    setShowCanvas,
+    setShowError,
+    setErrorMessage,
+    setErrorDetails,
+  } = setStates;
+
+  let hls: Hls | null = null;
+  let disposed = false;
+  let startTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  const clearStartTimeout = () => {
+    if (!startTimeout) return;
+    clearTimeout(startTimeout);
+    startTimeout = null;
+  };
+
+  const cleanup = () => {
+    clearStartTimeout();
+    videoElem.removeEventListener("loadedmetadata", handleNativeReady);
+    videoElem.removeEventListener("canplay", handleNativeReady);
+    videoElem.removeEventListener("error", handleVideoError);
+  };
+
+  const dispose = () => {
+    disposed = true;
+    cleanup();
+  };
+
+  const fail = (message: string, details: string) => {
+    if (disposed) return;
+    cleanup();
+    if (hls) {
+      const hlsInstance = hls;
+      hls = null;
+      hlsInstance.destroy();
+    }
+    try {
+      videoElem.pause();
+    } catch {
+      // ignore
+    }
+    setErrorMessage(message);
+    setErrorDetails(details);
+    setShowError(true);
+    setLoading(false);
+  };
+
+  const finishLoad = () => {
+    if (disposed) return;
+    cleanup();
+    setLoading(false);
+    setShowCanvas(false);
+
+    if (autoPlay) {
+      videoElem.play().catch((err) => {
+        console.warn("autoplay failed:", err);
+      });
+    }
+  };
+
+  function handleNativeReady() {
+    finishLoad();
+  }
+
+  function handleVideoError() {
+    const error = videoElem.error;
+    fail(
+      "Live stream failed",
+      error?.message || `Media error ${error?.code ?? "unknown"}.`,
+    );
+  }
+
+  setLoading(true);
+  setShowCanvas(false);
+  setShowError(false);
+  setErrorMessage("");
+  setErrorDetails("");
+
+  startTimeout = setTimeout(() => {
+    fail(
+      "Live stream failed",
+      "The HLS manifest did not load quickly. Please try another channel.",
+    );
+  }, DIRECT_HLS_START_TIMEOUT_MS);
+
+  videoElem.addEventListener("error", handleVideoError);
+
+  if (Hls.isSupported()) {
+    hls = new Hls({
+      lowLatencyMode: true,
+      enableWorker: true,
+      manifestLoadingTimeOut: 8000,
+      manifestLoadingMaxRetry: 1,
+      manifestLoadingMaxRetryTimeout: 8000,
+      levelLoadingTimeOut: 8000,
+      levelLoadingMaxRetry: 1,
+      levelLoadingMaxRetryTimeout: 8000,
+      fragLoadPolicy: {
+        default: {
+          maxTimeToFirstByteMs: 8000,
+          maxLoadTimeMs: 20000,
+          timeoutRetry: {
+            maxNumRetry: 1,
+            retryDelayMs: 500,
+            maxRetryDelayMs: 1000,
+          },
+          errorRetry: {
+            maxNumRetry: 1,
+            retryDelayMs: 500,
+            maxRetryDelayMs: 1000,
+          },
+        },
+      },
+    });
+
+    const originalDestroy = hls.destroy.bind(hls);
+    hls.destroy = () => {
+      dispose();
+      originalDestroy();
+    };
+
+    hls.on(Hls.Events.MANIFEST_PARSED, finishLoad);
+    hls.on(Hls.Events.ERROR, (_, data) => {
+      console.error("DIRECT HLS ERROR", data);
+      if (!data.fatal) return;
+      fail("Live stream failed", getDirectHlsErrorDetails(data));
+    });
+
+    hls.loadSource(src);
+    hls.attachMedia(videoElem);
+    return hls;
+  }
+
+  if (videoElem.canPlayType("application/vnd.apple.mpegurl")) {
+    videoElem.addEventListener("loadedmetadata", handleNativeReady);
+    videoElem.addEventListener("canplay", handleNativeReady);
+    videoElem.src = src;
+    videoElem.load();
+    return null;
+  }
+
+  fail(
+    "Live stream failed",
+    "This browser does not support direct HLS playback.",
+  );
+  return null;
 }
 
 export function initHLS(

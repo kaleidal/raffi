@@ -1,6 +1,6 @@
 <script lang="ts">
     import { tick } from "svelte";
-    import { Pencil, Plus, Trash2, X } from "@lucide/svelte";
+    import { Pencil, Trash2, X } from "@lucide/svelte";
     import { trackEvent } from "../../../lib/analytics";
     import {
         addIptvSource,
@@ -154,7 +154,7 @@
 
 {#if show}
     <div
-        class="fixed inset-0 z-[220] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+        class="fixed inset-0 z-[220] flex items-center justify-center bg-[#101010]/56 p-5 backdrop-blur-xl md:p-8"
         onclick={(event) => {
             if (event.currentTarget === event.target) show = false;
         }}
@@ -165,7 +165,7 @@
         tabindex="0"
     >
         <section
-            class="max-h-[92vh] w-full max-w-[1040px] overflow-y-auto rounded-[28px] border border-white/10 bg-[#2b2b2b]/95 p-5 shadow-[0_32px_100px_rgba(0,0,0,0.48)] backdrop-blur-xl"
+            class="max-h-[92vh] w-full max-w-[1040px] overflow-y-auto rounded-4xl bg-[#2b2b2b]/56 p-6 shadow-[0_40px_160px_rgba(0,0,0,0.45)] backdrop-blur-[40px] md:p-8"
             role="dialog"
             aria-modal="true"
             tabindex="-1"
@@ -181,11 +181,11 @@
                     </p>
                 </div>
                 <button
-                    class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/8 text-white/72 transition-colors hover:bg-white/14 hover:text-white"
+                    class="shrink-0 cursor-pointer text-white/50 transition-colors hover:text-white"
                     aria-label="Close source manager"
                     onclick={() => (show = false)}
                 >
-                    <X size={20} strokeWidth={2.2} />
+                    <X size={24} strokeWidth={2} />
                 </button>
             </div>
 
@@ -195,13 +195,6 @@
                         <h3 class="font-poppins text-lg font-semibold">
                             Sources
                         </h3>
-                        <button
-                            class="flex h-9 w-9 items-center justify-center rounded-full bg-white/8 text-white/70 transition-colors hover:bg-white/14 hover:text-white"
-                            aria-label="Add source"
-                            onclick={resetForm}
-                        >
-                            <Plus size={18} strokeWidth={2.4} />
-                        </button>
                     </div>
 
                     {#if $iptvSources.length > 0}
