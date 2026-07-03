@@ -9,7 +9,7 @@
 	import {
 		ADDONS_CHANGED_EVENT,
 		HOME_REFRESH_EVENT,
-		buildConfigureUrl,
+		openConfigureUrl,
 		formatResourceName,
 		getResourceNames,
 		normalizeTransportUrl,
@@ -111,10 +111,8 @@
 	}
 
 	function handleConfigure(url: string | undefined) {
-		const target = buildConfigureUrl(url);
-		if (!target) return;
+		if (!openConfigureUrl(url)) return;
 		trackEvent("addon_configure_opened");
-		window.open(target, "_blank", "noopener,noreferrer");
 	}
 
 	async function handleRemoveAddon(url: string) {

@@ -117,7 +117,10 @@ function createMainWindow({
   };
 
   const handleExternalNavigation = (url, context, referrerUrl) => {
-    const isAppOwnedWindow = context === "window" && isAppUrl(referrerUrl) && isWebUrl(url);
+    const isAppOwnedWindow =
+      context === "window" &&
+      isWebUrl(url) &&
+      (!referrerUrl || isAppUrl(referrerUrl));
     if (isAppOwnedWindow || isAllowedExternalUrl?.(url)) {
       shell?.openExternal(url).catch((error) => {
         logToFile(`Failed opening external ${context}`, error);

@@ -13,7 +13,7 @@
 		isUuid,
 		normalizeTransportUrl,
 		supportsResource,
-		buildConfigureUrl,
+		openConfigureUrl,
 	} from "./addonsShared";
 
 	type ResourceFilter = "all" | "stream" | "subtitles" | "catalog" | "meta";
@@ -153,10 +153,8 @@
 	}
 
 	function handleConfigure(url: string | undefined) {
-		const target = buildConfigureUrl(url);
-		if (!target) return;
+		if (!openConfigureUrl(url)) return;
 		trackEvent("addon_configure_opened");
-		window.open(target, "_blank", "noopener,noreferrer");
 	}
 
 	function handleCommunitySearchInput(event: Event) {

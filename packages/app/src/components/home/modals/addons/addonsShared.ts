@@ -70,3 +70,23 @@ export const buildConfigureUrl = (url: string | undefined) => {
 	if (trimmed.endsWith("/configure")) return trimmed;
 	return `${trimmed.replace(/\/$/, "")}/configure`;
 };
+
+export const openConfigureUrl = (url: string | undefined) => {
+	const target = buildConfigureUrl(url);
+	if (!target) return null;
+
+	const electronApi = (window as any).electronAPI as
+		| { openExternal?: (url: string) => Promise<void> }
+		| undefined;
+
+	if (electronApi?.openExternal) {
+		void electronApi.openExternal(target).catch((error) => {
+			console.error("Failed to open addon configure page", error);
+			window.open(target, "_blank", "noopener,noreferrer");
+		});
+		return target;
+	}
+
+	window.open(target, "_blank", "noopener,noreferrer");
+	return target;
+};
