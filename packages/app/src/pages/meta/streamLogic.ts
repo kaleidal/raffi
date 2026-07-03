@@ -20,6 +20,10 @@ import {
     markStreamFailed,
 } from "./streamFailures";
 
+let streamFetchGeneration = 0;
+
+const isStaleStreamFetch = (requestId: number) => requestId !== streamFetchGeneration;
+
 const getStreamAnalyticsProps = (stream: Stream) => {
     const isTorrent = Boolean(
         stream.infoHash || (stream.url && stream.url.startsWith("magnet:")),
@@ -74,6 +78,7 @@ export const fetchStreams = async (
     setActive: boolean = true,
     imdbID: string,
 ) => {
+    const requestId = ++streamFetchGeneration;
     loadingStreams.set(true);
     streams.set([]);
 
@@ -87,6 +92,8 @@ export const fetchStreams = async (
 
         const type = data.meta.type;
         const settings = await getStreamingSourceSettings();
+        if (isStaleStreamFetch(requestId)) return [];
+
         if (settings.mode === "direct") {
             const localStreams = getLocalStreamsFor(imdbID, type as any, episode);
             const currentProgressMap = get(progressMap);
@@ -97,6 +104,7 @@ export const fetchStreams = async (
                 progressSeconds: getStartTimeForCurrentSelection(currentProgressMap, data, episode),
             });
             const combined = [...(localStreams as any), ...(directStream ? [directStream] : [])];
+            if (isStaleStreamFetch(requestId)) return [];
             streams.set(combined);
             trackEvent("stream_list_loaded", {
                 content_type: type,
@@ -129,6 +137,7 @@ export const fetchStreams = async (
             addonUrl + "/stream/" + type + "/" + streamId + ".json",
         );
         const result = await response.json();
+        if (isStaleStreamFetch(requestId)) return [];
 
         const remoteStreams: Stream[] = Array.isArray(result.streams)
             ? result.streams
@@ -145,6 +154,7 @@ export const fetchStreams = async (
         return combined;
 
     } catch (e) {
+        if (isStaleStreamFetch(requestId)) return [];
         console.error("Failed to fetch streams", e);
         const fallbackType = get(metaData)?.meta?.type || "movie";
         trackEvent("stream_list_failed", {
@@ -161,7 +171,9 @@ export const fetchStreams = async (
             // ignore
         }
     } finally {
-        loadingStreams.set(false);
+        if (!isStaleStreamFetch(requestId)) {
+            loadingStreams.set(false);
+        }
     }
     return [];
 };
@@ -346,6 +358,8 @@ export const closePlayer = () => {
 };
 
 export const closeStreamsPopup = () => {
+    streamFetchGeneration += 1;
+    loadingStreams.set(false);
     streamsPopupVisible.set(false);
     streams.set([]);
 };
