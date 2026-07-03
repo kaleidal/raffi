@@ -85,41 +85,8 @@ func (c *Controller) EnsureSession(ctx context.Context, id, source string, start
 		}
 		duration := meta.Format.DurationSeconds
 
-		var streams []session.StreamInfo
-		audioIndex := 0
-		audioCount := 0
-		foundEng := false
-
-		for _, st := range meta.Streams {
-			if st.CodecType == "audio" {
-				streams = append(streams, session.StreamInfo{
-					Index:    audioCount, // This is the index relative to audio streams for ffmpeg map
-					Type:     "audio",
-					Codec:    st.CodecName,
-					Language: st.Tags.Language,
-					Title:    st.Tags.Title,
-				})
-
-				if st.Tags.Language == "eng" && !foundEng {
-					audioIndex = audioCount
-					foundEng = true
-				}
-				audioCount++
-			}
-		}
-
-		// Find codec for selected audio index
-		audioCodec := "aac" // Default
-		currentAudioIdx := 0
-		for _, st := range meta.Streams {
-			if st.CodecType == "audio" {
-				if currentAudioIdx == audioIndex {
-					audioCodec = st.CodecName
-					break
-				}
-				currentAudioIdx++
-			}
-		}
+		streams, audioIndex := StreamsFromMetadata(meta)
+		audioCodec := AudioCodecForIndex(meta, audioIndex)
 
 		sess = &Session{
 			ID:               id,

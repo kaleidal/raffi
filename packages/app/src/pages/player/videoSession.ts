@@ -158,6 +158,65 @@ function applyAudioTrackState(
   return true;
 }
 
+function buildEmbeddedSubtitleTracks(
+  sessionId: string,
+  sessionData: any,
+): Track[] {
+  const streams = Array.isArray(sessionData?.availableStreams)
+    ? sessionData.availableStreams
+    : [];
+
+  return streams
+    .filter((stream: any) => stream?.type === "subtitle")
+    .map((stream: any) => {
+      const lang = stream.language || "und";
+      const title = typeof stream.title === "string" ? stream.title.trim() : "";
+      const langLabel = title || lang;
+      return {
+        id: stream.index,
+        label: `${langLabel} (Embedded)`,
+        lang,
+        url: `${serverUrl}/sessions/${sessionId}/subtitles/${stream.index}`,
+        selected: false,
+        isEmbedded: true,
+        format: "vtt" as const,
+        group: "Embedded",
+      };
+    });
+}
+
+function mergeSubtitleTracks(
+  embeddedTracks: Track[],
+  existingTracks: Track[],
+): Track[] {
+  const offTrack = existingTracks.find((track) => track.id === "off") || {
+    id: "off",
+    label: "Off",
+    selected: true,
+    group: "None",
+  };
+  const otherTracks = existingTracks.filter(
+    (track) => track.id !== "off" && !track.isEmbedded,
+  );
+
+  return [offTrack, ...embeddedTracks, ...otherTracks];
+}
+
+function applyEmbeddedSubtitleState(
+  sessionId: string,
+  sessionData: any,
+  setSubtitleTracks: (tracks: Track[]) => void,
+  currentTracks: Track[],
+): boolean {
+  const embeddedTracks = buildEmbeddedSubtitleTracks(sessionId, sessionData);
+  if (embeddedTracks.length === 0) {
+    return false;
+  }
+
+  setSubtitleTracks(mergeSubtitleTracks(embeddedTracks, currentTracks));
+  return true;
+}
+
 export async function loadVideoSession(
   src: string,
   fileIdx: number | null,
@@ -346,7 +405,18 @@ export async function loadVideoSession(
     const subtitleTracks = [
       { id: "off", label: "Off", selected: true, group: "None" },
     ];
-    setSubtitleTracks(subtitleTracks);
+    let currentSubtitleTracks = subtitleTracks;
+    const updateSubtitleTracks = (tracks: Track[]) => {
+      currentSubtitleTracks = tracks;
+      setSubtitleTracks(tracks);
+    };
+    updateSubtitleTracks(subtitleTracks);
+    applyEmbeddedSubtitleState(
+      sessionId,
+      sessionData,
+      updateSubtitleTracks,
+      currentSubtitleTracks,
+    );
 
     let { hasDuration, hasAudioTracks } = applySessionMetadata(sessionData);
 
@@ -365,6 +435,12 @@ export async function loadVideoSession(
             const nextState = applySessionMetadata(nextData);
             hasDuration = hasDuration || nextState.hasDuration;
             hasAudioTracks = hasAudioTracks || nextState.hasAudioTracks;
+            applyEmbeddedSubtitleState(
+              sessionId,
+              nextData,
+              updateSubtitleTracks,
+              currentSubtitleTracks,
+            );
 
             if (hasDuration && hasAudioTracks) {
               break;

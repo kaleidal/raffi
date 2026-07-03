@@ -22,6 +22,7 @@ export interface Track {
     url?: string;
     isAddon?: boolean;
     isLocal?: boolean;
+    isEmbedded?: boolean;
     format?: "vtt" | "srt";
 }
 

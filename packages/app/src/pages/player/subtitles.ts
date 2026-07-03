@@ -245,11 +245,12 @@ export async function handleSubtitleSelect(
             } else {
                 const startTime = currentTime || playbackOffset || 0;
                 const fetchUrl = `${track.url}?startTime=${startTime}`;
-                console.log("Fetching subtitles from:", fetchUrl);
+                console.log("Fetching embedded subtitles from:", fetchUrl);
 
                 response = await fetch(fetchUrl, {
                     signal: currentSubtitleAbort.signal,
                 });
+                isSrt = false;
             }
 
             if (!response.body) throw new Error("No response body");

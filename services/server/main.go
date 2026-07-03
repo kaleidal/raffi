@@ -205,6 +205,74 @@ func (s *Server) handleAudioTrack(w http.ResponseWriter, r *http.Request, id str
 	w.WriteHeader(http.StatusOK)
 }
 
+func (s *Server) handleSubtitleTrack(w http.ResponseWriter, r *http.Request, id, indexStr string) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	subtitleIndex, err := strconv.Atoi(indexStr)
+	if err != nil || subtitleIndex < 0 {
+		http.Error(w, "invalid subtitle index", http.StatusBadRequest)
+		return
+	}
+
+	sess, err := s.sessions.Get(id)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	if sess.Kind != session.SessionKindHTTP {
+		http.Error(w, "unsupported session type", http.StatusBadRequest)
+		return
+	}
+
+	found := false
+	for _, stream := range sess.AvailableStreams {
+		if stream.Type == "subtitle" && stream.Index == subtitleIndex {
+			found = true
+			break
+		}
+	}
+	if !found && s.hlsController != nil {
+		ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
+		meta, probeErr := s.hlsController.ProbeMetadata(ctx, sess.ID, sess.Source)
+		cancel()
+		if probeErr == nil && meta != nil {
+			streams, _ := hls.StreamsFromMetadata(meta)
+			for _, stream := range streams {
+				if stream.Type == "subtitle" && stream.Index == subtitleIndex {
+					found = true
+					break
+				}
+			}
+			if len(streams) > 0 {
+				sess.AvailableStreams = streams
+			}
+		}
+	}
+	if !found {
+		http.Error(w, "subtitle track not found", http.StatusNotFound)
+		return
+	}
+
+	startTime := 0.0
+	if raw := r.URL.Query().Get("startTime"); raw != "" {
+		if val, parseErr := strconv.ParseFloat(raw, 64); parseErr == nil && val >= 0 {
+			startTime = val
+		}
+	}
+
+	w.Header().Set("Content-Type", "text/vtt; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+	w.WriteHeader(http.StatusOK)
+
+	if err := hls.StreamSubtitle(r.Context(), s.ffmpegPath, sess.Source, subtitleIndex, startTime, w); err != nil {
+		log.Printf("subtitle stream failed for session %s track %d: %v", id, subtitleIndex, err)
+	}
+}
+
 // POST /sessions  -> create session
 // OPTIONS /sessions -> preflight
 // Anything else -> 405
@@ -310,6 +378,12 @@ func (s *Server) handleSessionByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// /sessions/{id}/subtitles/{index}
+	if len(parts) == 3 && parts[1] == "subtitles" {
+		s.handleSubtitleTrack(w, r, id, parts[2])
+		return
+	}
+
 	http.NotFound(w, r)
 }
 
@@ -390,27 +464,9 @@ func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request, id str
 					}
 				}
 
-				sess.AvailableStreams = nil
-				audioCount := 0
-				preferredIndex := 0
-				foundEng := false
-				for _, st := range meta.Streams {
-					if st.CodecType == "audio" {
-						sess.AvailableStreams = append(sess.AvailableStreams, session.StreamInfo{
-							Index:    audioCount,
-							Type:     "audio",
-							Codec:    st.CodecName,
-							Language: st.Tags.Language,
-							Title:    st.Tags.Title,
-						})
-						if !foundEng && strings.EqualFold(st.Tags.Language, "eng") {
-							preferredIndex = audioCount
-							foundEng = true
-						}
-						audioCount++
-					}
-				}
-				if len(sess.AvailableStreams) > 0 {
+				streams, preferredIndex := hls.StreamsFromMetadata(meta)
+				sess.AvailableStreams = streams
+				if len(streams) > 0 {
 					sess.AudioIndex = preferredIndex
 				}
 			} else if probeErr != nil {
