@@ -1,4 +1,5 @@
 import type { StremioLibraryEntry } from "./stremioImport";
+import { normalizeStremioAddonDescriptors } from "./stremioAddons";
 
 const DEFAULT_ENDPOINT = "https://api.strem.io";
 
@@ -124,6 +125,31 @@ const normalizeLibraryResponse = (result: unknown): StremioLibraryEntry[] => {
     return [];
 };
 
+export const fetchStremioAddons = async (
+    authKey: string,
+    endpoint = DEFAULT_ENDPOINT,
+): Promise<unknown> => {
+    return await request<unknown>(endpoint, "addonCollectionGet", {
+        update: true,
+        addFromURL: [],
+    }, authKey);
+};
+
+export const fetchStremioAccountData = async (
+    authKey: string,
+    endpoint = DEFAULT_ENDPOINT,
+) => {
+    const [library, addonCollection] = await Promise.all([
+        fetchStremioLibrary(authKey, endpoint),
+        fetchStremioAddons(authKey, endpoint),
+    ]);
+
+    return {
+        library,
+        addons: normalizeStremioAddonDescriptors(addonCollection),
+    };
+};
+
 export const fetchStremioLibrary = async (
     authKey: string,
     endpoint = DEFAULT_ENDPOINT,
@@ -141,12 +167,13 @@ export const fetchStremioLibraryWithLogin = async (
     email: string,
     password: string,
     endpoint = DEFAULT_ENDPOINT,
-): Promise<{ authKey: string; email: string; library: StremioLibraryEntry[] }> => {
+): Promise<{ authKey: string; email: string; library: StremioLibraryEntry[]; addons: ReturnType<typeof normalizeStremioAddonDescriptors> }> => {
     const login = await loginWithEmail(email, password, endpoint);
-    const library = await fetchStremioLibrary(login.authKey, endpoint);
+    const { library, addons } = await fetchStremioAccountData(login.authKey, endpoint);
     return {
         authKey: login.authKey,
         email: typeof login.user?.email === "string" ? login.user.email : email.trim(),
         library,
+        addons,
     };
 };

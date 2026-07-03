@@ -157,7 +157,7 @@
 		stremioMessage = "";
 		try {
 			const summary = await syncStremioLibrary();
-			stremioMessage = `Synced ${summary.total} item${summary.total === 1 ? "" : "s"} (${summary.added} new, ${summary.merged} updated).`;
+			stremioMessage = `Synced ${summary.total} item${summary.total === 1 ? "" : "s"} (${summary.added} new, ${summary.merged} updated)${summary.addonsAdded > 0 ? ` and ${summary.addonsAdded} addon${summary.addonsAdded === 1 ? "" : "s"}` : ""}.`;
 			trackEvent("stremio_sync_success", {
 				total: summary.total,
 				added: summary.added,
@@ -259,12 +259,6 @@
 			</button>
 			<button
 				class="bg-white/10 text-white px-4 py-2 rounded-2xl font-semibold hover:bg-white/20 transition-colors cursor-pointer"
-				on:click={onImportStremio}
-			>
-				Import from Stremio
-			</button>
-			<button
-				class="bg-white/10 text-white px-4 py-2 rounded-2xl font-semibold hover:bg-white/20 transition-colors cursor-pointer"
 				on:click={onRequestSignOut}
 			>
 				Sign out
@@ -332,7 +326,7 @@
 								· since {formatTimestamp(Date.parse(stremioStatus.connectedAt))}
 							{/if}
 						{:else}
-							Import your library once, or stay connected to sync watch progress again later.
+							Import your library and addons once, or stay connected to sync watch progress again later.
 						{/if}
 					</p>
 				</div>

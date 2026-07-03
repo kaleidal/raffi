@@ -25,15 +25,23 @@ import {
     mergeStremioImportIntoLibrary,
     parseStremioExport,
     parseStremioLibrary,
+    type StremioImportPreviewItem,
     type StremioImportSummary,
     type StremioLibraryEntry,
 } from "../import/stremioImport";
 import {
-    fetchStremioLibrary,
+    fetchStremioAccountData,
     fetchStremioLibraryWithLogin,
     logoutStremio,
     StremioApiClientError,
 } from "../import/stremioApi";
+import {
+    importStremioAddons,
+    normalizeStremioTransportUrl,
+    parseStremioAddonsFromExport,
+    type StremioAddonDescriptor,
+    type StremioAddonImportResult,
+} from "../import/stremioAddons";
 import {
     clearStremioConnection,
     getStremioConnection,
@@ -41,6 +49,13 @@ import {
     saveStremioConnection,
     type StremioConnectionStatus,
 } from "../import/stremioConnection";
+import {
+    buildStremioAddonPreviewItems,
+    type StremioAddonPreviewItem,
+    type StremioImportPreview,
+} from "../import/stremioImportPreview";
+
+export type { StremioAddonPreviewItem, StremioImportPreview };
 
 export { hasLocalState } from "./state";
 
@@ -313,6 +328,7 @@ export const updateListItemPoster = async (list_id: string, imdb_id: string, pos
 export type StremioImportProgressEvent =
     | { phase: "fetching" }
     | { phase: "parsing"; rawCount?: number }
+    | { phase: "importing_addons" }
     | { phase: "applying"; processed: number; total: number; current?: string }
     | { phase: "reconciling" }
     | { phase: "uploading"; uploaded: number; total: number }
@@ -323,7 +339,70 @@ export interface StremioImportOptions {
     onProgress?: (event: StremioImportProgressEvent) => void;
     signal?: AbortSignal;
     pushToCloud?: boolean;
+    addons?: StremioAddonDescriptor[];
+    libraryPreviews?: StremioImportPreviewItem[];
+    initialWarnings?: string[];
 }
+
+export interface StremioImportSelection {
+    libraryIds: string[];
+    addonIds: string[];
+}
+
+const emptyAddonSummary = (): Pick<
+    StremioImportSummary,
+    "addonsTotal" | "addonsAdded" | "addonsSkipped" | "addonsUnsupported"
+> => ({
+    addonsTotal: 0,
+    addonsAdded: 0,
+    addonsSkipped: 0,
+    addonsUnsupported: 0,
+});
+
+const applyAddonImport = (
+    summary: StremioImportSummary,
+    addonResult: StremioAddonImportResult,
+): StremioImportSummary => ({
+    ...summary,
+    addonsTotal: addonResult.total,
+    addonsAdded: addonResult.added,
+    addonsSkipped: addonResult.skipped,
+    addonsUnsupported: addonResult.unsupported,
+    warnings: [...summary.warnings, ...addonResult.warnings],
+});
+
+const runStremioAddonImport = async (
+    descriptors: StremioAddonDescriptor[],
+    options: StremioImportOptions,
+    report: (event: StremioImportProgressEvent) => void,
+) => {
+    const uniqueDescriptors = (() => {
+        const seen = new Set<string>();
+        return descriptors.filter((descriptor) => {
+            const transportUrl = normalizeStremioTransportUrl(descriptor.transportUrl);
+            if (!transportUrl || seen.has(transportUrl)) return false;
+            seen.add(transportUrl);
+            return true;
+        });
+    })();
+
+    if (!uniqueDescriptors.length) {
+        return {
+            total: 0,
+            added: 0,
+            skipped: 0,
+            unsupported: 0,
+            warnings: [] as string[],
+        };
+    }
+
+    report({ phase: "importing_addons" });
+    return await importStremioAddons(uniqueDescriptors, {
+        getAddons,
+        addAddon,
+        signal: options.signal,
+    });
+};
 
 const yieldToBrowser = () => new Promise<void>((resolve) => {
     if (typeof requestAnimationFrame === "function") {
@@ -343,15 +422,33 @@ export const importStremioLibrary = async (
     };
 
     report({ phase: "parsing" });
-    const parsed = Array.isArray(raw)
-        ? parseStremioLibrary(raw)
-        : parseStremioExport(raw);
-    const { items: previews, warnings, rawCount } = parsed;
+    const exportAddons = !options.libraryPreviews && !Array.isArray(raw)
+        ? parseStremioAddonsFromExport(raw)
+        : [];
+    const addonDescriptors = [...(options.addons ?? []), ...exportAddons];
+
+    let previews: StremioImportPreviewItem[];
+    let warnings: string[];
+    let rawCount: number;
+
+    if (options.libraryPreviews) {
+        previews = options.libraryPreviews;
+        warnings = [...(options.initialWarnings ?? [])];
+        rawCount = previews.length;
+    } else {
+        const parsed = Array.isArray(raw)
+            ? parseStremioLibrary(raw)
+            : parseStremioExport(raw);
+        previews = parsed.items;
+        warnings = [...(options.initialWarnings ?? []), ...parsed.warnings];
+        rawCount = parsed.rawCount;
+    }
     if (signal?.aborted) {
         throw new Error("Import was cancelled.");
     }
     report({ phase: "parsing", rawCount });
     if (previews.length === 0) {
+        const addonResult = await runStremioAddonImport(addonDescriptors, options, report);
         const summary: StremioImportSummary = {
             total: 0,
             rawCount,
@@ -361,13 +458,14 @@ export const importStremioLibrary = async (
             movies: 0,
             series: 0,
             watched: 0,
+            ...emptyAddonSummary(),
             items: [],
             lastWatched: null,
             poster: null,
             warnings,
         };
         report({ phase: "done" });
-        return summary;
+        return applyAddonImport(summary, addonResult);
     }
 
     const shouldPauseCloud = pushToCloud && isCloudBackupEnabled();
@@ -390,6 +488,7 @@ export const importStremioLibrary = async (
             movies: previews.filter((item) => item.type === "movie").length,
             series: previews.filter((item) => item.type === "series").length,
             watched: previews.filter((item) => item.watched).length,
+            ...emptyAddonSummary(),
             items: [],
             lastWatched: null,
             poster: null,
@@ -498,8 +597,9 @@ export const importStremioLibrary = async (
             }
         }
 
+        const addonResult = await runStremioAddonImport(addonDescriptors, options, report);
         report({ phase: "done" });
-        return summary;
+        return applyAddonImport(summary, addonResult);
     } finally {
         if (shouldPauseCloud) resumeCloudSync();
         publishCloudSyncStatus();
@@ -518,6 +618,63 @@ export const disconnectStremio = async () => {
     clearStremioConnection();
 };
 
+export const previewStremioImportFromAccount = async (
+    email: string,
+    password: string,
+): Promise<StremioImportPreview> => {
+    try {
+        const { authKey, email: resolvedEmail, library, addons } =
+            await fetchStremioLibraryWithLogin(email, password);
+        const parsed = parseStremioLibrary(library);
+        const existingAddons = await getAddons();
+
+        return {
+            authKey,
+            email: resolvedEmail,
+            libraryItems: parsed.items,
+            addons: buildStremioAddonPreviewItems(addons, existingAddons),
+            warnings: parsed.warnings,
+            rawCount: parsed.rawCount,
+        };
+    } catch (error) {
+        if (error instanceof StremioApiClientError) {
+            if (error.apiError?.wrongPass) {
+                throw new Error("Wrong email or password.");
+            }
+            throw new Error(error.message);
+        }
+        throw error;
+    }
+};
+
+export const importStremioFromPreview = async (
+    preview: StremioImportPreview,
+    selection: StremioImportSelection,
+    options: StremioImportOptions & { keepConnected?: boolean } = {},
+): Promise<StremioImportSummary> => {
+    const { keepConnected = false, ...importOptions } = options;
+    const libraryIdSet = new Set(selection.libraryIds);
+    const addonIdSet = new Set(selection.addonIds);
+
+    const selectedLibrary = preview.libraryItems.filter((item) =>
+        libraryIdSet.has(item.imdbId),
+    );
+    const selectedAddons = preview.addons
+        .filter((item) => addonIdSet.has(item.id))
+        .map((item) => item.descriptor);
+
+    if (keepConnected) {
+        saveStremioConnection({ authKey: preview.authKey, email: preview.email });
+    }
+
+    return await importStremioLibrary([], {
+        ...importOptions,
+        libraryPreviews: selectedLibrary,
+        addons: selectedAddons,
+        initialWarnings: preview.warnings,
+    });
+};
+
 export const importStremioFromAccount = async (
     email: string,
     password: string,
@@ -531,7 +688,7 @@ export const importStremioFromAccount = async (
 
     report({ phase: "fetching" });
     try {
-        const { authKey, email: resolvedEmail, library } = await fetchStremioLibraryWithLogin(email, password);
+        const { authKey, email: resolvedEmail, library, addons } = await fetchStremioLibraryWithLogin(email, password);
         if (importOptions.signal?.aborted) {
             throw new Error("Import was cancelled.");
         }
@@ -540,7 +697,10 @@ export const importStremioFromAccount = async (
             saveStremioConnection({ authKey, email: resolvedEmail });
         }
 
-        return await importStremioLibrary(library, importOptions);
+        return await importStremioLibrary(library, {
+            ...importOptions,
+            addons,
+        });
     } catch (error) {
         if (error instanceof StremioApiClientError) {
             if (error.apiError?.wrongPass) {
@@ -567,11 +727,14 @@ export const syncStremioLibrary = async (
 
     report({ phase: "fetching" });
     try {
-        const library = await fetchStremioLibrary(connection.authKey);
+        const { library, addons } = await fetchStremioAccountData(connection.authKey);
         if (options.signal?.aborted) {
             throw new Error("Import was cancelled.");
         }
-        return await importStremioLibrary(library, options);
+        return await importStremioLibrary(library, {
+            ...options,
+            addons,
+        });
     } catch (error) {
         if (error instanceof StremioApiClientError) {
             clearStremioConnection();

@@ -87,6 +87,10 @@ export interface StremioImportSummary {
     movies: number;
     series: number;
     watched: number;
+    addonsTotal: number;
+    addonsAdded: number;
+    addonsSkipped: number;
+    addonsUnsupported: number;
     items: StremioImportResultItem[];
     lastWatched: string | null;
     poster: string | null;
@@ -605,6 +609,10 @@ export const mergeStremioImportIntoLibrary = (
         movies: previews.filter((item) => item.type === "movie").length,
         series: previews.filter((item) => item.type === "series").length,
         watched: previews.filter((item) => item.watched).length,
+        addonsTotal: 0,
+        addonsAdded: 0,
+        addonsSkipped: 0,
+        addonsUnsupported: 0,
         items,
         lastWatched,
         poster,
