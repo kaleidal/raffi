@@ -389,6 +389,7 @@ export const upsertLibraryItem = (
     poster?: string,
 ) => {
     const existingIndex = items.findIndex((item) => item.imdb_id === imdb_id);
+    const existing = existingIndex >= 0 ? items[existingIndex] : null;
     const nowIso = new Date().toISOString();
     const next: LibraryItem = {
         user_id: getLocalUserId(),
@@ -397,8 +398,8 @@ export const upsertLibraryItem = (
         last_watched: nowIso,
         completed_at: completed === true ? nowIso : null,
         type,
-        shown: true,
-        poster: poster ?? items[existingIndex]?.poster,
+        shown: existing?.shown !== false,
+        poster: poster ?? existing?.poster,
     };
     if (completed === false) next.completed_at = null;
     const updated = [...items];
@@ -513,7 +514,7 @@ const mergeLibraryItem = (localItem: LibraryItem, remoteItem: LibraryItem) => {
         progress: mergedProgress,
         last_watched: mergedLastWatched || localItem.last_watched || remoteItem.last_watched,
         completed_at: mergedCompletedAt,
-        shown: localItem.shown === false && remoteItem.shown === false ? false : true,
+        shown: localItem.shown !== false && remoteItem.shown !== false,
         poster: localItem.poster ?? remoteItem.poster,
     };
 };

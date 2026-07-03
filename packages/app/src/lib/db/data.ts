@@ -215,6 +215,7 @@ export const hideFromContinueWatching = async (imdb_id: string) => {
     writeLocal(LOCAL_LIBRARY_KEY, readLocal<LibraryItem[]>(LOCAL_LIBRARY_KEY, []).map((item) => item.imdb_id === imdb_id ? { ...item, shown: false } : item));
     markDirty("library", imdb_id);
     scheduleCloudBackupSync();
+    publishCloudSyncStatus();
 };
 
 export const forgetProgress = async (imdb_id: string) => {
