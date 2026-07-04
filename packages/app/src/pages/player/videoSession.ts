@@ -414,6 +414,8 @@ export async function loadVideoSession(
 
 const DIRECT_HLS_START_TIMEOUT_MS = 12_000;
 
+type DirectHlsHandle = Pick<Hls, "destroy">;
+
 function getDirectHlsErrorDetails(data: any): string {
   const details = typeof data?.details === "string" ? data.details : "";
   const error = data?.error instanceof Error ? data.error.message : "";
@@ -431,7 +433,7 @@ export function initDirectHLS(
     setErrorMessage: (msg: string) => void;
     setErrorDetails: (details: string) => void;
   },
-): Hls | null {
+): DirectHlsHandle | null {
   const {
     setLoading,
     setShowCanvas,
@@ -557,7 +559,11 @@ export function initDirectHLS(
 
     hls.on(Hls.Events.MANIFEST_PARSED, finishLoad);
     hls.on(Hls.Events.ERROR, (_, data) => {
-      console.error("DIRECT HLS ERROR", data);
+      console.error("DIRECT HLS ERROR", {
+        type: data.type,
+        details: data.details,
+        fatal: data.fatal,
+      });
       if (!data.fatal) return;
       fail("Live stream failed", getDirectHlsErrorDetails(data));
     });
@@ -568,11 +574,23 @@ export function initDirectHLS(
   }
 
   if (videoElem.canPlayType("application/vnd.apple.mpegurl")) {
+    const nativeHandle: DirectHlsHandle = {
+      destroy: () => {
+        dispose();
+        try {
+          videoElem.pause();
+          videoElem.removeAttribute("src");
+          videoElem.load();
+        } catch {
+          // ignore
+        }
+      },
+    };
     videoElem.addEventListener("loadedmetadata", handleNativeReady);
     videoElem.addEventListener("canplay", handleNativeReady);
     videoElem.src = src;
     videoElem.load();
-    return null;
+    return nativeHandle;
   }
 
   fail(

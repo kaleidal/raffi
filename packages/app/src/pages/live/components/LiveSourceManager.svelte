@@ -1,7 +1,9 @@
 <script lang="ts">
-    import { tick } from "svelte";
+    import { onDestroy, tick } from "svelte";
+    import { fade, scale } from "svelte/transition";
     import { Pencil, Trash2, X } from "@lucide/svelte";
     import { trackEvent } from "../../../lib/analytics";
+    import { withOverlayZoomStyle } from "../../../lib/overlayZoom";
     import {
         addIptvSource,
         iptvSources,
@@ -23,6 +25,20 @@
     export let iptvExample: IptvExample | null = null;
     export let onSourceRemoved: (source: IptvSource) => void = () => {};
 
+    const portal = (node: HTMLElement) => {
+        if (typeof document === "undefined") {
+            return { destroy() {} };
+        }
+        document.body.appendChild(node);
+        return {
+            destroy() {
+                if (node.parentNode) {
+                    node.parentNode.removeChild(node);
+                }
+            },
+        };
+    };
+
     let editingSourceId: string | null = null;
     let formKind: IptvSourceKind = "m3u";
     let formName = "";
@@ -33,6 +49,13 @@
     let formXtreamCredential = "";
     let formError = "";
     let lastResetRequest = resetRequest;
+    let bodyOverflowBeforeOpen: string | null = null;
+
+    $: if (show) {
+        lockBodyScroll();
+    } else {
+        unlockBodyScroll();
+    }
 
     $: if (resetRequest !== lastResetRequest) {
         lastResetRequest = resetRequest;
@@ -53,6 +76,22 @@
         formXtreamUsername = "";
         formXtreamCredential = "";
         formError = "";
+    }
+
+    function close() {
+        show = false;
+    }
+
+    function lockBodyScroll() {
+        if (typeof document === "undefined" || bodyOverflowBeforeOpen !== null) return;
+        bodyOverflowBeforeOpen = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+    }
+
+    function unlockBodyScroll() {
+        if (typeof document === "undefined" || bodyOverflowBeforeOpen === null) return;
+        document.body.style.overflow = bodyOverflowBeforeOpen;
+        bodyOverflowBeforeOpen = null;
     }
 
     function editSource(source: IptvSource) {
@@ -150,26 +189,37 @@
         onSourceRemoved(source);
         trackEvent("iptv_source_removed");
     }
+
+    onDestroy(unlockBodyScroll);
 </script>
 
 {#if show}
     <div
-        class="fixed inset-0 z-[220] flex items-center justify-center bg-[#101010]/56 p-5 backdrop-blur-xl md:p-8"
+        use:portal
+        class="fixed inset-0 z-[220] flex items-center justify-center bg-[#101010]/56 backdrop-blur-xl"
+        transition:fade={{ duration: 200 }}
         onclick={(event) => {
-            if (event.currentTarget === event.target) show = false;
+            if (event.currentTarget === event.target) close();
         }}
         onkeydown={(event) => {
-            if (event.key === "Escape") show = false;
+            if (event.key === "Escape") close();
+        }}
+        onwheel={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
         }}
         role="button"
         tabindex="0"
+        style={withOverlayZoomStyle("padding: clamp(20px, 5vw, 150px);")}
     >
         <section
-            class="max-h-[92vh] w-full max-w-[1040px] overflow-y-auto rounded-4xl bg-[#2b2b2b]/56 p-6 shadow-[0_40px_160px_rgba(0,0,0,0.45)] backdrop-blur-[40px] md:p-8"
+            class="max-h-full w-full max-w-[1040px] overflow-y-auto rounded-4xl bg-[#2b2b2b]/56 p-6 shadow-[0_40px_160px_rgba(0,0,0,0.45)] backdrop-blur-[40px] md:p-8"
+            transition:scale={{ start: 0.95, duration: 200 }}
             role="dialog"
             aria-modal="true"
             tabindex="-1"
             use:focusOnMount
+            onwheel={(event) => event.stopPropagation()}
         >
             <div class="mb-5 flex items-start justify-between gap-4">
                 <div>
@@ -183,7 +233,7 @@
                 <button
                     class="shrink-0 cursor-pointer text-white/50 transition-colors hover:text-white"
                     aria-label="Close source manager"
-                    onclick={() => (show = false)}
+                    onclick={close}
                 >
                     <X size={24} strokeWidth={2} />
                 </button>

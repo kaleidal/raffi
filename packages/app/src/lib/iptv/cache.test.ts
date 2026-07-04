@@ -130,6 +130,34 @@ describe("IPTV refresh result cache", () => {
         expect(Object.hasOwn(stored, "guide")).toBe(true);
     });
 
+    test("persists feed-controlled guide channel ids as data keys", () => {
+        const protoProgramme = {
+            channelId: "__proto__",
+            start: new Date("2026-06-22T16:00:00.000Z"),
+            stop: new Date("2026-06-22T17:00:00.000Z"),
+            title: "Prototype News",
+        };
+        persistIptvRefreshResult(source, {
+            ...result,
+            guide: {
+                channels: new Map([
+                    ["__proto__", { id: "__proto__", displayNames: ["Prototype"] }],
+                ]),
+                programmesByChannel: new Map([["__proto__", [protoProgramme]]]),
+                displayNameToChannelId: new Map([["prototype", "__proto__"]]),
+            },
+        });
+
+        const stored = JSON.parse(storage.getItem(cacheKey) ?? "{}");
+        expect(Object.hasOwn(stored.guide.programmesByChannel, "__proto__")).toBe(true);
+        const cachedGuide = getStoredIptvRefreshResult(source)?.guide;
+        expect(cachedGuide?.channels.get("__proto__")?.displayNames).toEqual([
+            "Prototype",
+        ]);
+        expect(cachedGuide?.displayNameToChannelId.get("prototype")).toBe("__proto__");
+        expect(cachedGuide?.programmesByChannel.get("__proto__")?.[0]?.title).toBe("Prototype News");
+    });
+
     test("ignores cached results with mismatched child source ids", () => {
         persistIptvRefreshResult(source, result);
         const stored = JSON.parse(storage.getItem(cacheKey) ?? "{}");

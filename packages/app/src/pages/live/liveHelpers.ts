@@ -2,6 +2,7 @@ import { getIptvSourceCacheFingerprint } from "../../lib/iptv/cache";
 import type { GuideGridViewport } from "../../lib/iptv/guideGrid";
 import type {
     IptvChannel,
+    IptvGroup,
     IptvRefreshResult,
     IptvSource,
 } from "../../lib/iptv/types";
@@ -27,10 +28,16 @@ export interface LiveTvSelection {
     sourceId: string;
     groupsBySourceId: Record<string, string>;
     favoritesBySourceId: Record<string, string[]>;
+    lastChannelIdsBySourceId: Record<string, string>;
 }
 
 function createDefaultLiveTvSelection(): LiveTvSelection {
-    return { sourceId: "", groupsBySourceId: {}, favoritesBySourceId: {} };
+    return {
+        sourceId: "",
+        groupsBySourceId: {},
+        favoritesBySourceId: {},
+        lastChannelIdsBySourceId: {},
+    };
 }
 
 function getStorage(): Storage | null {
@@ -63,6 +70,22 @@ function cleanGroupsBySourceId(value: unknown): Record<string, string> {
         }
     }
     return groupsBySourceId;
+}
+
+function cleanStringBySourceId(value: unknown): Record<string, string> {
+    if (!isRecord(value)) {
+        return {};
+    }
+
+    const stringsBySourceId: Record<string, string> = {};
+    for (const [sourceId, rawValue] of Object.entries(value)) {
+        const cleanSourceId = cleanStoredString(sourceId);
+        const cleanValue = cleanStoredString(rawValue);
+        if (cleanSourceId && cleanValue) {
+            stringsBySourceId[cleanSourceId] = cleanValue;
+        }
+    }
+    return stringsBySourceId;
 }
 
 function cleanFavoriteChannelIds(value: unknown): string[] {
@@ -112,6 +135,7 @@ export function getStoredLiveTvSelection(): LiveTvSelection {
             sourceId: cleanStoredString(parsed.sourceId),
             groupsBySourceId: cleanGroupsBySourceId(parsed.groupsBySourceId),
             favoritesBySourceId: cleanFavoritesBySourceId(parsed.favoritesBySourceId),
+            lastChannelIdsBySourceId: cleanStringBySourceId(parsed.lastChannelIdsBySourceId),
         };
     } catch {
         return createDefaultLiveTvSelection();
@@ -185,6 +209,22 @@ export function toggleStoredLiveTvFavoriteChannelId(sourceId: string, channelId:
     return setStoredLiveTvFavoriteChannelIds(sourceId, next);
 }
 
+export function getStoredLiveTvLastChannelId(sourceId: string) {
+    const cleanSourceId = sourceId.trim();
+    if (!cleanSourceId) return "";
+    return getStoredLiveTvSelection().lastChannelIdsBySourceId[cleanSourceId] ?? "";
+}
+
+export function setStoredLiveTvLastChannelId(sourceId: string, channelId: string) {
+    const cleanSourceId = sourceId.trim();
+    const cleanChannelId = channelId.trim();
+    if (!cleanSourceId || !cleanChannelId) return;
+
+    const selection = getStoredLiveTvSelection();
+    selection.lastChannelIdsBySourceId[cleanSourceId] = cleanChannelId;
+    persistLiveTvSelection(selection);
+}
+
 export function isLiveTvRefreshDue(
     loadedAt: string | null | undefined,
     now: Date = new Date(),
@@ -217,12 +257,18 @@ export function getVisibleChannels(
     query: string,
     favoriteChannelIds: string[] = [],
 ) {
+    const effectiveGroup =
+        group === ALL_GROUPS ||
+        group === FAVORITES_GROUP ||
+        channels.some((channel) => channel.group === group)
+            ? group
+            : ALL_GROUPS;
     const normalizedQuery = query.trim().toLowerCase();
     const favoriteChannelIdSet =
-        group === FAVORITES_GROUP ? new Set(favoriteChannelIds) : null;
+        effectiveGroup === FAVORITES_GROUP ? new Set(favoriteChannelIds) : null;
     return channels.filter((channel) => {
         if (favoriteChannelIdSet && !favoriteChannelIdSet.has(channel.id)) return false;
-        if (!favoriteChannelIdSet && group !== ALL_GROUPS && channel.group !== group) return false;
+        if (!favoriteChannelIdSet && effectiveGroup !== ALL_GROUPS && channel.group !== effectiveGroup) return false;
         if (!normalizedQuery) return true;
 
         return (
@@ -232,6 +278,24 @@ export function getVisibleChannels(
             (channel.tvgId ?? "").toLowerCase().includes(normalizedQuery)
         );
     });
+}
+
+export function normalizeLiveTvGroup<T extends Pick<IptvGroup, "name">>(
+    group: string,
+    groups: T[],
+) {
+    if (group === ALL_GROUPS || group === FAVORITES_GROUP) return group;
+    return groups.some((candidate) => candidate.name === group) ? group : ALL_GROUPS;
+}
+
+export function getVisibleLiveTvGroups<T extends Pick<IptvGroup, "name">>(
+    groups: T[],
+    query: string,
+) {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) return groups;
+
+    return groups.filter((group) => group.name.toLowerCase().includes(normalizedQuery));
 }
 
 export function getLiveSourceCacheKey(source: IptvSource) {
