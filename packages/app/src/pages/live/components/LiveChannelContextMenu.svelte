@@ -2,6 +2,7 @@
     import { onMount, tick } from "svelte";
     import { fade } from "svelte/transition";
     import { Star } from "@lucide/svelte";
+    import { getEffectiveOverlayZoom } from "../../../lib/overlayZoom";
 
     export let x = 0;
     export let y = 0;
@@ -36,14 +37,6 @@
         };
     };
 
-    function getEffectiveZoom() {
-        if (typeof document === "undefined") return 1;
-        const zoom = Number.parseFloat(
-            getComputedStyle(document.documentElement).getPropertyValue("--raffi-effective-zoom") || "1",
-        );
-        return Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
-    }
-
     function clamp(value: number, min: number, max: number) {
         if (max < min) return min;
         return Math.max(min, Math.min(value, max));
@@ -58,7 +51,7 @@
 
         if (!menuEl || typeof window === "undefined") return;
 
-        const zoom = getEffectiveZoom();
+        const zoom = getEffectiveOverlayZoom();
         const naturalMenuWidth = menuEl.offsetWidth;
         const naturalMenuHeight = menuEl.offsetHeight;
         const visualMenuWidth = naturalMenuWidth * zoom;

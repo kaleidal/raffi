@@ -33,7 +33,6 @@
         getStoredHomeSearchBarPosition,
     } from "../../lib/home/searchBarSettings";
 
-
     export let onOpenAddons: () => void = () => {};
     export let onOpenSettings: () => void = () => {};
     export let controlledSearch = false;

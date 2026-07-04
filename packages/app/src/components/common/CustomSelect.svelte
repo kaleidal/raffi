@@ -1,6 +1,7 @@
 <script lang="ts">
     import { createEventDispatcher, onDestroy, tick } from "svelte";
     import { ChevronDown } from "@lucide/svelte";
+    import { getEffectiveOverlayZoom } from "../../lib/overlayZoom";
 
     export let value = "";
     export let options: Array<{ label: string; value: string }> = [];
@@ -98,9 +99,7 @@
         if (!buttonEl || !menuEl || typeof window === "undefined") return;
 
         const buttonRect = buttonEl.getBoundingClientRect();
-        const zoom = Number.parseFloat(
-            getComputedStyle(document.documentElement).getPropertyValue("--raffi-effective-zoom") || "1",
-        ) || 1;
+        const zoom = getEffectiveOverlayZoom();
         const naturalMenuWidth = Math.max(menuEl.offsetWidth, buttonRect.width / zoom);
         const naturalMenuHeight = menuEl.offsetHeight;
         const visualMenuWidth = naturalMenuWidth * zoom;
