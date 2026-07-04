@@ -4,6 +4,12 @@
     import type { IptvGroup } from "../../../lib/iptv/types";
     import { getVisibleLiveTvGroups } from "../liveHelpers";
 
+    interface GroupOption {
+        value: string;
+        label: string;
+        count: number;
+    }
+
     export let groups: IptvGroup[] = [];
     export let selectedGroup = "__all__";
     export let allGroupsValue = "__all__";
@@ -41,8 +47,20 @@
     $: showFavoritesGroupOption =
         !normalizedGroupQuery ||
         favoritesGroupLabel.toLowerCase().includes(normalizedGroupQuery);
-    $: hasVisibleOptions =
-        showAllGroupOption || showFavoritesGroupOption || visibleGroups.length > 0;
+    $: groupOptions = [
+        ...(showAllGroupOption
+            ? [{ value: allGroupsValue, label: allGroupsLabel, count: totalChannels }]
+            : []),
+        ...(showFavoritesGroupOption
+            ? [{ value: favoritesGroupValue, label: favoritesGroupLabel, count: favoritesCount }]
+            : []),
+        ...visibleGroups.map((group): GroupOption => ({
+            value: group.name,
+            label: group.name,
+            count: group.channelCount,
+        })),
+    ];
+    $: hasVisibleOptions = groupOptions.length > 0;
 
     function toggleMenu(event: MouseEvent) {
         event.stopPropagation();
@@ -129,79 +147,27 @@
             </label>
 
             <div class="max-h-[360px] overflow-y-auto pr-1" role="listbox">
-                {#if showAllGroupOption}
+                {#each groupOptions as option (option.value)}
                     <button
                         type="button"
                         class={`flex w-full items-center gap-3 rounded-[18px] px-3 py-3 text-left transition-colors ${
-                            selectedGroup === allGroupsValue
+                            selectedGroup === option.value
                                 ? "bg-white/[0.12] text-white"
                                 : "text-white/76 hover:bg-white/[0.07] hover:text-white"
                         }`}
                         role="option"
-                        aria-selected={selectedGroup === allGroupsValue}
-                        onclick={() => selectGroup(allGroupsValue)}
+                        aria-selected={selectedGroup === option.value}
+                        onclick={() => selectGroup(option.value)}
                     >
                         <span class="min-w-0 flex-1">
                             <span class="block truncate text-sm font-semibold">
-                                {allGroupsLabel}
+                                {option.label}
                             </span>
                             <span class="mt-0.5 block text-xs text-white/42">
-                                {totalChannels} channels
+                                {option.count} channels
                             </span>
                         </span>
-                        {#if selectedGroup === allGroupsValue}
-                            <Check size={18} strokeWidth={2.4} class="shrink-0" />
-                        {/if}
-                    </button>
-                {/if}
-
-                {#if showFavoritesGroupOption}
-                    <button
-                        type="button"
-                        class={`flex w-full items-center gap-3 rounded-[18px] px-3 py-3 text-left transition-colors ${
-                            selectedGroup === favoritesGroupValue
-                                ? "bg-white/[0.12] text-white"
-                                : "text-white/76 hover:bg-white/[0.07] hover:text-white"
-                        }`}
-                        role="option"
-                        aria-selected={selectedGroup === favoritesGroupValue}
-                        onclick={() => selectGroup(favoritesGroupValue)}
-                    >
-                        <span class="min-w-0 flex-1">
-                            <span class="block truncate text-sm font-semibold">
-                                {favoritesGroupLabel}
-                            </span>
-                            <span class="mt-0.5 block text-xs text-white/42">
-                                {favoritesCount} channels
-                            </span>
-                        </span>
-                        {#if selectedGroup === favoritesGroupValue}
-                            <Check size={18} strokeWidth={2.4} class="shrink-0" />
-                        {/if}
-                    </button>
-                {/if}
-
-                {#each visibleGroups as group}
-                    <button
-                        type="button"
-                        class={`flex w-full items-center gap-3 rounded-[18px] px-3 py-3 text-left transition-colors ${
-                            selectedGroup === group.name
-                                ? "bg-white/[0.12] text-white"
-                                : "text-white/76 hover:bg-white/[0.07] hover:text-white"
-                        }`}
-                        role="option"
-                        aria-selected={selectedGroup === group.name}
-                        onclick={() => selectGroup(group.name)}
-                    >
-                        <span class="min-w-0 flex-1">
-                            <span class="block truncate text-sm font-semibold">
-                                {group.name}
-                            </span>
-                            <span class="mt-0.5 block text-xs text-white/42">
-                                {group.channelCount} channels
-                            </span>
-                        </span>
-                        {#if selectedGroup === group.name}
+                        {#if selectedGroup === option.value}
                             <Check size={18} strokeWidth={2.4} class="shrink-0" />
                         {/if}
                     </button>

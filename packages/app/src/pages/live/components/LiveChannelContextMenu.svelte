@@ -3,6 +3,7 @@
     import { fade } from "svelte/transition";
     import { Star } from "@lucide/svelte";
     import { getEffectiveOverlayZoom } from "../../../lib/overlayZoom";
+    import { portalToBody } from "../../../lib/portal";
 
     export let x = 0;
     export let y = 0;
@@ -23,19 +24,6 @@
     let menuReady = false;
     let positionKey = "";
 
-    const portal = (node: HTMLElement) => {
-        if (typeof document === "undefined") {
-            return { destroy() {} };
-        }
-        document.body.appendChild(node);
-        return {
-            destroy() {
-                if (node.parentNode) {
-                    node.parentNode.removeChild(node);
-                }
-            },
-        };
-    };
 
     function clamp(value: number, min: number, max: number) {
         if (max < min) return min;
@@ -132,7 +120,7 @@
 }} />
 
 <div
-    use:portal
+    use:portalToBody
     bind:this={menuEl}
     class={`live-channel-context-menu fixed z-[300] flex min-w-[190px] flex-col rounded-xl bg-[#181818] py-2 shadow-[0_18px_48px_rgba(0,0,0,0.36)] ${menuReady ? "opacity-100" : "opacity-0"}`}
     style={menuStyle}

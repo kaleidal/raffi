@@ -4,6 +4,7 @@
     import { Pencil, Trash2, X } from "@lucide/svelte";
     import { trackEvent } from "../../../lib/analytics";
     import { withOverlayZoomStyle } from "../../../lib/overlayZoom";
+    import { portalToBody } from "../../../lib/portal";
     import {
         addIptvSource,
         iptvSources,
@@ -25,19 +26,6 @@
     export let iptvExample: IptvExample | null = null;
     export let onSourceRemoved: (source: IptvSource) => void = () => {};
 
-    const portal = (node: HTMLElement) => {
-        if (typeof document === "undefined") {
-            return { destroy() {} };
-        }
-        document.body.appendChild(node);
-        return {
-            destroy() {
-                if (node.parentNode) {
-                    node.parentNode.removeChild(node);
-                }
-            },
-        };
-    };
 
     let editingSourceId: string | null = null;
     let formKind: IptvSourceKind = "m3u";
@@ -195,7 +183,7 @@
 
 {#if show}
     <div
-        use:portal
+        use:portalToBody
         class="fixed inset-0 z-[220] flex items-center justify-center bg-[#101010]/56 backdrop-blur-xl"
         transition:fade={{ duration: 200 }}
         onclick={(event) => {

@@ -56,22 +56,6 @@ function cleanStoredString(value: unknown): string {
     return typeof value === "string" ? value.trim() : "";
 }
 
-function cleanGroupsBySourceId(value: unknown): Record<string, string> {
-    if (!isRecord(value)) {
-        return {};
-    }
-
-    const groupsBySourceId: Record<string, string> = {};
-    for (const [sourceId, group] of Object.entries(value)) {
-        const cleanSourceId = cleanStoredString(sourceId);
-        const cleanGroup = cleanStoredString(group);
-        if (cleanSourceId && cleanGroup) {
-            groupsBySourceId[cleanSourceId] = cleanGroup;
-        }
-    }
-    return groupsBySourceId;
-}
-
 function cleanStringBySourceId(value: unknown): Record<string, string> {
     if (!isRecord(value)) {
         return {};
@@ -133,7 +117,7 @@ export function getStoredLiveTvSelection(): LiveTvSelection {
 
         return {
             sourceId: cleanStoredString(parsed.sourceId),
-            groupsBySourceId: cleanGroupsBySourceId(parsed.groupsBySourceId),
+            groupsBySourceId: cleanStringBySourceId(parsed.groupsBySourceId),
             favoritesBySourceId: cleanFavoritesBySourceId(parsed.favoritesBySourceId),
             lastChannelIdsBySourceId: cleanStringBySourceId(parsed.lastChannelIdsBySourceId),
         };
@@ -259,27 +243,41 @@ export function getVisibleChannels(
 ) {
     // Keep this fallback aligned with normalizeLiveTvGroup(), which resets
     // persisted/UI group selections when the selected group disappears.
-    const effectiveGroup =
-        group === ALL_GROUPS ||
-        group === FAVORITES_GROUP ||
-        channels.some((channel) => channel.group === group)
-            ? group
-            : ALL_GROUPS;
     const normalizedQuery = query.trim().toLowerCase();
     const favoriteChannelIdSet =
-        effectiveGroup === FAVORITES_GROUP ? new Set(favoriteChannelIds) : null;
-    return channels.filter((channel) => {
-        if (favoriteChannelIdSet && !favoriteChannelIdSet.has(channel.id)) return false;
-        if (!favoriteChannelIdSet && effectiveGroup !== ALL_GROUPS && channel.group !== effectiveGroup) return false;
-        if (!normalizedQuery) return true;
+        group === FAVORITES_GROUP ? new Set(favoriteChannelIds) : null;
+    const shouldFilterByGroup = group !== ALL_GROUPS && group !== FAVORITES_GROUP;
+    let hasSelectedGroup = false;
+    const allMatches: IptvChannel[] = [];
+    const groupMatches: IptvChannel[] = [];
 
-        return (
-            channel.name.toLowerCase().includes(normalizedQuery) ||
-            channel.group.toLowerCase().includes(normalizedQuery) ||
-            (channel.tvgName ?? "").toLowerCase().includes(normalizedQuery) ||
-            (channel.tvgId ?? "").toLowerCase().includes(normalizedQuery)
-        );
-    });
+    for (const channel of channels) {
+        const matchesSelectedGroup = channel.group === group;
+        if (matchesSelectedGroup) {
+            hasSelectedGroup = true;
+        }
+
+        if (favoriteChannelIdSet && !favoriteChannelIdSet.has(channel.id)) continue;
+
+        if (
+            normalizedQuery &&
+            !(
+                channel.name.toLowerCase().includes(normalizedQuery) ||
+                channel.group.toLowerCase().includes(normalizedQuery) ||
+                (channel.tvgName ?? "").toLowerCase().includes(normalizedQuery) ||
+                (channel.tvgId ?? "").toLowerCase().includes(normalizedQuery)
+            )
+        ) {
+            continue;
+        }
+
+        allMatches.push(channel);
+        if (shouldFilterByGroup && matchesSelectedGroup) {
+            groupMatches.push(channel);
+        }
+    }
+
+    return shouldFilterByGroup && hasSelectedGroup ? groupMatches : allMatches;
 }
 
 export function normalizeLiveTvGroup<T extends Pick<IptvGroup, "name">>(
