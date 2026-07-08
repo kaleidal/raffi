@@ -1444,6 +1444,8 @@
                         {sessionId}
                         {videoSrc}
                         {metaData}
+                        {season}
+                        {episode}
                         {hasNextEpisode}
                         currentAudioLabel={$currentAudioLabel}
                         currentSubtitleLabel={$currentSubtitleLabel}

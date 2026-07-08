@@ -34,6 +34,8 @@
     export let hasNextEpisode = true;
     export let showWatchParty = true;
     export let chapterMarkers: Chapter[] = [];
+    export let season: number | null = null;
+    export let episode: number | null = null;
 
     export let seekBarStyle: "raffi" | "normal" = "raffi";
 
@@ -59,6 +61,21 @@
             : duration > 0
               ? duration - displayedTime
               : 0;
+
+    $: nowPlayingLabel = (() => {
+        const name = metaData?.meta?.name;
+        if (!name) return null;
+        if (
+            metaData?.meta?.type === "series" &&
+            season != null &&
+            episode != null &&
+            Number.isFinite(season) &&
+            Number.isFinite(episode)
+        ) {
+            return `${name} S${season} E${episode}`;
+        }
+        return name;
+    })();
 
     let showClipPanel = false;
 
@@ -138,6 +155,18 @@
     <div class="absolute inset-0 rounded-4xl bg-[#000000]/10 backdrop-blur-xl pointer-events-none"></div>
 
     <div class="relative z-10 flex flex-col gap-2 w-full">
+        {#if nowPlayingLabel}
+            <div
+                class="text-center pointer-events-none select-none"
+            >
+                <span
+                    class="inline-block max-w-[80%] truncate bg-[#000000]/30 backdrop-blur-md border border-white/10 rounded-full px-4 py-1 text-[13px] font-medium text-white/80"
+                    title={nowPlayingLabel}
+                >
+                    {nowPlayingLabel}
+                </span>
+            </div>
+        {/if}
         <div class="flex flex-row gap-5 items-center w-full">
             {#if !isWatchPartyMember}
                 <button
