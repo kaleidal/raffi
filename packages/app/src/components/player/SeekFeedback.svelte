@@ -2,6 +2,7 @@
     import { fade } from "svelte/transition";
 
     export let type: "forward" | "backward";
+    export let side: "left" | "right";
     export let id: number;
 
     let rotation = 0;
@@ -20,7 +21,7 @@
 
 <div
     class="absolute top-1/2 -translate-y-1/2 z-40 flex flex-col items-center justify-center text-white pointer-events-none
-    {type === 'forward' ? 'left-[20%]' : 'right-[20%]'}"
+    {side === 'left' ? 'left-[20%]' : 'right-[20%]'}"
     transition:fade={{ duration: 200 }}
 >
     <div class="relative flex items-center justify-center">
