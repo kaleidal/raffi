@@ -1328,6 +1328,7 @@
             volume.set,
             seekFeedback.set,
             togglePlayWithFeedback,
+            liveMode,
         )}
 />
 
