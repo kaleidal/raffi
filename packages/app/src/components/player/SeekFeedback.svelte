@@ -2,10 +2,19 @@
     import { fade } from "svelte/transition";
 
     export let type: "forward" | "backward";
-    export let side: "left" | "right";
+    export let seekBarStyle: "raffi" | "normal" = "raffi";
     export let id: number;
 
     let rotation = 0;
+
+    $: side =
+        seekBarStyle === "normal"
+            ? type === "forward"
+                ? "right"
+                : "left"
+            : type === "forward"
+                ? "left"
+                : "right";
 
     $: if (id) {
         triggerAnimation();

@@ -94,7 +94,7 @@
         type NextEpisodePrefetchHandoff,
     } from "./nextEpisodePrefetch";
     import { serverUrl } from "../../lib/client";
-    import type { Chapter, SeekFeedback as SeekFeedbackState } from "./types";
+    import type { Chapter } from "./types";
 
     // Props
     export let videoSrc: string | null = null;
@@ -163,16 +163,6 @@
     const handleSeekStyleChange = (style: SeekBarStyle) => {
         seekBarStyle = style;
         persistSeekBarStyle(style);
-    };
-
-    const getSeekFeedbackSide = (
-        type: SeekFeedbackState["type"],
-    ): "left" | "right" => {
-        if (seekBarStyle === "normal") {
-            return type === "forward" ? "right" : "left";
-        }
-
-        return type === "forward" ? "left" : "right";
     };
 
     const handleSeekStyleAcknowledge = async () => {
@@ -1397,7 +1387,7 @@
     {#if $seekFeedback && !embedSrc}
         <SeekFeedback
             type={$seekFeedback.type}
-            side={getSeekFeedbackSide($seekFeedback.type)}
+            seekBarStyle={seekBarStyle}
             id={$seekFeedback.id}
         />
     {/if}
