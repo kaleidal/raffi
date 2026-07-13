@@ -1385,7 +1385,11 @@
     {/if}
 
     {#if $seekFeedback && !embedSrc}
-        <SeekFeedback type={$seekFeedback.type} id={$seekFeedback.id} />
+        <SeekFeedback
+            type={$seekFeedback.type}
+            seekBarStyle={seekBarStyle}
+            id={$seekFeedback.id}
+        />
     {/if}
 
     <PlayerLoadingScreen
