@@ -534,6 +534,21 @@
 
     $: showNextEpisodeAllowed = $showNextEpisode && hasNextEpisode;
 
+    $: nowPlayingLabel = (() => {
+        const name = metaData?.meta?.name;
+        if (!name) return null;
+        if (
+            metaData?.meta?.type === "series" &&
+            season != null &&
+            episode != null &&
+            Number.isFinite(season) &&
+            Number.isFinite(episode)
+        ) {
+            return `${name} S${season} E${episode}`;
+        }
+        return name;
+    })();
+
     const disposeNextEpisodePrefetch = (opts?: { transfer?: boolean }) => {
         nextEpisodePrefetchRunId += 1;
         nextEpisodePrefetchStarting = false;
@@ -1414,6 +1429,21 @@
             </button>
         </div>
 
+        {#if nowPlayingLabel}
+            <div
+                class="absolute top-10 left-1/2 -translate-x-1/2 z-50 flex items-center h-16 pointer-events-none select-none transition-all duration-300 ease-in-out transform {$controlsVisible
+                    ? 'translate-y-0 opacity-100'
+                    : '-translate-y-10 opacity-0'} will-change-transform will-change-opacity"
+            >
+                <span
+                    class="inline-block h-full max-w-[640px] truncate rounded-full bg-[#000000]/20 px-8 text-[18px] leading-[4rem] font-medium text-white/80 backdrop-blur-md"
+                    title={nowPlayingLabel}
+                >
+                    {nowPlayingLabel}
+                </span>
+            </div>
+        {/if}
+
         {#if !embedSrc}
             <div
                 class="absolute left-1/2 -translate-x-1/2 bottom-12.5 z-50 flex flex-col gap-2.5"
@@ -1444,8 +1474,6 @@
                         {sessionId}
                         {videoSrc}
                         {metaData}
-                        {season}
-                        {episode}
                         {hasNextEpisode}
                         currentAudioLabel={$currentAudioLabel}
                         currentSubtitleLabel={$currentSubtitleLabel}
