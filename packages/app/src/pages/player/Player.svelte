@@ -1416,7 +1416,7 @@
 
     {#if !$loading && !miniPlayerActive}
         <div
-            class="absolute left-0 top-0 p-10 z-50 transition-all duration-300 ease-in-out transform {$controlsVisible
+            class="absolute left-0 top-0 p-4 sm:p-10 z-50 transition-all duration-300 ease-in-out transform {$controlsVisible
                 ? 'translate-y-0 opacity-100'
                 : '-translate-y-10 opacity-0 pointer-events-none'} will-change-transform will-change-opacity"
         >
@@ -1431,12 +1431,14 @@
 
         {#if nowPlayingLabel}
             <div
-                class="absolute top-10 left-1/2 -translate-x-1/2 z-50 flex items-center h-16 pointer-events-none select-none transition-all duration-300 ease-in-out transform {$controlsVisible
+                class="absolute top-4 inset-x-24 sm:top-10 sm:inset-x-28 z-50 flex items-center justify-center h-14 sm:h-16 pointer-events-none select-none transition-all duration-300 ease-in-out transform {$controlsVisible
                     ? 'translate-y-0 opacity-100'
                     : '-translate-y-10 opacity-0'} will-change-transform will-change-opacity"
             >
                 <span
-                    class="inline-block h-full max-w-[640px] truncate rounded-full bg-[#000000]/20 px-8 text-[18px] leading-[4rem] font-medium text-white/80 backdrop-blur-md"
+                    class="inline-block max-w-full truncate rounded-full bg-[#000000]/60 px-5 py-3 text-[16px] leading-6 font-medium text-white backdrop-blur-md sm:max-w-[640px] sm:px-8 sm:text-[18px] {$controlsVisible
+                        ? 'pointer-events-auto'
+                        : 'pointer-events-none'}"
                     title={nowPlayingLabel}
                 >
                     {nowPlayingLabel}
