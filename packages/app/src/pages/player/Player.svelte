@@ -534,6 +534,21 @@
 
     $: showNextEpisodeAllowed = $showNextEpisode && hasNextEpisode;
 
+    $: nowPlayingLabel = (() => {
+        const name = metaData?.meta?.name;
+        if (!name) return null;
+        if (
+            metaData?.meta?.type === "series" &&
+            season != null &&
+            episode != null &&
+            Number.isFinite(season) &&
+            Number.isFinite(episode)
+        ) {
+            return `${name} S${season} E${episode}`;
+        }
+        return name;
+    })();
+
     const disposeNextEpisodePrefetch = (opts?: { transfer?: boolean }) => {
         nextEpisodePrefetchRunId += 1;
         nextEpisodePrefetchStarting = false;
@@ -1405,7 +1420,7 @@
 
     {#if !$loading && !miniPlayerActive}
         <div
-            class="absolute left-0 top-0 p-10 z-50 transition-all duration-300 ease-in-out transform {$controlsVisible
+            class="absolute left-0 top-0 p-4 sm:p-10 z-50 transition-all duration-300 ease-in-out transform {$controlsVisible
                 ? 'translate-y-0 opacity-100'
                 : '-translate-y-10 opacity-0 pointer-events-none'} will-change-transform will-change-opacity"
         >
@@ -1417,6 +1432,23 @@
                 <ChevronLeft size={30} color="white" strokeWidth={2} />
             </button>
         </div>
+
+        {#if nowPlayingLabel}
+            <div
+                class="absolute top-4 inset-x-24 sm:top-10 sm:inset-x-28 z-50 flex items-center justify-center h-14 sm:h-16 pointer-events-none select-none transition-all duration-300 ease-in-out transform {$controlsVisible
+                    ? 'translate-y-0 opacity-100'
+                    : '-translate-y-10 opacity-0'} will-change-transform will-change-opacity"
+            >
+                <span
+                    class="inline-block max-w-full truncate rounded-full bg-[#000000]/60 px-5 py-3 text-[16px] leading-6 font-medium text-white backdrop-blur-md sm:max-w-[640px] sm:px-8 sm:text-[18px] {$controlsVisible
+                        ? 'pointer-events-auto'
+                        : 'pointer-events-none'}"
+                    title={nowPlayingLabel}
+                >
+                    {nowPlayingLabel}
+                </span>
+            </div>
+        {/if}
 
         {#if !embedSrc}
             <div
