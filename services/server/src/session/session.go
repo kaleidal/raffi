@@ -47,6 +47,7 @@ type Chapter struct {
 type Store interface {
 	Create(source string, kind SessionKind, startTime float64) (*Session, error)
 	Get(id string) (*Session, error)
+	List() []*Session
 	Delete(id string) error
 }
 
@@ -103,6 +104,16 @@ func (s *memoryStore) Get(id string) (*Session, error) {
 		return nil, errors.New("not found")
 	}
 	return sess, nil
+}
+
+func (s *memoryStore) List() []*Session {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	sessions := make([]*Session, 0, len(s.sessions))
+	for _, sess := range s.sessions {
+		sessions = append(sessions, sess)
+	}
+	return sessions
 }
 
 func (s *memoryStore) Delete(id string) error {

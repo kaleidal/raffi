@@ -103,6 +103,7 @@ func main() {
 	mux.HandleFunc("/sessions/", srv.handleSessionByID)
 	mux.HandleFunc("/cleanup", srv.handleCleanup)
 	mux.HandleFunc("/torrents/", srv.torrentStreamer.ServeHTTP)
+	mux.HandleFunc("/settings/torrenting", srv.handleTorrentingSetting)
 	mux.HandleFunc("/community-addons", srv.handleCommunityAddons)
 
 	addr := strings.TrimSpace(os.Getenv("RAFFI_SERVER_ADDR"))
@@ -303,6 +304,10 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 	if req.Kind == session.SessionKindTorrent {
 		streamURL, infoHash, err := s.torrentStreamer.AddTorrent(req.Source, req.FileIdx)
 		if err != nil {
+			if errors.Is(err, stream.ErrTorrentingDisabled) {
+				http.Error(w, err.Error(), http.StatusForbidden)
+				return
+			}
 			http.Error(w, fmt.Sprintf("failed to start torrent: %v", err), http.StatusInternalServerError)
 			return
 		}
@@ -324,6 +329,54 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, struct {
 		ID string `json:"id"`
 	}{ID: sess.ID})
+}
+
+func (s *Server) handleTorrentingSetting(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if r.Method == http.MethodGet {
+		writeJSON(w, struct {
+			Enabled bool `json:"enabled"`
+		}{Enabled: s.torrentStreamer.IsEnabled()})
+		return
+	}
+	if r.Method != http.MethodPut {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if req.Enabled {
+		if err := s.torrentStreamer.Enable(); err != nil {
+			http.Error(w, fmt.Sprintf("failed to enable torrenting: %v", err), http.StatusInternalServerError)
+			return
+		}
+	} else {
+		s.torrentStreamer.Disable()
+		for _, sess := range s.sessions.List() {
+			if sess == nil || !sess.IsTorrent {
+				continue
+			}
+			if s.hlsController != nil {
+				_ = s.hlsController.StopSession(sess.ID)
+			}
+			s.probeMu.Lock()
+			delete(s.probeCooldown, sess.ID)
+			s.probeMu.Unlock()
+			_ = s.sessions.Delete(sess.ID)
+		}
+	}
+	writeJSON(w, struct {
+		Enabled bool `json:"enabled"`
+	}{Enabled: s.torrentStreamer.IsEnabled()})
 }
 
 // /sessions/{id}         GET -> info
@@ -693,7 +746,7 @@ func withCORS(next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Vary", "Origin")
 		}
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, DELETE, HEAD")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS, DELETE, HEAD")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept-Encoding, Range, Origin, Accept")
 		w.Header().Set("Access-Control-Expose-Headers", "X-Raffi-Slice-Start, Accept-Ranges, Content-Range, Content-Length")
 		w.Header().Set("Access-Control-Max-Age", "86400")

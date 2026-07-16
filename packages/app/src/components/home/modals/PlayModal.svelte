@@ -7,6 +7,14 @@
     import { cloudSyncStatus, getWatchPartyInfo } from "../../../lib/db/db";
     import { overlayZoomStyle } from "../../../lib/overlayZoom";
     import { localMode } from "../../../lib/stores/authStore";
+    import { get } from "svelte/store";
+    import TorrentWarningModal from "../../meta/modals/TorrentWarningModal.svelte";
+    import {
+        acknowledgeTorrentWarning,
+        allowTorrenting,
+        hasAcknowledgedTorrentWarning,
+        setTorrentingAllowed,
+    } from "../../../lib/stores/torrenting";
 
     const portal = (node: HTMLElement) => {
         if (typeof document === "undefined") {
@@ -33,6 +41,7 @@
     let partyDetails: any = null;
     let loading = false;
     let error = "";
+    let showTorrentWarning = false;
 
     let fileInput: HTMLInputElement;
 
@@ -143,7 +152,7 @@
         target.value = "";
     }
 
-    function playMagnet() {
+    function openMagnetPlayer() {
         if (!magnetLink.trim()) return;
         router.navigate("player", {
             videoSrc: magnetLink.trim(),
@@ -154,6 +163,33 @@
             episode: null,
         });
         onClose();
+    }
+
+    function playMagnet() {
+        if (!magnetLink.trim()) return;
+        error = "";
+        if (!hasAcknowledgedTorrentWarning()) {
+            showTorrentWarning = true;
+            return;
+        }
+        if (!get(allowTorrenting)) {
+            error = "Torrenting is disabled. Turn on Allow Torrenting in Settings before playing a magnet link.";
+            return;
+        }
+        openMagnetPlayer();
+    }
+
+    async function confirmTorrentWarning() {
+        try {
+            await setTorrentingAllowed(true);
+            acknowledgeTorrentWarning();
+            showTorrentWarning = false;
+            openMagnetPlayer();
+        } catch (cause) {
+            console.error("Failed to enable torrenting", cause);
+            showTorrentWarning = false;
+            error = "Could not enable torrenting. Please try again from Settings.";
+        }
     }
 
     async function fetchPartyDetails() {
@@ -330,6 +366,12 @@
                         ></textarea>
                     </div>
 
+                    {#if error}
+                        <div class="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm text-center">
+                            {error}
+                        </div>
+                    {/if}
+
                     <div class="flex gap-3 mt-2">
                         <button
                             class="flex-1 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-medium transition-colors"
@@ -440,4 +482,11 @@
             {/if}
         </div>
     </div>
+
+    {#if showTorrentWarning}
+        <TorrentWarningModal
+            onConfirm={confirmTorrentWarning}
+            onCancel={() => (showTorrentWarning = false)}
+        />
+    {/if}
 </div>

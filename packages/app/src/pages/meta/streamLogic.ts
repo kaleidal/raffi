@@ -19,6 +19,12 @@ import {
     isStreamFailed,
     markStreamFailed,
 } from "./streamFailures";
+import {
+    acknowledgeTorrentWarning,
+    allowTorrenting,
+    hasAcknowledgedTorrentWarning,
+    setTorrentingAllowed,
+} from "../../lib/stores/torrenting";
 
 let streamFetchGeneration = 0;
 
@@ -250,6 +256,11 @@ export const playStream = (
         url = `magnet:?xt=urn:btih:${stream.infoHash}`;
     }
 
+    if (url?.startsWith("magnet:") && !get(allowTorrenting)) {
+        streamFailureMessage.set("Torrenting is disabled. Turn on Allow Torrenting in Settings to play this source.");
+        return;
+    }
+
     if (url) {
         clearStreamFailureMessage();
         selectedStream.set(stream);
@@ -311,10 +322,14 @@ export const onStreamClick = (stream: Stream, progressMap: any) => {
     const isTorrent = stream.infoHash || (stream.url && stream.url.startsWith("magnet:"));
 
     if (isTorrent) {
-        const hasSeenWarning = localStorage.getItem("torrentWarningShown");
-        if (!hasSeenWarning) {
+        if (!hasAcknowledgedTorrentWarning()) {
             pendingTorrentStream.set(stream);
             showTorrentWarning.set(true);
+            return;
+        }
+        if (!get(allowTorrenting)) {
+            trackEvent("torrent_stream_blocked_disabled", getStreamAnalyticsProps(stream));
+            streamFailureMessage.set("Torrenting is disabled. Turn on Allow Torrenting in Settings to play this source.");
             return;
         }
     }
@@ -322,13 +337,20 @@ export const onStreamClick = (stream: Stream, progressMap: any) => {
     playStream(stream, progressMap);
 };
 
-export const handleTorrentWarningConfirm = (progressMap: any) => {
-    localStorage.setItem("torrentWarningShown", "true");
-    showTorrentWarning.set(false);
+export const handleTorrentWarningConfirm = async (progressMap: any) => {
     const pending = get(pendingTorrentStream);
-    if (pending) {
+    if (!pending) return;
+    try {
+        await setTorrentingAllowed(true);
+        acknowledgeTorrentWarning();
+        showTorrentWarning.set(false);
         trackEvent("torrent_warning_confirmed", getStreamAnalyticsProps(pending));
         playStream(pending, progressMap);
+        pendingTorrentStream.set(null);
+    } catch (error) {
+        console.error("Failed to enable torrenting", error);
+        streamFailureMessage.set("Could not enable torrenting. Please try again from Settings.");
+        showTorrentWarning.set(false);
         pendingTorrentStream.set(null);
     }
 };
