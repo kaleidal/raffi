@@ -1,6 +1,8 @@
 <script lang="ts">
     import { createEventDispatcher, onDestroy, tick } from "svelte";
     import { ChevronDown } from "@lucide/svelte";
+    import { getEffectiveOverlayZoom } from "../../lib/overlayZoom";
+    import { portalToBody } from "../../lib/portal";
 
     export let value = "";
     export let options: Array<{ label: string; value: string }> = [];
@@ -19,20 +21,6 @@
     let menuStyle = "";
     let menuReady = false;
 
-    const portal = (node: HTMLElement) => {
-        if (typeof document === "undefined") {
-            return { destroy() {} };
-        }
-
-        document.body.appendChild(node);
-        return {
-            destroy() {
-                if (node.parentNode) {
-                    node.parentNode.removeChild(node);
-                }
-            },
-        };
-    };
 
     const handlePointerDown = (event: MouseEvent) => {
         if (!root) return;
@@ -98,9 +86,7 @@
         if (!buttonEl || !menuEl || typeof window === "undefined") return;
 
         const buttonRect = buttonEl.getBoundingClientRect();
-        const zoom = Number.parseFloat(
-            getComputedStyle(document.documentElement).getPropertyValue("--raffi-effective-zoom") || "1",
-        ) || 1;
+        const zoom = getEffectiveOverlayZoom();
         const naturalMenuWidth = Math.max(menuEl.offsetWidth, buttonRect.width / zoom);
         const naturalMenuHeight = menuEl.offsetHeight;
         const visualMenuWidth = naturalMenuWidth * zoom;
@@ -151,7 +137,7 @@
 
     {#if open}
         <div
-            use:portal
+            use:portalToBody
             bind:this={menuEl}
             style={menuStyle}
             class={`z-400 overflow-hidden rounded-2xl bg-[#181818] p-2 shadow-[0_20px_60px_rgba(0,0,0,0.45)] ${menuReady ? 'opacity-100' : 'opacity-0'} ${menuClass}`}

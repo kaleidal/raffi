@@ -1,3 +1,5 @@
+const { registerIptvFetchHandler } = require("./iptvFetch.cjs");
+
 function registerMainIpcHandlers({
   ipcMain,
   dialog,
@@ -105,6 +107,8 @@ function registerMainIpcHandlers({
       data: await response.json(),
     };
   });
+
+  registerIptvFetchHandler({ ipcMain, logToFile });
 
   ipcMain.handle("OPEN_EXTERNAL_URL", async (_event, targetUrl) => {
     if (!targetUrl || typeof targetUrl !== "string") throw new Error("Invalid URL");

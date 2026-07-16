@@ -127,8 +127,14 @@ export function createControlsManager(
         performSeek: (time: number) => void,
         setVolume: (vol: number) => void,
         setSeekFeedback: (feedback: SeekFeedback | null) => void,
-        togglePlayFn: () => void
+        togglePlayFn: () => void,
+        liveMode = false
     ) {
+        if (liveMode && (event.code === "ArrowLeft" || event.code === "ArrowRight")) {
+            event.preventDefault();
+            return;
+        }
+
         // Disable controls for participants
         if (isWatchPartyActive && !isWatchPartyHost) return;
 

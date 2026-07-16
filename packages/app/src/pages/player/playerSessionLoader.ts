@@ -40,6 +40,7 @@ export type PlayerSessionLoaderDeps = {
     getMetaData: () => ShowResponse | null;
     getSeason: () => number | null;
     getEpisode: () => number | null;
+    isLiveMode: () => boolean;
     getVideoElem: () => HTMLVideoElement | undefined;
     getHls: () => any;
     setHls: (value: any) => void;
@@ -88,10 +89,18 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
             const metaData = deps.getMetaData();
             const season = deps.getSeason();
             const episode = deps.getEpisode();
-            const directHttp = !opts?.reuseSession && Session.shouldBypassServerForHttpStream(
-                src,
-                deps.getVideoElem(),
-            );
+            const directHls =
+                !opts?.reuseSession &&
+                deps.isLiveMode() &&
+                /^https?:\/\//i.test(src) &&
+                Session.isHlsManifestUrl(src);
+            const directHttp =
+                !opts?.reuseSession &&
+                (directHls ||
+                    Session.shouldBypassServerForHttpStream(
+                        src,
+                        deps.getVideoElem(),
+                    ));
 
             const result = await Session.loadVideoSession(
                 src,
@@ -137,6 +146,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                 {
                     ...opts,
                     directHttp,
+                    directHls,
                 },
             );
 
@@ -190,11 +200,22 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                 deps.setPendingStartAfterSeekStyleModal(true);
             }
 
-            const bypassServer = Session.shouldBypassServerForHttpStream(src, videoElem);
+            const bypassServer =
+                Boolean(result.sessionData?.isDirectHttp) ||
+                Session.shouldBypassServerForHttpStream(src, videoElem);
+            const directHlsPlayback = Boolean(result.sessionData?.isDirectHls);
 
             if (bypassServer) {
-                loadingStage.set("Loading stream directly");
-                loadingDetails.set("Bypassing server transcoding");
+                loadingStage.set(
+                    directHlsPlayback
+                        ? "Loading live stream directly"
+                        : "Loading stream directly",
+                );
+                loadingDetails.set(
+                    directHlsPlayback
+                        ? "Loading HLS manifest..."
+                        : "Bypassing server transcoding",
+                );
                 loadingProgress.set(null);
 
                 const hls = deps.getHls();
@@ -224,6 +245,23 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                         // ignore
                     });
                 loading.set(true);
+
+                if (directHlsPlayback) {
+                    const hlsInstance = Session.initDirectHLS(
+                        videoElem,
+                        src,
+                        needsSeekStyleModal ? false : deps.autoPlay,
+                        {
+                            setLoading: loading.set,
+                            setShowCanvas: showCanvas.set,
+                            setShowError: showError.set,
+                            setErrorMessage: errorMessage.set,
+                            setErrorDetails: errorDetails.set,
+                        },
+                    );
+                    deps.setHls(hlsInstance);
+                    return;
+                }
 
                 const onLoaded = () => {
                     const currentVideo = deps.getVideoElem();

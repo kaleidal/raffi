@@ -29,6 +29,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.invoke('SHOW_ALERT_DIALOG', { message, title }),
     showSelectDialog: (message, title, options) =>
         ipcRenderer.invoke('SHOW_SELECT_DIALOG', { message, title, options }),
+    iptvFetchText: (url, options) =>
+        ipcRenderer.invoke('IPTV_FETCH_TEXT', { url, options }),
     fetchIntroDbSegments: (imdbId, season, episode) =>
         ipcRenderer.invoke('INTRODB_FETCH_SEGMENTS', { imdbId, season, episode }),
     localLibrary: {
