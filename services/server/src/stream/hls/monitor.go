@@ -17,6 +17,16 @@ const (
 	playlistDemandNudgeMinGap = 2 * time.Second
 )
 
+func isRemoteHTTPSource(source string) bool {
+	isHTTPSource := strings.HasPrefix(source, "http://") || strings.HasPrefix(source, "https://")
+	return isHTTPSource && !isTorrentSource(source)
+}
+
+func throttleAllowsWork(now time.Time) bool {
+	phase := time.Duration(now.UnixNano()) % throttleCycleWindow
+	return phase < throttleActivePortion
+}
+
 func (c *Controller) monitorBuffer(id string, ctx context.Context) {
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
@@ -39,11 +49,7 @@ func (c *Controller) monitorBuffer(id string, ctx context.Context) {
 }
 
 func (c *Controller) adjustThrottleLocked(sess *Session) {
-	isHTTPSource := false
-	if sess != nil {
-		src := sess.Source
-		isHTTPSource = strings.HasPrefix(src, "http://") || strings.HasPrefix(src, "https://")
-	}
+	isRemoteHTTP := sess != nil && isRemoteHTTPSource(sess.Source)
 
 	mediaSeq, segCount, err := readPlaylistState(filepath.Join(sess.WorkDir, fmt.Sprintf("slice_%03d", sess.SliceIndex), "child.m3u8"))
 	if err != nil || segCount == 0 {
@@ -61,18 +67,16 @@ func (c *Controller) adjustThrottleLocked(sess *Session) {
 	aheadDuration := time.Duration(aheadSegments) * DefaultSegmentDuration
 
 	if !sess.DemandResumeUntil.IsZero() && time.Now().Before(sess.DemandResumeUntil) {
-		if aheadDuration < MaxBufferAhead {
-			if sess.Paused && sess.PausedByCap {
-				sess.PausedByCap = false
-				resumeProcessPlatform(sess, c, sess.ID, sess.Source)
-			}
-			return
+		if sess.Paused && sess.PausedByCap {
+			sess.PausedByCap = false
+			resumeProcessPlatform(sess, c, sess.ID, sess.Source)
 		}
+		return
 	}
 
 	switch {
 	case aheadDuration >= MaxBufferAhead && !sess.Paused:
-		if !isHTTPSource {
+		if !isRemoteHTTP {
 			sess.PausedByCap = true
 			pauseProcess(sess)
 		}
@@ -82,16 +86,12 @@ func (c *Controller) adjustThrottleLocked(sess *Session) {
 	}
 
 	if aheadDuration >= MaxBufferAhead {
-		// Local files are already fully paused above; only HTTP sources need the
-		// duty-cycle approach to keep the remote connection alive.
-		if !isHTTPSource {
+		// Local files and loopback torrent sources are already fully paused above;
+		// only remote HTTP sources need duty cycling to keep their connection alive.
+		if !isRemoteHTTP {
 			return
 		}
-		now := time.Now()
-		phase := time.Duration(now.UnixNano()) % throttleCycleWindow
-		allowWork := phase < (20 * time.Millisecond)
-
-		if allowWork {
+		if throttleAllowsWork(time.Now()) {
 			if sess.Paused {
 				sess.PausedByCap = false
 				resumeProcessPlatform(sess, c, sess.ID, sess.Source)
@@ -129,11 +129,7 @@ func (c *Controller) adjustThrottleLocked(sess *Session) {
 		return
 	}
 
-	now := time.Now()
-	phase := time.Duration(now.UnixNano()) % throttleCycleWindow
-	allowWork := phase < throttleActivePortion
-
-	if allowWork {
+	if throttleAllowsWork(time.Now()) {
 		if sess.Paused && sess.PausedByCap {
 			sess.PausedByCap = false
 			resumeProcessPlatform(sess, c, sess.ID, sess.Source)

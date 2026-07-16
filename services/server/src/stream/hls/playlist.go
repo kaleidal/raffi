@@ -55,6 +55,15 @@ func readPlaylistTimeline(path string, sliceStart float64) (int, []PlaylistSegme
 	return readPlaylistTimelineFromReader(f, sliceStart)
 }
 
+func playlistResumePoint(path string, sliceStart float64) (resumeTime float64, nextSequence int, ok bool) {
+	mediaSequence, timeline, err := readPlaylistTimeline(path, sliceStart)
+	if err != nil || len(timeline) == 0 {
+		return 0, 0, false
+	}
+	lastSegment := timeline[len(timeline)-1]
+	return lastSegment.End, mediaSequence + len(timeline), true
+}
+
 func readPlaylistTimelineFromReader(r io.Reader, sliceStart float64) (int, []PlaylistSegment, error) {
 	scanner := bufio.NewScanner(r)
 	mediaSeq := 0
