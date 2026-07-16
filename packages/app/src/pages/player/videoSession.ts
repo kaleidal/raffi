@@ -595,6 +595,11 @@ export function initHLS(
       }
     };
 
+    let networkRetries = 0;
+    let mediaRetries = 0;
+    const MAX_NETWORK_RETRIES = 5;
+    const MAX_MEDIA_RETRIES = 3;
+
     hls.on(Hls.Events.MANIFEST_LOADED, (_, data) => {
       console.log("MANIFEST_LOADED data:", data);
       if (
@@ -625,10 +630,16 @@ export function initHLS(
 
     hls.on(Hls.Events.MANIFEST_PARSED, onInitialParsed);
 
-    let networkRetries = 0;
-    let mediaRetries = 0;
-    const MAX_NETWORK_RETRIES = 5;
-    const MAX_MEDIA_RETRIES = 3;
+    // Retries represent consecutive failures, not every transient failure over
+    // the lifetime of a movie. A successful fragment proves the pipeline has
+    // recovered and must reset the circuit breaker.
+    hls.on(Hls.Events.FRAG_LOADED, () => {
+      networkRetries = 0;
+    });
+    hls.on(Hls.Events.FRAG_BUFFERED, () => {
+      networkRetries = 0;
+      mediaRetries = 0;
+    });
 
     hls.on(Hls.Events.ERROR, (_, data) => {
       console.error("HLS ERROR", data);

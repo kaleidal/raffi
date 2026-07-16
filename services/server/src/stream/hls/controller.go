@@ -121,13 +121,23 @@ func (c *Controller) EnsureSession(ctx context.Context, id, source string, start
 		return 0, "", err
 	}
 
-	if err := c.ensureCmdLocked(id, source, sess, sess.Slices[sess.SliceIndex].StartTime, sliceDir, false, len(sess.AvailableStreams) > 0); err != nil {
+	resumeAt := sess.Slices[sess.SliceIndex].StartTime
+	startSequence := sess.SliceIndex
+	appendMode := false
+	manifestPath := filepath.Join(sliceDir, "child.m3u8")
+	if resumeTime, nextSequence, ok := playlistResumePoint(manifestPath, resumeAt); ok {
+		resumeAt = resumeTime
+		startSequence = nextSequence
+		appendMode = true
+		log.Printf("Resuming interrupted HLS session %s at %.2fs (sequence %d)", id, resumeAt, startSequence)
+	}
+
+	if err := c.ensureCmdLocked(id, source, sess, resumeAt, startSequence, sliceDir, appendMode, len(sess.AvailableStreams) > 0); err != nil {
 		c.mu.Unlock()
 		return 0, "", err
 	}
 
 	duration := sess.DurationHint
-	manifestPath := filepath.Join(sliceDir, "child.m3u8")
 	abortFn := c.transcoderAbortFn(id)
 	c.mu.Unlock()
 
@@ -168,40 +178,20 @@ func (c *Controller) Seek(ctx context.Context, id, source string, target float64
 		}
 		duration := meta.Format.DurationSeconds
 
-		audioIndex := 0
-		audioCount := 0
-		foundEng := false
-		for _, st := range meta.Streams {
-			if st.CodecType == "audio" {
-				if st.Tags.Language == "eng" && !foundEng {
-					audioIndex = audioCount
-					foundEng = true
-				}
-				audioCount++
-			}
-		}
-
-		// Find codec for selected audio index
-		audioCodec := "aac" // Default
-		currentAudioIdx := 0
-		for _, st := range meta.Streams {
-			if st.CodecType == "audio" {
-				if currentAudioIdx == audioIndex {
-					audioCodec = st.CodecName
-					break
-				}
-				currentAudioIdx++
-			}
-		}
+		streams, audioIndex := StreamsFromMetadata(meta)
+		audioCodec := AudioCodecForIndex(meta, audioIndex)
 
 		sess = &Session{
-			WorkDir:       baseDir,
-			DurationHint:  duration,
-			Codec:         codec,
-			AudioIndex:    audioIndex,
-			AudioCodec:    audioCodec,
-			LastServedSeq: -1,
-			SliceIndex:    0,
+			ID:               id,
+			Source:           source,
+			WorkDir:          baseDir,
+			DurationHint:     duration,
+			Codec:            codec,
+			AudioIndex:       audioIndex,
+			AudioCodec:       audioCodec,
+			AvailableStreams: streams,
+			LastServedSeq:    -1,
+			SliceIndex:       0,
 			Slices: []SliceInfo{
 				{Index: 0, StartTime: target},
 			},
@@ -216,7 +206,7 @@ func (c *Controller) Seek(ctx context.Context, id, source string, target float64
 			return 0, 0, "", err
 		}
 
-		if err := c.ensureCmdLocked(id, source, sess, target, sliceDir, false, len(sess.AvailableStreams) > 0); err != nil {
+		if err := c.ensureCmdLocked(id, source, sess, target, sess.SliceIndex, sliceDir, false, len(sess.AvailableStreams) > 0); err != nil {
 			c.mu.Unlock()
 			return 0, 0, "", err
 		}
@@ -264,7 +254,7 @@ func (c *Controller) Seek(ctx context.Context, id, source string, target float64
 		for _, slice := range sess.Slices {
 			sliceDir := filepath.Join(sess.WorkDir, fmt.Sprintf("slice_%03d", slice.Index))
 			manifestPath := filepath.Join(sliceDir, "child.m3u8")
-			_, timeline, err := readPlaylistTimeline(manifestPath, slice.StartTime)
+			mediaSeq, timeline, err := readPlaylistTimeline(manifestPath, slice.StartTime)
 			if err != nil || len(timeline) == 0 {
 				continue
 			}
@@ -296,7 +286,8 @@ func (c *Controller) Seek(ctx context.Context, id, source string, target float64
 
 			if sess.Cmd == nil && !sess.Finished && endTime < sess.DurationHint {
 				resumeTime := endTime
-				if err := c.ensureCmdLocked(id, source, sess, resumeTime, sliceDir, true, len(sess.AvailableStreams) > 0); err != nil {
+				nextSequence := mediaSeq + len(timeline)
+				if err := c.ensureCmdLocked(id, source, sess, resumeTime, nextSequence, sliceDir, true, len(sess.AvailableStreams) > 0); err != nil {
 					log.Printf("Failed to resume slice %d: %v", slice.Index, err)
 				}
 			}
@@ -321,7 +312,7 @@ func (c *Controller) Seek(ctx context.Context, id, source string, target float64
 		return 0, 0, "", err
 	}
 
-	if err := c.ensureCmdLocked(id, source, sess, target, sliceDir, false, len(sess.AvailableStreams) > 0); err != nil {
+	if err := c.ensureCmdLocked(id, source, sess, target, sess.SliceIndex, sliceDir, false, len(sess.AvailableStreams) > 0); err != nil {
 		c.mu.Unlock()
 		return 0, 0, "", err
 	}

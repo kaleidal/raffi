@@ -81,6 +81,7 @@ func (c *Controller) ensureCmdLocked(
 	id, source string,
 	sess *Session,
 	seek float64,
+	startSeq int,
 	outDir string,
 	append bool,
 	hasAudio bool,
@@ -94,7 +95,7 @@ func (c *Controller) ensureCmdLocked(
 	ctxCmd, cancel := context.WithCancel(context.Background())
 	sess.CmdCancel = cancel
 
-	cmd, err := c.startCmd(ctxCmd, source, outDir, seek, sess.SliceIndex, DefaultSegmentDuration, MaxBufferAhead, sess.Codec, sess.AudioIndex, sess.AudioCodec, append, hasAudio)
+	cmd, err := c.startCmd(ctxCmd, source, outDir, seek, startSeq, DefaultSegmentDuration, MaxBufferAhead, sess.Codec, sess.AudioIndex, sess.AudioCodec, append, hasAudio)
 	if err != nil {
 		cancel()
 		return err
@@ -105,7 +106,9 @@ func (c *Controller) ensureCmdLocked(
 	sess.CurrentlyAt = seek
 	sess.Paused = false
 	sess.PausedByCap = false
-	sess.LastServedSeq = -1
+	if !append {
+		sess.LastServedSeq = -1
+	}
 	sess.Finished = false
 
 	go func(sessionID string, command *exec.Cmd, cmdCtx context.Context) {
