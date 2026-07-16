@@ -22,7 +22,10 @@ type TorrentStreamer struct {
 	mu      sync.RWMutex
 	streams map[string]*TorrentStream
 	dataDir string
+	enabled bool
 }
+
+var ErrTorrentingDisabled = errors.New("torrenting is disabled")
 
 type TorrentStream struct {
 	t        *torrent.Torrent
@@ -317,18 +320,31 @@ func (ts *TorrentStream) prepare() error {
 }
 
 func NewTorrentStreamer(dataDir string) *TorrentStreamer {
-	if err := os.MkdirAll(dataDir, 0o755); err != nil {
-		log.Fatalf("failed to create torrent data dir: %v", err)
+	return &TorrentStreamer{
+		streams: make(map[string]*TorrentStream),
+		dataDir: dataDir,
+	}
+}
+
+func (s *TorrentStreamer) Enable() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.enabled && s.client != nil {
+		return nil
+	}
+
+	if err := os.MkdirAll(s.dataDir, 0o755); err != nil {
+		return fmt.Errorf("failed to create torrent data dir: %w", err)
 	}
 
 	cfg := torrent.NewDefaultClientConfig()
-	cfg.DataDir = dataDir
+	cfg.DataDir = s.dataDir
 
-	pc, err := storage.NewDefaultPieceCompletionForDir(dataDir)
+	pc, err := storage.NewDefaultPieceCompletionForDir(s.dataDir)
 	if err != nil {
-		log.Fatalf("piece completion init failed: %v", err)
+		return fmt.Errorf("piece completion init failed: %w", err)
 	}
-	cfg.DefaultStorage = storage.NewFileWithCompletion(dataDir, pc)
+	cfg.DefaultStorage = storage.NewFileWithCompletion(s.dataDir, pc)
 
 	cfg.NoUpload = false
 	cfg.Debug = false
@@ -342,17 +358,56 @@ func NewTorrentStreamer(dataDir string) *TorrentStreamer {
 
 	c, err := torrent.NewClient(cfg)
 	if err != nil {
-		log.Fatalf("error creating torrent client: %s", err)
+		return fmt.Errorf("error creating torrent client: %w", err)
 	}
 
-	return &TorrentStreamer{
-		client:  c,
-		streams: make(map[string]*TorrentStream),
-		dataDir: dataDir,
+	s.client = c
+	s.enabled = true
+	log.Printf("Torrenting enabled")
+	return nil
+}
+
+func (s *TorrentStreamer) Disable() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	client := s.client
+	streams := s.streams
+	s.client = nil
+	s.enabled = false
+	s.streams = make(map[string]*TorrentStream)
+
+	for infoHash, torrentStream := range streams {
+		if torrentStream == nil {
+			continue
+		}
+		torrentStream.stop()
+		if torrentStream.t != nil {
+			log.Printf("Dropping torrent %s", infoHash)
+			torrentStream.t.Drop()
+		}
 	}
+	if client != nil {
+		client.Close()
+	}
+	if err := os.RemoveAll(s.dataDir); err != nil {
+		log.Printf("Warning: failed to remove torrent data while disabling: %v", err)
+	}
+	log.Printf("Torrenting disabled")
+}
+
+func (s *TorrentStreamer) IsEnabled() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.enabled && s.client != nil
 }
 
 func (s *TorrentStreamer) AddTorrent(magnetOrInfoHash string, fileIdx *int) (string, string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.enabled || s.client == nil {
+		return "", "", ErrTorrentingDisabled
+	}
+
 	var (
 		t   *torrent.Torrent
 		err error
@@ -371,9 +426,7 @@ func (s *TorrentStreamer) AddTorrent(magnetOrInfoHash string, fileIdx *int) (str
 
 	// Store stream immediately so session creation doesn't block on metadata.
 	stream := newTorrentStream(t, fileIdx)
-	s.mu.Lock()
 	s.streams[infoHash] = stream
-	s.mu.Unlock()
 
 	// Kick off metadata + file selection in the background.
 	go func() {
@@ -386,6 +439,10 @@ func (s *TorrentStreamer) AddTorrent(magnetOrInfoHash string, fileIdx *int) (str
 }
 
 func (s *TorrentStreamer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if !s.IsEnabled() {
+		http.Error(w, ErrTorrentingDisabled.Error(), http.StatusForbidden)
+		return
+	}
 	// Path: /torrents/{infohash}
 	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/torrents/"), "/")
 	if len(parts) == 0 || parts[0] == "" {
@@ -464,5 +521,5 @@ func (s *TorrentStreamer) GetStatus(infoHash string) (TorrentStatus, bool) {
 }
 
 func (s *TorrentStreamer) Close() {
-	s.client.Close()
+	s.Disable()
 }

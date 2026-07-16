@@ -22,6 +22,7 @@
     import { userZoom } from "./lib/stores/settingsStore";
     import { warmTraktClientAuth } from "./lib/db/db";
     import ZoomModal from "./components/common/ZoomModal.svelte";
+    import { syncTorrentingPreference } from "./lib/stores/torrenting";
 
     const pages = {
         home: Home,
@@ -286,6 +287,9 @@
         initAnalytics();
         trackEvent("app_started");
         trackPageView($router.page);
+        void syncTorrentingPreference().catch((error) => {
+            console.warn("Failed to sync torrenting preference with playback server", error);
+        });
 
         try {
             const storedRpc = localStorage.getItem("discord_rpc_enabled");

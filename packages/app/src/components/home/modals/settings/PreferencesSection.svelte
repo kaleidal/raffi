@@ -11,6 +11,10 @@
 		autoSkipIntros,
 		miniPlayerOnMinimize,
 	} from "../../../../lib/stores/playbackPreferences";
+	import {
+		allowTorrenting,
+		setTorrentingAllowed,
+	} from "../../../../lib/stores/torrenting";
 	import { currentUser, localMode } from "../../../../lib/stores/authStore";
 	import {
 		getHeroCatalogSourceOptions,
@@ -40,6 +44,8 @@
 	let heroSourceOptions: HeroCatalogSourceOption[] = [];
 	let heroSourceLoading = false;
 	let traktHeroSourceAvailable = false;
+	let torrentingSaving = false;
+	let torrentingError = "";
 	const HOME_REFRESH_EVENT = "raffi:home-refresh";
 
 	onMount(() => {
@@ -88,6 +94,22 @@
 			trackEvent("mini_player_on_minimize_toggled", { enabled: nextValue });
 			return nextValue;
 		});
+	}
+
+	async function toggleTorrenting() {
+		if (torrentingSaving) return;
+		torrentingSaving = true;
+		torrentingError = "";
+		const enabled = !$allowTorrenting;
+		try {
+			await setTorrentingAllowed(enabled);
+			trackEvent("torrenting_toggled", { enabled });
+		} catch (error) {
+			console.error("Failed to update torrenting setting", error);
+			torrentingError = "Could not update the playback server. Please try again.";
+		} finally {
+			torrentingSaving = false;
+		}
 	}
 
 	async function loadHeroSourceOptions() {
@@ -265,6 +287,38 @@
 				}`}
 			>
 				{miniPlayerEnabled ? "On" : "Off"}
+			</span>
+		</button>
+	</div>
+
+	<div class="rounded-2xl bg-white/8 p-4 flex flex-wrap items-center gap-4 justify-between">
+		<div>
+			<p class="text-white font-medium">Allow Torrenting</p>
+			<p class="text-white/60 text-sm">
+				Allow Raffi to start, download, and seed torrent streams. Turning this off stops all torrent activity.
+			</p>
+			{#if torrentingError}
+				<p class="mt-1 text-red-300 text-xs">{torrentingError}</p>
+			{/if}
+		</div>
+		<button
+			class={`relative w-16 h-9 rounded-full border border-white/10 transition-colors duration-200 cursor-pointer disabled:cursor-wait disabled:opacity-60 ${
+				$allowTorrenting ? "bg-white" : "bg-white/10"
+			}`}
+			on:click={toggleTorrenting}
+			disabled={torrentingSaving}
+			aria-label="Toggle torrenting"
+			role="switch"
+			aria-checked={$allowTorrenting}
+		>
+			<span
+				class={`absolute top-1 left-1 w-7 h-7 rounded-full text-[10px] font-semibold flex items-center justify-center transition-all duration-200 ${
+					$allowTorrenting
+						? "translate-x-7 bg-black text-white/90"
+						: "translate-x-0 bg-white/80 text-black"
+				}`}
+			>
+				{$allowTorrenting ? "On" : "Off"}
 			</span>
 		</button>
 	</div>

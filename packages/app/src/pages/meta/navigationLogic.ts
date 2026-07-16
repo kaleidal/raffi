@@ -7,6 +7,7 @@ import {
 import { router } from "../../lib/stores/router";
 import { fetchStreams, fetchStreamListForEpisodeOnly, playStream } from "./streamLogic";
 import type { Stream } from "./types";
+import { allowTorrenting, hasAcknowledgedTorrentWarning } from "../../lib/stores/torrenting";
 
 export const resolveNextEpisodeStream = async (
     imdbID: string,
@@ -121,18 +122,22 @@ export const handleNextEpisode = async (imdbID: string, progressMap: any) => {
                 match.infoHash ||
                 (match.url && match.url.startsWith("magnet:"));
 
-            if (isTorrent && !localStorage.getItem("torrentWarningShown")) {
+            if (isTorrent && !hasAcknowledgedTorrentWarning()) {
                 pendingTorrentStream.set(match);
                 showTorrentWarning.set(true);
                 selectedStreamUrl.set(null);
                 selectedEpisode.set(nextEp);
                 router.back();
-            } else {
+            } else if (!isTorrent || get(allowTorrenting)) {
                 selectedEpisode.set(nextEp);
                 playStream(match, progressMap, {
                     replace: true,
                     autoSkipFromNextEpisode: true,
                 });
+            } else {
+                selectedStreamUrl.set(null);
+                selectedEpisode.set(nextEp);
+                router.back();
             }
         } else {
             selectedStreamUrl.set(null);
