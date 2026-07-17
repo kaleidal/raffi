@@ -16,15 +16,16 @@ import (
 const (
 	DefaultSegmentDuration = 6 * time.Second
 	MaxBufferAhead         = 90 * time.Second
-	sliceReuseSafetyMargin = 5.0
+	PrefetchBufferAhead    = 12 * time.Second
 )
 
 type Controller struct {
-	mu         sync.Mutex
-	sessions   map[string]*Session
-	probeCache map[string]probeCacheEntry
-	ffprobeFn  func(ctx context.Context, source string) (*Metadata, string, error)
-	startCmd   TranscoderFunc
+	mu           sync.Mutex
+	sessions     map[string]*Session
+	probeCache   map[string]probeCacheEntry
+	bufferLimits map[string]time.Duration
+	ffprobeFn    func(ctx context.Context, source string) (*Metadata, string, error)
+	startCmd     TranscoderFunc
 }
 
 type probeCacheEntry struct {
@@ -34,10 +35,11 @@ type probeCacheEntry struct {
 
 func NewController(ffmpegPath, ffprobePath string) *Controller {
 	return &Controller{
-		sessions:   make(map[string]*Session),
-		probeCache: make(map[string]probeCacheEntry),
-		ffprobeFn:  NewProbeDuration(ffprobePath),
-		startCmd:   NewTranscoder(ffmpegPath),
+		sessions:     make(map[string]*Session),
+		probeCache:   make(map[string]probeCacheEntry),
+		bufferLimits: make(map[string]time.Duration),
+		ffprobeFn:    NewProbeDuration(ffprobePath),
+		startCmd:     NewTranscoder(ffmpegPath),
 	}
 }
 
@@ -71,14 +73,7 @@ func (c *Controller) EnsureSession(ctx context.Context, id, source string, start
 			return 0, "", err
 		}
 
-		probeCtx := ctx
-		if isTorrentSource(source) {
-			ctxProbe, cancel := context.WithTimeout(ctx, 10*time.Second)
-			defer cancel()
-			probeCtx = ctxProbe
-		}
-
-		meta, codec, err := c.getOrProbeLocked(probeCtx, source)
+		meta, codec, err := c.getOrProbeLocked(ctx, source)
 		if err != nil {
 			c.mu.Unlock()
 			return 0, "", fmt.Errorf("probe failed: %w", err)
@@ -97,6 +92,7 @@ func (c *Controller) EnsureSession(ctx context.Context, id, source string, start
 			AudioIndex:       audioIndex,
 			AudioCodec:       audioCodec,
 			AvailableStreams: streams,
+			BufferAheadLimit: c.bufferAheadLimitLocked(id),
 			LastServedSeq:    -1,
 			SliceIndex:       0,
 			Slices: []SliceInfo{
@@ -111,8 +107,16 @@ func (c *Controller) EnsureSession(ctx context.Context, id, source string, start
 	if (sess.Cmd != nil && sess.Cmd.Process != nil) || sess.Finished {
 		sliceDir := filepath.Join(sess.WorkDir, fmt.Sprintf("slice_%03d", sess.SliceIndex))
 		manifestPath := filepath.Join(sliceDir, "child.m3u8")
+		duration := sess.DurationHint
+		active := sess.Cmd != nil && sess.Cmd.Process != nil
+		abortFn := c.transcoderAbortFn(id)
 		c.mu.Unlock()
-		return sess.DurationHint, manifestPath, nil
+		if active {
+			if err := waitForManifestReady(ctx, manifestPath, abortFn); err != nil {
+				return 0, "", err
+			}
+		}
+		return duration, manifestPath, nil
 	}
 
 	sliceDir := filepath.Join(sess.WorkDir, fmt.Sprintf("slice_%03d", sess.SliceIndex))
@@ -141,11 +145,7 @@ func (c *Controller) EnsureSession(ctx context.Context, id, source string, start
 	abortFn := c.transcoderAbortFn(id)
 	c.mu.Unlock()
 
-	manifestTimeout := 10 * time.Second
-	if isTorrentSource(source) {
-		manifestTimeout = 60 * time.Second
-	}
-	if err := waitForManifestReady(manifestPath, manifestTimeout, abortFn); err != nil {
+	if err := waitForManifestReady(ctx, manifestPath, abortFn); err != nil {
 		return 0, "", err
 	}
 
@@ -165,13 +165,7 @@ func (c *Controller) Seek(ctx context.Context, id, source string, target float64
 			return 0, 0, "", err
 		}
 
-		probeCtx := ctx
-		if isTorrentSource(source) {
-			ctxProbe, cancel := context.WithTimeout(ctx, 2*time.Minute)
-			defer cancel()
-			probeCtx = ctxProbe
-		}
-		meta, codec, err := c.getOrProbeLocked(probeCtx, source)
+		meta, codec, err := c.getOrProbeLocked(ctx, source)
 		if err != nil {
 			c.mu.Unlock()
 			return 0, 0, "", fmt.Errorf("probe failed: %w", err)
@@ -190,6 +184,7 @@ func (c *Controller) Seek(ctx context.Context, id, source string, target float64
 			AudioIndex:       audioIndex,
 			AudioCodec:       audioCodec,
 			AvailableStreams: streams,
+			BufferAheadLimit: c.bufferAheadLimitLocked(id),
 			LastServedSeq:    -1,
 			SliceIndex:       0,
 			Slices: []SliceInfo{
@@ -215,11 +210,7 @@ func (c *Controller) Seek(ctx context.Context, id, source string, target float64
 		abortFn := c.transcoderAbortFn(id)
 		c.mu.Unlock()
 
-		manifestTimeout := 10 * time.Second
-		if isTorrentSource(source) {
-			manifestTimeout = 60 * time.Second
-		}
-		if err := waitForManifestReady(manifestPath, manifestTimeout, abortFn); err != nil {
+		if err := waitForManifestSegments(ctx, manifestPath, abortFn, 1); err != nil {
 			return 0, 0, "", err
 		}
 
@@ -238,8 +229,16 @@ func (c *Controller) Seek(ctx context.Context, id, source string, target float64
 			}
 		}
 
+		duration := sess.DurationHint
+		active := sess.Cmd != nil && sess.Cmd.Process != nil
+		abortFn := c.transcoderAbortFn(id)
 		c.mu.Unlock()
-		return sess.DurationHint, startTime, manifestPath, nil
+		if active {
+			if err := waitForManifestSegments(ctx, manifestPath, abortFn, 1); err != nil {
+				return 0, 0, "", err
+			}
+		}
+		return duration, startTime, manifestPath, nil
 	}
 
 	if target < 0 {
@@ -261,7 +260,7 @@ func (c *Controller) Seek(ctx context.Context, id, source string, target float64
 
 			lastSegment := timeline[len(timeline)-1]
 			endTime := lastSegment.End
-			if target < slice.StartTime || target >= (endTime-sliceReuseSafetyMargin) {
+			if target < slice.StartTime || target >= endTime {
 				continue
 			}
 
@@ -322,7 +321,7 @@ func (c *Controller) Seek(ctx context.Context, id, source string, target float64
 	abortFn := c.transcoderAbortFn(id)
 	c.mu.Unlock()
 
-	if err := waitForManifestReady(manifestPath, 10*time.Second, abortFn); err != nil {
+	if err := waitForManifestSegments(ctx, manifestPath, abortFn, 1); err != nil {
 		return 0, 0, "", err
 	}
 
@@ -385,6 +384,35 @@ func (c *Controller) CurrentSliceDir(id string) string {
 		return ""
 	}
 	return filepath.Join(sess.WorkDir, fmt.Sprintf("slice_%03d", sess.SliceIndex))
+}
+
+func (c *Controller) SetBufferAheadLimit(id string, limit time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if limit <= 0 || limit >= MaxBufferAhead {
+		delete(c.bufferLimits, id)
+		limit = MaxBufferAhead
+	} else {
+		c.bufferLimits[id] = limit
+	}
+	if sess := c.sessions[id]; sess != nil {
+		sess.BufferAheadLimit = limit
+		c.adjustThrottleLocked(sess)
+	}
+}
+
+func (c *Controller) bufferAheadLimitLocked(id string) time.Duration {
+	if limit := c.bufferLimits[id]; limit > 0 {
+		return limit
+	}
+	return MaxBufferAhead
+}
+
+func (c *Controller) IsProducing(id string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	sess := c.sessions[id]
+	return sess != nil && sess.Cmd != nil && !sess.Finished
 }
 
 func (c *Controller) GetAllSessionIDs() []string {

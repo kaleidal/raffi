@@ -341,7 +341,7 @@ export async function loadVideoSession(
       sessionId = reuse.sessionId;
       setLoadingStage?.("Using prefetched stream");
       setLoadingDetails?.("");
-      const res = await fetch(`${serverUrl}/sessions/${sessionId}`);
+      const res = await fetch(`${serverUrl}/sessions/${sessionId}?playback=1`);
       if (!res.ok) throw new Error("Failed to load session info");
       sessionData = await res.json();
       setPlaybackOffset(startTime);
@@ -497,6 +497,7 @@ export function initHLS(
     setErrorDetails: (details: string) => void;
   },
   initialSeekTime: number | null = null,
+  bufferMode: "playback" | "prefetch" = "playback",
 ): Hls | null {
   const {
     setLoading,
@@ -543,10 +544,12 @@ export function initHLS(
   let hls: Hls | null = null;
 
   if (Hls.isSupported()) {
+    const maxBufferLength = bufferMode === "prefetch" ? 12 : 50;
+    const maxMaxBufferLength = bufferMode === "prefetch" ? 12 : 80;
     hls = new Hls({
       lowLatencyMode: false,
-      maxBufferLength: 50,
-      maxMaxBufferLength: 80,
+      maxBufferLength,
+      maxMaxBufferLength,
       backBufferLength: 30,
       maxBufferHole: 0,
       maxFragLookUpTolerance: 0,
@@ -775,7 +778,7 @@ export function createSeekHandler(
   setStates: {
     setPendingSeek: (seek: number | null) => void;
     setSeekGuard: (guard: boolean) => void;
-    setLoading: (loading: boolean) => void;
+    setBuffering: (buffering: boolean) => void;
     setShowCanvas: (show: boolean) => void;
     setFirstSeekLoad: (load: boolean) => void;
     setPlaybackOffset: (offset: number) => void;
@@ -784,7 +787,7 @@ export function createSeekHandler(
   const {
     setPendingSeek,
     setSeekGuard,
-    setLoading,
+    setBuffering,
     setShowCanvas,
     setFirstSeekLoad,
     setPlaybackOffset,
@@ -806,13 +809,13 @@ export function createSeekHandler(
     }
 
     setSeekGuard(true);
-    setLoading(true);
+    setBuffering(true);
     setShowCanvas(true);
     setFirstSeekLoad(true);
     const sessionId = getSessionId();
     if (!sessionId) {
       setSeekGuard(false);
-      setLoading(false);
+      setBuffering(false);
       setShowCanvas(false);
       return;
     }
@@ -826,7 +829,6 @@ export function createSeekHandler(
       const onSeekParsed = () => {
         console.log("HLS MANIFEST_PARSED (seek)");
         setSeekGuard(false);
-        setLoading(false);
         setShowCanvas(false);
 
         // Re-fetch subtitles if active
@@ -855,7 +857,6 @@ export function createSeekHandler(
         setPlaybackOffset(desiredGlobal);
         videoElem.currentTime = 0;
         setSeekGuard(false);
-        setLoading(false);
         setShowCanvas(false);
 
         // Re-fetch subtitles if active

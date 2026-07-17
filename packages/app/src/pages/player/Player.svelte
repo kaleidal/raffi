@@ -20,7 +20,7 @@
         autoSkipIntros,
         miniPlayerOnMinimize,
     } from "../../lib/stores/playbackPreferences";
-    import { ChevronLeft } from "@lucide/svelte";
+    import { ChevronLeft, SkipForward } from "@lucide/svelte";
     import * as NavigationLogic from "../meta/navigationLogic";
     import { streamToPlayableUrl } from "../meta/streamLogic";
     import * as ProgressLogic from "../meta/progressLogic";
@@ -34,6 +34,7 @@
         loadingStage,
         loadingDetails,
         loadingProgress,
+        playbackBuffering,
         showCanvas,
         currentTime,
         duration,
@@ -123,6 +124,12 @@
     };
 
     const handleNextEpisodeInternal = () => {
+        if (nextEpisodePrefetchResolved) {
+            return NavigationLogic.playResolvedNextEpisode(
+                nextEpisodePrefetchResolved,
+                get(metaProgressMap),
+            );
+        }
         if (onNextEpisode) {
             return onNextEpisode();
         }
@@ -138,9 +145,11 @@
     let nextEpisodePrefetchDispose: ((opts?: { transfer?: boolean }) => void) | null =
         null;
     let nextEpisodePrefetchHandoff: NextEpisodePrefetchHandoff | null = null;
+    let nextEpisodePrefetchResolved: Awaited<ReturnType<typeof NavigationLogic.resolveNextEpisodeStream>> = null;
     let bingeAutoAdvancing = false;
     let nextEpisodePrefetchRunId = 0;
     let nextEpisodePrefetchStarting = false;
+    let nextEpisodePrefetchRetryAt = 0;
     let effectiveChapterMarkers: Chapter[] = [];
     let skipButtonLabel = "Skip Intro";
     let miniPlayerActive = false;
@@ -531,8 +540,8 @@
         $sessionData,
         introDbChapters,
     );
-
-    $: showNextEpisodeAllowed = $showNextEpisode && hasNextEpisode;
+    $: nextEpisodePrefetchStartAt = Math.min(nextEpisodePrefetchWindow.startAt, 60);
+    $: nextEpisodeHighlighted = $currentChapter?.kind === "outro";
 
     $: nowPlayingLabel = (() => {
         const name = metaData?.meta?.name;
@@ -552,11 +561,13 @@
     const disposeNextEpisodePrefetch = (opts?: { transfer?: boolean }) => {
         nextEpisodePrefetchRunId += 1;
         nextEpisodePrefetchStarting = false;
+        nextEpisodePrefetchRetryAt = 0;
         if (nextEpisodePrefetchDispose) {
             nextEpisodePrefetchDispose(opts);
             nextEpisodePrefetchDispose = null;
         }
         nextEpisodePrefetchHandoff = null;
+        nextEpisodePrefetchResolved = null;
     };
 
     const handleTorrentError = (message: string) => {
@@ -657,6 +668,7 @@
             };
         },
         startTorrentStatusPolling: torrentStatusPoller.start,
+        awaitTorrentReady: torrentStatusPoller.waitUntilReady,
         stopTorrentStatusPolling: torrentStatusPoller.stop,
         awaitDomUpdate: tick,
     });
@@ -876,7 +888,6 @@
         if (torrentFailureExitTimeout) clearTimeout(torrentFailureExitTimeout);
         clearEmbedLoadFallback();
         clearBrowserAudioCheck();
-        playerSessionLoader.clearLoadTimeout();
         disposeNextEpisodePrefetch();
         Session.cleanupSession(
             hls,
@@ -949,46 +960,63 @@
                     return;
                 }
 
-                if (
-                    imdbID &&
-                    hasNextEpisode &&
-                    !nextEpisodePrefetchDispose &&
-                    !nextEpisodePrefetchStarting &&
-                    time >= nextEpisodePrefetchWindow.startAt &&
-                    time < nextEpisodePrefetchWindow.creditsAt &&
-                    nextEpisodePrefetchWindow.creditsAt > 0
-                ) {
-                    nextEpisodePrefetchStarting = true;
-                    const runId = ++nextEpisodePrefetchRunId;
-                    void (async () => {
-                        try {
-                            const resolved = await NavigationLogic.resolveNextEpisodeStream(imdbID);
-                            if (runId !== nextEpisodePrefetchRunId) return;
-                            if (!nextEpisodePrefetchVideo || !resolved) return;
-                            const playable = streamToPlayableUrl(resolved.stream);
-                            if (!playable) return;
-                            const { dispose, handoff } = await startNextEpisodePrefetch(
-                                playable.url,
-                                playable.fileIdx,
-                                nextEpisodePrefetchVideo,
-                                () => {},
-                            );
-                            if (runId !== nextEpisodePrefetchRunId) {
-                                dispose();
-                                return;
-                            }
-                            nextEpisodePrefetchDispose = dispose;
-                            nextEpisodePrefetchHandoff = handoff;
-                        } finally {
-                            nextEpisodePrefetchStarting = false;
+            }
+
+            if (
+                imdbID &&
+                hasNextEpisode &&
+                !$watchParty.isActive &&
+                !nextEpisodePrefetchDispose &&
+                !nextEpisodePrefetchStarting &&
+                Date.now() >= nextEpisodePrefetchRetryAt &&
+                time >= nextEpisodePrefetchStartAt &&
+                nextEpisodePrefetchWindow.creditsAt > 0
+            ) {
+                nextEpisodePrefetchStarting = true;
+                const runId = ++nextEpisodePrefetchRunId;
+                void (async () => {
+                    try {
+                        const resolved = await NavigationLogic.resolveNextEpisodeStream(imdbID);
+                        if (runId !== nextEpisodePrefetchRunId) return;
+                        if (!nextEpisodePrefetchVideo || !resolved) {
+                            nextEpisodePrefetchRetryAt = Date.now() + 10_000;
+                            return;
                         }
-                    })();
-                }
+                        const playable = streamToPlayableUrl(resolved.stream);
+                        if (!playable) {
+                            nextEpisodePrefetchRetryAt = Date.now() + 10_000;
+                            return;
+                        }
+                        const { dispose, handoff } = await startNextEpisodePrefetch(
+                            playable.url,
+                            playable.fileIdx,
+                            nextEpisodePrefetchVideo,
+                            () => {},
+                        );
+                        if (runId !== nextEpisodePrefetchRunId) {
+                            dispose?.();
+                            return;
+                        }
+                        if (!dispose) {
+                            nextEpisodePrefetchRetryAt = Date.now() + 10_000;
+                            return;
+                        }
+                        nextEpisodePrefetchDispose = dispose;
+                        nextEpisodePrefetchHandoff = handoff;
+                        nextEpisodePrefetchResolved = resolved;
+                    } catch (error) {
+                        console.warn("Next episode prefetch attempt failed", error);
+                        nextEpisodePrefetchRetryAt = Date.now() + 10_000;
+                    } finally {
+                        nextEpisodePrefetchStarting = false;
+                    }
+                })();
             }
         }
     };
 
     const handlePlay = () => {
+        torrentStatusPoller.stop();
         isPlaying.set(true);
         hasStarted = true;
         void traktScrobbler.send("start");
@@ -1063,11 +1091,12 @@
         loadVideo(currentVideoSrc);
     };
 
-    $: if (!$loading) {
-        torrentStatusPoller.stop();
-    }
-
     $: if ($showError && !errorModalOpen) {
+        loading.set(false);
+        loadingStage.set("");
+        loadingDetails.set("");
+        loadingProgress.set(null);
+        playbackBuffering.set(false);
         errorModalOpen = true;
         trackEvent("player_error_shown", {
             message: $errorMessage || null,
@@ -1355,12 +1384,17 @@
                     }
                 }}
                 on:waiting={() => {
-                    captureLoadingBackdrop();
-                    loading.set(true);
-                    loadingStage.set("Buffering");
+                    if (hasStarted) {
+                        playbackBuffering.set(true);
+                    } else {
+                        captureLoadingBackdrop();
+                        loading.set(true);
+                        loadingStage.set("Buffering");
+                    }
                     handleBufferStart();
                 }}
                 on:playing={() => {
+                    playbackBuffering.set(false);
                     loading.set(false);
                     loadingStage.set("");
                     loadingDetails.set("");
@@ -1369,6 +1403,7 @@
                     scheduleBrowserAudioCheck();
                 }}
                 on:canplay={() => {
+                    playbackBuffering.set(false);
                     loading.set(false);
                 }}
                 on:error={handleVideoError}
@@ -1418,6 +1453,12 @@
         progress={$loadingProgress}
     />
 
+    {#if $playbackBuffering && !$loading && !miniPlayerActive && !embedSrc}
+        <div class="pointer-events-none absolute inset-0 z-40 flex items-center justify-center" aria-label="Buffering">
+            <div class="h-14 w-14 animate-spin rounded-full border-4 border-white/25 border-t-white drop-shadow-lg"></div>
+        </div>
+    {/if}
+
     {#if !$loading && !miniPlayerActive}
         <div
             class="absolute left-0 top-0 p-4 sm:p-10 z-50 transition-all duration-300 ease-in-out transform {$controlsVisible
@@ -1433,14 +1474,33 @@
             </button>
         </div>
 
+        {#if metaData?.meta?.type === "series" && hasNextEpisode && !(!$localMode && $watchParty.isActive && !$watchParty.isHost)}
+            <div
+                class="absolute right-0 top-0 p-4 sm:p-10 z-50 transition-all duration-300 ease-in-out transform {nextEpisodeHighlighted || $controlsVisible
+                    ? 'translate-y-0 opacity-100'
+                    : '-translate-y-10 opacity-0 pointer-events-none'} will-change-transform will-change-opacity"
+            >
+                <button
+                    class="backdrop-blur-md transition-all duration-200 rounded-full p-4 cursor-pointer {nextEpisodeHighlighted
+                        ? 'bg-white shadow-[0_0_0_4px_rgba(255,255,255,0.22),0_0_32px_rgba(255,255,255,0.5)] scale-105'
+                        : 'bg-[#000000]/20 hover:bg-[#FFFFFF]/20'}"
+                    on:click={handleNextEpisodeClick}
+                    aria-label="Next episode"
+                    title={nextEpisodeHighlighted ? "Next Episode — Outro" : "Next Episode"}
+                >
+                    <SkipForward size={30} color={nextEpisodeHighlighted ? "black" : "white"} strokeWidth={2} />
+                </button>
+            </div>
+        {/if}
+
         {#if nowPlayingLabel}
             <div
-                class="absolute top-4 inset-x-24 sm:top-10 sm:inset-x-28 z-50 flex items-center justify-center h-14 sm:h-16 pointer-events-none select-none transition-all duration-300 ease-in-out transform {$controlsVisible
+                class="absolute top-4 inset-x-24 sm:top-10 sm:inset-x-28 z-50 flex h-[62px] items-center justify-center pointer-events-none select-none transition-all duration-300 ease-in-out transform {$controlsVisible
                     ? 'translate-y-0 opacity-100'
                     : '-translate-y-10 opacity-0'} will-change-transform will-change-opacity"
             >
                 <span
-                    class="inline-block max-w-full truncate rounded-full bg-[#000000]/60 px-5 py-3 text-[16px] leading-6 font-medium text-white backdrop-blur-md sm:max-w-[640px] sm:px-8 sm:text-[18px] {$controlsVisible
+                    class="inline-flex min-h-[62px] max-w-full items-center truncate rounded-full bg-[#000000]/20 p-4 text-[16px] leading-6 font-medium text-white backdrop-blur-md transition-colors duration-200 sm:max-w-[640px] sm:px-8 sm:text-[18px] {$controlsVisible
                         ? 'pointer-events-auto'
                         : 'pointer-events-none'}"
                     title={nowPlayingLabel}
@@ -1456,11 +1516,9 @@
             >
                 <PlayerOverlays
                     showSkipIntro={$showSkipIntro}
-                    showNextEpisode={showNextEpisodeAllowed}
                     isWatchPartyMember={!$localMode && $watchParty.isActive && !$watchParty.isHost}
                     skipLabel={skipButtonLabel}
                     skipChapter={handleSkipIntro}
-                    nextEpisode={handleNextEpisodeClick}
                 />
 
                 <div
@@ -1480,7 +1538,6 @@
                         {sessionId}
                         {videoSrc}
                         {metaData}
-                        {hasNextEpisode}
                         currentAudioLabel={$currentAudioLabel}
                         currentSubtitleLabel={$currentSubtitleLabel}
                         isWatchPartyMember={!$localMode && $watchParty.isActive && !$watchParty.isHost}
@@ -1493,7 +1550,6 @@
                         toggleFullscreen={handleToggleFullscreen}
                         objectFit={$objectFit}
                         toggleObjectFit={handleToggleObjectFit}
-                        onNextEpisode={handleNextEpisodeClick}
                         showWatchParty={!$localMode && $cloudSyncStatus.cloudFeaturesAvailable && !embedSrc}
                         onAudioClick={openAudioSelection}
                         onSubtitleClick={openSubtitleSelection}

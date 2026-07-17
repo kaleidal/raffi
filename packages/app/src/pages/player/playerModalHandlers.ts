@@ -10,6 +10,7 @@ import {
     firstSeekLoad,
     loading,
     loadingStage,
+    playbackBuffering,
     pendingSeek,
     playbackOffset,
     seekGuard,
@@ -88,7 +89,7 @@ export const createPlayerModalHandlers = ({
                             {
                                 setPendingSeek: pendingSeek.set,
                                 setSeekGuard: seekGuard.set,
-                                setLoading: loading.set,
+                                setBuffering: playbackBuffering.set,
                                 setShowCanvas: showCanvas.set,
                                 setFirstSeekLoad: firstSeekLoad.set,
                                 setPlaybackOffset: playbackOffset.set,

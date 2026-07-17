@@ -4,31 +4,27 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
 const (
-	throttleCycleWindow       = time.Second
-	throttleActivePortion     = 600 * time.Millisecond // ~60% active
-	throttleMinAheadToEngage  = 12 * time.Second
+	bufferMonitorInterval     = 100 * time.Millisecond
 	clientDemandResumeGrace   = 4 * time.Second
 	playlistDemandResumeGrace = 1200 * time.Millisecond
 	playlistDemandNudgeMinGap = 2 * time.Second
 )
 
-func isRemoteHTTPSource(source string) bool {
-	isHTTPSource := strings.HasPrefix(source, "http://") || strings.HasPrefix(source, "https://")
-	return isHTTPSource && !isTorrentSource(source)
-}
-
-func throttleAllowsWork(now time.Time) bool {
-	phase := time.Duration(now.UnixNano()) % throttleCycleWindow
-	return phase < throttleActivePortion
+func bufferedAheadDuration(mediaSeq, segCount, lastServedSeq int) time.Duration {
+	if segCount <= 0 {
+		return 0
+	}
+	highest := mediaSeq + segCount - 1
+	aheadSegments := max(highest-lastServedSeq, 0)
+	return time.Duration(aheadSegments) * DefaultSegmentDuration
 }
 
 func (c *Controller) monitorBuffer(id string, ctx context.Context) {
-	ticker := time.NewTicker(250 * time.Millisecond)
+	ticker := time.NewTicker(bufferMonitorInterval)
 	defer ticker.Stop()
 
 	for {
@@ -49,8 +45,6 @@ func (c *Controller) monitorBuffer(id string, ctx context.Context) {
 }
 
 func (c *Controller) adjustThrottleLocked(sess *Session) {
-	isRemoteHTTP := sess != nil && isRemoteHTTPSource(sess.Source)
-
 	mediaSeq, segCount, err := readPlaylistState(filepath.Join(sess.WorkDir, fmt.Sprintf("slice_%03d", sess.SliceIndex), "child.m3u8"))
 	if err != nil || segCount == 0 {
 		if !sess.DemandResumeUntil.IsZero() && time.Now().Before(sess.DemandResumeUntil) {
@@ -62,43 +56,16 @@ func (c *Controller) adjustThrottleLocked(sess *Session) {
 		return
 	}
 
-	highest := mediaSeq + segCount - 1
-	aheadSegments := max(highest-sess.LastServedSeq, 0)
-	aheadDuration := time.Duration(aheadSegments) * DefaultSegmentDuration
-
-	if !sess.DemandResumeUntil.IsZero() && time.Now().Before(sess.DemandResumeUntil) {
-		if sess.Paused && sess.PausedByCap {
-			sess.PausedByCap = false
-			resumeProcessPlatform(sess, c, sess.ID, sess.Source)
-		}
-		return
+	aheadDuration := bufferedAheadDuration(mediaSeq, segCount, sess.LastServedSeq)
+	bufferLimit := sess.BufferAheadLimit
+	if bufferLimit <= 0 {
+		bufferLimit = MaxBufferAhead
 	}
+	resumeAhead := max(bufferLimit-2*DefaultSegmentDuration, 0)
+	now := time.Now()
+	hasDemand := !sess.DemandResumeUntil.IsZero() && now.Before(sess.DemandResumeUntil)
 
-	switch {
-	case aheadDuration >= MaxBufferAhead && !sess.Paused:
-		if !isRemoteHTTP {
-			sess.PausedByCap = true
-			pauseProcess(sess)
-		}
-	case aheadDuration <= MaxBufferAhead/2 && sess.Paused:
-		sess.PausedByCap = false
-		resumeProcessPlatform(sess, c, sess.ID, sess.Source)
-	}
-
-	if aheadDuration >= MaxBufferAhead {
-		// Local files and loopback torrent sources are already fully paused above;
-		// only remote HTTP sources need duty cycling to keep their connection alive.
-		if !isRemoteHTTP {
-			return
-		}
-		if throttleAllowsWork(time.Now()) {
-			if sess.Paused {
-				sess.PausedByCap = false
-				resumeProcessPlatform(sess, c, sess.ID, sess.Source)
-			}
-			return
-		}
-
+	if aheadDuration >= bufferLimit {
 		if !sess.Paused {
 			sess.PausedByCap = true
 			pauseProcess(sess)
@@ -106,40 +73,11 @@ func (c *Controller) adjustThrottleLocked(sess *Session) {
 		return
 	}
 
-	if aheadDuration <= MaxBufferAhead/2 {
-		return
-	}
-
-	// First startup buffer should run uncapped for fastest time-to-first-frame.
-	// We only cap after playback has started serving at least one segment.
-	if sess.LastServedSeq < 0 {
+	if hasDemand || aheadDuration <= resumeAhead {
 		if sess.Paused && sess.PausedByCap {
 			sess.PausedByCap = false
 			resumeProcessPlatform(sess, c, sess.ID, sess.Source)
 		}
-		return
-	}
-
-	// Don't cap when the ahead buffer is still shallow to avoid rebuffer risk.
-	if aheadDuration < throttleMinAheadToEngage {
-		if sess.Paused && sess.PausedByCap {
-			sess.PausedByCap = false
-			resumeProcessPlatform(sess, c, sess.ID, sess.Source)
-		}
-		return
-	}
-
-	if throttleAllowsWork(time.Now()) {
-		if sess.Paused && sess.PausedByCap {
-			sess.PausedByCap = false
-			resumeProcessPlatform(sess, c, sess.ID, sess.Source)
-		}
-		return
-	}
-
-	if !sess.Paused {
-		sess.PausedByCap = true
-		pauseProcess(sess)
 	}
 }
 
@@ -190,6 +128,13 @@ func (c *Controller) NotifyClientPlaylistRequest(id string) {
 
 	sess := c.sessions[id]
 	if sess == nil {
+		return
+	}
+
+	// Polling an already usable playlist is not demand for more media. Without
+	// this guard, normal HLS polling continuously wakes a saturated transcoder.
+	manifestPath := filepath.Join(sess.WorkDir, fmt.Sprintf("slice_%03d", sess.SliceIndex), "child.m3u8")
+	if _, segCount, err := readPlaylistState(manifestPath); err == nil && segCount > 0 {
 		return
 	}
 

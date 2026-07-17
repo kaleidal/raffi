@@ -1,10 +1,12 @@
 import type { Chapter, ChapterKind } from "./types";
 
 type IntroDbSegment = {
-    start_sec: number;
-    end_sec: number;
-    confidence: number;
-    submission_count: number;
+    start_sec?: number | string;
+    end_sec?: number | string;
+    start_ms?: number;
+    end_ms?: number;
+    confidence?: number;
+    submission_count?: number;
 };
 
 type IntroDbResponse = {
@@ -17,12 +19,26 @@ type IntroDbResponse = {
 };
 
 const INTRO_DB_BASE_URL = "https://api.introdb.app";
+const chapterCache = new Map<string, Chapter[]>();
+
+const parseTimestamp = (seconds: unknown, milliseconds: unknown): number => {
+    if (typeof seconds === "string" && seconds.includes(":")) {
+        const parts = seconds.split(":").map(Number);
+        if (parts.every(Number.isFinite)) {
+            return parts.reduce((total, part) => total * 60 + part, 0);
+        }
+    }
+    const secondsValue = Number(seconds);
+    if (Number.isFinite(secondsValue)) return secondsValue;
+    const millisecondsValue = Number(milliseconds);
+    return Number.isFinite(millisecondsValue) ? millisecondsValue / 1000 : Number.NaN;
+};
 
 const toChapter = (kind: ChapterKind, segment: IntroDbSegment | null): Chapter | null => {
     if (!segment) return null;
 
-    const startTime = Number(segment.start_sec);
-    const endTime = Number(segment.end_sec);
+    const startTime = parseTimestamp(segment.start_sec, segment.start_ms);
+    const endTime = parseTimestamp(segment.end_sec, segment.end_ms);
     if (!Number.isFinite(startTime) || !Number.isFinite(endTime) || endTime <= startTime) {
         return null;
     }
@@ -50,6 +66,10 @@ export async function fetchIntroDbChapters(
         return [];
     }
 
+    const cacheKey = `${imdbId}:${season}:${episode}`;
+    const cached = chapterCache.get(cacheKey);
+    if (cached) return cached;
+
     const params = new URLSearchParams({
         imdb_id: imdbId,
         season: String(season),
@@ -76,9 +96,19 @@ export async function fetchIntroDbChapters(
         data = (await response.json()) as IntroDbResponse;
     }
 
-    return [
+    if (!data || typeof data !== "object") {
+        return [];
+    }
+
+    const chapters = [
         toChapter("recap", data.recap),
         toChapter("intro", data.intro),
         toChapter("outro", data.outro),
     ].filter((chapter): chapter is Chapter => Boolean(chapter));
+    console.info(
+        chapters.length > 0 ? "Loaded IntroDB chapters" : "No IntroDB chapters available",
+        { imdbId, season, episode, chapters },
+    );
+    chapterCache.set(cacheKey, chapters);
+    return chapters;
 }

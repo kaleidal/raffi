@@ -11,6 +11,9 @@ export const createTorrentStatusPoller = ({
     let intervalRef: ReturnType<typeof setInterval> | null = null;
     let statusHash: string | null = null;
     let fatalHandled = false;
+    let readyPromise: Promise<void> | null = null;
+    let resolveReady: (() => void) | null = null;
+    let rejectReady: ((error: Error) => void) | null = null;
 
     const stop = () => {
         if (intervalRef) {
@@ -19,6 +22,12 @@ export const createTorrentStatusPoller = ({
         }
         statusHash = null;
         fatalHandled = false;
+        if (rejectReady) {
+            rejectReady(new Error("Torrent readiness wait canceled"));
+        }
+        readyPromise = null;
+        resolveReady = null;
+        rejectReady = null;
     };
 
     const start = (hash: string) => {
@@ -28,6 +37,10 @@ export const createTorrentStatusPoller = ({
         stop();
         statusHash = hash;
         fatalHandled = false;
+        readyPromise = new Promise<void>((resolve, reject) => {
+            resolveReady = resolve;
+            rejectReady = reject;
+        });
 
         const poll = async () => {
             try {
@@ -52,6 +65,9 @@ export const createTorrentStatusPoller = ({
                         fatalHandled = true;
                         onTorrentError?.(error);
                     }
+                    rejectReady?.(new Error(error));
+                    resolveReady = null;
+                    rejectReady = null;
                     return;
                 }
 
@@ -82,6 +98,9 @@ export const createTorrentStatusPoller = ({
                         loadingDetails.set("");
                     }
                     loadingProgress.set(null);
+                    resolveReady?.();
+                    resolveReady = null;
+                    rejectReady = null;
                 }
             } catch {
                 // ignore polling errors
@@ -92,8 +111,14 @@ export const createTorrentStatusPoller = ({
         intervalRef = setInterval(poll, 1000);
     };
 
+    const waitUntilReady = (hash: string) => {
+        start(hash);
+        return readyPromise ?? Promise.resolve();
+    };
+
     return {
         start,
         stop,
+        waitUntilReady,
     };
 };

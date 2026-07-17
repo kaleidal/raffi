@@ -1,5 +1,6 @@
 import { get } from "svelte/store";
 import type { ShowResponse } from "../../lib/library/types/meta_types";
+import { serverUrl } from "../../lib/client";
 import type { Chapter, Track } from "./types";
 import * as Session from "./videoSession";
 import * as Subtitles from "./subtitles";
@@ -11,6 +12,7 @@ import {
     loadingStage,
     loadingDetails,
     loadingProgress,
+    playbackBuffering,
     showCanvas,
     currentTime,
     duration,
@@ -29,7 +31,6 @@ import {
     seekGuard,
     firstSeekLoad,
     showSeekStyleModal,
-    hasStarted as hasStartedStore,
     currentChapter,
 } from "./playerState";
 
@@ -61,19 +62,12 @@ export type PlayerSessionLoaderDeps = {
         introDbChapters: Chapter[];
     }>;
     startTorrentStatusPolling: (torrentInfoHash: string) => void;
+    awaitTorrentReady: (torrentInfoHash: string) => Promise<void>;
     stopTorrentStatusPolling: () => void;
     awaitDomUpdate: () => Promise<void>;
 };
 
 export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
-    let loadTimeout: ReturnType<typeof setTimeout> | null = null;
-
-    const clearLoadTimeout = () => {
-        if (!loadTimeout) return;
-        clearTimeout(loadTimeout);
-        loadTimeout = null;
-    };
-
     const loadVideo = async (
         src: string,
         opts?: { reuseSession?: { sessionId: string; sessionData: any } },
@@ -141,6 +135,21 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
             );
 
             deps.setSessionId(result.sessionId);
+
+            if (result.sessionData?.isTorrent && result.sessionData?.torrentInfoHash) {
+                const torrentInfoHash = result.sessionData.torrentInfoHash;
+                deps.startTorrentStatusPolling(torrentInfoHash);
+                await deps.awaitTorrentReady(torrentInfoHash);
+
+                const readySession = await fetch(`${serverUrl}/sessions/${result.sessionId}`);
+                if (!readySession.ok) {
+                    throw new Error("Failed to refresh ready torrent session info");
+                }
+                result.sessionData = await readySession.json();
+            } else {
+                deps.stopTorrentStatusPolling();
+            }
+
             sessionData.set(result.sessionData);
 
             const playbackStart = await deps.resolvePlaybackStart({
@@ -152,12 +161,6 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
             });
             const effectiveStartTime = playbackStart.effectiveStartTime;
             deps.setIntroDbChapters(playbackStart.introDbChapters);
-
-            if (result.sessionData?.isTorrent && result.sessionData?.torrentInfoHash) {
-                deps.startTorrentStatusPolling(result.sessionData.torrentInfoHash);
-            } else {
-                deps.stopTorrentStatusPolling();
-            }
 
             await deps.awaitDomUpdate();
             const videoElem = deps.getVideoElem();
@@ -316,7 +319,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                     {
                         setPendingSeek: pendingSeek.set,
                         setSeekGuard: seekGuard.set,
-                        setLoading: loading.set,
+                        setBuffering: playbackBuffering.set,
                         setShowCanvas: showCanvas.set,
                         setFirstSeekLoad: firstSeekLoad.set,
                         setPlaybackOffset: playbackOffset.set,
@@ -334,26 +337,23 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
             );
             deps.setHls(hlsInstance);
 
-            clearLoadTimeout();
-            loadTimeout = setTimeout(() => {
-                if (
-                    get(loading) &&
-                    !get(hasStartedStore) &&
-                    !get(isPlaying)
-                ) {
-                    loading.set(false);
-                    showError.set(true);
-                    errorMessage.set("Stream took too long to load");
-                    errorDetails.set("Please try another stream.");
-                }
-            }, 60000);
         } catch (err) {
-            console.error(err);
+            console.error("Failed to prepare playback", err);
+            deps.stopTorrentStatusPolling();
+            playbackBuffering.set(false);
+            loading.set(false);
+            loadingStage.set("");
+            loadingDetails.set("");
+            loadingProgress.set(null);
+            showCanvas.set(false);
+            seekGuard.set(false);
+            errorMessage.set("Failed to prepare stream");
+            errorDetails.set(err instanceof Error ? err.message : String(err));
+            showError.set(true);
         }
     };
 
     return {
-        clearLoadTimeout,
         loadVideo,
     };
 }

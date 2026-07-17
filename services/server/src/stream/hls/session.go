@@ -27,6 +27,7 @@ type Session struct {
 	LastServedSeq     int
 	Paused            bool
 	PausedByCap       bool
+	BufferAheadLimit  time.Duration
 	DemandResumeUntil time.Time
 	LastPlaylistNudge time.Time
 

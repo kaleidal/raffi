@@ -28,7 +28,6 @@ export const createNextEpisodeHandler = ({
         nextEpisodeAttemptId += 1;
         const attemptId = nextEpisodeAttemptId;
         setCurrentVideoSrc(getVideoSrc());
-        const beforeSrc = getVideoSrc();
         if (!suppressInitialLoading?.()) {
             loading.set(true);
         }
@@ -53,15 +52,5 @@ export const createNextEpisodeHandler = ({
             showActionLoading("Next Episode Failed", err);
             return;
         }
-
-        window.setTimeout(() => {
-            if (attemptId !== nextEpisodeAttemptId) return;
-            if (get(loading) && getVideoSrc() === beforeSrc) {
-                showActionLoading(
-                    "Next Episode Failed",
-                    "No new stream started. Please try again.",
-                );
-            }
-        }, 10000);
     };
 };
