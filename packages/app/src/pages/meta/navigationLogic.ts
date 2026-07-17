@@ -66,6 +66,38 @@ export const resolveNextEpisodeStream = async (
     return { stream: match, nextEpisode: nextEp };
 };
 
+export const playResolvedNextEpisode = (
+    resolved: { stream: Stream; nextEpisode: any },
+    progressMap: any,
+) => {
+    const { stream, nextEpisode } = resolved;
+    if (nextEpisode.season !== get(currentSeason)) {
+        currentSeason.set(nextEpisode.season);
+    }
+
+    const isTorrent =
+        stream.infoHash ||
+        (stream.url && stream.url.startsWith("magnet:"));
+
+    if (isTorrent && !hasAcknowledgedTorrentWarning()) {
+        pendingTorrentStream.set(stream);
+        showTorrentWarning.set(true);
+        selectedStreamUrl.set(null);
+        selectedEpisode.set(nextEpisode);
+        router.back();
+    } else if (!isTorrent || get(allowTorrenting)) {
+        selectedEpisode.set(nextEpisode);
+        playStream(stream, progressMap, {
+            replace: true,
+            autoSkipFromNextEpisode: true,
+        });
+    } else {
+        selectedStreamUrl.set(null);
+        selectedEpisode.set(nextEpisode);
+        router.back();
+    }
+};
+
 export const handleNextEpisode = async (imdbID: string, progressMap: any) => {
     const episode = get(selectedEpisode);
     const data = get(metaData);
@@ -118,27 +150,7 @@ export const handleNextEpisode = async (imdbID: string, progressMap: any) => {
 
         if (match) {
             console.log("Auto-selecting matching stream:", match);
-            const isTorrent =
-                match.infoHash ||
-                (match.url && match.url.startsWith("magnet:"));
-
-            if (isTorrent && !hasAcknowledgedTorrentWarning()) {
-                pendingTorrentStream.set(match);
-                showTorrentWarning.set(true);
-                selectedStreamUrl.set(null);
-                selectedEpisode.set(nextEp);
-                router.back();
-            } else if (!isTorrent || get(allowTorrenting)) {
-                selectedEpisode.set(nextEp);
-                playStream(match, progressMap, {
-                    replace: true,
-                    autoSkipFromNextEpisode: true,
-                });
-            } else {
-                selectedStreamUrl.set(null);
-                selectedEpisode.set(nextEp);
-                router.back();
-            }
+            playResolvedNextEpisode({ stream: match, nextEpisode: nextEp }, progressMap);
         } else {
             selectedStreamUrl.set(null);
             selectedEpisode.set(nextEp);

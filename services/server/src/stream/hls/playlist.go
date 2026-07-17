@@ -2,6 +2,7 @@ package hls
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -127,36 +128,30 @@ func readPlaylistTimelineFromReader(r io.Reader, sliceStart float64) (int, []Pla
 	return mediaSeq, segments, nil
 }
 
-func waitForManifestReady(manifestPath string, timeout time.Duration, shouldAbort func() bool) error {
-	deadline := time.Now().Add(timeout)
+func waitForManifestReady(ctx context.Context, manifestPath string, shouldAbort func() bool) error {
+	return waitForManifestSegments(ctx, manifestPath, shouldAbort, 1)
+}
+
+func waitForManifestSegments(ctx context.Context, manifestPath string, shouldAbort func() bool, minSegments int) error {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
 
 	for {
-		if shouldAbort != nil && shouldAbort() {
-			return fmt.Errorf("transcoder exited before manifest was ready: %s", manifestPath)
-		}
 		if _, err := os.Stat(manifestPath); err == nil {
-			break
+			_, segCount, readErr := readPlaylistState(manifestPath)
+			if readErr == nil && segCount >= minSegments {
+				return nil
+			}
 		}
-		if time.Now().After(deadline) {
-			return fmt.Errorf("timeout waiting for manifest: %s", manifestPath)
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-
-	// best-effort: wait for at least 2 segments to ensure smooth start
-	for {
 		if shouldAbort != nil && shouldAbort() {
-			return fmt.Errorf("transcoder exited before manifest had segments: %s", manifestPath)
+			return fmt.Errorf("transcoder exited before manifest had usable segments: %s", manifestPath)
 		}
-		_, segCount, err := readPlaylistState(manifestPath)
-		if err == nil && segCount >= 2 {
-			return nil
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
 		}
-		if time.Now().After(deadline) {
-			fmt.Printf("warning: manifest %s has few segments yet, continuing\n", manifestPath)
-			return nil
-		}
-		time.Sleep(100 * time.Millisecond)
 	}
 }
 

@@ -14,7 +14,6 @@
         AudioWaveform,
         Subtitles,
         Users,
-        SkipForward,
         Download,
         Scissors,
     } from "@lucide/svelte";
@@ -31,7 +30,6 @@
     export let objectFit: "contain" | "cover" = "contain";
     export let pendingSeek: number | null = null;
     export let isWatchPartyMember = false;
-    export let hasNextEpisode = true;
     export let showWatchParty = true;
     export let chapterMarkers: Chapter[] = [];
 
@@ -43,7 +41,6 @@
     export let onVolumeChange: (e: Event) => void;
     export let toggleFullscreen: () => void;
     export let toggleObjectFit: () => void;
-    export let onNextEpisode: () => void;
 
     export let onAudioClick: () => void = () => {};
     export let onSubtitleClick: () => void = () => {};
@@ -65,6 +62,7 @@
     let seekHoverVisible = false;
     let seekHoverLeftPct = 0;
     let seekHoverTime = 0;
+    let seekHoverChapter: Chapter | null = null;
 
     const updateSeekHover = (event: MouseEvent) => {
         if (!duration || duration <= 0) return;
@@ -82,10 +80,14 @@
         seekHoverVisible = true;
         seekHoverLeftPct = ratio * 100;
         seekHoverTime = Math.max(0, Math.min(duration, desiredGlobal));
+        seekHoverChapter = chapterMarkers.find(
+            (chapter) => seekHoverTime >= chapter.startTime && seekHoverTime < chapter.endTime,
+        ) ?? null;
     };
 
     const hideSeekHover = () => {
         seekHoverVisible = false;
+        seekHoverChapter = null;
     };
 
     const setClipPanelOpen = (open: boolean) => {
@@ -108,6 +110,19 @@
         return ((endTime - chapter.startTime) / duration) * 100;
     };
 
+    const getMarkerColor = (chapter: Chapter) => {
+        switch (chapter.kind) {
+            case "intro":
+                return "rgba(59,130,246,0.92)";
+            case "recap":
+                return "rgba(245,158,11,0.92)";
+            case "outro":
+                return "rgba(168,85,247,0.94)";
+            default:
+                return "rgba(87,87,87,0.85)";
+        }
+    };
+
     $: chapterSliderMarkers = duration > 0
         ? chapterMarkers
             .map((chapter) => {
@@ -123,7 +138,7 @@
                 return {
                     left,
                     width,
-                    color: "rgba(87,87,87,0.85)",
+                    color: getMarkerColor(chapter),
                     roundStart: touchesStart || !touchesEnd,
                     roundEnd: touchesEnd || !touchesStart,
                 };
@@ -212,7 +227,7 @@
                             <div
                                 class="tabular-nums bg-[#000000]/60 backdrop-blur-md text-white text-[12px] px-2 py-1 rounded-md"
                             >
-                                {formatTime(seekHoverTime)}
+                                {formatTime(seekHoverTime)}{#if seekHoverChapter} · {seekHoverChapter.title}{/if}
                             </div>
                         </div>
                     {/if}
@@ -269,12 +284,6 @@
                     onClick={onWatchPartyClick}
                 >
                     <Users size={20} color="#E9E9E9" strokeWidth={2} />
-                </ExpandingButton>
-            {/if}
-
-            {#if metaData?.meta.type === "series" && onNextEpisode && !isWatchPartyMember && hasNextEpisode}
-                <ExpandingButton label={"Next Episode"} onClick={onNextEpisode}>
-                    <SkipForward size={20} color="#E9E9E9" strokeWidth={2} />
                 </ExpandingButton>
             {/if}
 

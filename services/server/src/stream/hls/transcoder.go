@@ -91,8 +91,11 @@ func NewTranscoder(ffmpegPath string) TranscoderFunc {
 		}
 
 		args := []string{
+			"-hide_banner",
+			"-loglevel", "error",
+			"-nostats",
 			"-hwaccel", "auto",
-			"-fflags", "+genpts+nofillin",
+			"-fflags", "+genpts",
 			"-probesize", "1000000",
 			"-analyzeduration", "1000000",
 		}
@@ -124,7 +127,6 @@ func NewTranscoder(ffmpegPath string) TranscoderFunc {
 		args = append(args, "-c:v", videoCodec)
 		if videoCodec == "copy" {
 			args = append(args,
-				"-copytb", "1",
 				"-bsf:v", "h264_mp4toannexb",
 			)
 		}

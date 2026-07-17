@@ -8,6 +8,7 @@ export const loading = writable(true);
 export const loadingStage = writable("Loading...");
 export const loadingDetails = writable("");
 export const loadingProgress = writable<number | null>(null);
+export const playbackBuffering = writable(false);
 export const showCanvas = writable(false);
 export const hasStarted = writable(false);
 
@@ -66,6 +67,7 @@ export function resetPlayerState() {
     loadingStage.set("Loading...");
     loadingDetails.set("");
     loadingProgress.set(null);
+    playbackBuffering.set(false);
     showCanvas.set(false);
     hasStarted.set(false);
     currentTime.set(0);

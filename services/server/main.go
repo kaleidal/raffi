@@ -237,9 +237,7 @@ func (s *Server) handleSubtitleTrack(w http.ResponseWriter, r *http.Request, id,
 		}
 	}
 	if !found && s.hlsController != nil {
-		ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
-		meta, probeErr := s.hlsController.ProbeMetadata(ctx, sess.ID, sess.Source)
-		cancel()
+		meta, probeErr := s.hlsController.ProbeMetadata(r.Context(), sess.ID, sess.Source)
 		if probeErr == nil && meta != nil {
 			streams, _ := hls.StreamsFromMetadata(meta)
 			for _, stream := range streams {
@@ -292,6 +290,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 		Kind      session.SessionKind `json:"kind"`
 		StartTime float64             `json:"startTime"`
 		FileIdx   *int                `json:"fileIdx,omitempty"`
+		Prefetch  bool                `json:"prefetch,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
@@ -324,6 +323,9 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+	if req.Prefetch && s.hlsController != nil {
+		s.hlsController.SetBufferAheadLimit(sess.ID, hls.PrefetchBufferAhead)
 	}
 
 	writeJSON(w, struct {
@@ -446,6 +448,9 @@ func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request, id str
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
+	if r.URL.Query().Get("playback") == "1" && s.hlsController != nil {
+		s.hlsController.SetBufferAheadLimit(sess.ID, hls.MaxBufferAhead)
+	}
 
 	if sess.Kind == session.SessionKindHTTP && s.hlsController != nil {
 		if audioIdx, streams, ok := s.hlsController.DescribeSession(sess.ID); ok {
@@ -479,17 +484,12 @@ func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request, id str
 			var meta *hls.Metadata
 			var probeErr error
 			maxAttempts := 3
-			probeTimeout := 12 * time.Second
 			if sess.IsTorrent {
 				maxAttempts = 2
-				probeTimeout = 30 * time.Second
 			}
 
 			for attempt := 0; attempt < maxAttempts; attempt++ {
-				ctx := r.Context()
-				ctx, cancel := context.WithTimeout(ctx, probeTimeout)
-				meta, probeErr = s.hlsController.ProbeMetadata(ctx, sess.ID, sess.Source)
-				cancel()
+				meta, probeErr = s.hlsController.ProbeMetadata(r.Context(), sess.ID, sess.Source)
 				if probeErr == nil && meta != nil {
 					break
 				}
@@ -582,31 +582,32 @@ func (s *Server) handleHLSSessionAsset(w http.ResponseWriter, r *http.Request, s
 		forceSlice := r.URL.Query().Get("force_slice") == "1"
 
 		sliceStart := 0.0
+		manifestPath := ""
 		if s.hlsController != nil {
 			sliceStart = s.hlsController.GetSliceStart(sess.ID)
 		}
 
 		if start != "" {
 			if val, err := strconv.ParseFloat(start, 64); err == nil && val >= 0 {
-				shouldSeek := forceSlice || !s.hlsController.IsDuplicateSeek(sess.ID, seekID)
-				if shouldSeek {
-					dur, actualStart, _, err := s.hlsController.Seek(r.Context(), sess.ID, sess.Source, val, seekID, forceSlice)
-					if err != nil {
-						log.Printf("seek error for %s: %v", sess.ID, err)
-						http.Error(w, "failed to seek", http.StatusInternalServerError)
-						return
-					}
-					if dur > 0 {
-						sess.DurationSeconds = dur
-					}
-					sliceStart = actualStart
+				dur, actualStart, readyManifestPath, err := s.hlsController.Seek(r.Context(), sess.ID, sess.Source, val, seekID, forceSlice)
+				if err != nil {
+					log.Printf("seek error for %s: %v", sess.ID, err)
+					http.Error(w, "failed to seek", http.StatusInternalServerError)
+					return
 				}
+				if dur > 0 {
+					sess.DurationSeconds = dur
+				}
+				sliceStart = actualStart
+				manifestPath = readyManifestPath
 			}
 		} else {
-			if _, _, err := s.hlsController.EnsureSession(r.Context(), sess.ID, sess.Source, sess.StartTime); err != nil {
+			if _, readyManifestPath, err := s.hlsController.EnsureSession(r.Context(), sess.ID, sess.Source, sess.StartTime); err != nil {
 				log.Printf("failed to prepare stream for session %s (source=%s): %v", sess.ID, sess.Source, err)
 				http.Error(w, "failed to prepare stream", http.StatusInternalServerError)
 				return
+			} else {
+				manifestPath = readyManifestPath
 			}
 			sliceStart = s.hlsController.GetSliceStart(sess.ID)
 		}
@@ -618,7 +619,10 @@ func (s *Server) handleHLSSessionAsset(w http.ResponseWriter, r *http.Request, s
 			http.Error(w, "no active slice", http.StatusInternalServerError)
 			return
 		}
-		fullPath := filepath.Clean(filepath.Join(sliceDir, asset))
+		fullPath := manifestPath
+		if fullPath == "" {
+			fullPath = filepath.Clean(filepath.Join(sliceDir, asset))
+		}
 
 		content, err := os.ReadFile(fullPath)
 		if err != nil {
@@ -676,11 +680,15 @@ func (s *Server) handleHLSSessionAsset(w http.ResponseWriter, r *http.Request, s
 	if s.hlsController != nil {
 		ext := strings.ToLower(filepath.Ext(fullPath))
 		if ext == ".ts" {
-			s.hlsController.NotifyClientAssetRequest(sess.ID)
+			if _, err := os.Stat(fullPath); errors.Is(err, os.ErrNotExist) {
+				s.hlsController.NotifyClientAssetRequest(sess.ID)
+			}
 		}
 	}
 
-	if err := waitForFile(r.Context(), fullPath, 20*time.Second); err != nil {
+	if err := waitForFile(r.Context(), fullPath, func() bool {
+		return s.hlsController != nil && s.hlsController.IsProducing(sess.ID)
+	}); err != nil {
 		log.Printf("segment wait failed for %s: %v", fullPath, err)
 		http.Error(w, "segment unavailable", http.StatusServiceUnavailable)
 		return
@@ -708,10 +716,8 @@ func (s *Server) handleHLSSessionAsset(w http.ResponseWriter, r *http.Request, s
 	http.ServeFile(w, r, fullPath)
 }
 
-func waitForFile(ctx context.Context, p string, timeout time.Duration) error {
-	deadline := time.NewTimer(timeout)
+func waitForFile(ctx context.Context, p string, producerActive func() bool) error {
 	ticker := time.NewTicker(100 * time.Millisecond)
-	defer deadline.Stop()
 	defer ticker.Stop()
 
 	for {
@@ -720,15 +726,13 @@ func waitForFile(ctx context.Context, p string, timeout time.Duration) error {
 		} else if !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
+		if producerActive != nil && !producerActive() {
+			return fmt.Errorf("stream producer stopped before file was ready: %s", p)
+		}
 
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-deadline.C:
-			if _, err := os.Stat(p); err == nil {
-				return nil
-			}
-			return fmt.Errorf("timeout waiting for file: %s", p)
 		case <-ticker.C:
 		}
 	}

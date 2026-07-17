@@ -39,7 +39,7 @@ export async function startNextEpisodePrefetch(
     videoElem: HTMLVideoElement,
     onBufferRatio: (ratio: number) => void,
 ): Promise<{
-    dispose: (opts?: { transfer?: boolean }) => void;
+    dispose: ((opts?: { transfer?: boolean }) => void) | null;
     handoff: NextEpisodePrefetchHandoff | null;
 }> {
     let hlsInstance: Hls | null = null;
@@ -96,9 +96,9 @@ export async function startNextEpisodePrefetch(
 
         const kind = src.startsWith("magnet:") ? "torrent" : "http";
         if (fileIdx != null && fileIdx !== undefined) {
-            sessionId = await createSession(src, kind, 0, fileIdx);
+            sessionId = await createSession(src, kind, 0, fileIdx, { prefetch: true });
         } else {
-            sessionId = await createSession(src, kind, 0);
+            sessionId = await createSession(src, kind, 0, undefined, { prefetch: true });
         }
 
         const res = await fetch(`${serverUrl}/sessions/${sessionId}`);
@@ -120,6 +120,7 @@ export async function startNextEpisodePrefetch(
                 setErrorDetails: noop,
             },
             null,
+            "prefetch",
         );
 
         pollId = setInterval(() => {
@@ -136,6 +137,6 @@ export async function startNextEpisodePrefetch(
     } catch (e) {
         console.warn("Next episode prefetch failed", e);
         dispose();
-        return { dispose: () => {}, handoff: null };
+        return { dispose: null, handoff: null };
     }
 }

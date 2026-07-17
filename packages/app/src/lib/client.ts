@@ -3,7 +3,7 @@ export const serverUrl = CORE_BASE;
 
 export type SessionKind = "http" | "torrent";
 
-export async function createSession(source: string, kind: SessionKind = "http", startTime: number = 0, fileIdx?: number) {
+export async function createSession(source: string, kind: SessionKind = "http", startTime: number = 0, fileIdx?: number, options?: { prefetch?: boolean }) {
     if (kind === "torrent") {
         const { ensureTorrentingAllowed } = await import("./stores/torrenting");
         await ensureTorrentingAllowed();
@@ -11,7 +11,7 @@ export async function createSession(source: string, kind: SessionKind = "http", 
     const res = await fetch(`${CORE_BASE}/sessions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source, kind, startTime, fileIdx })
+        body: JSON.stringify({ source, kind, startTime, fileIdx, prefetch: options?.prefetch === true })
     });
 
     if (!res.ok) {

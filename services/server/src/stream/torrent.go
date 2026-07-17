@@ -177,8 +177,6 @@ func (ts *TorrentStream) prepare() error {
 		// ok
 	case <-ts.stopCh:
 		return errors.New("torrent stream canceled")
-	case <-time.After(90 * time.Second):
-		return fmt.Errorf("timeout waiting for torrent metadata")
 	}
 
 	log.Printf("Got info for torrent %s: %q, length=%d bytes",
@@ -292,10 +290,10 @@ func (ts *TorrentStream) prepare() error {
 		}
 	}(ts.t.InfoHash().HexString())
 
-	// Best-effort short wait for the first piece, but don't block forever
+	// The first media piece is the real readiness signal. Keep waiting while the
+	// torrent is alive instead of advancing because an arbitrary clock expired.
 	log.Printf("Waiting for first piece of torrent %s (piece %d)...",
 		ts.t.InfoHash().HexString(), startPiece)
-	deadline := time.Now().Add(60 * time.Second)
 	for {
 		select {
 		case <-ts.stopCh:
@@ -305,10 +303,6 @@ func (ts *TorrentStream) prepare() error {
 
 		if ts.t.Piece(startPiece).State().Complete {
 			log.Printf("First piece ready, streaming can start")
-			break
-		}
-		if time.Now().After(deadline) {
-			log.Printf("Timeout waiting for first piece, proceeding anyway")
 			break
 		}
 		time.Sleep(500 * time.Millisecond)

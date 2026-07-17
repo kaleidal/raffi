@@ -13,6 +13,7 @@ func (c *Controller) StopSession(id string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	sess := c.sessions[id]
+	delete(c.bufferLimits, id)
 	if sess == nil {
 		return nil
 	}
@@ -107,7 +108,9 @@ func (c *Controller) ensureCmdLocked(
 	sess.Paused = false
 	sess.PausedByCap = false
 	if !append {
-		sess.LastServedSeq = -1
+		// Sequence numbers can start above zero after seeks. Track the sequence
+		// immediately before this slice so buffer depth counts segments, not IDs.
+		sess.LastServedSeq = startSeq - 1
 	}
 	sess.Finished = false
 
