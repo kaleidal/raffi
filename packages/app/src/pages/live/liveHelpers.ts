@@ -257,6 +257,8 @@ export function getVisibleChannels(
     query: string,
     favoriteChannelIds: string[] = [],
 ) {
+    // Keep this fallback aligned with normalizeLiveTvGroup(), which resets
+    // persisted/UI group selections when the selected group disappears.
     const effectiveGroup =
         group === ALL_GROUPS ||
         group === FAVORITES_GROUP ||

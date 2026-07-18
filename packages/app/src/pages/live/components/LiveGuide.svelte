@@ -24,6 +24,7 @@
 
     let failedLogoUrls = new Set<string>();
     let contextMenuChannel: IptvChannel | null = null;
+    let contextMenuTrigger: HTMLElement | null = null;
     let contextMenuX = 0;
     let contextMenuY = 0;
 
@@ -45,10 +46,12 @@
             ? event.clientY
             : (rect?.top ?? 0) + Math.min(rect?.height ?? 0, 28);
         contextMenuChannel = channel;
+        contextMenuTrigger = event.currentTarget as HTMLElement | null;
     }
 
     function closeChannelContextMenu() {
         contextMenuChannel = null;
+        contextMenuTrigger = null;
     }
 
     function toggleContextMenuFavorite() {
@@ -56,7 +59,7 @@
         onToggleFavoriteChannel(contextMenuChannel);
     }
 
-    function loadMoreSentinel(node: HTMLElement, _pageKey = 0) {
+    function loadMoreSentinel(node: HTMLElement, _pageKey: number = 0) {
         let disposed = false;
         const loadNextPage = () => {
             if (!disposed) onShowMoreGuideChannels();
@@ -290,6 +293,8 @@
             x={contextMenuX}
             y={contextMenuY}
             isFavorite={isFavoriteChannel(contextMenuChannel)}
+            ariaLabel={`Channel actions for ${contextMenuChannel.name}`}
+            returnFocusTo={contextMenuTrigger}
             onClose={closeChannelContextMenu}
             onToggleFavorite={toggleContextMenuFavorite}
         />
