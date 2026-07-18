@@ -13,7 +13,7 @@
 
   const links = {
     source: "https://github.com/kaleidal/raffi",
-    donate: "https://ko-fi.com/kaleidal",
+    sponsor: "https://github.com/sponsors/krissedout",
     privacy: "/privacy/index.html"
   } as const;
 
@@ -185,7 +185,7 @@
       <p class="text-[13px] text-neutral-500">© {new Date().getFullYear()} Raffi</p>
       <div class="flex flex-wrap gap-x-6 gap-y-2 text-[13px] text-neutral-600">
         <a class="hover:text-black" href={links.privacy}>Privacy</a>
-        <a class="hover:text-black" href={links.donate} target="_blank" rel="noreferrer">Donate</a>
+        <a class="hover:text-black" href={links.sponsor} target="_blank" rel="noreferrer">Sponsor</a>
         <a class="hover:text-black" href={links.source} target="_blank" rel="noreferrer">Source</a>
       </div>
     </div>
