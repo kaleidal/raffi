@@ -43,9 +43,12 @@
         getLiveSourceSummary,
         getStoredLiveTvFavoriteChannelIds,
         getStoredLiveTvGroup,
+        getStoredLiveTvLastChannelId,
         getStoredLiveTvSelection,
         getVisibleChannels,
+        normalizeLiveTvGroup,
         setStoredLiveTvGroup,
+        setStoredLiveTvLastChannelId,
         setStoredLiveTvSourceId,
         shouldAutoRefreshLiveTvSource,
         toggleStoredLiveTvFavoriteChannelId,
@@ -85,6 +88,7 @@
             refreshResult: cachedResult,
             selectedGroup: source ? getStoredLiveTvGroup(source.id) || ALL_GROUPS : ALL_GROUPS,
             favoriteChannelIds: source ? getStoredLiveTvFavoriteChannelIds(source.id) : [],
+            lastChannelId: source ? getStoredLiveTvLastChannelId(source.id) : "",
         };
     }
 
@@ -98,6 +102,7 @@
     let refreshError = "";
     let selectedGroup = initialLiveTvState.selectedGroup;
     let favoriteChannelIds = initialLiveTvState.favoriteChannelIds;
+    let lastChannelId = initialLiveTvState.lastChannelId;
     let searchQuery = "";
     let guideNow = new Date();
     let guideTimer: ReturnType<typeof setInterval> | null = null;
@@ -143,20 +148,6 @@
     }
     $: visibleGuideChannels = visibleChannels.slice(0, guideChannelLimit);
     $: hasMoreGuideChannels = visibleGuideChannels.length < visibleChannels.length;
-    $: remainingGuideChannels = Math.max(
-        visibleChannels.length - visibleGuideChannels.length,
-        0,
-    );
-    $: nextGuideChannelPageCount = Math.min(
-        GUIDE_CHANNEL_PAGE_SIZE,
-        remainingGuideChannels,
-    );
-    $: guideTitle =
-        selectedGroup === ALL_GROUPS
-            ? "Live TV"
-            : selectedGroup === FAVORITES_GROUP
-              ? FAVORITES_GROUP_LABEL
-              : selectedGroup;
     $: guideViewport = getGuideViewport(guideNow);
     $: guideRows = currentResult
         ? buildGuideRows(visibleGuideChannels, currentResult.guide, guideViewport)
@@ -190,9 +181,7 @@
     }
     $: if (
         currentResult &&
-        selectedGroup !== ALL_GROUPS &&
-        selectedGroup !== FAVORITES_GROUP &&
-        !availableGroups.some((group) => group.name === selectedGroup)
+        normalizeLiveTvGroup(selectedGroup, availableGroups) !== selectedGroup
     ) {
         selectedGroup = ALL_GROUPS;
     }
@@ -214,6 +203,7 @@
         loadedSourceCacheKey = cacheKey;
         selectedGroup = getStoredLiveTvGroup(source.id) || ALL_GROUPS;
         favoriteChannelIds = getStoredLiveTvFavoriteChannelIds(source.id);
+        lastChannelId = getStoredLiveTvLastChannelId(source.id);
         searchQuery = "";
         refreshError = "";
         queueMicrotask(() => {
@@ -304,6 +294,10 @@
 
     function playChannel(channel: IptvChannel) {
         const nowNext = getChannelGuide(channel);
+        lastChannelId = channel.id;
+        if (selectedSource) {
+            setStoredLiveTvLastChannelId(selectedSource.id, channel.id);
+        }
         trackEvent("live_channel_opened", {
             group: channel.group,
             has_logo: Boolean(channel.logo),
@@ -435,18 +429,14 @@
                 <LiveEmptyState state="no-results" />
             {:else}
                 <LiveGuide
-                    {guideTitle}
-                    {guideViewport}
                     {guideRows}
                     {guideTimeTicks}
                     {guideNowLinePercent}
                     {showGuideNowLine}
                     hasGuide={Boolean(currentResult.guide)}
                     favoriteChannelIds={favoriteChannelIds}
+                    activeChannelId={lastChannelId}
                     {hasMoreGuideChannels}
-                    visibleGuideChannelsCount={visibleGuideChannels.length}
-                    visibleChannelsCount={visibleChannels.length}
-                    {nextGuideChannelPageCount}
                     onPlayChannel={playChannel}
                     onToggleFavoriteChannel={toggleFavoriteChannel}
                     onShowMoreGuideChannels={showMoreGuideChannels}

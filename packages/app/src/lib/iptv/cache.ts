@@ -297,7 +297,7 @@ function serializeProgramme(programme: XmltvProgramme): StoredXmltvProgramme {
 function serializeGuide(guide: XmltvGuide | undefined): StoredXmltvGuide | undefined {
     if (!guide) return undefined;
 
-    const programmesByChannel: Record<string, StoredXmltvProgramme[]> = {};
+    const programmesByChannel = Object.create(null) as Record<string, StoredXmltvProgramme[]>;
     for (const [channelId, programmes] of guide.programmesByChannel.entries()) {
         programmesByChannel[channelId] = programmes.map(serializeProgramme);
     }

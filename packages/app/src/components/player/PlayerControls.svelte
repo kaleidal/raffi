@@ -33,6 +33,7 @@
     export let isWatchPartyMember = false;
     export let hasNextEpisode = true;
     export let showWatchParty = true;
+    export let liveMode = false;
     export let chapterMarkers: Chapter[] = [];
 
     export let seekBarStyle: "raffi" | "normal" = "raffi";
@@ -93,6 +94,10 @@
         onClipPanelOpenChange({ open });
     };
 
+    $: if (liveMode && showClipPanel) {
+        setClipPanelOpen(false);
+    }
+
     const getMarkerLeft = (chapter: Chapter) => {
         if (duration <= 0) return 0;
         const endTime = chapter.kind === "outro" ? duration : chapter.endTime;
@@ -133,11 +138,69 @@
 </script>
 
 <div
-    class="relative z-10 items-center rounded-4xl w-250 flex flex-col gap-2 px-7.5 py-5 text-white overflow-hidden"
+    class={`relative z-10 items-center text-white overflow-hidden ${
+        liveMode
+            ? "flex w-auto max-w-[92vw] rounded-full px-3 py-3"
+            : "rounded-4xl w-250 flex flex-col gap-2 px-7.5 py-5"
+    }`}
 >
-    <div class="absolute inset-0 rounded-4xl bg-[#000000]/10 backdrop-blur-xl pointer-events-none"></div>
+    <div
+        class={`absolute inset-0 bg-[#000000]/10 backdrop-blur-xl pointer-events-none ${
+            liveMode ? "rounded-full" : "rounded-4xl"
+        }`}
+    ></div>
 
-    <div class="relative z-10 flex flex-col gap-2 w-full">
+    <div
+        class={liveMode
+            ? "relative z-10 flex w-full items-center gap-2 sm:gap-3"
+            : "relative z-10 flex flex-col gap-2 w-full"}
+    >
+        {#if liveMode}
+            <button
+                on:click={togglePlay}
+                class="flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-full bg-[#6E6E6E]/50 transition-colors duration-200 hover:bg-[#7A7A7A]/55"
+                aria-label={isPlaying ? "Pause" : "Play"}
+            >
+                {#if isPlaying}
+                    <CirclePause size={30} color="#FFFFFF" strokeWidth={2} />
+                {:else}
+                    <CirclePlay size={30} color="#FFFFFF" strokeWidth={2} />
+                {/if}
+            </button>
+
+            <ExpandingButton
+                label={objectFit === "contain" ? "Zoom" : "Fit"}
+                onClick={toggleObjectFit}
+            >
+                {#if objectFit === "contain"}
+                    <ZoomIn size={20} color="#E9E9E9" strokeWidth={2} />
+                {:else}
+                    <ZoomOut size={20} color="#E9E9E9" strokeWidth={2} />
+                {/if}
+            </ExpandingButton>
+
+            <ExpandingButton
+                label={"Fullscreen"}
+                onClick={() => {
+                    toggleFullscreen();
+                }}
+            >
+                <Maximize size={22} color="#E9E9E9" strokeWidth={2} />
+            </ExpandingButton>
+
+            <div class="w-28 shrink-0 sm:w-36">
+                <Slider
+                    widthProgress={volume * 100}
+                    widthGrey={100}
+                    onInput={onVolumeChange}
+                    value={volume}
+                    label="Volume"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                />
+            </div>
+        {:else}
         <div class="flex flex-row gap-5 items-center w-full">
             {#if !isWatchPartyMember}
                 <button
@@ -321,5 +384,6 @@
             {isWatchPartyMember}
             onClose={() => setClipPanelOpen(false)}
         />
+        {/if}
     </div>
 </div>

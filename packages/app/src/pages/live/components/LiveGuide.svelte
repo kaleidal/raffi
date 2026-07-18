@@ -1,32 +1,31 @@
 <script lang="ts">
     import type {
         GuideGridRow,
-        GuideGridViewport,
         GuideProgrammeState,
     } from "../../../lib/iptv/guideGrid";
     import type { IptvChannel } from "../../../lib/iptv/types";
-    import { formatTime, type GuideTimeTick } from "../liveHelpers";
+    import type { GuideTimeTick } from "../liveHelpers";
+    import LiveChannelContextMenu from "./LiveChannelContextMenu.svelte";
     import LiveChannelLogo from "./LiveChannelLogo.svelte";
 
     const GUIDE_TIMELINE_MIN_WIDTH = 680;
 
-    export let guideTitle = "Live TV";
-    export let guideViewport: GuideGridViewport;
     export let guideRows: GuideGridRow[] = [];
     export let guideTimeTicks: GuideTimeTick[] = [];
     export let guideNowLinePercent = 0;
     export let showGuideNowLine = false;
     export let hasGuide = false;
     export let favoriteChannelIds: string[] = [];
+    export let activeChannelId = "";
     export let hasMoreGuideChannels = false;
-    export let visibleGuideChannelsCount = 0;
-    export let visibleChannelsCount = 0;
-    export let nextGuideChannelPageCount = 0;
     export let onPlayChannel: (channel: IptvChannel) => void = () => {};
     export let onToggleFavoriteChannel: (channel: IptvChannel) => void = () => {};
     export let onShowMoreGuideChannels: () => void = () => {};
 
     let failedLogoUrls = new Set<string>();
+    let contextMenuChannel: IptvChannel | null = null;
+    let contextMenuX = 0;
+    let contextMenuY = 0;
 
     $: favoriteChannelIdSet = new Set(favoriteChannelIds);
 
@@ -34,16 +33,81 @@
         return favoriteChannelIdSet.has(channel.id);
     }
 
-    function favoriteButtonLabel(channel: IptvChannel) {
-        return `${isFavoriteChannel(channel) ? "Remove" : "Add"} ${channel.name} ${isFavoriteChannel(channel) ? "from" : "to"} Favorites`;
+    function openChannelContextMenu(event: MouseEvent, channel: IptvChannel) {
+        event.preventDefault();
+        event.stopPropagation();
+        const rect = (event.currentTarget as HTMLElement | null)?.getBoundingClientRect();
+        const hasPointerCoordinates = event.clientX !== 0 || event.clientY !== 0;
+        contextMenuX = hasPointerCoordinates
+            ? event.clientX
+            : (rect?.left ?? 0) + Math.min(rect?.width ?? 0, 28);
+        contextMenuY = hasPointerCoordinates
+            ? event.clientY
+            : (rect?.top ?? 0) + Math.min(rect?.height ?? 0, 28);
+        contextMenuChannel = channel;
     }
 
-    function favoriteButtonClass(channel: IptvChannel) {
-        return `flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors ${
-            isFavoriteChannel(channel)
-                ? "border-amber-300/50 bg-amber-300/18 text-amber-200"
-                : "border-white/10 bg-black/36 text-white/48 hover:bg-white/12 hover:text-white"
-        }`;
+    function closeChannelContextMenu() {
+        contextMenuChannel = null;
+    }
+
+    function toggleContextMenuFavorite() {
+        if (!contextMenuChannel) return;
+        onToggleFavoriteChannel(contextMenuChannel);
+    }
+
+    function loadMoreSentinel(node: HTMLElement, _pageKey = 0) {
+        let disposed = false;
+        const loadNextPage = () => {
+            if (!disposed) onShowMoreGuideChannels();
+        };
+
+        if (typeof IntersectionObserver === "undefined") {
+            queueMicrotask(loadNextPage);
+            return {
+                update() {
+                    queueMicrotask(loadNextPage);
+                },
+                destroy() {
+                    disposed = true;
+                },
+            };
+        }
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries.some((entry) => entry.isIntersecting)) {
+                    loadNextPage();
+                }
+            },
+            { rootMargin: "520px 0px" },
+        );
+        const observe = () => {
+            observer.unobserve(node);
+            observer.observe(node);
+        };
+        observe();
+
+        return {
+            update() {
+                observe();
+            },
+            destroy() {
+                disposed = true;
+                observer.disconnect();
+            },
+        };
+    }
+
+    function channelButtonClass(channel: IptvChannel, variant: "grid" | "guide") {
+        const active = channel.id === activeChannelId;
+        const base =
+            variant === "grid"
+                ? "flex h-[88px] w-full min-w-0 items-center gap-3 rounded-[14px] border px-3 text-left transition-colors"
+                : "flex h-full w-full flex-col items-center justify-center gap-1 px-2 text-center transition-colors";
+        return active
+            ? `${base} border-white/22 bg-white/[0.14] ring-1 ring-white/22`
+            : `${base} border-white/[0.08] bg-white/[0.045] hover:border-white/14 hover:bg-white/[0.08]`;
     }
 
     function shouldShowLogo(channel: IptvChannel) {
@@ -80,80 +144,54 @@
     }
 </script>
 
-<section class="overflow-hidden rounded-[28px] border border-white/10 bg-[#2b2b2b]/56 shadow-[0_24px_80px_rgba(0,0,0,0.32)] backdrop-blur-xl">
-    <div class="flex flex-col gap-2 border-b border-white/10 bg-white/[0.04] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-            <h2 class="font-poppins text-lg font-semibold">
-                {guideTitle}
-            </h2>
-            <p class="text-sm text-white/45">
-                Click a channel{#if hasGuide} or programme{/if} to start live playback.
-                {#if hasMoreGuideChannels}
-                    Showing {visibleGuideChannelsCount} of {visibleChannelsCount} matching channels.
-                {/if}
-            </p>
-        </div>
-        <div class="text-sm tabular-nums text-white/46">
-            {#if hasGuide}
-                {formatTime(guideViewport.viewportStart)} to {formatTime(
-                    guideViewport.viewportEnd,
-                )}
-            {:else}
-                {visibleChannelsCount} channels
-            {/if}
-        </div>
-    </div>
-
+<section class="min-w-0">
     {#if !hasGuide}
-        <div class="p-4">
-            <div class="grid grid-cols-[repeat(auto-fill,minmax(86px,1fr))] gap-2 sm:grid-cols-[repeat(auto-fill,minmax(104px,1fr))]">
-                {#each guideRows as row (row.channel.id)}
-                    <div class="relative">
-                        <button
-                            class="flex h-[104px] w-full min-w-0 flex-col items-center justify-center gap-2 rounded-2xl bg-white/[0.06] px-2 text-center transition-colors hover:bg-white/[0.11]"
-                            title={row.channel.name}
-                            aria-label={`Play ${row.channel.name}`}
-                            onclick={() => onPlayChannel(row.channel)}
-                        >
-                            <LiveChannelLogo
-                                channel={row.channel}
-                                {shouldShowLogo}
-                                {markLogoFailed}
-                            />
-                            <span class="line-clamp-2 max-w-full text-[11px] font-medium leading-tight text-white/72">
-                                {row.channel.name}
-                            </span>
+        <div class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3 sm:grid-cols-[repeat(auto-fill,minmax(260px,1fr))]">
+            {#each guideRows as row (row.channel.id)}
+                <button
+                    class={channelButtonClass(row.channel, "grid")}
+                    title={row.channel.name}
+                    aria-label={`Play ${row.channel.name}`}
+                    onclick={() => onPlayChannel(row.channel)}
+                    oncontextmenu={(event) => openChannelContextMenu(event, row.channel)}
+                >
+                    <LiveChannelLogo
+                        channel={row.channel}
+                        {shouldShowLogo}
+                        {markLogoFailed}
+                    />
+                    <span class="min-w-0 flex-1">
+                        <span class="block truncate font-poppins text-sm font-semibold text-white/86">
+                            {row.channel.name}
+                        </span>
+                        <span class="mt-1 flex min-w-0 items-center gap-2 text-xs text-white/48">
                             {#if row.channel.number}
-                                <span class="max-w-full truncate rounded bg-white/[0.07] px-1.5 py-0.5 text-[10px] tabular-nums text-white/54">
+                                <span class="shrink-0 rounded bg-white/[0.07] px-2 py-0.5 tabular-nums text-white/58">
                                     {row.channel.number}
                                 </span>
                             {/if}
-                        </button>
-                        <button
-                            type="button"
-                            class={`absolute right-2 top-2 ${favoriteButtonClass(row.channel)}`}
-                            aria-label={favoriteButtonLabel(row.channel)}
-                            aria-pressed={isFavoriteChannel(row.channel)}
-                            title={favoriteButtonLabel(row.channel)}
-                            onclick={() => onToggleFavoriteChannel(row.channel)}
-                        >
-                            {isFavoriteChannel(row.channel) ? "★" : "☆"}
-                        </button>
-                    </div>
-                {/each}
-            </div>
+                            {#if row.channel.group || !row.channel.number}
+                                <span class="truncate">
+                                    {row.channel.group || "Live TV"}
+                                </span>
+                            {/if}
+                        </span>
+                    </span>
+                </button>
+            {/each}
         </div>
     {:else}
-        <div class="grid grid-cols-[88px_minmax(0,1fr)] sm:grid-cols-[108px_minmax(0,1fr)]">
-            <div class="border-r border-white/10 bg-black/18">
-                <div class="h-10 border-b border-white/10 bg-white/[0.03]"></div>
+        <div class="grid grid-cols-[88px_minmax(0,1fr)] border-t border-white/10 sm:grid-cols-[108px_minmax(0,1fr)]">
+            <div class="border-r border-white/10">
+                <div class="h-10 border-b border-white/10 bg-white/[0.025]"></div>
                 {#each guideRows as row (row.channel.id)}
-                    <div class="relative h-[86px] border-b border-white/[0.06]">
+                    <div class="h-[86px] border-b border-white/[0.06]">
                         <button
-                            class="flex h-full w-full flex-col items-center justify-center gap-1 px-2 text-center transition-colors hover:bg-white/[0.06]"
+                            class={channelButtonClass(row.channel, "guide")}
                             title={row.channel.name}
                             aria-label={`Play ${row.channel.name}`}
                             onclick={() => onPlayChannel(row.channel)}
+                            oncontextmenu={(event) => openChannelContextMenu(event, row.channel)}
                         >
                             <LiveChannelLogo
                                 channel={row.channel}
@@ -170,23 +208,13 @@
                                 </span>
                             {/if}
                         </button>
-                        <button
-                            type="button"
-                            class={`absolute right-1 top-1 ${favoriteButtonClass(row.channel)}`}
-                            aria-label={favoriteButtonLabel(row.channel)}
-                            aria-pressed={isFavoriteChannel(row.channel)}
-                            title={favoriteButtonLabel(row.channel)}
-                            onclick={() => onToggleFavoriteChannel(row.channel)}
-                        >
-                            {isFavoriteChannel(row.channel) ? "★" : "☆"}
-                        </button>
                     </div>
                 {/each}
             </div>
 
-            <div class="no-scrollbar min-w-0 overflow-x-auto bg-black/12">
+            <div class="no-scrollbar min-w-0 overflow-x-auto">
                 <div class="relative" style={`min-width: ${GUIDE_TIMELINE_MIN_WIDTH}px;`}>
-                    <div class="relative h-10 border-b border-white/10 bg-white/[0.03]">
+                    <div class="relative h-10 border-b border-white/10 bg-white/[0.025]">
                         {#each guideTimeTicks as tick (tick.value.getTime())}
                             <div
                                 class={timeTickClass(tick.leftPercent)}
@@ -209,7 +237,11 @@
                         {/if}
 
                         {#each guideRows as row (row.channel.id)}
-                            <div class="relative h-[86px] border-b border-white/[0.06]">
+                            <div
+                                class="relative h-[86px] border-b border-white/[0.06]"
+                                role="presentation"
+                                oncontextmenu={(event) => openChannelContextMenu(event, row.channel)}
+                            >
                                 {#if row.programmes.length > 0}
                                     {#each row.programmes as programme (programme.id)}
                                         <button
@@ -217,6 +249,7 @@
                                             style={`left: ${programme.leftPercent}%; width: ${programme.widthPercent}%;`}
                                             title={`${programme.timeRange} ${programme.title}`}
                                             onclick={() => onPlayChannel(row.channel)}
+                                            oncontextmenu={(event) => openChannelContextMenu(event, row.channel)}
                                         >
                                             <span class="line-clamp-2 font-poppins text-[13px] font-semibold leading-tight">
                                                 {programme.title}
@@ -230,6 +263,7 @@
                                     <button
                                         class="absolute inset-y-2 left-2 right-2 flex items-center justify-between gap-3 rounded-xl border border-white/[0.08] bg-white/[0.08] px-3 text-left text-white/78 transition-colors hover:bg-white/[0.12]"
                                         onclick={() => onPlayChannel(row.channel)}
+                                        oncontextmenu={(event) => openChannelContextMenu(event, row.channel)}
                                     >
                                         <span class="font-poppins text-[13px] font-semibold">
                                             {guideFallbackLabel()}
@@ -248,17 +282,17 @@
     {/if}
 
     {#if hasMoreGuideChannels}
-        <div class="flex flex-col gap-3 border-t border-white/10 bg-white/[0.03] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <p class="text-sm leading-6 text-white/48">
-                Large playlists are paged to keep the guide responsive. Search or select a group to narrow the list.
-            </p>
-            <button
-                class="h-11 rounded-full border border-white/10 bg-white/8 px-5 text-sm font-semibold text-white/76 transition-colors hover:bg-white/14 hover:text-white"
-                onclick={onShowMoreGuideChannels}
-            >
-                Show {nextGuideChannelPageCount} more
-            </button>
-        </div>
+        <div use:loadMoreSentinel={guideRows.length} class="h-px w-full" aria-hidden="true"></div>
+    {/if}
+
+    {#if contextMenuChannel}
+        <LiveChannelContextMenu
+            x={contextMenuX}
+            y={contextMenuY}
+            isFavorite={isFavoriteChannel(contextMenuChannel)}
+            onClose={closeChannelContextMenu}
+            onToggleFavorite={toggleContextMenuFavorite}
+        />
     {/if}
 </section>
 

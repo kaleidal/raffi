@@ -1,7 +1,8 @@
 <script lang="ts">
-    import { onMount } from "svelte";
-    import { Check, ChevronDown, ListFilter } from "@lucide/svelte";
+    import { onMount, tick } from "svelte";
+    import { Check, ChevronDown, ListFilter, Search } from "@lucide/svelte";
     import type { IptvGroup } from "../../../lib/iptv/types";
+    import { getVisibleLiveTvGroups } from "../liveHelpers";
 
     export let groups: IptvGroup[] = [];
     export let selectedGroup = "__all__";
@@ -12,14 +13,18 @@
     export let disabled = false;
     export let totalChannels = 0;
 
+    const allGroupsLabel = "All groups";
+
     let open = false;
     let root: HTMLDivElement;
+    let groupQuery = "";
+    let searchInput: HTMLInputElement;
 
     $: selectedGroupRow =
         groups.find((group) => group.name === selectedGroup) ?? null;
     $: selectedLabel =
         selectedGroup === allGroupsValue
-            ? "All groups"
+            ? allGroupsLabel
             : selectedGroup === favoritesGroupValue
               ? favoritesGroupLabel
               : selectedGroup;
@@ -29,15 +34,32 @@
             : selectedGroup === favoritesGroupValue
               ? favoritesCount
               : selectedGroupRow?.channelCount ?? 0;
+    $: visibleGroups = getVisibleLiveTvGroups(groups, groupQuery);
+    $: normalizedGroupQuery = groupQuery.trim().toLowerCase();
+    $: showAllGroupOption =
+        !normalizedGroupQuery || allGroupsLabel.toLowerCase().includes(normalizedGroupQuery);
+    $: showFavoritesGroupOption =
+        !normalizedGroupQuery ||
+        favoritesGroupLabel.toLowerCase().includes(normalizedGroupQuery);
+    $: hasVisibleOptions =
+        showAllGroupOption || showFavoritesGroupOption || visibleGroups.length > 0;
 
     function toggleMenu(event: MouseEvent) {
         event.stopPropagation();
         if (disabled) return;
-        open = !open;
+        if (open) {
+            closeMenu();
+            return;
+        }
+
+        groupQuery = "";
+        open = true;
+        void tick().then(() => searchInput?.focus());
     }
 
     function closeMenu() {
         open = false;
+        groupQuery = "";
     }
 
     function selectGroup(groupName: string) {
@@ -93,61 +115,73 @@
     {#if open}
         <div
             class="absolute left-0 top-[calc(100%+10px)] z-[260] w-[300px] overflow-hidden rounded-[24px] border border-white/10 bg-[#181818]/96 p-2 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl"
-            role="listbox"
         >
-            <div class="max-h-[360px] overflow-y-auto pr-1">
-                <button
-                    type="button"
-                    class={`flex w-full items-center gap-3 rounded-[18px] px-3 py-3 text-left transition-colors ${
-                        selectedGroup === allGroupsValue
-                            ? "bg-white/[0.12] text-white"
-                            : "text-white/76 hover:bg-white/[0.07] hover:text-white"
-                    }`}
-                    role="option"
-                    aria-selected={selectedGroup === allGroupsValue}
-                    onclick={() => selectGroup(allGroupsValue)}
-                >
-                    <span class="min-w-0 flex-1">
-                        <span class="block truncate text-sm font-semibold">
-                            All groups
-                        </span>
-                        <span class="mt-0.5 block text-xs text-white/42">
-                            {totalChannels} channels
-                        </span>
-                    </span>
-                    {#if selectedGroup === allGroupsValue}
-                        <Check size={18} strokeWidth={2.4} class="shrink-0" />
-                    {/if}
-                </button>
+            <label class="mb-2 flex h-10 items-center gap-2 rounded-[16px] border border-white/10 bg-black/24 px-3 text-white/62 focus-within:border-white/30 focus-within:text-white">
+                <Search size={16} strokeWidth={2.2} class="shrink-0" />
+                <input
+                    bind:this={searchInput}
+                    bind:value={groupQuery}
+                    class="h-full min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/32"
+                    placeholder="Search groups"
+                    autocomplete="off"
+                    aria-label="Search groups"
+                />
+            </label>
 
-                <button
-                    type="button"
-                    class={`flex w-full items-center gap-3 rounded-[18px] px-3 py-3 text-left transition-colors ${
-                        selectedGroup === favoritesGroupValue
-                            ? "bg-white/[0.12] text-white"
-                            : "text-white/76 hover:bg-white/[0.07] hover:text-white"
-                    }`}
-                    role="option"
-                    aria-selected={selectedGroup === favoritesGroupValue}
-                    onclick={() => selectGroup(favoritesGroupValue)}
-                >
-                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/[0.08] text-sm text-amber-200">
-                        ★
-                    </span>
-                    <span class="min-w-0 flex-1">
-                        <span class="block truncate text-sm font-semibold">
-                            {favoritesGroupLabel}
+            <div class="max-h-[360px] overflow-y-auto pr-1" role="listbox">
+                {#if showAllGroupOption}
+                    <button
+                        type="button"
+                        class={`flex w-full items-center gap-3 rounded-[18px] px-3 py-3 text-left transition-colors ${
+                            selectedGroup === allGroupsValue
+                                ? "bg-white/[0.12] text-white"
+                                : "text-white/76 hover:bg-white/[0.07] hover:text-white"
+                        }`}
+                        role="option"
+                        aria-selected={selectedGroup === allGroupsValue}
+                        onclick={() => selectGroup(allGroupsValue)}
+                    >
+                        <span class="min-w-0 flex-1">
+                            <span class="block truncate text-sm font-semibold">
+                                {allGroupsLabel}
+                            </span>
+                            <span class="mt-0.5 block text-xs text-white/42">
+                                {totalChannels} channels
+                            </span>
                         </span>
-                        <span class="mt-0.5 block text-xs text-white/42">
-                            {favoritesCount} channels
-                        </span>
-                    </span>
-                    {#if selectedGroup === favoritesGroupValue}
-                        <Check size={18} strokeWidth={2.4} class="shrink-0" />
-                    {/if}
-                </button>
+                        {#if selectedGroup === allGroupsValue}
+                            <Check size={18} strokeWidth={2.4} class="shrink-0" />
+                        {/if}
+                    </button>
+                {/if}
 
-                {#each groups as group}
+                {#if showFavoritesGroupOption}
+                    <button
+                        type="button"
+                        class={`flex w-full items-center gap-3 rounded-[18px] px-3 py-3 text-left transition-colors ${
+                            selectedGroup === favoritesGroupValue
+                                ? "bg-white/[0.12] text-white"
+                                : "text-white/76 hover:bg-white/[0.07] hover:text-white"
+                        }`}
+                        role="option"
+                        aria-selected={selectedGroup === favoritesGroupValue}
+                        onclick={() => selectGroup(favoritesGroupValue)}
+                    >
+                        <span class="min-w-0 flex-1">
+                            <span class="block truncate text-sm font-semibold">
+                                {favoritesGroupLabel}
+                            </span>
+                            <span class="mt-0.5 block text-xs text-white/42">
+                                {favoritesCount} channels
+                            </span>
+                        </span>
+                        {#if selectedGroup === favoritesGroupValue}
+                            <Check size={18} strokeWidth={2.4} class="shrink-0" />
+                        {/if}
+                    </button>
+                {/if}
+
+                {#each visibleGroups as group}
                     <button
                         type="button"
                         class={`flex w-full items-center gap-3 rounded-[18px] px-3 py-3 text-left transition-colors ${
@@ -172,6 +206,12 @@
                         {/if}
                     </button>
                 {/each}
+
+                {#if !hasVisibleOptions}
+                    <div class="px-3 py-5 text-sm text-white/42">
+                        No groups found
+                    </div>
+                {/if}
             </div>
         </div>
     {/if}

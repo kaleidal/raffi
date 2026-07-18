@@ -1,15 +1,20 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import {
+    ALL_GROUPS,
     FAVORITES_GROUP,
     LIVE_TV_REFRESH_INTERVAL_MS,
     LIVE_TV_SELECTION_STORAGE_KEY,
     getStoredLiveTvFavoriteChannelIds,
     getStoredLiveTvGroup,
+    getStoredLiveTvLastChannelId,
     getStoredLiveTvSelection,
     getVisibleChannels,
+    getVisibleLiveTvGroups,
     isLiveTvRefreshDue,
+    normalizeLiveTvGroup,
     setStoredLiveTvFavoriteChannelIds,
     setStoredLiveTvGroup,
+    setStoredLiveTvLastChannelId,
     setStoredLiveTvSourceId,
     shouldAutoRefreshLiveTvSource,
     toggleStoredLiveTvFavoriteChannelId,
@@ -58,6 +63,7 @@ describe("Live TV selection persistence", () => {
                 "source-2": "Sports",
             },
             favoritesBySourceId: {},
+            lastChannelIdsBySourceId: {},
         });
         expect(getStoredLiveTvGroup("source-1")).toBe("News");
     });
@@ -81,6 +87,7 @@ describe("Live TV selection persistence", () => {
                 good: "Documentaries",
             },
             favoritesBySourceId: {},
+            lastChannelIdsBySourceId: {},
         });
     });
 
@@ -91,6 +98,7 @@ describe("Live TV selection persistence", () => {
             sourceId: "",
             groupsBySourceId: {},
             favoritesBySourceId: {},
+            lastChannelIdsBySourceId: {},
         });
     });
 
@@ -109,6 +117,18 @@ describe("Live TV selection persistence", () => {
         expect(getStoredLiveTvFavoriteChannelIds("source-2")).toEqual([]);
     });
 
+    test("persists the last played channel per source", () => {
+        setStoredLiveTvLastChannelId(" source-1 ", " abc ");
+        setStoredLiveTvLastChannelId("source-2", "espn");
+
+        expect(getStoredLiveTvLastChannelId("source-1")).toBe("abc");
+        expect(getStoredLiveTvLastChannelId("source-2")).toBe("espn");
+        expect(getStoredLiveTvSelection().lastChannelIdsBySourceId).toEqual({
+            "source-1": "abc",
+            "source-2": "espn",
+        });
+    });
+
     test("drops malformed persisted favorite channel ids", () => {
         storage.setItem(
             LIVE_TV_SELECTION_STORAGE_KEY,
@@ -120,6 +140,11 @@ describe("Live TV selection persistence", () => {
                     empty: [],
                     bad: "not-an-array",
                 },
+                lastChannelIdsBySourceId: {
+                    "source-1": " abc ",
+                    empty: " ",
+                    bad: 42,
+                },
             }),
         );
 
@@ -128,6 +153,9 @@ describe("Live TV selection persistence", () => {
             groupsBySourceId: {},
             favoritesBySourceId: {
                 "source-1": ["abc", "bbc"],
+            },
+            lastChannelIdsBySourceId: {
+                "source-1": "abc",
             },
         });
     });
@@ -167,6 +195,38 @@ describe("Live TV visible channel filtering", () => {
 
     test("applies search inside the virtual Favorites group", () => {
         expect(getVisibleChannels(channels, FAVORITES_GROUP, "news", ["espn", "abc"]).map((channel) => channel.id)).toEqual(["abc"]);
+    });
+
+    test("falls back unknown persisted groups to all channels", () => {
+        expect(getVisibleChannels(channels, "Removed Group", "", []).map((channel) => channel.id)).toEqual(["abc", "espn", "bbc"]);
+    });
+});
+
+describe("Live TV group filtering", () => {
+    const groups = [
+        { id: "news", name: "News", channelCount: 12 },
+        { id: "sports", name: "Sports", channelCount: 8 },
+        { id: "kids", name: "Kids", channelCount: 4 },
+    ];
+
+    test("returns every group when the group search is empty", () => {
+        expect(getVisibleLiveTvGroups(groups, "  ").map((group) => group.name)).toEqual([
+            "News",
+            "Sports",
+            "Kids",
+        ]);
+    });
+
+    test("filters groups case-insensitively by name", () => {
+        expect(getVisibleLiveTvGroups(groups, "SP").map((group) => group.name)).toEqual([
+            "Sports",
+        ]);
+    });
+
+    test("normalizes removed persisted groups back to all groups", () => {
+        expect(normalizeLiveTvGroup("Sports", groups)).toBe("Sports");
+        expect(normalizeLiveTvGroup(FAVORITES_GROUP, groups)).toBe(FAVORITES_GROUP);
+        expect(normalizeLiveTvGroup("Removed Group", groups)).toBe(ALL_GROUPS);
     });
 });
 

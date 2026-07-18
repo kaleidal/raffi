@@ -1478,6 +1478,7 @@
                         {sessionId}
                         {videoSrc}
                         {metaData}
+                        {liveMode}
                         hasNextEpisode={!liveMode && hasNextEpisode}
                         currentAudioLabel={$currentAudioLabel}
                         currentSubtitleLabel={$currentSubtitleLabel}
