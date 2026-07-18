@@ -1,0 +1,11 @@
+{
+  "cli": { "version": ">= 16.0.0", "appVersionSource": "local" },
+  "build": {
+    "development": { "developmentClient": true, "distribution": "internal", "ios": { "simulator": true } },
+    "device-development": { "developmentClient": true, "distribution": "internal" },
+    "preview": { "distribution": "internal" },
+    "production": {},
+    "tv-development": { "extends": "development", "env": { "EXPO_TV": "1" } },
+    "tv-preview": { "extends": "preview", "env": { "EXPO_TV": "1" } }
+  }
+}

@@ -33,6 +33,7 @@ type Server struct {
 	ffprobePath     string
 	probeMu         sync.Mutex
 	probeCooldown   map[string]time.Time
+	bridge          *BridgeService
 }
 
 func main() {
@@ -52,6 +53,7 @@ func main() {
 		ffprobePath:     ffprobePath,
 		probeCooldown:   make(map[string]time.Time),
 	}
+	srv.bridge = NewBridgeService(srv)
 
 	log.Printf("Using ffmpeg: %s", ffmpegPath)
 	log.Printf("Using ffprobe: %s", ffprobePath)
@@ -105,6 +107,7 @@ func main() {
 	mux.HandleFunc("/torrents/", srv.torrentStreamer.ServeHTTP)
 	mux.HandleFunc("/settings/torrenting", srv.handleTorrentingSetting)
 	mux.HandleFunc("/community-addons", srv.handleCommunityAddons)
+	srv.bridge.RegisterLocalAdmin(mux)
 
 	addr := strings.TrimSpace(os.Getenv("RAFFI_SERVER_ADDR"))
 	if addr == "" {
@@ -115,6 +118,9 @@ func main() {
 		log.Fatalf("failed to bind to %s: %v", addr, err)
 	}
 	log.Printf("Server listening on http://%s\n", listener.Addr().String())
+	if err := srv.bridge.Restore(); err != nil {
+		log.Printf("Nearby-device bridge could not be restored: %v", err)
+	}
 	if err := http.Serve(listener, withCORS(mux)); err != nil {
 		log.Fatal(err)
 	}

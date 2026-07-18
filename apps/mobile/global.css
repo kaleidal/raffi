@@ -1,0 +1,14 @@
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(base);
+@import "tailwindcss/utilities.css";
+@import "nativewind/theme";
+
+@theme {
+  --color-canvas: #08090b;
+  --color-panel: #121418;
+  --color-soft: #1b1e24;
+  --color-ink: #f7f7f8;
+  --color-muted: #a5a8b0;
+  --color-accent: #ffffff;
+  --font-sans: System;
+}

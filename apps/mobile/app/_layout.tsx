@@ -1,122 +1,17 @@
+import '../global.css';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import 'react-native-reanimated';
+import React from 'react';
+import { ActivityIndicator, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { AppProvider, useApp } from '@/state/AppContext';
 
-import { Colors } from '@/constants/theme';
-import { useAuthStore } from '@/lib/stores/authStore';
-
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
-
-export default function RootLayout() {
-  const { initAuth, initialized, loading } = useAuthStore();
-
-  useEffect(() => {
-    initAuth();
-  }, []);
-
-  if (!initialized || loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
-    );
-  }
-
-  return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <View style={styles.container}>
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: Colors.background },
-            animation: 'fade',
-          }}
-        >
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen
-            name="meta/[id]"
-            options={{
-              presentation: 'card',
-              animation: 'slide_from_right',
-            }}
-          />
-          <Stack.Screen
-            name="player"
-            options={{
-              presentation: 'fullScreenModal',
-              animation: 'fade',
-            }}
-          />
-          <Stack.Screen
-            name="tv"
-            options={{
-              presentation: 'card',
-              animation: 'fade',
-            }}
-          />
-          <Stack.Screen
-            name="tv-search"
-            options={{
-              presentation: 'card',
-              animation: 'slide_from_right',
-            }}
-          />
-          <Stack.Screen
-            name="tv-meta/[id]"
-            options={{
-              presentation: 'card',
-              animation: 'slide_from_right',
-            }}
-          />
-          <Stack.Screen
-            name="lists"
-            options={{
-              presentation: 'card',
-              animation: 'slide_from_right',
-            }}
-          />
-          <Stack.Screen
-            name="addons"
-            options={{
-              presentation: 'card',
-              animation: 'slide_from_right',
-            }}
-          />
-          <Stack.Screen
-            name="history"
-            options={{
-              presentation: 'card',
-              animation: 'slide_from_right',
-            }}
-          />
-          <Stack.Screen
-            name="login"
-            options={{
-              presentation: 'modal',
-              animation: 'slide_from_bottom',
-            }}
-          />
-        </Stack>
-        <StatusBar style="light" backgroundColor={Colors.background} translucent={false} />
-      </View>
-    </GestureHandlerRootView>
-  );
+function Router() {
+  const { ready } = useApp();
+  if (!ready) return <View className="flex-1 items-center justify-center bg-canvas"><ActivityIndicator color="white" /></View>;
+  return <><StatusBar style="light" /><Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#08090b' }, animation: 'fade' }} /></>;
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: Colors.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-});
+export default function RootLayout() {
+  return <SafeAreaProvider><AppProvider><Router /></AppProvider></SafeAreaProvider>;
+}

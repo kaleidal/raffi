@@ -402,7 +402,7 @@ export async function loadVideoSession(
       return { hasDuration, hasAudioTracks };
     };
 
-    const subtitleTracks = [
+    const subtitleTracks: Track[] = [
       { id: "off", label: "Off", selected: true, group: "None" },
     ];
     let currentSubtitleTracks = subtitleTracks;

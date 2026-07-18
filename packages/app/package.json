@@ -17,6 +17,7 @@
   },
   "devDependencies": {
     "@tsconfig/svelte": "^5.0.8",
+    "@types/qrcode": "^1.5.5",
     "svelte": "^5.56.0",
     "svelte-check": "^4.4.8",
     "tailwindcss": "^4.3.0",
@@ -28,7 +29,8 @@
     "@lucide/svelte": "^1.17.0",
     "eventemitter3": "^5.0.4",
     "hls.js": "^1.6.16",
-    "posthog-js": "^1.376.4"
+    "posthog-js": "^1.376.4",
+    "qrcode": "^1.5.4"
   },
   "peerDependencies": {
     "svelte": "^5.0.0"

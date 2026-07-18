@@ -21,6 +21,7 @@ release
 .parcel-cache
 .eslintcache
 .bun
+.expo/
 .zig-cache
 zig-out
 target
@@ -77,6 +78,8 @@ apps/desktop/electron/raffi
 apps/desktop/release/
 apps/mobile/modules/**/android/.gradle/
 apps/mobile/modules/**/android/build/
+apps/mobile/android/
+apps/mobile/ios/
 
 # Legacy / stale paths from pre-refactor layouts
 Raffi/
