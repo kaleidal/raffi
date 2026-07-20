@@ -43,18 +43,26 @@ func NewController(ffmpegPath, ffprobePath string) *Controller {
 	}
 }
 
-func (c *Controller) getOrProbeLocked(ctx context.Context, source string) (*Metadata, string, error) {
+func (c *Controller) getOrProbeLocked(ctx context.Context, source string) (*Metadata, string, string, error) {
 	if cached, ok := c.probeCache[source]; ok {
-		return cached.meta, cached.codec, nil
+		resolvedSource, err := ResolvePlaybackSource(ctx, source)
+		if err != nil {
+			return nil, "", "", err
+		}
+		return cached.meta, cached.codec, resolvedSource, nil
 	}
 
-	meta, codec, err := c.ffprobeFn(ctx, source)
+	resolvedSource, err := ResolvePlaybackSource(ctx, source)
 	if err != nil {
-		return nil, "", err
+		return nil, "", "", err
+	}
+	meta, codec, err := c.ffprobeFn(ctx, resolvedSource)
+	if err != nil {
+		return nil, "", "", err
 	}
 
 	c.probeCache[source] = probeCacheEntry{meta: meta, codec: codec}
-	return meta, codec, nil
+	return meta, codec, resolvedSource, nil
 }
 
 func isTorrentSource(source string) bool {
@@ -73,7 +81,7 @@ func (c *Controller) EnsureSession(ctx context.Context, id, source string, start
 			return 0, "", err
 		}
 
-		meta, codec, err := c.getOrProbeLocked(ctx, source)
+		meta, codec, resolvedSource, err := c.getOrProbeLocked(ctx, source)
 		if err != nil {
 			c.mu.Unlock()
 			return 0, "", fmt.Errorf("probe failed: %w", err)
@@ -85,7 +93,7 @@ func (c *Controller) EnsureSession(ctx context.Context, id, source string, start
 
 		sess = &Session{
 			ID:               id,
-			Source:           source,
+			Source:           resolvedSource,
 			WorkDir:          baseDir,
 			DurationHint:     duration,
 			Codec:            codec,
@@ -136,7 +144,7 @@ func (c *Controller) EnsureSession(ctx context.Context, id, source string, start
 		log.Printf("Resuming interrupted HLS session %s at %.2fs (sequence %d)", id, resumeAt, startSequence)
 	}
 
-	if err := c.ensureCmdLocked(id, source, sess, resumeAt, startSequence, sliceDir, appendMode, len(sess.AvailableStreams) > 0); err != nil {
+	if err := c.ensureCmdLocked(id, sess.Source, sess, resumeAt, startSequence, sliceDir, appendMode, len(sess.AvailableStreams) > 0); err != nil {
 		c.mu.Unlock()
 		return 0, "", err
 	}
@@ -165,7 +173,7 @@ func (c *Controller) Seek(ctx context.Context, id, source string, target float64
 			return 0, 0, "", err
 		}
 
-		meta, codec, err := c.getOrProbeLocked(ctx, source)
+		meta, codec, resolvedSource, err := c.getOrProbeLocked(ctx, source)
 		if err != nil {
 			c.mu.Unlock()
 			return 0, 0, "", fmt.Errorf("probe failed: %w", err)
@@ -177,7 +185,7 @@ func (c *Controller) Seek(ctx context.Context, id, source string, target float64
 
 		sess = &Session{
 			ID:               id,
-			Source:           source,
+			Source:           resolvedSource,
 			WorkDir:          baseDir,
 			DurationHint:     duration,
 			Codec:            codec,
@@ -201,7 +209,7 @@ func (c *Controller) Seek(ctx context.Context, id, source string, target float64
 			return 0, 0, "", err
 		}
 
-		if err := c.ensureCmdLocked(id, source, sess, target, sess.SliceIndex, sliceDir, false, len(sess.AvailableStreams) > 0); err != nil {
+		if err := c.ensureCmdLocked(id, sess.Source, sess, target, sess.SliceIndex, sliceDir, false, len(sess.AvailableStreams) > 0); err != nil {
 			c.mu.Unlock()
 			return 0, 0, "", err
 		}
@@ -286,7 +294,7 @@ func (c *Controller) Seek(ctx context.Context, id, source string, target float64
 			if sess.Cmd == nil && !sess.Finished && endTime < sess.DurationHint {
 				resumeTime := endTime
 				nextSequence := mediaSeq + len(timeline)
-				if err := c.ensureCmdLocked(id, source, sess, resumeTime, nextSequence, sliceDir, true, len(sess.AvailableStreams) > 0); err != nil {
+				if err := c.ensureCmdLocked(id, sess.Source, sess, resumeTime, nextSequence, sliceDir, true, len(sess.AvailableStreams) > 0); err != nil {
 					log.Printf("Failed to resume slice %d: %v", slice.Index, err)
 				}
 			}
@@ -311,7 +319,7 @@ func (c *Controller) Seek(ctx context.Context, id, source string, target float64
 		return 0, 0, "", err
 	}
 
-	if err := c.ensureCmdLocked(id, source, sess, target, sess.SliceIndex, sliceDir, false, len(sess.AvailableStreams) > 0); err != nil {
+	if err := c.ensureCmdLocked(id, sess.Source, sess, target, sess.SliceIndex, sliceDir, false, len(sess.AvailableStreams) > 0); err != nil {
 		c.mu.Unlock()
 		return 0, 0, "", err
 	}

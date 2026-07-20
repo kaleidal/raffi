@@ -888,6 +888,7 @@
         if (torrentFailureExitTimeout) clearTimeout(torrentFailureExitTimeout);
         clearEmbedLoadFallback();
         clearBrowserAudioCheck();
+        playerSessionLoader.cancelCurrentLoad();
         disposeNextEpisodePrefetch();
         Session.cleanupSession(
             hls,
@@ -1081,6 +1082,7 @@
     const reloadSession = () => {
         if (!currentVideoSrc) return;
 
+        playerSessionLoader.cancelCurrentLoad();
         Session.cleanupSession(
             hls,
             sessionId,
@@ -1157,7 +1159,13 @@
         getCueLinePercent: () => cueLinePercent,
         getPlaybackAnalyticsProps,
         getVideoSrc: () => videoSrc,
-        loadVideo,
+        loadVideo: (src) => {
+            if (src === currentVideoSrc) {
+                reloadSession();
+                return;
+            }
+            return loadVideo(src);
+        },
         handleClose,
     });
 
@@ -1192,6 +1200,7 @@
         playbackClosedTracked = false;
         bingeAutoAdvancing = false;
         lastEmbedProgressAt = 0;
+        playerSessionLoader.cancelCurrentLoad();
         disposeNextEpisodePrefetch();
         Session.cleanupSession(
             hls,
@@ -1237,6 +1246,7 @@
               }
             : undefined;
 
+        playerSessionLoader.cancelCurrentLoad();
         disposeNextEpisodePrefetch(reuseSession ? { transfer: true } : undefined);
         Session.cleanupSession(
             hls,

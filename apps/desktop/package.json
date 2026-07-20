@@ -11,8 +11,8 @@
   },
   "homepage": "https://raffi.al",
   "scripts": {
-    "dev": "vite",
-    "electron:dev": "bun run server:build && cross-env NODE_ENV=development concurrently \"bun run dev\" \"wait-on http://localhost:5173 && cross-env ELECTRON_DISABLE_SANDBOX=1 electron .\"",
+    "dev": "vite --strictPort",
+    "electron:dev": "bun run server:build && cross-env NODE_ENV=development concurrently -k \"bun run dev\" \"wait-on http://localhost:5173 && cross-env ELECTRON_DISABLE_SANDBOX=1 electron .\"",
     "electron:dev:only": "cross-env ELECTRON_DISABLE_SANDBOX=1 electron .",
     "build": "vite build",
     "server:build": "node build_binary.cjs",

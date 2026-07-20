@@ -93,6 +93,9 @@ export const createPlayerModalHandlers = ({
                                 setShowCanvas: showCanvas.set,
                                 setFirstSeekLoad: firstSeekLoad.set,
                                 setPlaybackOffset: playbackOffset.set,
+                                setShowError: showError.set,
+                                setErrorMessage: errorMessage.set,
+                                setErrorDetails: errorDetails.set,
                             },
                         ),
                         {

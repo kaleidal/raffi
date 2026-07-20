@@ -68,10 +68,32 @@ export type PlayerSessionLoaderDeps = {
 };
 
 export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
+    let loadGeneration = 0;
+    let activeAbortController: AbortController | null = null;
+    let activeSessionId = "";
+
+    const cancelCurrentLoad = () => {
+        loadGeneration += 1;
+        activeAbortController?.abort();
+        activeAbortController = null;
+        deps.stopTorrentStatusPolling();
+        if (activeSessionId) {
+            Session.cleanupServerSession(activeSessionId);
+            activeSessionId = "";
+        }
+    };
+
     const loadVideo = async (
         src: string,
         opts?: { reuseSession?: { sessionId: string; sessionData: any } },
     ) => {
+        cancelCurrentLoad();
+        const generation = loadGeneration;
+        const abortController = new AbortController();
+        activeAbortController = abortController;
+        const isStale = () =>
+            generation !== loadGeneration || abortController.signal.aborted;
+
         try {
             loadingStage.set("Initializing playback");
             loadingDetails.set("");
@@ -134,6 +156,12 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                 },
             );
 
+            if (isStale()) {
+                Session.cleanupServerSession(result.sessionId);
+                return;
+            }
+
+            activeSessionId = result.sessionId;
             deps.setSessionId(result.sessionId);
 
             if (result.sessionData?.isTorrent && result.sessionData?.torrentInfoHash) {
@@ -150,6 +178,8 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                 deps.stopTorrentStatusPolling();
             }
 
+            if (isStale()) return;
+
             sessionData.set(result.sessionData);
 
             const playbackStart = await deps.resolvePlaybackStart({
@@ -159,12 +189,20 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                 season,
                 episode,
             });
+            if (isStale()) return;
             const effectiveStartTime = playbackStart.effectiveStartTime;
             deps.setIntroDbChapters(playbackStart.introDbChapters);
 
             await deps.awaitDomUpdate();
+            if (isStale()) return;
             const videoElem = deps.getVideoElem();
-            if (!videoElem) return;
+            if (!videoElem) {
+                if (activeSessionId) {
+                    Session.cleanupServerSession(activeSessionId);
+                    activeSessionId = "";
+                }
+                return;
+            }
 
             try {
                 const isLocalFile =
@@ -265,6 +303,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
 
                 videoElem.src = src;
                 videoElem.load();
+                activeSessionId = "";
                 return;
             }
 
@@ -294,6 +333,15 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
             loadingProgress.set(null);
 
             const sessionId = result.sessionId;
+            const initialSeekTime = effectiveStartTime !== startTime ? effectiveStartTime : null;
+            loadingDetails.set("Waiting for the first playable segment...");
+            const preparedManifestUrl = await Session.prepareHLSManifest(
+                sessionId,
+                initialSeekTime,
+                abortController.signal,
+            );
+            if (isStale()) return;
+
             const hlsInstance = Session.initHLS(
                 videoElem,
                 sessionId,
@@ -323,6 +371,9 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                         setShowCanvas: showCanvas.set,
                         setFirstSeekLoad: firstSeekLoad.set,
                         setPlaybackOffset: playbackOffset.set,
+                        setShowError: showError.set,
+                        setErrorMessage: errorMessage.set,
+                        setErrorDetails: errorDetails.set,
                     },
                 ),
                 {
@@ -333,12 +384,22 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                     setErrorMessage: errorMessage.set,
                     setErrorDetails: errorDetails.set,
                 },
-                effectiveStartTime !== startTime ? effectiveStartTime : null,
+                initialSeekTime,
+                "playback",
+                preparedManifestUrl,
             );
             deps.setHls(hlsInstance);
+            activeSessionId = "";
 
         } catch (err) {
+            if (isStale() || (err instanceof DOMException && err.name === "AbortError")) {
+                return;
+            }
             console.error("Failed to prepare playback", err);
+            if (activeSessionId) {
+                Session.cleanupServerSession(activeSessionId);
+                activeSessionId = "";
+            }
             deps.stopTorrentStatusPolling();
             playbackBuffering.set(false);
             loading.set(false);
@@ -350,10 +411,15 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
             errorMessage.set("Failed to prepare stream");
             errorDetails.set(err instanceof Error ? err.message : String(err));
             showError.set(true);
+        } finally {
+            if (activeAbortController === abortController) {
+                activeAbortController = null;
+            }
         }
     };
 
     return {
         loadVideo,
+        cancelCurrentLoad,
     };
 }

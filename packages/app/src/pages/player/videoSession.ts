@@ -15,6 +15,85 @@ function formatSeekQueryParam(seconds: number): string {
   return seconds.toFixed(3);
 }
 
+async function sessionInfoError(response: Response): Promise<Error> {
+  const details = (await response.text().catch(() => "")).trim();
+  return new Error(details || `Failed to load session info (${response.status})`);
+}
+
+export function createHLSManifestUrl(
+  sessionId: string,
+  seekTime: number | null = null,
+): string {
+  let url = `${getStreamUrl(sessionId)}/child.m3u8`;
+  if (seekTime != null && Number.isFinite(seekTime) && seekTime > 0) {
+    const seekId = Math.random().toString(36).substring(7);
+    url = `${url}?seek=${formatSeekQueryParam(seekTime)}&seek_id=${seekId}`;
+  }
+  return url;
+}
+
+const manifestPreparationControllers = new Map<string, Set<AbortController>>();
+
+export function cancelHLSPreparation(sessionId: string) {
+  const controllers = manifestPreparationControllers.get(sessionId);
+  if (!controllers) return;
+  for (const controller of controllers) {
+    controller.abort();
+  }
+  manifestPreparationControllers.delete(sessionId);
+}
+
+export async function prepareHLSManifest(
+  sessionId: string,
+  seekTime: number | null = null,
+  signal?: AbortSignal,
+): Promise<string> {
+  const url = createHLSManifestUrl(sessionId, seekTime);
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  signal?.addEventListener("abort", abort, { once: true });
+  if (signal?.aborted) controller.abort();
+
+  let controllers = manifestPreparationControllers.get(sessionId);
+  if (!controllers) {
+    controllers = new Set();
+    manifestPreparationControllers.set(sessionId, controllers);
+  }
+  controllers.add(controller);
+
+  try {
+    const response = await fetch(url, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      const details = (await response.text().catch(() => "")).trim();
+      throw new Error(details || `Stream preparation failed (${response.status})`);
+    }
+    // Consume the response so the connection is released before HLS.js requests
+    // the now-ready manifest using the same URL and seek id.
+    await response.text();
+    return url;
+  } finally {
+    signal?.removeEventListener("abort", abort);
+    controllers.delete(controller);
+    if (controllers.size === 0) {
+      manifestPreparationControllers.delete(sessionId);
+    }
+  }
+}
+
+export function cleanupServerSession(sessionId: string) {
+  if (!sessionId) return;
+  cancelHLSPreparation(sessionId);
+  const url = `${serverUrl}/cleanup?id=${sessionId}`;
+  if (navigator.sendBeacon) {
+    navigator.sendBeacon(url);
+  } else {
+    void fetch(url, { method: "POST", keepalive: true });
+  }
+}
+
 export function isTimeBuffered(
   elem: HTMLVideoElement,
   target: number,
@@ -342,7 +421,7 @@ export async function loadVideoSession(
       setLoadingStage?.("Using prefetched stream");
       setLoadingDetails?.("");
       const res = await fetch(`${serverUrl}/sessions/${sessionId}?playback=1`);
-      if (!res.ok) throw new Error("Failed to load session info");
+      if (!res.ok) throw await sessionInfoError(res);
       sessionData = await res.json();
       setPlaybackOffset(startTime);
     } else if (fileIdx !== null && fileIdx !== undefined) {
@@ -357,7 +436,7 @@ export async function loadVideoSession(
       setLoadingDetails?.("Probing metadata and tracks...");
 
       const res = await fetch(`${serverUrl}/sessions/${sessionId}`);
-      if (!res.ok) throw new Error("Failed to load session info");
+      if (!res.ok) throw await sessionInfoError(res);
       sessionData = await res.json();
     } else {
       setLoadingStage?.(
@@ -377,7 +456,7 @@ export async function loadVideoSession(
       setLoadingDetails?.("Probing metadata and tracks...");
 
       const res = await fetch(`${serverUrl}/sessions/${sessionId}`);
-      if (!res.ok) throw new Error("Failed to load session info");
+      if (!res.ok) throw await sessionInfoError(res);
       sessionData = await res.json();
     }
     if (sessionData.chapters) {
@@ -402,10 +481,10 @@ export async function loadVideoSession(
       return { hasDuration, hasAudioTracks };
     };
 
-    const subtitleTracks = [
+    const subtitleTracks: Track[] = [
       { id: "off", label: "Off", selected: true, group: "None" },
     ];
-    let currentSubtitleTracks = subtitleTracks;
+    let currentSubtitleTracks: Track[] = subtitleTracks;
     const updateSubtitleTracks = (tracks: Track[]) => {
       currentSubtitleTracks = tracks;
       setSubtitleTracks(tracks);
@@ -498,6 +577,7 @@ export function initHLS(
   },
   initialSeekTime: number | null = null,
   bufferMode: "playback" | "prefetch" = "playback",
+  preparedManifestUrl: string | null = null,
 ): Hls | null {
   const {
     setLoading,
@@ -526,8 +606,9 @@ export function initHLS(
     }
   };
 
-  let baseManifest = `${getStreamUrl(sessionId)}/child.m3u8`;
+  let baseManifest = preparedManifestUrl || `${getStreamUrl(sessionId)}/child.m3u8`;
   if (
+    !preparedManifestUrl &&
     initialSeekTime != null &&
     Number.isFinite(initialSeekTime) &&
     initialSeekTime > 0
@@ -782,6 +863,9 @@ export function createSeekHandler(
     setShowCanvas: (show: boolean) => void;
     setFirstSeekLoad: (load: boolean) => void;
     setPlaybackOffset: (offset: number) => void;
+    setShowError: (show: boolean) => void;
+    setErrorMessage: (message: string) => void;
+    setErrorDetails: (details: string) => void;
   },
 ) {
   const {
@@ -791,9 +875,12 @@ export function createSeekHandler(
     setShowCanvas,
     setFirstSeekLoad,
     setPlaybackOffset,
+    setShowError,
+    setErrorMessage,
+    setErrorDetails,
   } = setStates;
 
-  return () => {
+  return async () => {
     if (!videoElem) return;
     const pending = getPendingSeek();
     if (pending == null || getSeekGuard()) return;
@@ -819,59 +906,74 @@ export function createSeekHandler(
       setShowCanvas(false);
       return;
     }
-    const seekId = Math.random().toString(36).substring(7);
-    const url = `${getStreamUrl(sessionId)}/child.m3u8?seek=${formatSeekQueryParam(desiredGlobal)}&seek_id=${seekId}`;
-    console.log("Hard seek to", desiredGlobal, "->", url);
-
     const hlsInstance = getHls();
 
-    if (hlsInstance) {
-      const onSeekParsed = () => {
-        console.log("HLS MANIFEST_PARSED (seek)");
-        setSeekGuard(false);
-        setShowCanvas(false);
+    try {
+      const url = await prepareHLSManifest(sessionId, desiredGlobal);
+      console.log("Hard seek to", desiredGlobal, "->", url);
 
-        // Re-fetch subtitles if active
-        const currentSubtitleLabel = getCurrentSubtitleLabel();
-        if (currentSubtitleLabel !== "Off") {
-          const track = getSubtitleTracks().find((t) => t.selected);
-          if (track) {
-            handleSubtitleSelect(track);
+      if (hlsInstance) {
+        const onSeekParsed = () => {
+          console.log("HLS MANIFEST_PARSED (seek)");
+          setSeekGuard(false);
+          setShowCanvas(false);
+
+          // Re-fetch subtitles if active
+          const currentSubtitleLabel = getCurrentSubtitleLabel();
+          if (currentSubtitleLabel !== "Off") {
+            const track = getSubtitleTracks().find((t) => t.selected);
+            if (track) {
+              handleSubtitleSelect(track);
+            }
           }
-        }
 
-        videoElem.play().catch((err) => {
-          console.warn("play after seek failed:", err);
-        });
+          videoElem.play().catch((err) => {
+            console.warn("play after seek failed:", err);
+          });
 
-        hlsInstance?.off(Hls.Events.MANIFEST_PARSED, onSeekParsed);
-      };
+          hlsInstance?.off(Hls.Events.MANIFEST_PARSED, onSeekParsed);
+        };
 
-      hlsInstance.on(Hls.Events.MANIFEST_PARSED, onSeekParsed);
-      hlsInstance.stopLoad();
-      hlsInstance.loadSource(url);
-      hlsInstance.startLoad(0);
-    } else {
-      videoElem.src = url;
-      videoElem.onloadedmetadata = () => {
-        setPlaybackOffset(desiredGlobal);
-        videoElem.currentTime = 0;
-        setSeekGuard(false);
-        setShowCanvas(false);
+        hlsInstance.on(Hls.Events.MANIFEST_PARSED, onSeekParsed);
+        hlsInstance.stopLoad();
+        hlsInstance.loadSource(url);
+        hlsInstance.startLoad(0);
+      } else {
+        videoElem.src = url;
+        videoElem.onloadedmetadata = () => {
+          setPlaybackOffset(desiredGlobal);
+          videoElem.currentTime = 0;
+          setSeekGuard(false);
+          setShowCanvas(false);
 
-        // Re-fetch subtitles if active
-        const currentSubtitleLabel = getCurrentSubtitleLabel();
-        if (currentSubtitleLabel !== "Off") {
-          const track = getSubtitleTracks().find((t) => t.selected);
-          if (track) {
-            handleSubtitleSelect(track);
+          // Re-fetch subtitles if active
+          const currentSubtitleLabel = getCurrentSubtitleLabel();
+          if (currentSubtitleLabel !== "Off") {
+            const track = getSubtitleTracks().find((t) => t.selected);
+            if (track) {
+              handleSubtitleSelect(track);
+            }
           }
-        }
 
-        videoElem
-          .play()
-          .catch((err) => console.warn("play after seek failed:", err));
-      };
+          videoElem
+            .play()
+            .catch((err) => console.warn("play after seek failed:", err));
+        };
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setSeekGuard(false);
+        setBuffering(false);
+        setShowCanvas(false);
+        return;
+      }
+      console.error("Failed to prepare seek", error);
+      setSeekGuard(false);
+      setBuffering(false);
+      setShowCanvas(false);
+      setShowError(true);
+      setErrorMessage("Failed to seek");
+      setErrorDetails(error instanceof Error ? error.message : String(error));
     }
   };
 }
@@ -894,14 +996,7 @@ export function cleanupSession(
     hls.destroy();
   }
 
-  if (sessionId) {
-    const url = `${serverUrl}/cleanup?id=${sessionId}`;
-    if (navigator.sendBeacon) {
-      navigator.sendBeacon(url);
-    } else {
-      fetch(url, { method: "POST", keepalive: true });
-    }
-  }
+  cleanupServerSession(sessionId);
 }
 
 export function detachLocalPlayback(

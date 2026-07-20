@@ -4,16 +4,6 @@ import * as Session from "./videoSession";
 
 const noop = () => {};
 
-const cleanupSessionBeacon = (sessionId: string) => {
-    if (!sessionId) return;
-    const url = `${serverUrl}/cleanup?id=${sessionId}`;
-    if (navigator.sendBeacon) {
-        navigator.sendBeacon(url);
-    } else {
-        void fetch(url, { method: "POST", keepalive: true });
-    }
-};
-
 export function getBufferedRatioFromStart(video: HTMLVideoElement): number {
     const d = video.duration;
     if (!Number.isFinite(d) || d <= 0) return 0;
@@ -46,6 +36,9 @@ export async function startNextEpisodePrefetch(
     let sessionId = "";
     let sessionData: unknown = null;
     let pollId: ReturnType<typeof setInterval> | null = null;
+    let prepareAbort: AbortController | null = null;
+    let disposed = false;
+    let sessionCleaned = false;
 
     const stopPolling = () => {
         if (pollId != null) {
@@ -55,6 +48,9 @@ export async function startNextEpisodePrefetch(
     };
 
     const dispose = (opts?: { transfer?: boolean }) => {
+        disposed = true;
+        prepareAbort?.abort();
+        prepareAbort = null;
         stopPolling();
         if (hlsInstance) {
             try {
@@ -72,8 +68,9 @@ export async function startNextEpisodePrefetch(
             videoElem.load();
         } catch {
         }
-        if (!opts?.transfer && sessionId) {
-            cleanupSessionBeacon(sessionId);
+        if (!opts?.transfer && sessionId && !sessionCleaned) {
+            sessionCleaned = true;
+            Session.cleanupServerSession(sessionId);
         }
     };
 
@@ -100,10 +97,30 @@ export async function startNextEpisodePrefetch(
         } else {
             sessionId = await createSession(src, kind, 0, undefined, { prefetch: true });
         }
+        if (disposed) {
+            dispose();
+            return { dispose: null, handoff: null };
+        }
 
         const res = await fetch(`${serverUrl}/sessions/${sessionId}`);
         if (!res.ok) throw new Error("prefetch session info failed");
         sessionData = await res.json();
+        if (disposed) {
+            dispose();
+            return { dispose: null, handoff: null };
+        }
+
+        prepareAbort = new AbortController();
+        const preparedManifestUrl = await Session.prepareHLSManifest(
+            sessionId,
+            null,
+            prepareAbort.signal,
+        );
+        prepareAbort = null;
+        if (disposed) {
+            dispose();
+            return { dispose: null, handoff: null };
+        }
 
         hlsInstance = Session.initHLS(
             videoElem,
@@ -121,6 +138,7 @@ export async function startNextEpisodePrefetch(
             },
             null,
             "prefetch",
+            preparedManifestUrl,
         );
 
         pollId = setInterval(() => {
@@ -135,6 +153,9 @@ export async function startNextEpisodePrefetch(
         };
         return { dispose, handoff };
     } catch (e) {
+        if (disposed || (e instanceof DOMException && e.name === "AbortError")) {
+            return { dispose: null, handoff: null };
+        }
         console.warn("Next episode prefetch failed", e);
         dispose();
         return { dispose: null, handoff: null };

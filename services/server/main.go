@@ -37,7 +37,6 @@ type Server struct {
 
 func main() {
 	debug.SetTraceback("single")
-	preferGoDNSResolver()
 
 	ffmpegPath, ffprobePath, err := resolveMediaToolPaths()
 	if err != nil {
@@ -170,15 +169,6 @@ func executableToolName(base string) string {
 	return base
 }
 
-func preferGoDNSResolver() {
-	net.DefaultResolver = &net.Resolver{PreferGo: true}
-	if existing := strings.TrimSpace(os.Getenv("GODEBUG")); existing == "" {
-		_ = os.Setenv("GODEBUG", "netdns=go")
-	} else if !strings.Contains(existing, "netdns=") {
-		_ = os.Setenv("GODEBUG", existing+",netdns=go")
-	}
-}
-
 func (s *Server) handleAudioTrack(w http.ResponseWriter, r *http.Request, id string) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -267,7 +257,12 @@ func (s *Server) handleSubtitleTrack(w http.ResponseWriter, r *http.Request, id,
 	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
 	w.WriteHeader(http.StatusOK)
 
-	if err := hls.StreamSubtitle(r.Context(), s.ffmpegPath, sess.Source, subtitleIndex, startTime, w); err != nil {
+	subtitleSource, err := hls.ResolvePlaybackSource(r.Context(), sess.Source)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	if err := hls.StreamSubtitle(r.Context(), s.ffmpegPath, subtitleSource, subtitleIndex, startTime, w); err != nil {
 		log.Printf("subtitle stream failed for session %s track %d: %v", id, subtitleIndex, err)
 	}
 }
@@ -483,7 +478,7 @@ func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request, id str
 
 			var meta *hls.Metadata
 			var probeErr error
-			maxAttempts := 3
+			maxAttempts := 1
 			if sess.IsTorrent {
 				maxAttempts = 2
 			}
@@ -529,6 +524,10 @@ func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request, id str
 					s.probeMu.Unlock()
 				}
 				log.Printf("metadata probe failed for session %s: %v", sess.ID, probeErr)
+				if !sess.IsTorrent {
+					http.Error(w, probeErr.Error(), http.StatusBadGateway)
+					return
+				}
 			}
 		}
 	}
@@ -591,8 +590,11 @@ func (s *Server) handleHLSSessionAsset(w http.ResponseWriter, r *http.Request, s
 			if val, err := strconv.ParseFloat(start, 64); err == nil && val >= 0 {
 				dur, actualStart, readyManifestPath, err := s.hlsController.Seek(r.Context(), sess.ID, sess.Source, val, seekID, forceSlice)
 				if err != nil {
+					if errors.Is(err, context.Canceled) && r.Context().Err() != nil {
+						return
+					}
 					log.Printf("seek error for %s: %v", sess.ID, err)
-					http.Error(w, "failed to seek", http.StatusInternalServerError)
+					http.Error(w, fmt.Sprintf("failed to seek: %v", err), http.StatusInternalServerError)
 					return
 				}
 				if dur > 0 {
@@ -603,8 +605,11 @@ func (s *Server) handleHLSSessionAsset(w http.ResponseWriter, r *http.Request, s
 			}
 		} else {
 			if _, readyManifestPath, err := s.hlsController.EnsureSession(r.Context(), sess.ID, sess.Source, sess.StartTime); err != nil {
+				if errors.Is(err, context.Canceled) && r.Context().Err() != nil {
+					return
+				}
 				log.Printf("failed to prepare stream for session %s (source=%s): %v", sess.ID, sess.Source, err)
-				http.Error(w, "failed to prepare stream", http.StatusInternalServerError)
+				http.Error(w, fmt.Sprintf("failed to prepare stream: %v", err), http.StatusInternalServerError)
 				return
 			} else {
 				manifestPath = readyManifestPath
@@ -631,6 +636,14 @@ func (s *Server) handleHLSSessionAsset(w http.ResponseWriter, r *http.Request, s
 		}
 
 		lines := strings.Split(string(content), "\n")
+		sliceName := filepath.Base(filepath.Dir(fullPath))
+		for i, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			if trimmed == "" || strings.HasPrefix(trimmed, "#") || !strings.HasSuffix(strings.ToLower(trimmed), ".ts") {
+				continue
+			}
+			lines[i] = path.Join(sliceName, trimmed)
+		}
 		if start != "" {
 			if val, err := strconv.ParseFloat(start, 64); err == nil && val >= 0 {
 				offset := val - sliceStart
@@ -660,19 +673,26 @@ func (s *Server) handleHLSSessionAsset(w http.ResponseWriter, r *http.Request, s
 	}
 
 	if _, _, err := s.hlsController.EnsureSession(r.Context(), sess.ID, sess.Source, sess.StartTime); err != nil {
+		if errors.Is(err, context.Canceled) && r.Context().Err() != nil {
+			return
+		}
 		log.Printf("failed to prepare stream for session %s (source=%s): %v", sess.ID, sess.Source, err)
-		http.Error(w, "failed to prepare stream", http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("failed to prepare stream: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	sliceDir := s.hlsController.CurrentSliceDir(sess.ID)
-	if sliceDir == "" {
+	currentSliceDir := s.hlsController.CurrentSliceDir(sess.ID)
+	if currentSliceDir == "" {
 		http.Error(w, "no active slice", http.StatusInternalServerError)
 		return
 	}
 
-	fullPath := filepath.Clean(filepath.Join(sliceDir, asset))
-	if !strings.HasPrefix(fullPath, sliceDir) {
+	sessionDir := session.TempDirForSession(sess.ID)
+	fullPath := filepath.Clean(filepath.Join(currentSliceDir, asset))
+	if strings.HasPrefix(filepath.ToSlash(asset), "slice_") {
+		fullPath = filepath.Clean(filepath.Join(sessionDir, asset))
+	}
+	if !pathWithinDirectory(fullPath, sessionDir) {
 		http.Error(w, "invalid path", http.StatusBadRequest)
 		return
 	}
@@ -714,6 +734,11 @@ func (s *Server) handleHLSSessionAsset(w http.ResponseWriter, r *http.Request, s
 	}
 
 	http.ServeFile(w, r, fullPath)
+}
+
+func pathWithinDirectory(candidate, directory string) bool {
+	relative, err := filepath.Rel(directory, candidate)
+	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
 }
 
 func waitForFile(ctx context.Context, p string, producerActive func() bool) error {

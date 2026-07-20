@@ -24,7 +24,6 @@ func StreamSubtitle(
 	if strings.HasPrefix(source, "http://") || strings.HasPrefix(source, "https://") {
 		args = append(args,
 			"-reconnect", "1",
-			"-reconnect_at_eof", "1",
 			"-reconnect_streamed", "1",
 			"-reconnect_delay_max", "5",
 		)
