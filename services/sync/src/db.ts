@@ -363,7 +363,10 @@ export const applySyncState = async (db: SyncD1Database, userId: string, payload
   }
 
   if (statements.length > 0) {
-    await db.batch(statements);
+    const CHUNK_SIZE = 300;
+    for (let i = 0; i < statements.length; i += CHUNK_SIZE) {
+      await db.batch(statements.slice(i, i + CHUNK_SIZE));
+    }
   }
 
   return {

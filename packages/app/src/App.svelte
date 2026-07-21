@@ -1,11 +1,8 @@
 <script lang="ts">
-    import Meta from "./pages/meta/Meta.svelte";
     import Home from "./pages/Home.svelte";
-    import Player from "./pages/player/Player.svelte";
     import { router } from "./lib/stores/router";
     import { onMount, tick } from "svelte";
     import { get } from "svelte/store";
-    import Lists from "./pages/lists/Lists.svelte";
     import { enableRPC, disableRPC } from "./lib/rpc";
 
 
@@ -24,12 +21,57 @@
     import ZoomModal from "./components/common/ZoomModal.svelte";
     import { syncTorrentingPreference } from "./lib/stores/torrenting";
 
-    const pages = {
-        home: Home,
-        meta: Meta,
-        player: Player,
-        lists: Lists,
+    type PageComponent = typeof Home;
+
+    const pageLoaders: Record<string, () => Promise<{ default: PageComponent }>> = {
+        meta: () => import("./pages/meta/Meta.svelte"),
+        player: () => import("./pages/player/Player.svelte"),
+        lists: () => import("./pages/lists/Lists.svelte"),
     };
+
+    const pageCache: Record<string, PageComponent> = {
+        home: Home,
+    };
+
+    let activePage: PageComponent | null = Home;
+    let pageLoading = false;
+    let pageLoadToken = 0;
+
+    const ensurePageLoaded = async (page: string) => {
+        if (pageCache[page]) {
+            activePage = pageCache[page];
+            pageLoading = false;
+            return;
+        }
+
+        const loader = pageLoaders[page];
+        if (!loader) {
+            activePage = Home;
+            pageLoading = false;
+            return;
+        }
+
+        const token = ++pageLoadToken;
+        pageLoading = true;
+        activePage = null;
+
+        try {
+            const mod = await loader();
+            pageCache[page] = mod.default;
+            if (token !== pageLoadToken) return;
+            activePage = mod.default;
+        } catch (err) {
+            console.error(`Failed to load page module: ${page}`, err);
+            if (token !== pageLoadToken) return;
+            activePage = Home;
+        } finally {
+            if (token === pageLoadToken) {
+                pageLoading = false;
+            }
+        }
+    };
+
+    $: void ensurePageLoaded($router.page);
 
     type DecoderStatus = {
         state: string;
@@ -466,7 +508,13 @@
             class="w-full h-full"
             style={`transform: scale(${displayZoom * $userZoom}); transform-origin: top left; width: calc(100% / ${displayZoom * $userZoom}); height: calc(100% / ${displayZoom * $userZoom});`}
         >
-            <svelte:component this={pages[$router.page]} {...$router.params as any} />
+            {#if pageLoading || !activePage}
+                <div class="w-full h-full flex items-center justify-center">
+                    <LoadingSpinner size="32px" color="#D8D8D8" />
+                </div>
+            {:else}
+                <svelte:component this={activePage} {...$router.params as any} />
+            {/if}
         </div>
     </div>
 

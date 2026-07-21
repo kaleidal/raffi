@@ -388,10 +388,35 @@ function createDecoderService({ isDev, path, fs, spawn, logToFile, baseDir }) {
         });
       });
 
+      const DECODER_LOG_RATE_LIMIT = 20;
+      const DECODER_LOG_WINDOW_MS = 1000;
+      let decoderLogTimestamps = [];
+
+      const allowDecoderFileLog = () => {
+        const now = Date.now();
+        decoderLogTimestamps = decoderLogTimestamps.filter(
+          (ts) => now - ts < DECODER_LOG_WINDOW_MS,
+        );
+        if (decoderLogTimestamps.length >= DECODER_LOG_RATE_LIMIT) {
+          return false;
+        }
+        decoderLogTimestamps.push(now);
+        return true;
+      };
+
+      const isNoisyDecoderLine = (line) =>
+        line.includes("h264 bitstream error, startcode missing") ||
+        line.includes("error flushing piece storage") ||
+        line.includes("torrent github.com/anacrolix/torrent torrent.go:") ||
+        line.includes("FlushFileBuffers: The handle is invalid") ||
+        line.includes("FlushFileBuffers: Incorrect function");
+
       goServer.stdout.on("data", (d) => {
         const msg = d.toString();
         console.log("[go]", msg);
-        logToFile("[go stdout]", msg);
+        if (allowDecoderFileLog()) {
+          logToFile("[go stdout]", msg);
+        }
       });
 
       goServer.stderr.on("data", (d) => {
@@ -401,19 +426,14 @@ function createDecoderService({ isDev, path, fs, spawn, logToFile, baseDir }) {
           .map((line) => line.trim())
           .filter(Boolean);
 
-        const kept = lines.filter((line) => {
-          if (line.includes("h264 bitstream error, startcode missing")) return false;
-          if (line.includes("error flushing piece storage")) return false;
-          if (line.includes("torrent github.com/anacrolix/torrent torrent.go:")) return false;
-          if (line.includes("FlushFileBuffers: The handle is invalid")) return false;
-          if (line.includes("FlushFileBuffers: Incorrect function")) return false;
-          return true;
-        });
+        const kept = lines.filter((line) => !isNoisyDecoderLine(line));
 
         if (kept.length === 0) return;
         const output = kept.join("\n");
         console.error("[go err]", output);
-        logToFile("[go stderr]", output);
+        if (allowDecoderFileLog()) {
+          logToFile("[go stderr]", output);
+        }
       });
     } catch (err) {
       setDecoderStatus({

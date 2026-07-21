@@ -17,36 +17,92 @@ const (
 	MaxBufferAhead         = 90 * time.Second
 	PrefetchBufferAhead    = 12 * time.Second
 	IdleSessionTTL         = 12 * time.Minute
+	probeCacheMaxEntries   = 128
+	probeCacheTTL          = 45 * time.Minute
 )
 
 type Controller struct {
 	mu           sync.Mutex
 	sessions     map[string]*Session
 	probeCache   map[string]probeCacheEntry
+	probeOrder   []string
 	bufferLimits map[string]time.Duration
 	ffprobeFn    func(ctx context.Context, source string) (*Metadata, string, error)
 	startCmd     TranscoderFunc
 }
 
 type probeCacheEntry struct {
-	meta  *Metadata
-	codec string
+	meta      *Metadata
+	codec     string
+	expiresAt time.Time
 }
 
 func NewController(ffmpegPath, ffprobePath string) *Controller {
 	return &Controller{
 		sessions:     make(map[string]*Session),
 		probeCache:   make(map[string]probeCacheEntry),
+		probeOrder:   make([]string, 0, probeCacheMaxEntries),
 		bufferLimits: make(map[string]time.Duration),
 		ffprobeFn:    NewProbeDuration(ffprobePath),
 		startCmd:     NewTranscoder(ffmpegPath),
 	}
 }
 
+func (c *Controller) probeCacheGetLocked(source string) (probeCacheEntry, bool) {
+	cached, ok := c.probeCache[source]
+	if !ok {
+		return probeCacheEntry{}, false
+	}
+	if time.Now().After(cached.expiresAt) {
+		c.probeCacheDeleteLocked(source)
+		return probeCacheEntry{}, false
+	}
+	c.probeCacheTouchLocked(source)
+	return cached, true
+}
+
+func (c *Controller) probeCacheTouchLocked(source string) {
+	for i, key := range c.probeOrder {
+		if key == source {
+			c.probeOrder = append(c.probeOrder[:i], c.probeOrder[i+1:]...)
+			break
+		}
+	}
+	c.probeOrder = append(c.probeOrder, source)
+}
+
+func (c *Controller) probeCacheDeleteLocked(source string) {
+	delete(c.probeCache, source)
+	for i, key := range c.probeOrder {
+		if key == source {
+			c.probeOrder = append(c.probeOrder[:i], c.probeOrder[i+1:]...)
+			return
+		}
+	}
+}
+
+func (c *Controller) probeCacheSetLocked(source string, meta *Metadata, codec string) {
+	if _, exists := c.probeCache[source]; exists {
+		c.probeCacheTouchLocked(source)
+	} else {
+		c.probeOrder = append(c.probeOrder, source)
+	}
+	c.probeCache[source] = probeCacheEntry{
+		meta:      meta,
+		codec:     codec,
+		expiresAt: time.Now().Add(probeCacheTTL),
+	}
+	for len(c.probeCache) > probeCacheMaxEntries && len(c.probeOrder) > 0 {
+		oldest := c.probeOrder[0]
+		c.probeOrder = c.probeOrder[1:]
+		delete(c.probeCache, oldest)
+	}
+}
+
 // getOrProbe resolves and probes a source without holding c.mu across DNS/HTTP/ffprobe.
 func (c *Controller) getOrProbe(ctx context.Context, source string) (*Metadata, string, string, error) {
 	c.mu.Lock()
-	if cached, ok := c.probeCache[source]; ok {
+	if cached, ok := c.probeCacheGetLocked(source); ok {
 		c.mu.Unlock()
 		resolvedSource, err := ResolvePlaybackSource(ctx, source)
 		if err != nil {
@@ -66,11 +122,11 @@ func (c *Controller) getOrProbe(ctx context.Context, source string) (*Metadata, 
 	}
 
 	c.mu.Lock()
-	if cached, ok := c.probeCache[source]; ok {
+	if cached, ok := c.probeCacheGetLocked(source); ok {
 		c.mu.Unlock()
 		return cached.meta, cached.codec, resolvedSource, nil
 	}
-	c.probeCache[source] = probeCacheEntry{meta: meta, codec: codec}
+	c.probeCacheSetLocked(source, meta, codec)
 	c.mu.Unlock()
 	return meta, codec, resolvedSource, nil
 }

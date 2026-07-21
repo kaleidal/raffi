@@ -128,6 +128,10 @@ function createMainWindow({
   });
 
   let currentDisplayZoom = 1;
+  let lastSentDisplayZoom = null;
+  let displayZoomDebounceTimer = null;
+  const DISPLAY_ZOOM_DEBOUNCE_MS = 120;
+  const DISPLAY_ZOOM_DELTA = 0.001;
   const miniPlayerState = {
     enabled: true,
     canEnter: false,
@@ -156,12 +160,23 @@ function createMainWindow({
     setTimeout(run, 180);
   };
 
+  const sendDisplayZoom = (zoom) => {
+    if (
+      lastSentDisplayZoom != null &&
+      Math.abs(zoom - lastSentDisplayZoom) <= DISPLAY_ZOOM_DELTA
+    ) {
+      return;
+    }
+    lastSentDisplayZoom = zoom;
+    try {
+      mainWindow.webContents.send("DISPLAY_ZOOM", zoom);
+    } catch {}
+  };
+
   const applyMiniPlayerDisplayZoom = () => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     currentDisplayZoom = 1;
-    try {
-      mainWindow.webContents.send("DISPLAY_ZOOM", currentDisplayZoom);
-    } catch {}
+    sendDisplayZoom(currentDisplayZoom);
   };
 
   const getMiniPlayerBounds = () => {
@@ -479,7 +494,7 @@ function createMainWindow({
 
     if (effectiveWidth >= widthThreshold) {
       currentDisplayZoom = dpiZoom;
-      mainWindow.webContents.send("DISPLAY_ZOOM", currentDisplayZoom);
+      sendDisplayZoom(currentDisplayZoom);
       return;
     }
 
@@ -512,13 +527,27 @@ function createMainWindow({
 
     mainWindow.webContents.setZoomFactor(1);
     try {
-      mainWindow.webContents.send("DISPLAY_ZOOM", currentDisplayZoom);
+      sendDisplayZoom(currentDisplayZoom);
     } catch (e) {
       console.warn("Failed to send display zoom", e);
     }
   };
 
+  const scheduleDebouncedDisplayZoom = () => {
+    if (displayZoomDebounceTimer) {
+      clearTimeout(displayZoomDebounceTimer);
+    }
+    displayZoomDebounceTimer = setTimeout(() => {
+      displayZoomDebounceTimer = null;
+      applyDisplayZoom();
+    }, DISPLAY_ZOOM_DEBOUNCE_MS);
+  };
+
   mainWindow.webContents.on("did-finish-load", () => {
+    if (displayZoomDebounceTimer) {
+      clearTimeout(displayZoomDebounceTimer);
+      displayZoomDebounceTimer = null;
+    }
     applyDisplayZoom();
     if (fileToOpen) {
       mainWindow.webContents.send("open-file", fileToOpen);
@@ -534,8 +563,8 @@ function createMainWindow({
     }
   });
 
-  mainWindow.on("resize", applyDisplayZoom);
-  screen.on("display-metrics-changed", applyDisplayZoom);
+  mainWindow.on("resize", scheduleDebouncedDisplayZoom);
+  screen.on("display-metrics-changed", scheduleDebouncedDisplayZoom);
 
   mainWindow.on("ready-to-show", () => {
     logToFile("Main window ready-to-show");

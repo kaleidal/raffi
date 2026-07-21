@@ -23,9 +23,11 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: (id) => {
-          if (id.includes('node_modules')) {
-            return 'vendor';
-          }
+          if (!id.includes('node_modules')) return;
+          if (id.includes('hls.js')) return 'hls';
+          if (id.includes('posthog')) return 'posthog';
+          if (id.includes('lucide')) return 'lucide';
+          return 'vendor';
         },
       },
     },
