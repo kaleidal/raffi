@@ -112,9 +112,7 @@ raffi/
 │   ├── web/           # SvelteKit + Cloudflare web app
 │   └── mobile/        # React Native + Expo
 ├── packages/
-│   ├── app/           # Shared Svelte Raffi UI and app logic
-│   ├── shared/        # Platform-agnostic utilities and types
-│   └── platform-types/
+│   └── app/           # Shared Svelte Raffi UI and app logic
 ├── services/
 │   ├── sync/          # Cloud sync API (Cloudflare Workers + D1)
 │   └── server/        # Local streaming server (Go)
@@ -131,7 +129,7 @@ raffi/
 - **Framework**: SvelteKit with Cloudflare adapter
 - **Purpose**: Browser-first Raffi for direct HTTP and debrid streams
 - **UI**: Consumes the same shared Svelte package as desktop
-- **Installable**: PWA manifest and Cloudflare deployment target
+- **Deploy**: Cloudflare Pages/Workers target
 
 #### Mobile App (`apps/mobile/`)
 - **Framework**: React Native with Expo SDK 54

@@ -1,4 +1,4 @@
-import type { TraktRecommendation, TraktScrobbleArgs, TraktStatus, WatchParty, WatchPartyMember } from "./types";
+import type { TraktRecommendation, TraktScrobbleArgs, TraktStatus, WatchParty } from "./types";
 import { DEFAULT_TRAKT_STATUS, canUseCloudFeatures, getRequiredUserId, isLocalModeActive } from "./state";
 import {
     clearTraktClientAuthCache,
@@ -27,14 +27,6 @@ export const disconnectTrakt = async () => {
     if (isLocalModeActive() || !canUseCloudFeatures()) return { ok: true };
     getRequiredUserId();
     const result = await syncPost("/trakt/disconnect", {});
-    clearTraktClientAuthCache();
-    return result;
-};
-
-export const refreshTraktToken = async () => {
-    if (!canUseCloudFeatures()) throw new Error("Cloud backup is offline");
-    getRequiredUserId();
-    const result = await syncPost("/trakt/refresh", {});
     clearTraktClientAuthCache();
     return result;
 };
@@ -75,28 +67,13 @@ export const updateWatchPartyState = async (partyId: string, currentTimeSeconds:
     return syncPost(`/watch-parties/${encodeURIComponent(partyId)}/state`, { currentTimeSeconds, isPlaying });
 };
 
-export const getWatchParty = async (partyId: string) => {
-    if (!canUseCloudFeatures()) return null;
-    return syncGet<WatchParty | null>(`/watch-parties/${encodeURIComponent(partyId)}`);
-};
-
 export const getWatchPartyInfo = async (partyId: string) => {
     if (!canUseCloudFeatures()) return null;
     return syncGet<any>(`/watch-parties/${encodeURIComponent(partyId)}`);
-};
-
-export const getActiveWatchParties = async () => {
-    if (!canUseCloudFeatures()) return [];
-    return syncGet<WatchParty[]>("/watch-parties/active");
 };
 
 export const updateMemberLastSeen = async (partyId: string) => {
     if (!canUseCloudFeatures()) return { ok: false, reason: "cloud_unavailable" };
     getRequiredUserId();
     return syncPost(`/watch-parties/${encodeURIComponent(partyId)}/heartbeat`, {});
-};
-
-export const getWatchPartyMembers = async (partyId: string) => {
-    if (!canUseCloudFeatures()) return [];
-    return syncGet<WatchPartyMember[]>(`/watch-parties/${encodeURIComponent(partyId)}/members`);
 };

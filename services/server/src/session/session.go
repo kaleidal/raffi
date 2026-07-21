@@ -28,6 +28,7 @@ type Session struct {
 	AudioIndex       int          `json:"audioIndex"`
 	IsTorrent        bool         `json:"isTorrent,omitempty"`
 	TorrentInfoHash  string       `json:"torrentInfoHash,omitempty"`
+	TorrentFileIdx   *int         `json:"torrentFileIdx,omitempty"`
 }
 
 type StreamInfo struct {

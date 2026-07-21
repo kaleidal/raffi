@@ -30,8 +30,6 @@ if (!isFlatpak) {
 const pendingAppUserModelId =
   process.platform === "win32" ? "al.kaleid.raffi" : null;
 
-const express = require("express");
-
 logFallback("Main process booting");
 logToFile("Main process booting");
 
@@ -90,7 +88,6 @@ app.on("child-process-gone", (_event, details) => {
 });
 
 let mainWindow;
-let httpServer;
 let decoderStartupPromise = null;
 let fileToOpen = null;
 let pendingAveAuthPayload = null;
@@ -197,7 +194,6 @@ function createWindow() {
     screen,
     fs,
     path,
-    express,
     isDev,
     autoUpdater,
     logToFile,
@@ -224,9 +220,6 @@ function createWindow() {
     },
     setPendingUpdateInfo: (value) => {
       pendingUpdateInfo = value;
-    },
-    setHttpServer: (server) => {
-      httpServer = server;
     },
   });
 }
@@ -323,10 +316,6 @@ function cleanup() {
   console.log("Cleaning up...");
   console.log("Killing decoder server...");
   decoderService.cleanupDecoder();
-  if (httpServer) {
-    console.log("Closing HTTP server...");
-    httpServer.close();
-  }
 }
 
 registerMainIpcHandlers({
@@ -340,6 +329,7 @@ registerMainIpcHandlers({
   logToFile,
   getMainWindow: () => mainWindow,
   getDecoderStatus: () => decoderService.getDecoderStatus(),
+  getDecoderAuthSecret: () => decoderService.getDecoderAuthSecret(),
   scanLibraryRoots,
 });
 

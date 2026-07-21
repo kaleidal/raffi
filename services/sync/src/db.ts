@@ -160,31 +160,10 @@ export const getState = async (db: SyncD1Database, userId: string): Promise<Remo
       .all<ListRow>(),
     db.prepare(`
       SELECT list_id, imdb_id, position, type, poster
-      FROM (
-        SELECT
-          item.list_id,
-          item.imdb_id,
-          item.position,
-          item.type,
-          item.poster,
-          ROW_NUMBER() OVER (
-            PARTITION BY item.list_id, item.imdb_id
-            ORDER BY CASE WHEN item.user_id = ? THEN 0 ELSE 1 END, item.position ASC
-          ) AS rank
-        FROM list_items item
-        INNER JOIN lists list
-          ON list.list_id = item.list_id
-          AND list.user_id = ?
-        WHERE item.user_id = ?
-          OR NOT EXISTS (
-            SELECT 1 FROM lists item_owner
-            WHERE item_owner.user_id = item.user_id
-              AND item_owner.list_id = item.list_id
-          )
-      )
-      WHERE rank = 1
+      FROM list_items
+      WHERE user_id = ?
       ORDER BY list_id ASC, position ASC
-    `).bind(userId, userId, userId).all<ListItemRow>(),
+    `).bind(userId).all<ListItemRow>(),
     db.prepare("SELECT * FROM user_meta WHERE user_id = ?")
       .bind(userId)
       .first<UserMetaRow>(),
@@ -310,7 +289,21 @@ export const applySyncState = async (db: SyncD1Database, userId: string, payload
     ));
   }
 
+  const ownedListIds = new Set(
+    lists.map((list) => optionalString(list.list_id)).filter((id): id is string => Boolean(id)),
+  );
+  const existingLists = await db.prepare("SELECT list_id FROM lists WHERE user_id = ?")
+    .bind(userId)
+    .all<{ list_id: string }>();
+  for (const row of existingLists.results || []) {
+    if (row.list_id) ownedListIds.add(row.list_id);
+  }
+
   for (const item of listItems) {
+    const listId = optionalString(item.list_id);
+    if (!listId || !ownedListIds.has(listId)) {
+      continue;
+    }
     statements.push(db.prepare(`
       INSERT INTO list_items (user_id, list_id, imdb_id, position, type, poster)
       VALUES (?, ?, ?, ?, ?, ?)
@@ -320,7 +313,7 @@ export const applySyncState = async (db: SyncD1Database, userId: string, payload
         poster = excluded.poster
     `).bind(
       userId,
-      item.list_id,
+      listId,
       item.imdb_id,
       toInteger(item.position),
       optionalString(item.type) || "movie",
@@ -353,21 +346,9 @@ export const applySyncState = async (db: SyncD1Database, userId: string, payload
   for (const listId of uniqueBy((payload.deletes?.lists || []).map((value) => ({ value })), (item) => item.value).map((item) => item.value)) {
     statements.push(db.prepare(`
       DELETE FROM list_items
-      WHERE list_id = ?
-        AND EXISTS (
-          SELECT 1 FROM lists owned_list
-          WHERE owned_list.user_id = ?
-            AND owned_list.list_id = list_items.list_id
-        )
-        AND (
-          user_id = ?
-          OR NOT EXISTS (
-            SELECT 1 FROM lists item_owner
-            WHERE item_owner.user_id = list_items.user_id
-              AND item_owner.list_id = list_items.list_id
-          )
-        )
-    `).bind(listId, userId, userId));
+      WHERE user_id = ?
+        AND list_id = ?
+    `).bind(userId, listId));
     statements.push(db.prepare("DELETE FROM lists WHERE user_id = ? AND list_id = ?").bind(userId, listId));
   }
 
@@ -375,22 +356,10 @@ export const applySyncState = async (db: SyncD1Database, userId: string, payload
   for (const item of deletedListItems) {
     statements.push(db.prepare(`
       DELETE FROM list_items
-      WHERE list_id = ?
+      WHERE user_id = ?
+        AND list_id = ?
         AND imdb_id = ?
-        AND EXISTS (
-          SELECT 1 FROM lists owned_list
-          WHERE owned_list.user_id = ?
-            AND owned_list.list_id = list_items.list_id
-        )
-        AND (
-          user_id = ?
-          OR NOT EXISTS (
-            SELECT 1 FROM lists item_owner
-            WHERE item_owner.user_id = list_items.user_id
-              AND item_owner.list_id = list_items.list_id
-          )
-        )
-    `).bind(item.list_id, item.imdb_id, userId, userId));
+    `).bind(userId, item.list_id, item.imdb_id));
   }
 
   if (statements.length > 0) {

@@ -82,7 +82,6 @@ export const openConfigureUrl = (url: string | undefined) => {
 	if (electronApi?.openExternal) {
 		void electronApi.openExternal(target).catch((error) => {
 			console.error("Failed to open addon configure page", error);
-			window.open(target, "_blank", "noopener,noreferrer");
 		});
 		return target;
 	}

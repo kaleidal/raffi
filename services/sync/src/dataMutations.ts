@@ -263,23 +263,11 @@ export const removeFromList = async (
 
   await db.prepare(`
     DELETE FROM list_items
-    WHERE list_id = ?
+    WHERE user_id = ?
+      AND list_id = ?
       AND imdb_id = ?
-      AND EXISTS (
-        SELECT 1 FROM lists owned_list
-        WHERE owned_list.user_id = ?
-          AND owned_list.list_id = list_items.list_id
-      )
-      AND (
-        user_id = ?
-        OR NOT EXISTS (
-          SELECT 1 FROM lists item_owner
-          WHERE item_owner.user_id = list_items.user_id
-            AND item_owner.list_id = list_items.list_id
-        )
-      )
   `)
-    .bind(listId, requireString(input.imdb_id, "imdb_id"), userId, userId)
+    .bind(userId, listId, requireString(input.imdb_id, "imdb_id"))
     .run();
   return { ok: true };
 };

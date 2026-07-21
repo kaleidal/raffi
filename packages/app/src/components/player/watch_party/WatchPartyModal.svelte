@@ -192,7 +192,9 @@
 
             partyPreview = data;
             joinStep = "preview";
-            const sourceType = getStreamSourceType(data?.stream_source || "");
+            const sourceType = data?.is_local_source
+                ? "local"
+                : getStreamSourceType(data?.stream_source || "");
             trackEvent("watch_party_preview_loaded", {
                 source_type: sourceType,
                 is_local: sourceType === "local",
@@ -214,12 +216,7 @@
     function handleContinueToJoin() {
         if (!partyPreview) return;
 
-        // Check if the party is using a local file (heuristic: not http/https)
-        const isLocal =
-            partyPreview.stream_source &&
-            !partyPreview.stream_source.startsWith("http");
-
-        if (isLocal) {
+        if (partyPreview.is_local_source) {
             joinStep = "select-file";
         } else {
             handleFinalJoin();
@@ -232,6 +229,10 @@
 
         try {
             await joinParty(partyIdInput.trim());
+            const fullInfo = await getWatchPartyInfo(partyIdInput.trim());
+            if (fullInfo) {
+                partyPreview = fullInfo;
+            }
 
             if (selectedFile) {
                 // Create a file object that matches what the player expects
@@ -244,7 +245,9 @@
 
             onPartyCreated(partyIdInput.trim());
             onClose();
-            const sourceType = getStreamSourceType(partyPreview?.stream_source || "");
+            const sourceType = partyPreview?.is_local_source
+                ? "local"
+                : getStreamSourceType(partyPreview?.stream_source || "");
             trackEvent("watch_party_joined", {
                 source_type: sourceType,
                 is_local: sourceType === "local",
@@ -765,7 +768,10 @@
 
                                     <div class="pl-13">
                                         <p class="text-white/80 text-sm break-all">
-                                            {partyPreview?.stream_source}
+                                            {partyPreview?.stream_source
+                                                || (partyPreview?.is_local_source
+                                                    ? "Local file (shared after you join)"
+                                                    : "Stream details available after you join")}
                                         </p>
                                     </div>
                                 </div>

@@ -1,8 +1,10 @@
 const http = require("http");
+const crypto = require("crypto");
 
 function createDecoderService({ isDev, path, fs, spawn, logToFile, baseDir }) {
   let goServer = null;
   let cleanupInProgress = false;
+  let decoderSecret = crypto.randomBytes(32).toString("hex");
   let decoderStatus = {
     state: "idle",
     reason: "idle",
@@ -39,6 +41,10 @@ function createDecoderService({ isDev, path, fs, spawn, logToFile, baseDir }) {
       ...decoderStatus,
       pid: goServer?.pid ?? null,
     };
+  }
+
+  function getDecoderAuthSecret() {
+    return decoderSecret;
   }
 
   function onDecoderStatusChange(listener) {
@@ -147,45 +153,83 @@ function createDecoderService({ isDev, path, fs, spawn, logToFile, baseDir }) {
     }
   }
 
-  async function isDecoderServerHealthy({ timeoutMs = 500 } = {}) {
+  function readHealthBody(res) {
+    return new Promise((resolve, reject) => {
+      const chunks = [];
+      res.on("data", (chunk) => chunks.push(chunk));
+      res.on("end", () => {
+        try {
+          const text = Buffer.concat(chunks).toString("utf8");
+          resolve(text ? JSON.parse(text) : null);
+        } catch (err) {
+          reject(err);
+        }
+      });
+      res.on("error", reject);
+    });
+  }
+
+  async function probeDecoderHealth({ timeoutMs = 500, requireVerified = false } = {}) {
     const serverUrl = getDecoderServerUrl();
 
     try {
-      await new Promise((resolve, reject) => {
-        const req = http.get(`${serverUrl}/`, (res) => {
-          if (res.statusCode) resolve();
-          else reject(new Error(`Unexpected status code: ${res.statusCode}`));
-        });
+      const body = await new Promise((resolve, reject) => {
+        const req = http.get(
+          `${serverUrl}/`,
+          {
+            headers: {
+              "X-Raffi-Auth": decoderSecret,
+              Accept: "application/json",
+            },
+          },
+          async (res) => {
+            try {
+              if (!res.statusCode || res.statusCode >= 500) {
+                reject(new Error(`Unexpected status code: ${res.statusCode}`));
+                return;
+              }
+              const parsed = await readHealthBody(res);
+              resolve({ statusCode: res.statusCode, body: parsed });
+            } catch (err) {
+              reject(err);
+            }
+          },
+        );
         req.on("error", reject);
         req.setTimeout(timeoutMs, () => {
           req.destroy();
           reject(new Error("Timeout"));
         });
       });
-      return true;
+
+      const isRaffi =
+        body?.body &&
+        body.body.ok === true &&
+        body.body.service === "raffi-decoder";
+      const verified = Boolean(body?.body?.verified);
+
+      if (!isRaffi) {
+        return { ok: false, reason: "not_raffi" };
+      }
+      if (requireVerified && !verified) {
+        return { ok: false, reason: "unverified", isRaffi: true };
+      }
+      return { ok: true, verified, isRaffi: true };
     } catch (err) {
       logToFile(`Decoder health check failed`, err);
-      return false;
+      return { ok: false, reason: "unreachable", error: err };
     }
   }
 
+  async function isOwnedDecoderHealthy({ timeoutMs = 500 } = {}) {
+    const result = await probeDecoderHealth({ timeoutMs, requireVerified: true });
+    return result.ok === true && result.verified === true;
+  }
+
   async function waitForDecoderReady(maxRetries = 30, retryDelayMs = 500) {
-    const serverUrl = getDecoderServerUrl();
-
     for (let i = 0; i < maxRetries; i++) {
-      try {
-        await new Promise((resolve, reject) => {
-          const req = http.get(`${serverUrl}/`, (res) => {
-            if (res.statusCode) resolve();
-            else reject(new Error(`Unexpected status code: ${res.statusCode}`));
-          });
-          req.on("error", reject);
-          req.setTimeout(1000, () => {
-            req.destroy();
-            reject(new Error("Timeout"));
-          });
-        });
-
+      const result = await probeDecoderHealth({ timeoutMs: 1000, requireVerified: true });
+      if (result.ok && result.verified) {
         logToFile(`Decoder server ready after ${i + 1} attempts`);
         setDecoderStatus({
           state: "ready",
@@ -194,21 +238,21 @@ function createDecoderService({ isDev, path, fs, spawn, logToFile, baseDir }) {
           detail: "",
         });
         return true;
-      } catch (err) {
-        if (i === maxRetries - 1) {
-          logToFile(`Decoder server not ready after ${maxRetries} attempts`, err);
-          if (decoderStatus.state !== "unavailable") {
-            setDecoderStatus({
-              state: "unavailable",
-              reason: "startup_timeout",
-              message: "Raffi could not reach its playback server.",
-              detail: "The playback server did not respond after waiting a few seconds.",
-            });
-          }
-          return false;
-        }
-        await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
       }
+
+      if (i === maxRetries - 1) {
+        logToFile(`Decoder server not ready after ${maxRetries} attempts`, result);
+        if (decoderStatus.state !== "unavailable") {
+          setDecoderStatus({
+            state: "unavailable",
+            reason: "startup_timeout",
+            message: "Raffi could not reach its playback server.",
+            detail: "The playback server did not respond after waiting a few seconds.",
+          });
+        }
+        return false;
+      }
+      await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
     }
 
     return false;
@@ -227,16 +271,37 @@ function createDecoderService({ isDev, path, fs, spawn, logToFile, baseDir }) {
       detail: "",
     });
 
-    const alreadyRunning = await isDecoderServerHealthy({ timeoutMs: 500 });
-    if (alreadyRunning) {
-      logToFile("Found existing playback server, attaching instead of spawning");
+    // Only attach if an already-running process proves it is OUR Raffi decoder
+    // (health verified with this launch's secret). Prefer spawning an owned process.
+    if (goServer && !goServer.killed) {
+      const owned = await isOwnedDecoderHealthy({ timeoutMs: 500 });
+      if (owned) {
+        logToFile("Owned decoder process already running");
+        setDecoderStatus({
+          state: "ready",
+          reason: "already_running",
+          message: "",
+          detail: "Using the owned Raffi playback server.",
+        });
+        return;
+      }
+    }
+
+    const existing = await probeDecoderHealth({ timeoutMs: 500, requireVerified: false });
+    if (existing.ok && existing.verified) {
+      logToFile("Verified Raffi decoder already running with matching secret; attaching");
       setDecoderStatus({
         state: "ready",
         reason: "already_running",
         message: "",
-        detail: "Using an already running Raffi playback server.",
+        detail: "Using a verified Raffi playback server.",
       });
       return;
+    }
+    if (existing.isRaffi && !existing.verified) {
+      logToFile("Foreign or stale Raffi decoder on :6969 — not attaching; preferring owned spawn");
+    } else if (existing.reason !== "unreachable") {
+      logToFile("Non-Raffi process responded on decoder port — not attaching", existing);
     }
 
     console.log("Binary path:", binPath);
@@ -261,6 +326,7 @@ function createDecoderService({ isDev, path, fs, spawn, logToFile, baseDir }) {
       const decoderEnv = {
         ...process.env,
         RAFFI_SERVER_ADDR: process.env.RAFFI_SERVER_ADDR || "127.0.0.1:6969",
+        RAFFI_DECODER_SECRET: decoderSecret,
       };
 
       // Smart resolution (mirrors what the Go server does):
@@ -376,6 +442,7 @@ function createDecoderService({ isDev, path, fs, spawn, logToFile, baseDir }) {
     waitForDecoderReady,
     cleanupDecoder,
     getDecoderStatus,
+    getDecoderAuthSecret,
     onDecoderStatusChange,
   };
 }

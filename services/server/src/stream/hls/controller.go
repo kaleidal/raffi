@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -17,6 +16,7 @@ const (
 	DefaultSegmentDuration = 6 * time.Second
 	MaxBufferAhead         = 90 * time.Second
 	PrefetchBufferAhead    = 12 * time.Second
+	IdleSessionTTL         = 12 * time.Minute
 )
 
 type Controller struct {
@@ -43,14 +43,18 @@ func NewController(ffmpegPath, ffprobePath string) *Controller {
 	}
 }
 
-func (c *Controller) getOrProbeLocked(ctx context.Context, source string) (*Metadata, string, string, error) {
+// getOrProbe resolves and probes a source without holding c.mu across DNS/HTTP/ffprobe.
+func (c *Controller) getOrProbe(ctx context.Context, source string) (*Metadata, string, string, error) {
+	c.mu.Lock()
 	if cached, ok := c.probeCache[source]; ok {
+		c.mu.Unlock()
 		resolvedSource, err := ResolvePlaybackSource(ctx, source)
 		if err != nil {
 			return nil, "", "", err
 		}
 		return cached.meta, cached.codec, resolvedSource, nil
 	}
+	c.mu.Unlock()
 
 	resolvedSource, err := ResolvePlaybackSource(ctx, source)
 	if err != nil {
@@ -61,56 +65,118 @@ func (c *Controller) getOrProbeLocked(ctx context.Context, source string) (*Meta
 		return nil, "", "", err
 	}
 
+	c.mu.Lock()
+	if cached, ok := c.probeCache[source]; ok {
+		c.mu.Unlock()
+		return cached.meta, cached.codec, resolvedSource, nil
+	}
 	c.probeCache[source] = probeCacheEntry{meta: meta, codec: codec}
+	c.mu.Unlock()
 	return meta, codec, resolvedSource, nil
 }
 
-func isTorrentSource(source string) bool {
-	// Raffi torrent sessions use a local HTTP source like:
-	// http://127.0.0.1:6969/torrents/{infoHash}
-	return strings.Contains(source, "/torrents/")
+func (c *Controller) createSessionLocked(id, resolvedSource string, startTime float64, meta *Metadata, codec string) (*Session, error) {
+	baseDir := session.TempDirForSession(id)
+	if err := os.MkdirAll(baseDir, 0o755); err != nil {
+		return nil, err
+	}
+
+	duration := meta.Format.DurationSeconds
+	streams, audioIndex := StreamsFromMetadata(meta)
+	audioCodec := AudioCodecForIndex(meta, audioIndex)
+
+	sess := &Session{
+		ID:               id,
+		Source:           resolvedSource,
+		WorkDir:          baseDir,
+		DurationHint:     duration,
+		Codec:            codec,
+		AudioIndex:       audioIndex,
+		AudioCodec:       audioCodec,
+		AvailableStreams: streams,
+		BufferAheadLimit: c.bufferAheadLimitLocked(id),
+		LastServedSeq:    -1,
+		SliceIndex:       0,
+		LastAccess:       time.Now(),
+		Slices: []SliceInfo{
+			{Index: 0, StartTime: startTime},
+		},
+	}
+	c.sessions[id] = sess
+	return sess, nil
 }
 
 func (c *Controller) EnsureSession(ctx context.Context, id, source string, startTime float64) (float64, string, error) {
 	c.mu.Lock()
 	sess := c.sessions[id]
-	if sess == nil {
-		baseDir := session.TempDirForSession(id)
-		if err := os.MkdirAll(baseDir, 0o755); err != nil {
+	if sess != nil {
+		sess.LastAccess = time.Now()
+
+		if (sess.Cmd != nil && sess.Cmd.Process != nil) || sess.Finished {
+			sliceDir := filepath.Join(sess.WorkDir, fmt.Sprintf("slice_%03d", sess.SliceIndex))
+			manifestPath := filepath.Join(sliceDir, "child.m3u8")
+			duration := sess.DurationHint
+			active := sess.Cmd != nil && sess.Cmd.Process != nil
+			abortFn := c.transcoderAbortFn(id)
+			c.mu.Unlock()
+			if active {
+				if err := waitForManifestReady(ctx, manifestPath, abortFn); err != nil {
+					return 0, "", err
+				}
+			}
+			return duration, manifestPath, nil
+		}
+
+		sliceDir := filepath.Join(sess.WorkDir, fmt.Sprintf("slice_%03d", sess.SliceIndex))
+		if err := os.MkdirAll(sliceDir, 0o755); err != nil {
 			c.mu.Unlock()
 			return 0, "", err
 		}
 
-		meta, codec, resolvedSource, err := c.getOrProbeLocked(ctx, source)
-		if err != nil {
+		resumeAt := sess.Slices[sess.SliceIndex].StartTime
+		startSequence := sess.SliceIndex
+		appendMode := false
+		manifestPath := filepath.Join(sliceDir, "child.m3u8")
+		if resumeTime, nextSequence, ok := playlistResumePoint(manifestPath, resumeAt); ok {
+			resumeAt = resumeTime
+			startSequence = nextSequence
+			appendMode = true
+			log.Printf("Resuming interrupted HLS session %s at %.2fs (sequence %d)", id, resumeAt, startSequence)
+		}
+
+		if err := c.ensureCmdLocked(id, sess.Source, sess, resumeAt, startSequence, sliceDir, appendMode, len(sess.AvailableStreams) > 0); err != nil {
 			c.mu.Unlock()
-			return 0, "", fmt.Errorf("probe failed: %w", err)
+			return 0, "", err
 		}
-		duration := meta.Format.DurationSeconds
 
-		streams, audioIndex := StreamsFromMetadata(meta)
-		audioCodec := AudioCodecForIndex(meta, audioIndex)
+		duration := sess.DurationHint
+		abortFn := c.transcoderAbortFn(id)
+		c.mu.Unlock()
 
-		sess = &Session{
-			ID:               id,
-			Source:           resolvedSource,
-			WorkDir:          baseDir,
-			DurationHint:     duration,
-			Codec:            codec,
-			AudioIndex:       audioIndex,
-			AudioCodec:       audioCodec,
-			AvailableStreams: streams,
-			BufferAheadLimit: c.bufferAheadLimitLocked(id),
-			LastServedSeq:    -1,
-			SliceIndex:       0,
-			Slices: []SliceInfo{
-				{Index: 0, StartTime: startTime},
-			},
+		if err := waitForManifestReady(ctx, manifestPath, abortFn); err != nil {
+			return 0, "", err
 		}
-		c.sessions[id] = sess
+
+		return duration, manifestPath, nil
+	}
+	c.mu.Unlock()
+
+	meta, codec, resolvedSource, err := c.getOrProbe(ctx, source)
+	if err != nil {
+		return 0, "", fmt.Errorf("probe failed: %w", err)
 	}
 
-	sess.LastAccess = time.Now()
+	c.mu.Lock()
+	if existing := c.sessions[id]; existing != nil {
+		sess = existing
+		sess.LastAccess = time.Now()
+	} else {
+		sess, err = c.createSessionLocked(id, resolvedSource, startTime, meta, codec)
+		if err != nil {
+			c.mu.Unlock()
+			return 0, "", err
+		}
+	}
 
 	if (sess.Cmd != nil && sess.Cmd.Process != nil) || sess.Finished {
 		sliceDir := filepath.Join(sess.WorkDir, fmt.Sprintf("slice_%03d", sess.SliceIndex))
@@ -164,66 +230,72 @@ func (c *Controller) Seek(ctx context.Context, id, source string, target float64
 	c.mu.Lock()
 	sess := c.sessions[id]
 	if sess == nil {
-		log.Printf("Seek: session %s is nil, creating new...", id)
-		// ... (rest of the new creation logic)
-		// Create session if not exists, starting at target
-		baseDir := session.TempDirForSession(id)
-		if err := os.MkdirAll(baseDir, 0o755); err != nil {
-			c.mu.Unlock()
-			return 0, 0, "", err
-		}
-
-		meta, codec, resolvedSource, err := c.getOrProbeLocked(ctx, source)
-		if err != nil {
-			c.mu.Unlock()
-			return 0, 0, "", fmt.Errorf("probe failed: %w", err)
-		}
-		duration := meta.Format.DurationSeconds
-
-		streams, audioIndex := StreamsFromMetadata(meta)
-		audioCodec := AudioCodecForIndex(meta, audioIndex)
-
-		sess = &Session{
-			ID:               id,
-			Source:           resolvedSource,
-			WorkDir:          baseDir,
-			DurationHint:     duration,
-			Codec:            codec,
-			AudioIndex:       audioIndex,
-			AudioCodec:       audioCodec,
-			AvailableStreams: streams,
-			BufferAheadLimit: c.bufferAheadLimitLocked(id),
-			LastServedSeq:    -1,
-			SliceIndex:       0,
-			Slices: []SliceInfo{
-				{Index: 0, StartTime: target},
-			},
-			LastSeekID: seekID,
-		}
-		c.sessions[id] = sess
-
-		// Initialize the first slice
-		sliceDir := filepath.Join(sess.WorkDir, fmt.Sprintf("slice_%03d", sess.SliceIndex))
-		if err := os.MkdirAll(sliceDir, 0o755); err != nil {
-			c.mu.Unlock()
-			return 0, 0, "", err
-		}
-
-		if err := c.ensureCmdLocked(id, sess.Source, sess, target, sess.SliceIndex, sliceDir, false, len(sess.AvailableStreams) > 0); err != nil {
-			c.mu.Unlock()
-			return 0, 0, "", err
-		}
-
-		manifestPath := filepath.Join(sliceDir, "child.m3u8")
-		abortFn := c.transcoderAbortFn(id)
 		c.mu.Unlock()
 
-		if err := waitForManifestSegments(ctx, manifestPath, abortFn, 1); err != nil {
-			return 0, 0, "", err
+		meta, codec, resolvedSource, err := c.getOrProbe(ctx, source)
+		if err != nil {
+			return 0, 0, "", fmt.Errorf("probe failed: %w", err)
 		}
 
-		return duration, target, manifestPath, nil
+		c.mu.Lock()
+		if existing := c.sessions[id]; existing != nil {
+			sess = existing
+		} else {
+			log.Printf("Seek: session %s is nil, creating new...", id)
+			baseDir := session.TempDirForSession(id)
+			if err := os.MkdirAll(baseDir, 0o755); err != nil {
+				c.mu.Unlock()
+				return 0, 0, "", err
+			}
+
+			duration := meta.Format.DurationSeconds
+			streams, audioIndex := StreamsFromMetadata(meta)
+			audioCodec := AudioCodecForIndex(meta, audioIndex)
+
+			sess = &Session{
+				ID:               id,
+				Source:           resolvedSource,
+				WorkDir:          baseDir,
+				DurationHint:     duration,
+				Codec:            codec,
+				AudioIndex:       audioIndex,
+				AudioCodec:       audioCodec,
+				AvailableStreams: streams,
+				BufferAheadLimit: c.bufferAheadLimitLocked(id),
+				LastServedSeq:    -1,
+				SliceIndex:       0,
+				LastAccess:       time.Now(),
+				Slices: []SliceInfo{
+					{Index: 0, StartTime: target},
+				},
+				LastSeekID: seekID,
+			}
+			c.sessions[id] = sess
+
+			sliceDir := filepath.Join(sess.WorkDir, fmt.Sprintf("slice_%03d", sess.SliceIndex))
+			if err := os.MkdirAll(sliceDir, 0o755); err != nil {
+				c.mu.Unlock()
+				return 0, 0, "", err
+			}
+
+			if err := c.ensureCmdLocked(id, sess.Source, sess, target, sess.SliceIndex, sliceDir, false, len(sess.AvailableStreams) > 0); err != nil {
+				c.mu.Unlock()
+				return 0, 0, "", err
+			}
+
+			manifestPath := filepath.Join(sliceDir, "child.m3u8")
+			abortFn := c.transcoderAbortFn(id)
+			c.mu.Unlock()
+
+			if err := waitForManifestSegments(ctx, manifestPath, abortFn, 1); err != nil {
+				return 0, 0, "", err
+			}
+
+			return duration, target, manifestPath, nil
+		}
 	}
+
+	sess.LastAccess = time.Now()
 
 	if seekID != "" && sess.LastSeekID == seekID {
 		sliceDir := filepath.Join(sess.WorkDir, fmt.Sprintf("slice_%03d", sess.SliceIndex))
@@ -257,7 +329,6 @@ func (c *Controller) Seek(ctx context.Context, id, source string, target float64
 	}
 
 	if !forceSlice {
-		// Check if we can reuse an existing slice
 		for _, slice := range sess.Slices {
 			sliceDir := filepath.Join(sess.WorkDir, fmt.Sprintf("slice_%03d", slice.Index))
 			manifestPath := filepath.Join(sliceDir, "child.m3u8")
@@ -447,16 +518,13 @@ func (c *Controller) SetAudioTrack(id string, index int) error {
 
 	sess.AudioIndex = index
 
-	// Update AudioCodec
 	for _, st := range sess.AvailableStreams {
-		// AvailableStreams index is the relative audio index
 		if st.Index == index {
 			sess.AudioCodec = st.Codec
 			break
 		}
 	}
 
-	// Kill current command to force restart with new audio index on next request
 	if sess.Cmd != nil && sess.Cmd.Process != nil {
 		if sess.CmdCancel != nil {
 			sess.CmdCancel()
@@ -480,4 +548,10 @@ func (c *Controller) DescribeSession(id string) (int, []session.StreamInfo, bool
 	streams := make([]session.StreamInfo, len(sess.AvailableStreams))
 	copy(streams, sess.AvailableStreams)
 	return sess.AudioIndex, streams, true
+}
+
+func (c *Controller) touchSessionLocked(sess *Session) {
+	if sess != nil {
+		sess.LastAccess = time.Now()
+	}
 }

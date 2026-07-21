@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -28,19 +29,21 @@ type TorrentStreamer struct {
 var ErrTorrentingDisabled = errors.New("torrenting is disabled")
 
 type TorrentStream struct {
-	t        *torrent.Torrent
-	file     *torrent.File
-	filePath string
-	fileIdx  *int
+	t *torrent.Torrent
+
+	refCount int
+	// fileRefs tracks how many sessions want each file index (-1 = default/largest).
+	fileRefs map[int]int
 
 	startupStartPiece int
 	startupEndPiece   int
 
-	readyOnce sync.Once
-	readyCh   chan struct{}
-	readyErr  error
-	stopCh    chan struct{}
-	stopOnce  sync.Once
+	infoOnce sync.Once
+	infoCh   chan struct{}
+	infoErr  error
+
+	stopCh   chan struct{}
+	stopOnce sync.Once
 }
 
 type TorrentStatus struct {
@@ -54,6 +57,33 @@ type TorrentStatus struct {
 	DownUsefulBytes int64   `json:"downUsefulBytes,omitempty"`
 }
 
+func fileRefKey(fileIdx *int) int {
+	if fileIdx == nil {
+		return -1
+	}
+	return *fileIdx
+}
+
+func torrentServeURL(infoHash string, fileIdx *int) string {
+	base := fmt.Sprintf("http://127.0.0.1:6969/torrents/%s", infoHash)
+	if fileIdx != nil {
+		return fmt.Sprintf("%s?fileIdx=%d", base, *fileIdx)
+	}
+	return base
+}
+
+func parseFileIdxQuery(r *http.Request) *int {
+	raw := r.URL.Query().Get("fileIdx")
+	if raw == "" {
+		return nil
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		return nil
+	}
+	return &n
+}
+
 func (ts *TorrentStream) status() TorrentStatus {
 	st := TorrentStatus{}
 	if ts == nil || ts.t == nil {
@@ -62,10 +92,10 @@ func (ts *TorrentStream) status() TorrentStatus {
 		return st
 	}
 
-	readyDone := false
+	infoDone := false
 	select {
-	case <-ts.readyCh:
-		readyDone = true
+	case <-ts.infoCh:
+		infoDone = true
 	default:
 	}
 
@@ -76,13 +106,13 @@ func (ts *TorrentStream) status() TorrentStatus {
 	default:
 	}
 
-	if readyDone {
-		if ts.readyErr != nil {
+	if infoDone {
+		if ts.infoErr != nil {
 			st.Stage = "error"
-			st.Error = ts.readyErr.Error()
+			st.Error = ts.infoErr.Error()
 			return st
 		}
-		st.Ready = ts.file != nil
+		st.Ready = infoReady
 		st.Stage = "ready"
 	} else if !infoReady {
 		st.Stage = "metadata"
@@ -138,14 +168,35 @@ func (ts *TorrentStream) status() TorrentStatus {
 }
 
 func newTorrentStream(t *torrent.Torrent, fileIdx *int) *TorrentStream {
-	return &TorrentStream{
+	ts := &TorrentStream{
 		t:                 t,
-		fileIdx:           fileIdx,
+		refCount:          1,
+		fileRefs:          map[int]int{fileRefKey(fileIdx): 1},
 		startupStartPiece: -1,
 		startupEndPiece:   -1,
-		readyCh:           make(chan struct{}),
+		infoCh:            make(chan struct{}),
 		stopCh:            make(chan struct{}),
 	}
+	return ts
+}
+
+func (ts *TorrentStream) addFileInterest(fileIdx *int) {
+	if ts.fileRefs == nil {
+		ts.fileRefs = make(map[int]int)
+	}
+	ts.fileRefs[fileRefKey(fileIdx)]++
+}
+
+func (ts *TorrentStream) removeFileInterest(fileIdx *int) {
+	if ts.fileRefs == nil {
+		return
+	}
+	key := fileRefKey(fileIdx)
+	if ts.fileRefs[key] <= 1 {
+		delete(ts.fileRefs, key)
+		return
+	}
+	ts.fileRefs[key]--
 }
 
 func (ts *TorrentStream) stop() {
@@ -157,16 +208,16 @@ func (ts *TorrentStream) stop() {
 	})
 }
 
-func (ts *TorrentStream) ensureReady() error {
-	ts.readyOnce.Do(func() {
-		ts.readyErr = ts.prepare()
-		close(ts.readyCh)
+func (ts *TorrentStream) ensureInfo() error {
+	ts.infoOnce.Do(func() {
+		ts.infoErr = ts.waitForInfo()
+		close(ts.infoCh)
 	})
-	<-ts.readyCh
-	return ts.readyErr
+	<-ts.infoCh
+	return ts.infoErr
 }
 
-func (ts *TorrentStream) prepare() error {
+func (ts *TorrentStream) waitForInfo() error {
 	if ts.t == nil {
 		return errors.New("torrent is nil")
 	}
@@ -174,7 +225,6 @@ func (ts *TorrentStream) prepare() error {
 	log.Printf("Torrent %s: waiting for metadata...", ts.t.InfoHash().HexString())
 	select {
 	case <-ts.t.GotInfo():
-		// ok
 	case <-ts.stopCh:
 		return errors.New("torrent stream canceled")
 	}
@@ -191,45 +241,99 @@ func (ts *TorrentStream) prepare() error {
 		log.Printf("  [%d] %q (%d bytes)", i, f.Path(), f.Length())
 	}
 
-	// Pick target file
-	var targetFile *torrent.File
-	if ts.fileIdx != nil && *ts.fileIdx >= 0 && *ts.fileIdx < len(files) {
-		targetFile = files[*ts.fileIdx]
-		log.Printf("Using specified file index %d: %q", *ts.fileIdx, targetFile.Path())
-	} else {
-		// Default: pick the largest file (usually the main video)
-		var maxSize int64
-		for _, f := range files {
-			if f.Length() > maxSize {
-				maxSize = f.Length()
-				targetFile = f
+	go func(infoHash string) {
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ts.stopCh:
+				return
+			case <-ticker.C:
 			}
+			st := ts.t.Stats()
+			log.Printf("Torrent %s: peers=%d, have=%d/%d, downUseful=%dB, up=%dB",
+				infoHash,
+				st.ActivePeers,
+				st.PiecesComplete,
+				ts.t.NumPieces(),
+				st.BytesReadUsefulData.Int64(),
+				st.BytesWrittenData.Int64(),
+			)
 		}
-		log.Printf("No file index specified, selected largest file: %q", targetFile.Path())
+	}(ts.t.InfoHash().HexString())
+
+	return nil
+}
+
+func pickTorrentFile(files []*torrent.File, fileIdx *int) (*torrent.File, error) {
+	if len(files) == 0 {
+		return nil, fmt.Errorf("no files found in torrent")
+	}
+	if fileIdx != nil && *fileIdx >= 0 && *fileIdx < len(files) {
+		return files[*fileIdx], nil
+	}
+	var targetFile *torrent.File
+	var maxSize int64
+	for _, f := range files {
+		if f.Length() > maxSize {
+			maxSize = f.Length()
+			targetFile = f
+		}
 	}
 	if targetFile == nil {
-		return fmt.Errorf("failed to select target file")
+		return nil, fmt.Errorf("failed to select target file")
+	}
+	return targetFile, nil
+}
+
+func (ts *TorrentStream) openFile(fileIdx *int) (*torrent.File, string, error) {
+	if err := ts.ensureInfo(); err != nil {
+		return nil, "", err
 	}
 
-	// Disable download for all other files so we don't fill disk with the whole torrent
+	files := ts.t.Files()
+	targetFile, err := pickTorrentFile(files, fileIdx)
+	if err != nil {
+		return nil, "", err
+	}
+
+	if fileIdx != nil && *fileIdx >= 0 && *fileIdx < len(files) {
+		log.Printf("Using specified file index %d: %q", *fileIdx, targetFile.Path())
+	} else {
+		log.Printf("No file index specified, selected largest file: %q", targetFile.Path())
+	}
+
+	interested := make(map[*torrent.File]struct{})
+	interested[targetFile] = struct{}{}
+	for key := range ts.fileRefs {
+		var idx *int
+		if key >= 0 {
+			v := key
+			idx = &v
+		}
+		f, pickErr := pickTorrentFile(files, idx)
+		if pickErr == nil && f != nil {
+			interested[f] = struct{}{}
+		}
+	}
+
 	for _, f := range files {
-		if f != targetFile {
+		if _, ok := interested[f]; ok {
+			f.Download()
+		} else {
 			f.SetPriority(torrent.PiecePriorityNone)
 		}
 	}
 
-	// Enable download only for this file
-	targetFile.Download()
-
 	pl := int64(ts.t.Info().PieceLength)
 	if pl <= 0 {
-		return fmt.Errorf("invalid piece length: %d", pl)
+		return nil, "", fmt.Errorf("invalid piece length: %d", pl)
 	}
 
 	startPiece := int(targetFile.Offset() / pl)
 	endPiece := int((targetFile.Offset() + 10*1024*1024) / pl)
 	if startPiece < 0 || startPiece >= ts.t.NumPieces() {
-		return fmt.Errorf("startPiece %d out of range (numPieces=%d)", startPiece, ts.t.NumPieces())
+		return nil, "", fmt.Errorf("startPiece %d out of range (numPieces=%d)", startPiece, ts.t.NumPieces())
 	}
 	if endPiece >= ts.t.NumPieces() {
 		endPiece = ts.t.NumPieces() - 1
@@ -241,7 +345,6 @@ func (ts *TorrentStream) prepare() error {
 	ts.startupStartPiece = startPiece
 	ts.startupEndPiece = endPiece
 
-	// Aggressively prioritize the first ~10MB for fast start
 	for i := startPiece; i <= endPiece; i++ {
 		p := ts.t.Piece(i)
 		p.SetPriority(torrent.PiecePriorityNow)
@@ -268,36 +371,12 @@ func (ts *TorrentStream) prepare() error {
 		log.Printf("Prioritized tail pieces for metadata: %d-%d", tailStartPiece, tailEndPiece)
 	}
 
-	// Stats logger
-	go func(infoHash string) {
-		ticker := time.NewTicker(5 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ts.stopCh:
-				return
-			case <-ticker.C:
-			}
-			st := ts.t.Stats()
-			log.Printf("Torrent %s: peers=%d, have=%d/%d, downUseful=%dB, up=%dB",
-				infoHash,
-				st.ActivePeers,
-				st.PiecesComplete,
-				ts.t.NumPieces(),
-				st.BytesReadUsefulData.Int64(),
-				st.BytesWrittenData.Int64(),
-			)
-		}
-	}(ts.t.InfoHash().HexString())
-
-	// The first media piece is the real readiness signal. Keep waiting while the
-	// torrent is alive instead of advancing because an arbitrary clock expired.
 	log.Printf("Waiting for first piece of torrent %s (piece %d)...",
 		ts.t.InfoHash().HexString(), startPiece)
 	for {
 		select {
 		case <-ts.stopCh:
-			return errors.New("torrent stream canceled")
+			return nil, "", errors.New("torrent stream canceled")
 		default:
 		}
 
@@ -308,9 +387,7 @@ func (ts *TorrentStream) prepare() error {
 		time.Sleep(500 * time.Millisecond)
 	}
 
-	ts.file = targetFile
-	ts.filePath = targetFile.Path()
-	return nil
+	return targetFile, targetFile.Path(), nil
 }
 
 func NewTorrentStreamer(dataDir string) *TorrentStreamer {
@@ -418,18 +495,24 @@ func (s *TorrentStreamer) AddTorrent(magnetOrInfoHash string, fileIdx *int) (str
 
 	infoHash := t.InfoHash().HexString()
 
-	// Store stream immediately so session creation doesn't block on metadata.
+	if existing, ok := s.streams[infoHash]; ok && existing != nil {
+		existing.refCount++
+		existing.addFileInterest(fileIdx)
+		log.Printf("Torrent %s: refcount=%d (reused)", infoHash, existing.refCount)
+		return torrentServeURL(infoHash, fileIdx), infoHash, nil
+	}
+
 	stream := newTorrentStream(t, fileIdx)
 	s.streams[infoHash] = stream
 
-	// Kick off metadata + file selection in the background.
 	go func() {
-		if err := stream.ensureReady(); err != nil {
-			log.Printf("Torrent %s: prepare failed: %v", infoHash, err)
+		if err := stream.ensureInfo(); err != nil {
+			log.Printf("Torrent %s: metadata failed: %v", infoHash, err)
 		}
 	}()
 
-	return fmt.Sprintf("http://127.0.0.1:6969/torrents/%s", infoHash), infoHash, nil
+	log.Printf("Torrent %s: refcount=%d (new)", infoHash, stream.refCount)
+	return torrentServeURL(infoHash, fileIdx), infoHash, nil
 }
 
 func (s *TorrentStreamer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -437,13 +520,13 @@ func (s *TorrentStreamer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, ErrTorrentingDisabled.Error(), http.StatusForbidden)
 		return
 	}
-	// Path: /torrents/{infohash}
 	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/torrents/"), "/")
 	if len(parts) == 0 || parts[0] == "" {
 		http.NotFound(w, r)
 		return
 	}
 	infoHash := parts[0]
+	fileIdx := parseFileIdxQuery(r)
 
 	s.mu.RLock()
 	stream, ok := s.streams[infoHash]
@@ -463,16 +546,17 @@ func (s *TorrentStreamer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := stream.ensureReady(); err != nil {
+	file, filePath, err := stream.openFile(fileIdx)
+	if err != nil {
 		http.Error(w, fmt.Sprintf("torrent not ready: %v", err), http.StatusGatewayTimeout)
 		return
 	}
-	if stream.file == nil {
+	if file == nil {
 		http.Error(w, "torrent has no selected file", http.StatusInternalServerError)
 		return
 	}
 
-	tr := stream.file.NewReader()
+	tr := file.NewReader()
 	defer tr.Close()
 
 	tr.SetResponsive()
@@ -481,24 +565,38 @@ func (s *TorrentStreamer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	} else {
 		tr.SetReadahead(16 * 1024 * 1024)
 	}
-	name := filepath.Base(stream.filePath)
+	name := filepath.Base(filePath)
 
 	http.ServeContent(w, r, name, time.Now(), tr)
 }
 
-func (s *TorrentStreamer) RemoveTorrent(infoHash string) {
+func (s *TorrentStreamer) RemoveTorrent(infoHash string, fileIdx *int) {
 	s.mu.Lock()
 	stream, ok := s.streams[infoHash]
-	if ok {
+	if !ok || stream == nil {
+		s.mu.Unlock()
+		return
+	}
+
+	stream.removeFileInterest(fileIdx)
+	stream.refCount--
+	shouldDrop := stream.refCount <= 0
+	if shouldDrop {
 		delete(s.streams, infoHash)
 	}
+	remaining := stream.refCount
+	if remaining < 0 {
+		remaining = 0
+	}
+	log.Printf("Torrent %s: refcount=%d after remove", infoHash, remaining)
 	s.mu.Unlock()
 
-	if ok && stream != nil {
-		stream.stop()
+	if !shouldDrop {
+		return
 	}
 
-	if ok && stream != nil && stream.t != nil {
+	stream.stop()
+	if stream.t != nil {
 		log.Printf("Dropping torrent %s", infoHash)
 		stream.t.Drop()
 	}

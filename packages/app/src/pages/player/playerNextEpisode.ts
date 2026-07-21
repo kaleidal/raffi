@@ -1,6 +1,10 @@
 import { get } from "svelte/store";
 import { currentTime, duration, loading } from "./playerState";
 
+const NEXT_EPISODE_TIMEOUT_MS = 45_000;
+
+export type NextEpisodeHandler = (() => void) & { cancel: () => void };
+
 export const createNextEpisodeHandler = ({
     trackEvent,
     getPlaybackAnalyticsProps,
@@ -10,6 +14,7 @@ export const createNextEpisodeHandler = ({
     invokeNextEpisode,
     showActionLoading,
     suppressInitialLoading,
+    onNextEpisodeFailed,
 }: {
     trackEvent: (event: string, props?: Record<string, any>) => void;
     getPlaybackAnalyticsProps: () => Record<string, any>;
@@ -19,14 +24,31 @@ export const createNextEpisodeHandler = ({
     invokeNextEpisode: () => unknown;
     showActionLoading: (label: string, err: unknown) => void;
     suppressInitialLoading?: () => boolean;
-}) => {
+    onNextEpisodeFailed?: () => void;
+}): NextEpisodeHandler => {
     let nextEpisodeAttemptId = 0;
+    let activeTimeout: ReturnType<typeof setTimeout> | null = null;
 
-    return () => {
+    const clearActiveTimeout = () => {
+        if (activeTimeout != null) {
+            clearTimeout(activeTimeout);
+            activeTimeout = null;
+        }
+    };
+
+    const fail = (attemptId: number, err: unknown) => {
+        if (attemptId !== nextEpisodeAttemptId) return;
+        clearActiveTimeout();
+        onNextEpisodeFailed?.();
+        showActionLoading("Next Episode Failed", err);
+    };
+
+    const handler = (() => {
         trackEvent("next_episode_clicked", getPlaybackAnalyticsProps());
 
         nextEpisodeAttemptId += 1;
         const attemptId = nextEpisodeAttemptId;
+        clearActiveTimeout();
         setCurrentVideoSrc(getVideoSrc());
         if (!suppressInitialLoading?.()) {
             loading.set(true);
@@ -38,19 +60,27 @@ export const createNextEpisodeHandler = ({
             handleProgressInternal(currentDuration, currentDuration);
         }
 
+        activeTimeout = setTimeout(() => {
+            fail(attemptId, new Error("Timed out loading the next episode"));
+        }, NEXT_EPISODE_TIMEOUT_MS);
+
         try {
             const res = invokeNextEpisode as unknown as () => unknown;
             const result = res?.();
             if (result && typeof (result as any).then === "function") {
                 (result as Promise<unknown>).catch((err) => {
-                    if (attemptId !== nextEpisodeAttemptId) return;
-                    showActionLoading("Next Episode Failed", err);
+                    fail(attemptId, err);
                 });
             }
         } catch (err) {
-            if (attemptId !== nextEpisodeAttemptId) return;
-            showActionLoading("Next Episode Failed", err);
-            return;
+            fail(attemptId, err);
         }
+    }) as NextEpisodeHandler;
+
+    handler.cancel = () => {
+        nextEpisodeAttemptId += 1;
+        clearActiveTimeout();
     };
+
+    return handler;
 };

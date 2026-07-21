@@ -35,6 +35,8 @@ func StreamSubtitle(
 		args = append(args, "-ss", fmt.Sprintf("%.3f", startSeconds))
 	}
 
+	// subtitleIndex is the absolute ffmpeg subtitle stream index (0:s:N),
+	// matching StreamsFromMetadata (counts image-based subs too).
 	args = append(args,
 		"-map", fmt.Sprintf("0:s:%d", subtitleIndex),
 		"-c:s", "webvtt",
@@ -43,9 +45,10 @@ func StreamSubtitle(
 	)
 
 	cmd := exec.CommandContext(ctx, ffmpegPath, args...)
-	cmd.Stdout = w
 
+	var stdout bytes.Buffer
 	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
@@ -54,6 +57,10 @@ func StreamSubtitle(
 			return fmt.Errorf("ffmpeg subtitle extract failed: %w", err)
 		}
 		return fmt.Errorf("ffmpeg subtitle extract failed: %w: %s", err, msg)
+	}
+
+	if _, err := io.Copy(w, &stdout); err != nil {
+		return fmt.Errorf("failed to write subtitle payload: %w", err)
 	}
 
 	return nil

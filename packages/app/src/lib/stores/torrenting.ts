@@ -1,5 +1,5 @@
 import { get, writable } from "svelte/store";
-import { serverUrl } from "../client";
+import { decoderFetch, serverUrl } from "../client";
 
 const ALLOW_TORRENTING_KEY = "raffi_allow_torrenting";
 const TORRENT_WARNING_SHOWN_KEY = "torrentWarningShown";
@@ -35,7 +35,7 @@ export const acknowledgeTorrentWarning = () => {
 };
 
 const updateServerTorrenting = async (enabled: boolean) => {
-    const response = await fetch(`${serverUrl}/settings/torrenting`, {
+    const response = await decoderFetch(`${serverUrl}/settings/torrenting`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ enabled }),

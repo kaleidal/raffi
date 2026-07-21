@@ -11,10 +11,6 @@
   font-family: 'Roboto', sans-serif;
 }
 
-.font-syne {
-  font-family: 'Syne', sans-serif;
-}
-
 /* Hide scrollbar for Chrome, Safari and Opera */
 .no-scrollbar::-webkit-scrollbar {
   display: none;

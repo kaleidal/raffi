@@ -9,8 +9,66 @@ function registerMainIpcHandlers({
   logToFile,
   getMainWindow,
   getDecoderStatus,
+  getDecoderAuthSecret,
   scanLibraryRoots,
 }) {
+  const pathModule = require("path");
+  const os = require("os");
+  const allowedClipSaveTargets = new Set();
+
+  async function resolveRealPath(candidate) {
+    const resolved = pathModule.resolve(candidate);
+    try {
+      return await fs.promises.realpath(resolved);
+    } catch {
+      const parent = pathModule.dirname(resolved);
+      const base = pathModule.basename(resolved);
+      try {
+        const realParent = await fs.promises.realpath(parent);
+        return pathModule.join(realParent, base);
+      } catch {
+        return resolved;
+      }
+    }
+  }
+
+  function isPathInside(candidate, parentDir) {
+    const relative = pathModule.relative(parentDir, candidate);
+    return (
+      relative === "" ||
+      (Boolean(relative) &&
+        !relative.startsWith("..") &&
+        !pathModule.isAbsolute(relative))
+    );
+  }
+
+  function hasPathEscape(value) {
+    return /(^|[\\/])\.\.([\\/]|$)/.test(value);
+  }
+
+  async function getAllowedClipSourceDirs() {
+    const dirs = [
+      pathModule.join(os.tmpdir(), "raffi", "clips"),
+    ];
+    try {
+      const { app } = require("electron");
+      dirs.push(pathModule.join(app.getPath("userData"), "clips"));
+      dirs.push(pathModule.join(app.getPath("appData"), "Raffi", "clips"));
+    } catch {
+      // ignore
+    }
+    const resolved = [];
+    for (const dir of dirs) {
+      try {
+        await fs.promises.mkdir(dir, { recursive: true });
+        resolved.push(await fs.promises.realpath(dir));
+      } catch {
+        resolved.push(pathModule.resolve(dir));
+      }
+    }
+    return resolved;
+  }
+
   ipcMain.on("WINDOW_MINIMIZE", () => {
     const mainWindow = getMainWindow();
     if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -77,6 +135,11 @@ function registerMainIpcHandlers({
     return getDecoderStatus();
   });
 
+  ipcMain.handle("DECODER_AUTH_SECRET_GET", async () => {
+    if (typeof getDecoderAuthSecret !== "function") return null;
+    return getDecoderAuthSecret() || null;
+  });
+
   ipcMain.handle("INTRODB_FETCH_SEGMENTS", async (_event, payload) => {
     const imdbId = typeof payload?.imdbId === "string" ? payload.imdbId.trim() : "";
     const season = Number(payload?.season);
@@ -139,6 +202,15 @@ function registerMainIpcHandlers({
         defaultPath: defaultName,
         filters: [{ name: "MP4 Video", extensions: ["mp4"] }],
       });
+      if (!res.canceled && res.filePath) {
+        const normalized = pathModule.resolve(res.filePath);
+        allowedClipSaveTargets.add(normalized);
+        try {
+          allowedClipSaveTargets.add(await resolveRealPath(normalized));
+        } catch {
+          // keep resolved path only
+        }
+      }
       return { canceled: res.canceled, filePath: res.filePath || null };
     } catch (e) {
       return { canceled: true, filePath: null, error: String(e) };
@@ -147,25 +219,47 @@ function registerMainIpcHandlers({
 
   ipcMain.handle("PERSIST_CLIP_FILE", async (_event, payload) => {
     try {
-      const path = require("path");
       const sourcePath = typeof payload?.sourcePath === "string" ? payload.sourcePath.trim() : "";
       const targetPath = typeof payload?.targetPath === "string" ? payload.targetPath.trim() : "";
 
       if (!sourcePath || !targetPath) {
         throw new Error("Invalid clip file paths");
       }
+      if (hasPathEscape(sourcePath) || hasPathEscape(targetPath)) {
+        throw new Error("Path traversal is not allowed");
+      }
 
-      const targetDir = path.dirname(targetPath);
+      const realSource = await resolveRealPath(sourcePath);
+      const realTarget = await resolveRealPath(targetPath);
+      const resolvedTarget = pathModule.resolve(targetPath);
+
+      const allowedSources = await getAllowedClipSourceDirs();
+      const sourceAllowed = allowedSources.some((dir) => isPathInside(realSource, dir));
+      if (!sourceAllowed) {
+        throw new Error("Clip source path is outside the allowed clips directory");
+      }
+
+      const targetAllowed =
+        allowedClipSaveTargets.has(resolvedTarget) ||
+        allowedClipSaveTargets.has(realTarget);
+      if (!targetAllowed) {
+        throw new Error("Clip target path was not selected via Save dialog");
+      }
+
+      const targetDir = pathModule.dirname(realTarget);
       await fs.promises.mkdir(targetDir, { recursive: true });
 
       try {
-        await fs.promises.rename(sourcePath, targetPath);
+        await fs.promises.rename(realSource, realTarget);
       } catch {
-        await fs.promises.copyFile(sourcePath, targetPath);
-        await fs.promises.unlink(sourcePath).catch(() => {});
+        await fs.promises.copyFile(realSource, realTarget);
+        await fs.promises.unlink(realSource).catch(() => {});
       }
 
-      return { ok: true, filePath: targetPath };
+      allowedClipSaveTargets.delete(resolvedTarget);
+      allowedClipSaveTargets.delete(realTarget);
+
+      return { ok: true, filePath: realTarget };
     } catch (error) {
       logToFile("PERSIST_CLIP_FILE failed", error);
       return { ok: false, filePath: null, error: String(error) };

@@ -41,17 +41,21 @@ func StreamsFromMetadata(meta *Metadata) ([]session.StreamInfo, int) {
 			}
 			audioCount++
 		case "subtitle":
+			// Index is the absolute subtitle stream index for ffmpeg's 0:s:N
+			// mapping (includes image-based subs), even though we only expose
+			// text tracks in the UI list.
+			absSubtitleIndex := subtitleCount
+			subtitleCount++
 			if !IsTextSubtitleCodec(st.CodecName) {
 				continue
 			}
 			streams = append(streams, session.StreamInfo{
-				Index:    subtitleCount,
+				Index:    absSubtitleIndex,
 				Type:     "subtitle",
 				Codec:    st.CodecName,
 				Language: st.Tags.Language,
 				Title:    st.Tags.Title,
 			})
-			subtitleCount++
 		}
 	}
 

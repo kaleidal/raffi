@@ -42,10 +42,6 @@ const routeWatchParty = async (
   userId: string,
   parts: string[],
 ) => {
-  if (request.method === "GET" && parts[1] === "active") {
-    return json([]);
-  }
-
   if (request.method === "POST" && parts.length === 1) {
     const body = await readJson<WatchPartyBody>(request);
     const partyId = crypto.randomUUID();
@@ -66,11 +62,11 @@ const routeWatchParty = async (
   const stub = getPartyStub(env, partyId);
 
   if (request.method === "GET" && !action) {
-    return json(await stub.getInfo());
+    return json(await stub.getInfo(userId));
   }
 
   if (request.method === "GET" && action === "members") {
-    return json(await stub.getMembers());
+    return json(await stub.getMembers(userId));
   }
 
   if (request.method === "POST" && action === "join") {

@@ -187,7 +187,7 @@ export class WatchPartyObject extends DurableObject<Env> {
     return { ok: true };
   }
 
-  getInfo(): WatchPartyInfo | null {
+  getInfo(userId?: string): WatchPartyInfo | null {
     const party = this.getParty();
     if (!party) return null;
     if (new Date(party.expires_at).getTime() < Date.now()) {
@@ -197,12 +197,37 @@ export class WatchPartyObject extends DurableObject<Env> {
     const count = this.ctx.storage.sql
       .exec<{ count: number }>("SELECT COUNT(*) AS count FROM members WHERE party_id = ?", party.party_id)
       .one().count;
-    return { ...party, memberCount: Number(count) || 0 };
+
+    const source = party.stream_source || "";
+    const isLocalSource =
+      Boolean(source) &&
+      !source.startsWith("http://") &&
+      !source.startsWith("https://") &&
+      !source.startsWith("magnet:");
+
+    if (!userId || !this.isMember(party.party_id, party.host_user_id, userId)) {
+      return {
+        ...party,
+        stream_source: null,
+        file_idx: null,
+        is_local_source: isLocalSource,
+        memberCount: Number(count) || 0,
+      };
+    }
+
+    return {
+      ...party,
+      is_local_source: isLocalSource,
+      memberCount: Number(count) || 0,
+    };
   }
 
-  getMembers(): WatchPartyMember[] {
+  getMembers(userId: string): WatchPartyMember[] {
     const party = this.getParty();
     if (!party) return [];
+    if (!this.isMember(party.party_id, party.host_user_id, userId)) {
+      throw new HttpError(403, "Join the party to view members", "not_a_member");
+    }
     return this.ctx.storage.sql
       .exec<MemberRow>(
         "SELECT party_id, user_id, joined_at, last_seen FROM members WHERE party_id = ? ORDER BY joined_at ASC",
@@ -218,6 +243,18 @@ export class WatchPartyObject extends DurableObject<Env> {
     if (new Date(party.expires_at).getTime() <= Date.now()) {
       await this.deleteParty(party.party_id);
     }
+  }
+
+  private isMember(partyId: string, hostUserId: string, userId: string): boolean {
+    if (hostUserId === userId) return true;
+    const row = this.ctx.storage.sql
+      .exec<{ user_id: string }>(
+        "SELECT user_id FROM members WHERE party_id = ? AND user_id = ? LIMIT 1",
+        partyId,
+        userId,
+      )
+      .toArray()[0];
+    return Boolean(row);
   }
 
   private getParty(): WatchParty | null {

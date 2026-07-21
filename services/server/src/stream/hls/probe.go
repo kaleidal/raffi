@@ -139,10 +139,7 @@ func NewProbeDuration(ffprobePath string) func(ctx context.Context, source strin
 }
 
 func (c *Controller) ProbeMetadata(ctx context.Context, id, source string) (*Metadata, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	meta, _, _, err := c.getOrProbeLocked(ctx, source)
+	meta, _, _, err := c.getOrProbe(ctx, source)
 	return meta, err
 }
 

@@ -17,7 +17,6 @@ import {
     cloudSyncStatus,
     mergeRemoteStateIntoLocal,
     setSyncResult,
-    canUseCloudFeatures,
     updateSyncState,
     DEFAULT_ADDON,
 } from "./state";
@@ -502,5 +501,3 @@ export const flushPendingLibraryProgress = async (_imdbId?: string) => {
     const pending = getPendingCloudSyncCounts();
     return { flushed: result.ok && !("skipped" in result && result.skipped) ? 1 : 0, pending: pending.uploads + pending.deletes };
 };
-
-export const cloudFeaturesAvailable = () => canUseCloudFeatures();

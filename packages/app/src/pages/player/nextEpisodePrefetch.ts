@@ -1,5 +1,5 @@
 import type Hls from "hls.js";
-import { createSession, serverUrl } from "../../lib/client";
+import { createSession, decoderFetch, serverUrl } from "../../lib/client";
 import * as Session from "./videoSession";
 
 const noop = () => {};
@@ -39,6 +39,7 @@ export async function startNextEpisodePrefetch(
     let prepareAbort: AbortController | null = null;
     let disposed = false;
     let sessionCleaned = false;
+    let transferred = false;
 
     const stopPolling = () => {
         if (pollId != null) {
@@ -47,8 +48,17 @@ export async function startNextEpisodePrefetch(
         }
     };
 
+    const cleanupSessionIfOwned = () => {
+        if (transferred || !sessionId || sessionCleaned) return;
+        sessionCleaned = true;
+        Session.cleanupServerSession(sessionId);
+    };
+
     const dispose = (opts?: { transfer?: boolean }) => {
         disposed = true;
+        if (opts?.transfer) {
+            transferred = true;
+        }
         prepareAbort?.abort();
         prepareAbort = null;
         stopPolling();
@@ -59,6 +69,7 @@ export async function startNextEpisodePrefetch(
             }
             hlsInstance = null;
         }
+        Session.detachSeekingListener(videoElem);
         try {
             videoElem.pause();
         } catch {
@@ -68,10 +79,7 @@ export async function startNextEpisodePrefetch(
             videoElem.load();
         } catch {
         }
-        if (!opts?.transfer && sessionId && !sessionCleaned) {
-            sessionCleaned = true;
-            Session.cleanupServerSession(sessionId);
-        }
+        cleanupSessionIfOwned();
     };
 
     try {
@@ -102,7 +110,7 @@ export async function startNextEpisodePrefetch(
             return { dispose: null, handoff: null };
         }
 
-        const res = await fetch(`${serverUrl}/sessions/${sessionId}`);
+        const res = await decoderFetch(`${serverUrl}/sessions/${sessionId}`);
         if (!res.ok) throw new Error("prefetch session info failed");
         sessionData = await res.json();
         if (disposed) {
@@ -153,9 +161,6 @@ export async function startNextEpisodePrefetch(
         };
         return { dispose, handoff };
     } catch (e) {
-        if (disposed || (e instanceof DOMException && e.name === "AbortError")) {
-            return { dispose: null, handoff: null };
-        }
         console.warn("Next episode prefetch failed", e);
         dispose();
         return { dispose: null, handoff: null };

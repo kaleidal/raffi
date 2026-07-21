@@ -8,6 +8,6 @@ export { router } from './lib/stores/router';
 export * from './lib/stores/authStore';
 export * from './lib/stores/settingsStore';
 
-// Platform abstraction
-export { platform, getPlatform, isDesktopPlatform, isWeb } from './lib/platform';
-export type { RaffiPlatform, PlatformCapabilities, PlatformName } from './lib/platform';
+// Platform flags
+export { getPlatformName, isDesktopPlatform, isWeb } from './lib/platform';
+export type { PlatformName } from './lib/platform';

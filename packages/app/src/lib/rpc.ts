@@ -25,76 +25,17 @@ declare global {
                 targetPath: string,
             ) => Promise<{ ok: boolean; filePath: string | null; error?: string }>;
             windowControls?: {
-                minimize?: () => void;
-                toggleMaximize?: () => void;
-                close?: () => void;
-                isMaximized?: () => Promise<boolean>;
                 getDisplayZoom?: () => Promise<number>;
                 syncMiniPlayerState?: (state: { enabled: boolean; canEnter: boolean }) => void;
                 exitMiniPlayer?: () => void;
                 isMiniPlayer?: () => Promise<boolean>;
-                onMaximizedChanged?: (callback: (value: boolean) => void) => (() => void) | void;
                 onMiniPlayerChanged?: (callback: (value: boolean) => void) => (() => void) | void;
             };
-            showSelectDialog?: (
-                message: string,
-                title: string,
-                options: string[],
-            ) => Promise<{ canceled: boolean; selectedIndex: number }>;
             fetchIntroDbSegments?: (
                 imdbId: string,
                 season: number,
                 episode: number,
             ) => Promise<{ status: number; data: unknown | null }>;
-            cast?: {
-                createBootstrap?: (
-                    sessionId: string,
-                    ttlSeconds?: number,
-                ) => Promise<{
-                    sessionId: string;
-                    localIp: string;
-                    port: number;
-                    token: string;
-                    expiresAt: string;
-                    streamUrl: string;
-                    sessionUrl: string;
-                }>;
-                listDevices?: (timeoutMs?: number) => Promise<Array<{ id: string; name: string; host: string }>>;
-                connectAndLoad?: (payload: {
-                    deviceId?: string;
-                    streamUrl: string;
-                    startTime?: number;
-                    mode?: "native" | "chrome";
-                    metadata?: {
-                        title?: string;
-                        subtitle?: string;
-                        cover?: string;
-                        background?: string;
-                        durationSeconds?: number;
-                    };
-                }) => Promise<{
-                    active: boolean;
-                    deviceId: string;
-                    mediaUrl: string;
-                    deviceName?: string;
-                    transport?: "native" | "chrome";
-                }>;
-                play?: () => Promise<void>;
-                pause?: () => Promise<void>;
-                seek?: (currentTime: number) => Promise<void>;
-                setVolume?: (level: number) => Promise<void>;
-                stop?: () => Promise<void>;
-                disconnect?: () => Promise<void>;
-                status?: () => Promise<{
-                    active: boolean;
-                    deviceId?: string;
-                    mediaUrl?: string;
-                    playerState?: string;
-                    currentTime?: number;
-                    volumeLevel?: number;
-                    raw?: unknown;
-                }>;
-            };
         };
     }
 }

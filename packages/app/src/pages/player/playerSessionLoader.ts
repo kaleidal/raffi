@@ -1,6 +1,6 @@
 import { get } from "svelte/store";
 import type { ShowResponse } from "../../lib/library/types/meta_types";
-import { serverUrl } from "../../lib/client";
+import { decoderFetch, serverUrl } from "../../lib/client";
 import type { Chapter, Track } from "./types";
 import * as Session from "./videoSession";
 import * as Subtitles from "./subtitles";
@@ -164,12 +164,18 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
             activeSessionId = result.sessionId;
             deps.setSessionId(result.sessionId);
 
+            const abandonOwnedSession = () => {
+                if (!activeSessionId) return;
+                Session.cleanupServerSession(activeSessionId);
+                activeSessionId = "";
+            };
+
             if (result.sessionData?.isTorrent && result.sessionData?.torrentInfoHash) {
                 const torrentInfoHash = result.sessionData.torrentInfoHash;
                 deps.startTorrentStatusPolling(torrentInfoHash);
                 await deps.awaitTorrentReady(torrentInfoHash);
 
-                const readySession = await fetch(`${serverUrl}/sessions/${result.sessionId}`);
+                const readySession = await decoderFetch(`${serverUrl}/sessions/${result.sessionId}`);
                 if (!readySession.ok) {
                     throw new Error("Failed to refresh ready torrent session info");
                 }
@@ -178,7 +184,10 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                 deps.stopTorrentStatusPolling();
             }
 
-            if (isStale()) return;
+            if (isStale()) {
+                abandonOwnedSession();
+                return;
+            }
 
             sessionData.set(result.sessionData);
 
@@ -189,18 +198,21 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                 season,
                 episode,
             });
-            if (isStale()) return;
+            if (isStale()) {
+                abandonOwnedSession();
+                return;
+            }
             const effectiveStartTime = playbackStart.effectiveStartTime;
             deps.setIntroDbChapters(playbackStart.introDbChapters);
 
             await deps.awaitDomUpdate();
-            if (isStale()) return;
+            if (isStale()) {
+                abandonOwnedSession();
+                return;
+            }
             const videoElem = deps.getVideoElem();
             if (!videoElem) {
-                if (activeSessionId) {
-                    Session.cleanupServerSession(activeSessionId);
-                    activeSessionId = "";
-                }
+                abandonOwnedSession();
                 return;
             }
 
@@ -303,7 +315,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
 
                 videoElem.src = src;
                 videoElem.load();
-                activeSessionId = "";
+                abandonOwnedSession();
                 return;
             }
 
@@ -340,7 +352,10 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                 initialSeekTime,
                 abortController.signal,
             );
-            if (isStale()) return;
+            if (isStale()) {
+                abandonOwnedSession();
+                return;
+            }
 
             const hlsInstance = Session.initHLS(
                 videoElem,
@@ -392,14 +407,14 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
             activeSessionId = "";
 
         } catch (err) {
-            if (isStale() || (err instanceof DOMException && err.name === "AbortError")) {
-                return;
-            }
-            console.error("Failed to prepare playback", err);
             if (activeSessionId) {
                 Session.cleanupServerSession(activeSessionId);
                 activeSessionId = "";
             }
+            if (isStale() || (err instanceof DOMException && err.name === "AbortError")) {
+                return;
+            }
+            console.error("Failed to prepare playback", err);
             deps.stopTorrentStatusPolling();
             playbackBuffering.set(false);
             loading.set(false);

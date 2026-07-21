@@ -5,7 +5,6 @@ function createMainWindow({
   screen,
   fs,
   path,
-  express,
   isDev,
   autoUpdater,
   logToFile,
@@ -25,7 +24,6 @@ function createMainWindow({
   setPendingAveAuthPayload,
   setPendingTraktAuthPayload,
   setPendingUpdateInfo,
-  setHttpServer,
 }) {
   const isWindows = process.platform === "win32";
   const isMac = process.platform === "darwin";
@@ -51,8 +49,8 @@ function createMainWindow({
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      webviewTag: true,
-      backgroundThrottling: false,
+      webviewTag: false,
+      backgroundThrottling: true,
       preload: path.join(baseDir, "preload.cjs"),
     },
   };
@@ -101,27 +99,14 @@ function createMainWindow({
       if (isDev) {
         return (host === "localhost" || host === "127.0.0.1") && parsed.port === "5173";
       }
-      return host === "127.0.0.1" && parsed.port === "11420";
+      return false;
     } catch {
       return false;
     }
   };
 
-  const isWebUrl = (value) => {
-    try {
-      const parsed = new URL(value);
-      return parsed.protocol === "http:" || parsed.protocol === "https:";
-    } catch {
-      return false;
-    }
-  };
-
-  const handleExternalNavigation = (url, context, referrerUrl) => {
-    const isAppOwnedWindow =
-      context === "window" &&
-      isWebUrl(url) &&
-      (!referrerUrl || isAppUrl(referrerUrl));
-    if (isAppOwnedWindow || isAllowedExternalUrl?.(url)) {
+  const handleExternalNavigation = (url, context) => {
+    if (isAllowedExternalUrl?.(url)) {
       shell?.openExternal(url).catch((error) => {
         logToFile(`Failed opening external ${context}`, error);
       });
@@ -132,7 +117,7 @@ function createMainWindow({
   };
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    handleExternalNavigation(details?.url, "window", details?.referrer?.url);
+    handleExternalNavigation(details?.url, "window");
     return { action: "deny" };
   });
 
@@ -360,30 +345,6 @@ function createMainWindow({
   };
   mainWindow.__raffiGetDisplayZoom = () => currentDisplayZoom;
 
-  mainWindow.on("maximize", () => {
-    try {
-      mainWindow.webContents.send("WINDOW_MAXIMIZED_CHANGED", true);
-    } catch {}
-  });
-
-  mainWindow.on("unmaximize", () => {
-    try {
-      mainWindow.webContents.send("WINDOW_MAXIMIZED_CHANGED", false);
-    } catch {}
-  });
-
-  mainWindow.on("enter-full-screen", () => {
-    try {
-      mainWindow.webContents.send("WINDOW_FULLSCREEN_CHANGED", true);
-    } catch {}
-  });
-
-  mainWindow.on("leave-full-screen", () => {
-    try {
-      mainWindow.webContents.send("WINDOW_FULLSCREEN_CHANGED", false);
-    } catch {}
-  });
-
   mainWindow.on("minimize", (event) => {
     if (miniPlayerState.restoring) return;
     if (miniPlayerState.active) {
@@ -485,20 +446,11 @@ function createMainWindow({
       logToFile("autoUpdater not available");
     }
 
-    const expressApp = express();
     const distPath = path.join(baseDir, "..", "dist");
-    expressApp.use(express.static(distPath));
-
-    const httpServer = expressApp.listen(11420, "127.0.0.1", () => {
-      console.log("Serving app on http://127.0.0.1:11420");
-      logToFile("Serving app on http://127.0.0.1:11420");
-      mainWindow.loadURL("http://127.0.0.1:11420");
-    });
-
-    setHttpServer(httpServer);
-
-    httpServer.on("error", (err) => {
-      logToFile("Failed to start express server", err);
+    const indexHtml = path.join(distPath, "index.html");
+    logToFile(`Loading packaged app from ${indexHtml}`);
+    mainWindow.loadFile(indexHtml).catch((err) => {
+      logToFile("Failed to load packaged app", err);
     });
   }
 

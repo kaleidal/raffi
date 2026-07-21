@@ -1,5 +1,6 @@
 // Subtitle handling and parsing
 import { getAddons } from "../../lib/db/db";
+import { decoderFetch } from "../../lib/client";
 import type { ShowResponse } from "../../lib/library/types/meta_types";
 import type { Track, ParsedCue } from "./types";
 
@@ -247,7 +248,7 @@ export async function handleSubtitleSelect(
                 const fetchUrl = `${track.url}?startTime=${startTime}`;
                 console.log("Fetching embedded subtitles from:", fetchUrl);
 
-                response = await fetch(fetchUrl, {
+                response = await decoderFetch(fetchUrl, {
                     signal: currentSubtitleAbort.signal,
                 });
                 isSrt = false;

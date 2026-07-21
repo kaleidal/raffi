@@ -14,7 +14,7 @@
     const AMBIENT_MAX_WIDTH = 420;
     const AMBIENT_BLEND_FACTOR = 0.14;
     const AMBIENT_SAMPLE_GRID = 4;
-    const AMBIENT_FRAME_INTERVAL_MS = 1000 / 30;
+    const AMBIENT_FRAME_INTERVAL_MS = 1000 / 10;
 
     let containerElem: HTMLDivElement | undefined = undefined;
     let ambientCanvasElem: HTMLCanvasElement | undefined = undefined;
@@ -317,6 +317,14 @@
                 return;
             }
 
+            if (
+                typeof document !== "undefined" &&
+                document.hidden
+            ) {
+                ambientRaf = requestAnimationFrame(tick);
+                return;
+            }
+
             if (!videoElem.paused && (lastAmbientDrawAt === 0 || now - lastAmbientDrawAt >= AMBIENT_FRAME_INTERVAL_MS)) {
                 drawAmbientFrame();
                 lastAmbientDrawAt = now;
@@ -419,7 +427,20 @@
             }
         }
 
+        const handleVisibility = () => {
+            if (document.hidden) {
+                stopAmbientLoop();
+                return;
+            }
+            refreshAmbient();
+        };
+        document.addEventListener("visibilitychange", handleVisibility);
+
         refreshAmbient();
+
+        return () => {
+            document.removeEventListener("visibilitychange", handleVisibility);
+        };
     });
 
     onDestroy(() => {

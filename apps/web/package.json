@@ -26,10 +26,9 @@
     "wrangler": "^4.95.0"
   },
   "dependencies": {
-    "@raffi/app": "workspace:*",
     "@ave-id/sdk": "^0.9.2",
     "@lucide/svelte": "^1.17.0",
-    "eventemitter3": "^5.0.4",
+    "@raffi/app": "workspace:*",
     "hls.js": "^1.6.16",
     "posthog-js": "^1.376.4"
   }

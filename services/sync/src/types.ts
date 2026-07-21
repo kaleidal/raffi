@@ -94,7 +94,7 @@ export interface WatchParty {
   imdb_id: string;
   season: number | null;
   episode: number | null;
-  stream_source: string;
+  stream_source: string | null;
   file_idx: number | null;
   created_at: string;
   expires_at: string;
@@ -112,4 +112,5 @@ export interface WatchPartyMember {
 
 export interface WatchPartyInfo extends WatchParty {
   memberCount: number;
+  is_local_source?: boolean;
 }

@@ -1,4 +1,5 @@
 import { get } from "svelte/store";
+import { decoderFetch } from "../../lib/client";
 import { loading, loadingDetails, loadingProgress, loadingStage } from "./playerState";
 
 export const createTorrentStatusPoller = ({
@@ -44,7 +45,7 @@ export const createTorrentStatusPoller = ({
 
         const poll = async () => {
             try {
-                const response = await fetch(`${serverUrl}/torrents/${hash}/status`);
+                const response = await decoderFetch(`${serverUrl}/torrents/${hash}/status`);
                 if (!response.ok) return;
 
                 const data = await response.json();

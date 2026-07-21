@@ -4,18 +4,17 @@ SvelteKit + Cloudflare Pages implementation of Raffi.
 
 This is a **first-class web target** that consumes the exact same `@raffi/app` package as the desktop app.
 
-## Goals (per original request)
+## Goals
 
 - Fully browser-based
 - Focused on **direct HTTP + debrid streams** (no torrent client)
-- Beautiful shared UI (home, library via sync.raffi.al, meta, player)
-- Installable as PWA
+- Shared UI (home, library via sync.raffi.al, meta, player)
 - Graceful degradation: when something doesn't work well in browser, show clear "Use Desktop" messaging
 
 ## Current Status
 
 - Mounts the real shared `App.svelte`
-- Web platform shim + PWA install prompt
+- Web platform shim
 - Direct stream playback is the primary supported path
 
 ## Development

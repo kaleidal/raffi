@@ -33,6 +33,36 @@ func (c *Controller) StopSession(id string) error {
 	return nil
 }
 
+// EvictIdleSessions stops in-memory HLS sessions whose LastAccess is older than ttl.
+// Returns the evicted session IDs so callers can clean torrent refs / session store.
+func (c *Controller) EvictIdleSessions(ttl time.Duration) []string {
+	if ttl <= 0 {
+		ttl = IdleSessionTTL
+	}
+
+	c.mu.Lock()
+	now := time.Now()
+	idle := make([]string, 0)
+	for id, sess := range c.sessions {
+		if sess == nil {
+			continue
+		}
+		if sess.LastAccess.IsZero() {
+			continue
+		}
+		if now.Sub(sess.LastAccess) >= ttl {
+			idle = append(idle, id)
+		}
+	}
+	c.mu.Unlock()
+
+	for _, id := range idle {
+		log.Printf("Evicting idle HLS session %s (TTL %s)", id, ttl)
+		_ = c.StopSession(id)
+	}
+	return idle
+}
+
 func (c *Controller) CleanupOrphanedSessions() {
 	// Get list of all temp directories
 	raffiTempDir := filepath.Join(os.TempDir(), "raffi")

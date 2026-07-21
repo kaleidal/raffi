@@ -56,6 +56,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
         },
     },
     getDecoderStatus: () => ipcRenderer.invoke('DECODER_STATUS_GET'),
+    getDecoderAuthSecret: () => ipcRenderer.invoke('DECODER_AUTH_SECRET_GET'),
     onDecoderStatusChanged: (callback) => {
         const handler = (_event, value) => callback(value);
         ipcRenderer.on('DECODER_STATUS_CHANGED', handler);

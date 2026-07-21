@@ -93,11 +93,20 @@ func main() {
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
 		for range ticker.C {
+			idleIDs := srv.hlsController.EvictIdleSessions(hls.IdleSessionTTL)
+			for _, id := range idleIDs {
+				srv.cleanupSessionResources(id)
+			}
 			srv.hlsController.CleanupOrphanedSessions()
 		}
 	}()
 
+	if decoderSecret() == "" {
+		log.Println("WARNING: RAFFI_DECODER_SECRET is not set; mutating decoder endpoints will reject requests")
+	}
+
 	mux := http.NewServeMux()
+	mux.HandleFunc("/", handleHealth)
 	mux.HandleFunc("/sessions", srv.handleSessions)
 	mux.HandleFunc("/sessions/", srv.handleSessionByID)
 	mux.HandleFunc("/cleanup", srv.handleCleanup)
@@ -114,7 +123,7 @@ func main() {
 		log.Fatalf("failed to bind to %s: %v", addr, err)
 	}
 	log.Printf("Server listening on http://%s\n", listener.Addr().String())
-	if err := http.Serve(listener, withCORS(mux)); err != nil {
+	if err := http.Serve(listener, withCORS(withAuth(mux))); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -253,17 +262,18 @@ func (s *Server) handleSubtitleTrack(w http.ResponseWriter, r *http.Request, id,
 		}
 	}
 
-	w.Header().Set("Content-Type", "text/vtt; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
-	w.WriteHeader(http.StatusOK)
-
 	subtitleSource, err := hls.ResolvePlaybackSource(r.Context(), sess.Source)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
+
+	w.Header().Set("Content-Type", "text/vtt; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
 	if err := hls.StreamSubtitle(r.Context(), s.ffmpegPath, subtitleSource, subtitleIndex, startTime, w); err != nil {
 		log.Printf("subtitle stream failed for session %s track %d: %v", id, subtitleIndex, err)
+		http.Error(w, "subtitle extract failed", http.StatusBadGateway)
+		return
 	}
 }
 
@@ -292,6 +302,11 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := validateSessionSource(req.Source, req.Kind); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	var sess *session.Session
 	var err error
 
@@ -310,6 +325,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			sess.IsTorrent = true
 			sess.TorrentInfoHash = infoHash
+			sess.TorrentFileIdx = req.FileIdx
 		}
 	} else {
 		sess, err = s.sessions.Create(req.Source, req.Kind, req.StartTime)
@@ -768,19 +784,40 @@ func writeJSON(w http.ResponseWriter, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
+var allowedCORSOrigins = map[string]struct{}{
+	"http://127.0.0.1:11420": {},
+	"http://localhost:11420": {},
+	"http://127.0.0.1:5173":  {},
+	"http://localhost:5173":  {},
+	"null":                   {},
+}
+
 func withCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := strings.TrimSpace(r.Header.Get("Origin"))
 		if origin != "" {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set("Vary", "Origin")
+			if _, ok := allowedCORSOrigins[origin]; ok {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Vary", "Origin")
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS, DELETE, HEAD")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept-Encoding, Range, Origin, Accept, X-Raffi-Auth, Authorization")
+				w.Header().Set("Access-Control-Expose-Headers", "X-Raffi-Slice-Start, Accept-Ranges, Content-Range, Content-Length")
+				w.Header().Set("Access-Control-Max-Age", "86400")
+			}
+		} else {
+			// Non-browser / same-origin style requests (no Origin) — no ACAO reflection.
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS, DELETE, HEAD")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept-Encoding, Range, Origin, Accept, X-Raffi-Auth, Authorization")
+			w.Header().Set("Access-Control-Expose-Headers", "X-Raffi-Slice-Start, Accept-Ranges, Content-Range, Content-Length")
 		}
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS, DELETE, HEAD")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept-Encoding, Range, Origin, Accept")
-		w.Header().Set("Access-Control-Expose-Headers", "X-Raffi-Slice-Start, Accept-Ranges, Content-Range, Content-Length")
-		w.Header().Set("Access-Control-Max-Age", "86400")
 
 		if r.Method == http.MethodOptions {
+			if origin != "" {
+				if _, ok := allowedCORSOrigins[origin]; !ok {
+					http.Error(w, "origin not allowed", http.StatusForbidden)
+					return
+				}
+			}
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
@@ -811,17 +848,19 @@ func (s *Server) handleCleanup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("Cleaning up session %s", id)
+	s.cleanupSessionResources(id)
+	w.WriteHeader(http.StatusOK)
+}
 
-	// Check if this is a torrent session and clean up the torrent
+func (s *Server) cleanupSessionResources(id string) {
 	sess, err := s.sessions.Get(id)
 	if err == nil && sess.IsTorrent && sess.TorrentInfoHash != "" {
 		log.Printf("Removing torrent %s for session %s", sess.TorrentInfoHash, id)
-		s.torrentStreamer.RemoveTorrent(sess.TorrentInfoHash)
+		s.torrentStreamer.RemoveTorrent(sess.TorrentInfoHash, sess.TorrentFileIdx)
 	}
 
 	if s.hlsController != nil {
 		_ = s.hlsController.StopSession(id)
 	}
 	_ = s.sessions.Delete(id)
-	w.WriteHeader(http.StatusOK)
 }

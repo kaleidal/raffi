@@ -96,6 +96,7 @@ func (c *Controller) MarkSegmentServed(id, filename string) {
 	if seq > sess.LastServedSeq {
 		sess.LastServedSeq = seq
 	}
+	c.touchSessionLocked(sess)
 	c.adjustThrottleLocked(sess)
 	c.mu.Unlock()
 }
@@ -110,6 +111,7 @@ func (c *Controller) NotifyClientAssetRequest(id string) {
 	}
 
 	sess.DemandResumeUntil = time.Now().Add(clientDemandResumeGrace)
+	c.touchSessionLocked(sess)
 
 	// If throttling paused ffmpeg and a client is actively requesting assets,
 	// resume immediately so waitForFile can make progress.
@@ -134,6 +136,7 @@ func (c *Controller) NotifyClientPlaylistRequest(id string) {
 	// Polling an already usable playlist is not demand for more media. Without
 	// this guard, normal HLS polling continuously wakes a saturated transcoder.
 	manifestPath := filepath.Join(sess.WorkDir, fmt.Sprintf("slice_%03d", sess.SliceIndex), "child.m3u8")
+	c.touchSessionLocked(sess)
 	if _, segCount, err := readPlaylistState(manifestPath); err == nil && segCount > 0 {
 		return
 	}

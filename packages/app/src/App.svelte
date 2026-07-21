@@ -49,7 +49,6 @@
         updatedAt: 0,
     });
 
-    let checkingAuth = false;
     let showTitleBar = false;
     let displayZoom = 1;
     let showUpdatePrompt = false;
@@ -303,8 +302,6 @@
             // ignore
         }
 
-        checkingAuth = false;
-
         const init = async () => {
             try {
                 await initAuth();
@@ -451,9 +448,7 @@
         const nextRouteKey = `${$router.page}:${JSON.stringify($router.params)}`;
         if (nextRouteKey !== lastRouteKey) {
             lastRouteKey = nextRouteKey;
-            if (!checkingAuth) {
-                void resetRouteScroll();
-            }
+            void resetRouteScroll();
         }
     }
 </script>
@@ -471,13 +466,7 @@
             class="w-full h-full"
             style={`transform: scale(${displayZoom * $userZoom}); transform-origin: top left; width: calc(100% / ${displayZoom * $userZoom}); height: calc(100% / ${displayZoom * $userZoom});`}
         >
-            {#if checkingAuth}
-                <div class="w-full h-full bg-[#090909] flex items-center justify-center">
-                    <LoadingSpinner size="60px" />
-                </div>
-            {:else}
-                <svelte:component this={pages[$router.page]} {...$router.params as any} />
-            {/if}
+            <svelte:component this={pages[$router.page]} {...$router.params as any} />
         </div>
     </div>
 

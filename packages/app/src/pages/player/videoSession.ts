@@ -2,6 +2,7 @@
 import Hls from "hls.js";
 import {
   createSession,
+  decoderFetch,
   getSessionUrl,
   getStreamUrl,
   serverUrl,
@@ -33,6 +34,17 @@ export function createHLSManifestUrl(
 }
 
 const manifestPreparationControllers = new Map<string, Set<AbortController>>();
+const seekingListeners = new WeakMap<HTMLVideoElement, EventListener>();
+let metadataRefreshGeneration = 0;
+let activeMetadataRefresh: AbortController | null = null;
+
+export function detachSeekingListener(videoElem: HTMLVideoElement | null | undefined) {
+  if (!videoElem) return;
+  const prev = seekingListeners.get(videoElem);
+  if (!prev) return;
+  videoElem.removeEventListener("seeking", prev);
+  seekingListeners.delete(videoElem);
+}
 
 export function cancelHLSPreparation(sessionId: string) {
   const controllers = manifestPreparationControllers.get(sessionId);
@@ -87,11 +99,7 @@ export function cleanupServerSession(sessionId: string) {
   if (!sessionId) return;
   cancelHLSPreparation(sessionId);
   const url = `${serverUrl}/cleanup?id=${sessionId}`;
-  if (navigator.sendBeacon) {
-    navigator.sendBeacon(url);
-  } else {
-    void fetch(url, { method: "POST", keepalive: true });
-  }
+  void decoderFetch(url, { method: "POST", keepalive: true }).catch(() => {});
 }
 
 export function isTimeBuffered(
@@ -203,7 +211,17 @@ export function shouldBypassServerForHttpStream(
   // If the addon already provides an HLS manifest, let the existing pipeline handle it.
   if (/\.m3u8(\?|$)/i.test(src)) return false;
 
-  if (isWeb) return true;
+  if (isWeb) {
+    const pathname = getMediaPathname(src);
+    const safeContainer =
+      pathname.endsWith(".mp4") || pathname.endsWith(".webm");
+    if (!safeContainer) return false;
+    const support = getDirectMediaSupport(src, videoElem);
+    return (
+      support.supported &&
+      (support.confidence === "probably" || support.confidence === "maybe")
+    );
+  }
 
   return supportsEac3Playback(videoElem);
 }
@@ -420,7 +438,7 @@ export async function loadVideoSession(
       sessionId = reuse.sessionId;
       setLoadingStage?.("Using prefetched stream");
       setLoadingDetails?.("");
-      const res = await fetch(`${serverUrl}/sessions/${sessionId}?playback=1`);
+      const res = await decoderFetch(`${serverUrl}/sessions/${sessionId}?playback=1`);
       if (!res.ok) throw await sessionInfoError(res);
       sessionData = await res.json();
       setPlaybackOffset(startTime);
@@ -435,7 +453,7 @@ export async function loadVideoSession(
       setLoadingStage?.("Loading stream info");
       setLoadingDetails?.("Probing metadata and tracks...");
 
-      const res = await fetch(`${serverUrl}/sessions/${sessionId}`);
+      const res = await decoderFetch(`${serverUrl}/sessions/${sessionId}`);
       if (!res.ok) throw await sessionInfoError(res);
       sessionData = await res.json();
     } else {
@@ -455,7 +473,7 @@ export async function loadVideoSession(
       setLoadingStage?.("Loading stream info");
       setLoadingDetails?.("Probing metadata and tracks...");
 
-      const res = await fetch(`${serverUrl}/sessions/${sessionId}`);
+      const res = await decoderFetch(`${serverUrl}/sessions/${sessionId}`);
       if (!res.ok) throw await sessionInfoError(res);
       sessionData = await res.json();
     }
@@ -500,17 +518,42 @@ export async function loadVideoSession(
     let { hasDuration, hasAudioTracks } = applySessionMetadata(sessionData);
 
     if (!hasDuration || !hasAudioTracks) {
+      const refreshGeneration = ++metadataRefreshGeneration;
+      const refreshAbort = new AbortController();
+      activeMetadataRefresh?.abort();
+      activeMetadataRefresh = refreshAbort;
+
       const refreshSessionMetadata = async () => {
         for (let attempt = 0; attempt < 18; attempt++) {
+          if (
+            refreshAbort.signal.aborted ||
+            refreshGeneration !== metadataRefreshGeneration
+          ) {
+            return;
+          }
           await new Promise((resolve) => setTimeout(resolve, 1000));
+          if (
+            refreshAbort.signal.aborted ||
+            refreshGeneration !== metadataRefreshGeneration
+          ) {
+            return;
+          }
 
           try {
-            const nextRes = await fetch(getSessionUrl(sessionId));
+            const nextRes = await decoderFetch(getSessionUrl(sessionId), {
+              signal: refreshAbort.signal,
+            });
             if (!nextRes.ok) {
               continue;
             }
 
             const nextData = await nextRes.json();
+            if (
+              refreshAbort.signal.aborted ||
+              refreshGeneration !== metadataRefreshGeneration
+            ) {
+              return;
+            }
             const nextState = applySessionMetadata(nextData);
             hasDuration = hasDuration || nextState.hasDuration;
             hasAudioTracks = hasAudioTracks || nextState.hasAudioTracks;
@@ -524,7 +567,10 @@ export async function loadVideoSession(
             if (hasDuration && hasAudioTracks) {
               break;
             }
-          } catch {
+          } catch (err) {
+            if (err instanceof DOMException && err.name === "AbortError") {
+              return;
+            }
             continue;
           }
         }
@@ -795,6 +841,8 @@ export function initHLS(
     console.error("No HLS support");
   }
 
+  detachSeekingListener(videoElem);
+  seekingListeners.set(videoElem, onSeeking);
   videoElem.addEventListener("seeking", onSeeking);
 
   return hls;
@@ -880,10 +928,24 @@ export function createSeekHandler(
     setErrorDetails,
   } = setStates;
 
-  return async () => {
+  let seekGeneration = 0;
+  const SEEK_TIMEOUT_MS = 18_000;
+
+  const reapplyActiveSubtitle = () => {
+    const currentSubtitleLabel = getCurrentSubtitleLabel();
+    if (currentSubtitleLabel === "Off") return;
+    const track = getSubtitleTracks().find((t) => t.selected);
+    if (track) {
+      handleSubtitleSelect(track);
+    }
+  };
+
+  const handler = async () => {
     if (!videoElem) return;
+    if (getSeekGuard()) return;
+
     const pending = getPendingSeek();
-    if (pending == null || getSeekGuard()) return;
+    if (pending == null) return;
 
     const desiredGlobal = pending;
     setPendingSeek(null);
@@ -895,6 +957,7 @@ export function createSeekHandler(
       return;
     }
 
+    const generation = ++seekGeneration;
     setSeekGuard(true);
     setBuffering(true);
     setShowCanvas(true);
@@ -908,30 +971,66 @@ export function createSeekHandler(
     }
     const hlsInstance = getHls();
 
+    let timeoutId: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+      if (generation !== seekGeneration) return;
+      console.error("Seek timed out", desiredGlobal);
+      setSeekGuard(false);
+      setBuffering(false);
+      setShowCanvas(false);
+      setShowError(true);
+      setErrorMessage("Seek timed out");
+      setErrorDetails("The stream did not become ready in time after seeking.");
+      void handler();
+    }, SEEK_TIMEOUT_MS);
+
+    const clearSeekTimeout = () => {
+      if (timeoutId != null) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+    };
+
+    const finishSeekSuccess = () => {
+      if (generation !== seekGeneration) return;
+      clearSeekTimeout();
+      setSeekGuard(false);
+      setBuffering(false);
+      setShowCanvas(false);
+      reapplyActiveSubtitle();
+      void handler();
+    };
+
+    const finishSeekFailure = (error: unknown) => {
+      if (generation !== seekGeneration) return;
+      clearSeekTimeout();
+      setSeekGuard(false);
+      setBuffering(false);
+      setShowCanvas(false);
+      if (error instanceof DOMException && error.name === "AbortError") {
+        void handler();
+        return;
+      }
+      console.error("Failed to prepare seek", error);
+      setShowError(true);
+      setErrorMessage("Failed to seek");
+      setErrorDetails(error instanceof Error ? error.message : String(error));
+      void handler();
+    };
+
     try {
       const url = await prepareHLSManifest(sessionId, desiredGlobal);
+      if (generation !== seekGeneration) return;
       console.log("Hard seek to", desiredGlobal, "->", url);
 
       if (hlsInstance) {
         const onSeekParsed = () => {
+          if (generation !== seekGeneration) return;
           console.log("HLS MANIFEST_PARSED (seek)");
-          setSeekGuard(false);
-          setShowCanvas(false);
-
-          // Re-fetch subtitles if active
-          const currentSubtitleLabel = getCurrentSubtitleLabel();
-          if (currentSubtitleLabel !== "Off") {
-            const track = getSubtitleTracks().find((t) => t.selected);
-            if (track) {
-              handleSubtitleSelect(track);
-            }
-          }
-
+          hlsInstance.off(Hls.Events.MANIFEST_PARSED, onSeekParsed);
+          finishSeekSuccess();
           videoElem.play().catch((err) => {
             console.warn("play after seek failed:", err);
           });
-
-          hlsInstance?.off(Hls.Events.MANIFEST_PARSED, onSeekParsed);
         };
 
         hlsInstance.on(Hls.Events.MANIFEST_PARSED, onSeekParsed);
@@ -941,41 +1040,21 @@ export function createSeekHandler(
       } else {
         videoElem.src = url;
         videoElem.onloadedmetadata = () => {
+          if (generation !== seekGeneration) return;
           setPlaybackOffset(desiredGlobal);
           videoElem.currentTime = 0;
-          setSeekGuard(false);
-          setShowCanvas(false);
-
-          // Re-fetch subtitles if active
-          const currentSubtitleLabel = getCurrentSubtitleLabel();
-          if (currentSubtitleLabel !== "Off") {
-            const track = getSubtitleTracks().find((t) => t.selected);
-            if (track) {
-              handleSubtitleSelect(track);
-            }
-          }
-
+          finishSeekSuccess();
           videoElem
             .play()
             .catch((err) => console.warn("play after seek failed:", err));
         };
       }
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
-        setSeekGuard(false);
-        setBuffering(false);
-        setShowCanvas(false);
-        return;
-      }
-      console.error("Failed to prepare seek", error);
-      setSeekGuard(false);
-      setBuffering(false);
-      setShowCanvas(false);
-      setShowError(true);
-      setErrorMessage("Failed to seek");
-      setErrorDetails(error instanceof Error ? error.message : String(error));
+      finishSeekFailure(error);
     }
   };
+
+  return handler;
 }
 
 export function cleanupSession(
@@ -984,10 +1063,13 @@ export function cleanupSession(
   clearActivity: () => void,
   leaveWatchParty: () => void,
   isWatchPartyActive: boolean,
+  videoElem?: HTMLVideoElement | null,
 ) {
   clearActivity();
+  activeMetadataRefresh?.abort();
+  activeMetadataRefresh = null;
+  metadataRefreshGeneration += 1;
 
-  // Leave watch party
   if (isWatchPartyActive) {
     leaveWatchParty();
   }
@@ -996,29 +1078,8 @@ export function cleanupSession(
     hls.destroy();
   }
 
+  detachSeekingListener(videoElem);
   cleanupServerSession(sessionId);
-}
-
-export function detachLocalPlayback(
-  hls: Hls | null,
-  videoElem: HTMLVideoElement | null,
-) {
-  if (hls) {
-    hls.destroy();
-  }
-  if (videoElem) {
-    try {
-      videoElem.pause();
-    } catch {
-      // ignore
-    }
-    videoElem.removeAttribute("src");
-    try {
-      videoElem.load();
-    } catch {
-      // ignore
-    }
-  }
 }
 
 export async function handleAudioSelect(
@@ -1052,7 +1113,7 @@ export async function handleAudioSelect(
     if (setLoading) setLoading(true);
     if (setLoadingStage) setLoadingStage("Switching audio track");
 
-    await fetch(`${serverUrl}/sessions/${sessionId}/audio`, {
+    await decoderFetch(`${serverUrl}/sessions/${sessionId}/audio`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ index: track.id }),

@@ -15,7 +15,7 @@ const ALLOWED_EXTERNAL_HOSTS = new Set([
 function isAllowedAddonConfigureUrl(value) {
   try {
     const parsed = new URL(value);
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return false;
+    if (parsed.protocol !== "https:") return false;
     const pathname = parsed.pathname.replace(/\/$/, "");
     return pathname === "/configure" || pathname.endsWith("/configure");
   } catch {

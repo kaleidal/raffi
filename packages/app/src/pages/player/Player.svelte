@@ -540,7 +540,7 @@
         $sessionData,
         introDbChapters,
     );
-    $: nextEpisodePrefetchStartAt = Math.min(nextEpisodePrefetchWindow.startAt, 60);
+    $: nextEpisodePrefetchStartAt = nextEpisodePrefetchWindow.startAt;
     $: nextEpisodeHighlighted = $currentChapter?.kind === "outro";
 
     $: nowPlayingLabel = (() => {
@@ -896,6 +896,7 @@
             Discord.clearDiscordActivity,
             WatchParty.leaveWatchParty,
             $watchParty.isActive,
+            videoElem,
         );
         resetPlayerState();
         hasStarted = false;
@@ -970,8 +971,8 @@
                 !nextEpisodePrefetchDispose &&
                 !nextEpisodePrefetchStarting &&
                 Date.now() >= nextEpisodePrefetchRetryAt &&
-                time >= nextEpisodePrefetchStartAt &&
-                nextEpisodePrefetchWindow.creditsAt > 0
+                nextEpisodePrefetchWindow.creditsAt > 0 &&
+                (time >= nextEpisodePrefetchStartAt || $showNextEpisode)
             ) {
                 nextEpisodePrefetchStarting = true;
                 const runId = ++nextEpisodePrefetchRunId;
@@ -1089,6 +1090,7 @@
             Discord.clearDiscordActivity,
             WatchParty.leaveWatchParty,
             $watchParty.isActive,
+            videoElem,
         );
         loadVideo(currentVideoSrc);
     };
@@ -1111,6 +1113,7 @@
     }
 
     const showActionLoading = (actionLabel: string, err: unknown) => {
+        bingeAutoAdvancing = false;
         loading.set(false);
         showError.set(true);
         errorMessage.set(actionLabel);
@@ -1137,6 +1140,9 @@
         invokeNextEpisode: handleNextEpisodeInternal,
         showActionLoading,
         suppressInitialLoading: () => nextEpisodePrefetchHandoff != null,
+        onNextEpisodeFailed: () => {
+            bingeAutoAdvancing = false;
+        },
     });
 
     const handleEnded = () => {
@@ -1202,12 +1208,14 @@
         lastEmbedProgressAt = 0;
         playerSessionLoader.cancelCurrentLoad();
         disposeNextEpisodePrefetch();
+        handleNextEpisodeClick.cancel();
         Session.cleanupSession(
             hls,
             sessionId,
             Discord.clearDiscordActivity,
             WatchParty.leaveWatchParty,
             $watchParty.isActive,
+            videoElem,
         );
         hls = null;
         sessionId = "";
@@ -1247,6 +1255,7 @@
             : undefined;
 
         playerSessionLoader.cancelCurrentLoad();
+        handleNextEpisodeClick.cancel();
         disposeNextEpisodePrefetch(reuseSession ? { transfer: true } : undefined);
         Session.cleanupSession(
             hls,
@@ -1254,6 +1263,7 @@
             Discord.clearDiscordActivity,
             WatchParty.leaveWatchParty,
             $watchParty.isActive,
+            videoElem,
         );
         loadVideo(videoSrc, reuseSession ? { reuseSession } : undefined);
     }
