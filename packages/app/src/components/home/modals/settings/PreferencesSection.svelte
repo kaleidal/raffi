@@ -46,7 +46,10 @@
 	let traktHeroSourceAvailable = false;
 	let torrentingSaving = false;
 	let torrentingError = "";
-	let defenderSupported = false;
+	const isWindowsDesktop =
+		typeof window !== "undefined" &&
+		window.electronAPI?.platform === "win32" &&
+		typeof window.electronAPI.getDefenderExclusionStatus === "function";
 	let defenderExcluded = false;
 	let defenderBusy = false;
 	let defenderError = "";
@@ -54,22 +57,20 @@
 	const HOME_REFRESH_EVENT = "raffi:home-refresh";
 
 	const refreshDefenderStatus = async () => {
+		if (!isWindowsDesktop) return;
 		const api = window.electronAPI;
-		if (!api?.getDefenderExclusionStatus || api.platform !== "win32") {
-			defenderSupported = false;
-			return;
-		}
+		if (!api?.getDefenderExclusionStatus) return;
 		try {
 			const status = await api.getDefenderExclusionStatus();
-			defenderSupported = Boolean(status?.supported);
 			defenderExcluded = Boolean(status?.excluded);
 			defenderPaths = Array.isArray(status?.paths) ? status.paths : [];
-			defenderError = status?.error || "";
+			// Only surface read errors when exclusions are not already active.
+			defenderError = status?.excluded ? "" : status?.error || "";
 		} catch (error) {
-			defenderSupported = true;
-			defenderExcluded = false;
-			defenderError =
-				error instanceof Error ? error.message : "Could not read Defender status";
+			if (!defenderExcluded) {
+				defenderError =
+					error instanceof Error ? error.message : "Could not read Defender status";
+			}
 		}
 	};
 
@@ -83,7 +84,9 @@
 		searchBarPosition = getStoredHomeSearchBarPosition();
 		void loadTraktHeroSourceAvailability();
 		void loadHeroSourceOptions();
-		void refreshDefenderStatus();
+		if (isWindowsDesktop) {
+			void refreshDefenderStatus();
+		}
 	});
 
 	const emitHomeRefresh = () => {
@@ -139,6 +142,7 @@
 	}
 
 	async function applyDefenderExclusions() {
+		if (!isWindowsDesktop) return;
 		const api = window.electronAPI;
 		if (!api?.applyDefenderExclusions || defenderBusy) return;
 
@@ -156,17 +160,36 @@
 		defenderError = "";
 		try {
 			const result = await api.applyDefenderExclusions();
-			if (!result?.ok) {
+			if (Array.isArray(result?.paths) && result.paths.length > 0) {
+				defenderPaths = result.paths;
+			}
+
+			if (result?.ok) {
+				defenderExcluded = true;
+				defenderError = "";
+				trackEvent("defender_exclusion_applied");
+				// Re-read prefs so the UI matches Defender, but never undo a successful apply.
+				await new Promise((resolve) => setTimeout(resolve, 500));
+				try {
+					const status = await api.getDefenderExclusionStatus?.();
+					if (status?.excluded) {
+						defenderExcluded = true;
+					}
+					if (Array.isArray(status?.paths) && status.paths.length > 0) {
+						defenderPaths = status.paths;
+					}
+				} catch {
+					// keep applied state
+				}
+			} else {
+				defenderExcluded = false;
 				defenderError =
 					result?.error ||
 					"Exclusion failed. You may have cancelled the Administrator prompt.";
 				trackEvent("defender_exclusion_failed");
-			} else {
-				defenderExcluded = true;
-				trackEvent("defender_exclusion_applied");
 			}
-			await refreshDefenderStatus();
 		} catch (error) {
+			defenderExcluded = false;
 			defenderError =
 				error instanceof Error ? error.message : "Could not apply Defender exclusions";
 			trackEvent("defender_exclusion_failed");
@@ -386,7 +409,7 @@
 		</button>
 	</div>
 
-	{#if defenderSupported}
+	{#if isWindowsDesktop}
 		<div class="rounded-2xl bg-white/8 p-4 flex flex-col gap-4">
 			<div class="flex flex-wrap items-start gap-4 justify-between">
 				<div class="min-w-0 flex-1">
@@ -394,11 +417,11 @@
 						Exclude Raffi from Microsoft Defender
 					</p>
 					<p class="text-white/60 text-sm">
-						Optional. Stops Defender from scanning Raffi's temp/transcode folders while you watch, which can saturate the disk. Requires an Administrator prompt. Skip this if you do not trust it.
+						Stops Defender from scanning Raffi's temp folders while you watch.
 					</p>
 					{#if defenderExcluded}
 						<p class="mt-2 text-emerald-300/90 text-xs">
-							Exclusions are active for Raffi's playback folders and tools.
+							Exclusions are active.
 						</p>
 					{:else if defenderError}
 						<p class="mt-2 text-red-300 text-xs">{defenderError}</p>

@@ -52,6 +52,15 @@ declare global {
                 error: string | null;
                 paths?: string[];
                 processes?: string[];
+                status?: {
+                    supported: boolean;
+                    excluded: boolean;
+                    paths: string[];
+                    processes: string[];
+                    missingPaths: string[];
+                    missingProcesses: string[];
+                    error: string | null;
+                };
             }>;
             showConfirmDialog?: (message: string, title?: string) => Promise<boolean>;
         };
