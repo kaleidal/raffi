@@ -463,6 +463,8 @@ function createDecoderService({ isDev, path, fs, spawn, logToFile, baseDir }) {
     cleanupDecoder,
     getDecoderStatus,
     getDecoderAuthSecret,
+    getDecoderPath,
+    getBundledToolPath,
     onDecoderStatusChange,
   };
 }

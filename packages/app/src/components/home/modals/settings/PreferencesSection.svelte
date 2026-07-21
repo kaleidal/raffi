@@ -46,7 +46,32 @@
 	let traktHeroSourceAvailable = false;
 	let torrentingSaving = false;
 	let torrentingError = "";
+	let defenderSupported = false;
+	let defenderExcluded = false;
+	let defenderBusy = false;
+	let defenderError = "";
+	let defenderPaths: string[] = [];
 	const HOME_REFRESH_EVENT = "raffi:home-refresh";
+
+	const refreshDefenderStatus = async () => {
+		const api = window.electronAPI;
+		if (!api?.getDefenderExclusionStatus || api.platform !== "win32") {
+			defenderSupported = false;
+			return;
+		}
+		try {
+			const status = await api.getDefenderExclusionStatus();
+			defenderSupported = Boolean(status?.supported);
+			defenderExcluded = Boolean(status?.excluded);
+			defenderPaths = Array.isArray(status?.paths) ? status.paths : [];
+			defenderError = status?.error || "";
+		} catch (error) {
+			defenderSupported = true;
+			defenderExcluded = false;
+			defenderError =
+				error instanceof Error ? error.message : "Could not read Defender status";
+		}
+	};
 
 	onMount(() => {
 		const storedRpc = localStorage.getItem("discord_rpc_enabled");
@@ -58,6 +83,7 @@
 		searchBarPosition = getStoredHomeSearchBarPosition();
 		void loadTraktHeroSourceAvailability();
 		void loadHeroSourceOptions();
+		void refreshDefenderStatus();
 	});
 
 	const emitHomeRefresh = () => {
@@ -109,6 +135,43 @@
 			torrentingError = "Could not update the playback server. Please try again.";
 		} finally {
 			torrentingSaving = false;
+		}
+	}
+
+	async function applyDefenderExclusions() {
+		const api = window.electronAPI;
+		if (!api?.applyDefenderExclusions || defenderBusy) return;
+
+		const confirmed = api.showConfirmDialog
+			? await api.showConfirmDialog(
+					"Raffi will ask Windows for Administrator permission to exclude its temp folders and playback tools from Microsoft Defender real-time scanning. This is optional and only affects Raffi's working directories.",
+					"Exclude Raffi from Defender?",
+				)
+			: window.confirm(
+					"Exclude Raffi temp folders from Microsoft Defender? Windows will ask for Administrator permission.",
+				);
+		if (!confirmed) return;
+
+		defenderBusy = true;
+		defenderError = "";
+		try {
+			const result = await api.applyDefenderExclusions();
+			if (!result?.ok) {
+				defenderError =
+					result?.error ||
+					"Exclusion failed. You may have cancelled the Administrator prompt.";
+				trackEvent("defender_exclusion_failed");
+			} else {
+				defenderExcluded = true;
+				trackEvent("defender_exclusion_applied");
+			}
+			await refreshDefenderStatus();
+		} catch (error) {
+			defenderError =
+				error instanceof Error ? error.message : "Could not apply Defender exclusions";
+			trackEvent("defender_exclusion_failed");
+		} finally {
+			defenderBusy = false;
 		}
 	}
 
@@ -322,6 +385,49 @@
 			</span>
 		</button>
 	</div>
+
+	{#if defenderSupported}
+		<div class="rounded-2xl bg-white/8 p-4 flex flex-col gap-4">
+			<div class="flex flex-wrap items-start gap-4 justify-between">
+				<div class="min-w-0 flex-1">
+					<p class="text-white font-medium">
+						Exclude Raffi from Microsoft Defender
+					</p>
+					<p class="text-white/60 text-sm">
+						Optional. Stops Defender from scanning Raffi's temp/transcode folders while you watch, which can saturate the disk. Requires an Administrator prompt. Skip this if you do not trust it.
+					</p>
+					{#if defenderExcluded}
+						<p class="mt-2 text-emerald-300/90 text-xs">
+							Exclusions are active for Raffi's playback folders and tools.
+						</p>
+					{:else if defenderError}
+						<p class="mt-2 text-red-300 text-xs">{defenderError}</p>
+					{/if}
+				</div>
+				<button
+					class="rounded-full bg-white text-black px-4 py-2 text-sm font-semibold cursor-pointer disabled:cursor-wait disabled:opacity-60"
+					on:click={applyDefenderExclusions}
+					disabled={defenderBusy || defenderExcluded}
+				>
+					{defenderBusy
+						? "Waiting…"
+						: defenderExcluded
+							? "Excluded"
+							: "Exclude folders"}
+				</button>
+			</div>
+			{#if defenderPaths.length > 0}
+				<details class="text-white/50 text-xs">
+					<summary class="cursor-pointer select-none">Folders Raffi will exclude</summary>
+					<ul class="mt-2 space-y-1 break-all">
+						{#each defenderPaths as folderPath}
+							<li>{folderPath}</li>
+						{/each}
+					</ul>
+				</details>
+			{/if}
+		</div>
+	{/if}
 
 	<div class="rounded-2xl bg-white/8 p-4 flex flex-wrap items-center gap-4 justify-between">
 		<div>

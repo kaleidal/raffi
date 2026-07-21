@@ -13,6 +13,7 @@ export interface ActivityDetails {
 declare global {
     interface Window {
         electronAPI?: {
+            platform?: string;
             setActivity: (activity: ActivityDetails) => void;
             clearActivity: () => void;
             enableRPC: () => void;
@@ -36,6 +37,23 @@ declare global {
                 season: number,
                 episode: number,
             ) => Promise<{ status: number; data: unknown | null }>;
+            getDefenderExclusionStatus?: () => Promise<{
+                supported: boolean;
+                excluded: boolean;
+                paths: string[];
+                processes: string[];
+                missingPaths: string[];
+                missingProcesses: string[];
+                error: string | null;
+            }>;
+            applyDefenderExclusions?: () => Promise<{
+                ok: boolean;
+                elevated: boolean;
+                error: string | null;
+                paths?: string[];
+                processes?: string[];
+            }>;
+            showConfirmDialog?: (message: string, title?: string) => Promise<boolean>;
         };
     }
 }

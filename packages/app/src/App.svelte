@@ -21,12 +21,12 @@
     import ZoomModal from "./components/common/ZoomModal.svelte";
     import { syncTorrentingPreference } from "./lib/stores/torrenting";
 
-    type PageComponent = typeof Home;
+    type PageComponent = typeof Home | any;
 
     const pageLoaders: Record<string, () => Promise<{ default: PageComponent }>> = {
-        meta: () => import("./pages/meta/Meta.svelte"),
-        player: () => import("./pages/player/Player.svelte"),
-        lists: () => import("./pages/lists/Lists.svelte"),
+        meta: () => import("./pages/meta/Meta.svelte") as Promise<{ default: PageComponent }>,
+        player: () => import("./pages/player/Player.svelte") as Promise<{ default: PageComponent }>,
+        lists: () => import("./pages/lists/Lists.svelte") as Promise<{ default: PageComponent }>,
     };
 
     const pageCache: Record<string, PageComponent> = {

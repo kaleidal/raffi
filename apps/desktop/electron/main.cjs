@@ -13,6 +13,7 @@ const { createDecoderService } = require("./services/decoder.cjs");
 const { registerMainIpcHandlers } = require("./services/mainIpc.cjs");
 const { registerDiscordRpcHandlers } = require("./services/rpc.cjs");
 const { createMainWindow } = require("./services/window.cjs");
+const { createDefenderService } = require("./services/defender.cjs");
 
 const { logFallback, logToFile } = createLogger(app);
 
@@ -178,6 +179,15 @@ const decoderService = createDecoderService({
   baseDir: __dirname,
 });
 
+const defenderService = createDefenderService({
+  logToFile,
+  getDecoderBinaryPath: () => decoderService.getDecoderPath(),
+  getBundledToolPaths: () => ({
+    ffmpeg: decoderService.getBundledToolPath("ffmpeg"),
+    ffprobe: decoderService.getBundledToolPath("ffprobe"),
+  }),
+});
+
 decoderService.onDecoderStatusChange((status) => {
   if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.webContents) {
     return;
@@ -330,6 +340,8 @@ registerMainIpcHandlers({
   getMainWindow: () => mainWindow,
   getDecoderStatus: () => decoderService.getDecoderStatus(),
   getDecoderAuthSecret: () => decoderService.getDecoderAuthSecret(),
+  getDefenderExclusionStatus: () => defenderService.getExclusionStatus(),
+  applyDefenderExclusions: () => defenderService.applyExclusions(),
   scanLibraryRoots,
 });
 

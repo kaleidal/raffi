@@ -10,6 +10,8 @@ function registerMainIpcHandlers({
   getMainWindow,
   getDecoderStatus,
   getDecoderAuthSecret,
+  getDefenderExclusionStatus,
+  applyDefenderExclusions,
   scanLibraryRoots,
 }) {
   const pathModule = require("path");
@@ -138,6 +140,28 @@ function registerMainIpcHandlers({
   ipcMain.handle("DECODER_AUTH_SECRET_GET", async () => {
     if (typeof getDecoderAuthSecret !== "function") return null;
     return getDecoderAuthSecret() || null;
+  });
+
+  ipcMain.handle("DEFENDER_EXCLUSION_STATUS", async () => {
+    if (typeof getDefenderExclusionStatus !== "function") {
+      return {
+        supported: false,
+        excluded: false,
+        paths: [],
+        processes: [],
+        missingPaths: [],
+        missingProcesses: [],
+        error: "Unavailable",
+      };
+    }
+    return getDefenderExclusionStatus();
+  });
+
+  ipcMain.handle("DEFENDER_APPLY_EXCLUSIONS", async () => {
+    if (typeof applyDefenderExclusions !== "function") {
+      return { ok: false, elevated: false, error: "Unavailable" };
+    }
+    return applyDefenderExclusions();
   });
 
   ipcMain.handle("INTRODB_FETCH_SEGMENTS", async (_event, payload) => {
