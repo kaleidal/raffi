@@ -20,6 +20,11 @@ import {
 	probeRemoteStream,
 	type ProbedStream,
 } from "./probe";
+import {
+	isLocalFilesystemPath,
+	isLocalMediaUrl,
+	toClientPlayableUrl,
+} from "./localSource";
 import { pickMseMimeType, pumpStreamToSourceBuffer, RESUME_BUFFER_AHEAD_SECONDS, TARGET_BUFFER_AHEAD_SECONDS, getBufferedAheadSeconds } from "./msePump";
 import { ensureMediaCodersRegistered } from "./registerCoders";
 
@@ -52,23 +57,43 @@ export async function resolveHttpPlayback(
 	if (!src) {
 		return { mode: "unsupported", meta: null, reason: "empty" };
 	}
-	if (!/^https?:\/\//i.test(src)) {
+	if (/^magnet:/i.test(src)) {
+		return { mode: "server", meta: null, reason: "torrent" };
+	}
+
+	const playable = toClientPlayableUrl(src);
+	const localSource =
+		isLocalFilesystemPath(src) || isLocalMediaUrl(playable);
+
+	if (!/^https?:\/\//i.test(playable) && !isLocalMediaUrl(playable)) {
 		return { mode: "server", meta: null, reason: "non-http" };
 	}
-	if (/\.m3u8(\?|$)/i.test(src)) {
+	if (/\.m3u8(\?|$)/i.test(playable)) {
 		return { mode: "addon-hls", meta: null, reason: "addon-hls" };
 	}
 
 	const supportsEac3 = supportsEac3Playback(videoElem);
-	const directSupport = getDirectMediaSupport(src, videoElem);
+	const directSupport = getDirectMediaSupport(playable, videoElem);
 
 	try {
-		const { input, meta: probedMeta } = await probeRemoteStream(src, signal);
+		const { input, meta: probedMeta } = await probeRemoteStream(playable, signal);
 		input.dispose();
 		const meta = ensureAudioTracks(probedMeta);
 
 		if (signal?.aborted) {
 			throw new DOMException("Aborted", "AbortError");
+		}
+
+		// Local files go through MediaBunny — Chromium+custom-protocol <video>
+		// seeking is unreliable; UrlSource range fetches are stable.
+		if (localSource) {
+			if (canUseMediaBunnyRemux(meta)) {
+				return { mode: "mediabunny", meta, reason: "local-remux" };
+			}
+			if (isDesktopPlatform) {
+				return { mode: "server", meta, reason: "local-fallback-server" };
+			}
+			return { mode: "unsupported", meta, reason: "local-unsupported" };
 		}
 
 		const audioOk = isNativeFriendlyAudio(meta.audio?.codec ?? null, supportsEac3);

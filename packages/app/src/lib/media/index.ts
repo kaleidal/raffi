@@ -1,4 +1,3 @@
-export { ensureMediaCodersRegistered } from "./registerCoders";
 export {
 	probeRemoteStream,
 	enrichProbedStreamAudio,
@@ -19,3 +18,11 @@ export {
 	type MediaBunnyAttachResult,
 } from "./playback";
 export { supportsEac3Playback, getDirectMediaSupport } from "./nativeSupport";
+export {
+	canTryClientPlayback,
+	toClientPlayableUrl,
+	isLocalFilesystemPath,
+	encodeLocalPathAsMediaUrl,
+} from "./localSource";
+export { exportClipWithMediaBunny } from "./clip";
+export { ensureMediaCodersRegistered } from "./registerCoders";

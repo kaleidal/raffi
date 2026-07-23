@@ -4,7 +4,7 @@
     import { formatTime } from "../../lib/time";
 
     export let open = false;
-    export let sessionId: string;
+    export let videoSrc: string | null = null;
     export let duration = 0;
     export let currentTime = 0;
     export let isWatchPartyMember = false;
@@ -276,10 +276,14 @@
         clipError = "";
         clipOutputPath = "";
 
+        if (!videoSrc) {
+            clipError = "No video source to clip";
+            return;
+        }
+
         const start = Math.max(0, clipStart);
         const end = Math.max(start + minGap, clipEnd);
 
-        // Optional Save-As prompt (Electron). Browser builds fall back to server default dir.
         let targetPath: string | null = null;
         if (window.electronAPI?.saveClipPath) {
             const suggested = `clip_${new Date().toISOString().replaceAll(":", "-").replaceAll(".", "-")}.mp4`;
@@ -297,20 +301,14 @@
             const clipName = targetPath
                 ? targetPath.split(/[\\/]/).pop() || undefined
                 : undefined;
-            const res = await createClip(sessionId, { start, end, name: clipName });
-
-            if (targetPath && window.electronAPI?.persistClipFile) {
-                const persisted = await window.electronAPI.persistClipFile(
-                    res.outputPath,
-                    targetPath,
-                );
-                if (!persisted?.ok || !persisted.filePath) {
-                    throw new Error(persisted?.error || "Failed to save clip");
-                }
-                clipOutputPath = persisted.filePath;
-            } else {
-                clipOutputPath = res.outputPath;
-            }
+            const res = await createClip({
+                source: videoSrc,
+                start,
+                end,
+                name: clipName,
+                outputPath: targetPath || undefined,
+            });
+            clipOutputPath = res.outputPath;
         } catch (err) {
             clipError = err instanceof Error ? err.message : String(err);
         } finally {

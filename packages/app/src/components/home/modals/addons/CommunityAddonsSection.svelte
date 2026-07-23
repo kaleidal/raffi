@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onDestroy, onMount } from "svelte";
-	import { serverUrl } from "../../../../lib/client";
 	import { addAddon, getAddons } from "../../../../lib/db/db";
 	import { trackEvent } from "../../../../lib/analytics";
 	import { alertDialog } from "../../../../lib/systemDialogs";
@@ -33,10 +32,6 @@
 	];
 	let communitySearchTimeout: ReturnType<typeof setTimeout> | undefined;
 	let installedTransportUrls = new Set<string>();
-
-	const COMMUNITY_ENDPOINTS = [
-		`${serverUrl}/community-addons`
-	];
 
 	onMount(() => {
 		void loadInstalledAddons();
@@ -80,21 +75,34 @@
 	async function loadCommunityAddons() {
 		loadingCommunity = true;
 		try {
-			const combined: any[] = [];
-			for (const endpoint of COMMUNITY_ENDPOINTS) {
-				try {
-					const response = await fetch(endpoint, {
-						headers: { Accept: "application/json" },
-					});
-					if (!response.ok) continue;
-					const json = await response.json();
-					if (Array.isArray(json)) {
-						combined.push(...json);
+			let combined: any[] = [];
+
+			if (window.electronAPI?.fetchCommunityAddons) {
+				const result = await window.electronAPI.fetchCommunityAddons();
+				if (result?.ok && Array.isArray(result.addons)) {
+					combined = result.addons;
+				} else if (result?.error) {
+					throw new Error(result.error);
+				}
+			} else {
+				const endpoints = [
+					"https://api.strem.io/addonscollection.json",
+					"https://stremio-addons.com/catalog.json",
+				];
+				for (const endpoint of endpoints) {
+					try {
+						const response = await fetch(endpoint, {
+							headers: { Accept: "application/json" },
+						});
+						if (!response.ok) continue;
+						const json = await response.json();
+						if (Array.isArray(json)) combined.push(...json);
+					} catch (innerError) {
+						console.warn("Community endpoint failed", endpoint, innerError);
 					}
-				} catch (innerError) {
-					console.warn("Community endpoint failed", endpoint, innerError);
 				}
 			}
+
 			if (combined.length === 0) throw new Error("All community endpoints failed");
 
 			const deduped = new Map<string, any>();
@@ -112,7 +120,6 @@
 			);
 			trackEvent("community_addons_loaded", {
 				count: communityAddons.length,
-				endpoints: COMMUNITY_ENDPOINTS.length,
 			});
 		} catch (e) {
 			console.error("Failed to load community addons", e);

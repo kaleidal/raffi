@@ -309,7 +309,10 @@ bun run build
 #### Video Playback
 - Custom video player with HLS support for torrents/local remux
 - HTTP/debrid streams prefer in-app playback via MediaBunny (probe + remux) or native `<video>` when compatible
-- Local Go sidecar is still used for torrents, local files, clips, and fallback remux
+- Local files and clip export also use MediaBunny on desktop (`raffi-media://` protocol for disk access)
+- Community addon catalog is fetched from Electron main (no Go proxy)
+- Local Go sidecar remains for torrents and rare codec fallback remux
+- Embedded container subtitles are not extracted yet (addon/external subs still work)
 - Multiple quality selection
 - Subtitle parsing (SRT/VTT)
 - Audio track switching

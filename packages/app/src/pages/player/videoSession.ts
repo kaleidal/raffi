@@ -231,30 +231,12 @@ function applyAudioTrackState(
 }
 
 function buildEmbeddedSubtitleTracks(
-  sessionId: string,
-  sessionData: any,
+  _sessionId: string,
+  _sessionData: any,
 ): Track[] {
-  const streams = Array.isArray(sessionData?.availableStreams)
-    ? sessionData.availableStreams
-    : [];
-
-  return streams
-    .filter((stream: any) => stream?.type === "subtitle")
-    .map((stream: any) => {
-      const lang = stream.language || "und";
-      const title = typeof stream.title === "string" ? stream.title.trim() : "";
-      const langLabel = title || lang;
-      return {
-        id: stream.index,
-        label: `${langLabel} (Embedded)`,
-        lang,
-        url: `${serverUrl}/sessions/${sessionId}/subtitles/${stream.index}`,
-        selected: false,
-        isEmbedded: true,
-        format: "vtt" as const,
-        group: "Embedded",
-      };
-    });
+  // Embedded container subs used to be extracted via the Go/ffmpeg sidecar.
+  // Until MediaBunny can demux subtitle tracks, we only surface addon/external subs.
+  return [];
 }
 
 function mergeSubtitleTracks(

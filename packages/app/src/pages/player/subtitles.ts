@@ -1,6 +1,5 @@
 // Subtitle handling and parsing
 import { getAddons } from "../../lib/db/db";
-import { decoderFetch } from "../../lib/client";
 import type { ShowResponse } from "../../lib/library/types/meta_types";
 import type { Track, ParsedCue } from "./types";
 
@@ -243,12 +242,11 @@ export async function handleSubtitleSelect(
                 isSrt =
                     track.url.endsWith(".srt") ||
                     track.url.includes("subencoding");
+            } else if (track.isEmbedded) {
+                console.warn("Embedded subtitles are disabled");
+                return;
             } else {
-                const startTime = currentTime || playbackOffset || 0;
-                const fetchUrl = `${track.url}?startTime=${startTime}`;
-                console.log("Fetching embedded subtitles from:", fetchUrl);
-
-                response = await decoderFetch(fetchUrl, {
+                response = await fetch(track.url, {
                     signal: currentSubtitleAbort.signal,
                 });
                 isSrt = false;

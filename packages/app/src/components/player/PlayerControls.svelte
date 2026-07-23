@@ -323,7 +323,7 @@
 
         <ClipPanel
             open={showClipPanel}
-            {sessionId}
+            {videoSrc}
             {duration}
             currentTime={displayedTime}
             inverted={seekBarStyle !== "normal"}

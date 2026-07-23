@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, screen, ipcMain, shell } = require("electron");
+const { app, BrowserWindow, dialog, screen, ipcMain, shell, protocol, net } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
@@ -9,11 +9,17 @@ const {
   createProtocolUrlHandler,
   registerLinuxProtocolHandler,
 } = require("./services/protocol.cjs");
+const {
+  registerPrivilegedSchemes,
+  createLocalMediaProtocolHandler,
+} = require("./services/localMediaProtocol.cjs");
 const { createDecoderService } = require("./services/decoder.cjs");
 const { registerMainIpcHandlers } = require("./services/mainIpc.cjs");
 const { registerDiscordRpcHandlers } = require("./services/rpc.cjs");
 const { createMainWindow } = require("./services/window.cjs");
 const { createDefenderService } = require("./services/defender.cjs");
+
+registerPrivilegedSchemes(protocol);
 
 const { logFallback, logToFile } = createLogger(app);
 
@@ -263,6 +269,11 @@ function startDecoderServerInBackground() {
 
 app.whenReady().then(async () => {
   logToFile("App whenReady start");
+  try {
+    createLocalMediaProtocolHandler({ protocol, net, logToFile });
+  } catch (error) {
+    logToFile("Failed to register raffi-media protocol", error);
+  }
   if (pendingAppUserModelId) {
     app.setAppUserModelId(pendingAppUserModelId);
   }

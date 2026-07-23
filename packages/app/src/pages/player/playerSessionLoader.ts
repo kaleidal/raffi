@@ -8,6 +8,7 @@ import {
     resolveHttpPlayback,
     type ProbedStream,
 } from "../../lib/media";
+import { canTryClientPlayback, toClientPlayableUrl } from "../../lib/media/localSource";
 import { isDesktopPlatform } from "../../lib/platform";
 import type { Chapter, Track } from "./types";
 import * as Session from "./videoSession";
@@ -176,10 +177,9 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
             const season = deps.getSeason();
             const episode = deps.getEpisode();
 
+            const playableSrc = toClientPlayableUrl(src);
             const canTryClient =
-                !opts?.reuseSession &&
-                /^https?:\/\//i.test(src) &&
-                !/\.m3u8(\?|$)/i.test(src);
+                !opts?.reuseSession && canTryClientPlayback(src);
 
             let clientPlayback:
                 | Awaited<ReturnType<typeof resolveHttpPlayback>>
@@ -187,10 +187,14 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
 
             if (canTryClient) {
                 loadingStage.set("Probing stream");
-                loadingDetails.set("Checking codecs without the local server...");
+                loadingDetails.set(
+                    /^https?:\/\//i.test(src)
+                        ? "Checking codecs without the local server..."
+                        : "Checking local file codecs...",
+                );
                 try {
                     clientPlayback = await resolveHttpPlayback(
-                        src,
+                        playableSrc,
                         deps.getVideoElem(),
                         abortController.signal,
                     );
@@ -213,8 +217,10 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                 clientPlayback?.mode === "direct" ||
                 clientPlayback?.mode === "mediabunny";
 
+            const sessionSource = useClientPlayback ? playableSrc : src;
+
             const result = await Session.loadVideoSession(
-                src,
+                sessionSource,
                 fileIdx,
                 startTime,
                 {
@@ -416,7 +422,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                         playbackOffset.set(globalStart);
                     };
                     deps.setMediaBunny(bunny);
-                    const attached = await bunny.attach(videoElem, src, {
+                    const attached = await bunny.attach(videoElem, sessionSource, {
                         startTime: effectiveStartTime,
                         signal: abortController.signal,
                         meta: clientPlayback.meta,
@@ -437,7 +443,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
 
                     result.sessionData = applyClientAudioTracks(
                         attached.meta,
-                        src,
+                        sessionSource,
                         result.sessionData,
                         bunny.getAudioIndex(),
                     );
@@ -446,7 +452,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
 
                     // Fill in disabled/extra container tracks without blocking start.
                     void enrichProbedStreamAudio(
-                        src,
+                        sessionSource,
                         attached.meta,
                         abortController.signal,
                     )
@@ -549,12 +555,12 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                     once: true,
                 });
 
-                videoElem.src = src;
+                videoElem.src = sessionSource;
                 videoElem.load();
 
                 if (clientPlayback.meta) {
                     void enrichProbedStreamAudio(
-                        src,
+                        sessionSource,
                         clientPlayback.meta,
                         abortController.signal,
                     )
@@ -563,7 +569,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                             clientPlayback.meta = enriched;
                             result.sessionData = applyClientAudioTracks(
                                 enriched,
-                                src,
+                                sessionSource,
                                 result.sessionData,
                             );
                             sessionData.set(result.sessionData);
