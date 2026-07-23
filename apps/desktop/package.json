@@ -28,8 +28,6 @@
     "cross-env": "^10.1.0",
     "electron": "^42.3.0",
     "electron-builder": "^26.8.1",
-    "ffmpeg-static": "^5.3.0",
-    "ffprobe-static": "^3.1.0",
     "svelte": "^5.56.0",
     "svelte-check": "^4.4.8",
     "typescript": "~6.0.3",
@@ -68,14 +66,6 @@
         {
           "from": "electron/decoder-x86_64-unknown-linux-gnu",
           "to": "decoder-x86_64-unknown-linux-gnu"
-        },
-        {
-          "from": "electron/ffmpeg",
-          "to": "ffmpeg"
-        },
-        {
-          "from": "electron/ffprobe",
-          "to": "ffprobe"
         }
       ]
     },
@@ -100,7 +90,7 @@
           ]
         }
       ],
-      "x64ArchFiles": "**/Contents/Resources/{app.asar.unpacked/node_modules/**,decoder-aarch64-apple-darwin,decoder-x86_64-apple-darwin,ffmpeg-arm64,ffmpeg-x64,ffprobe-arm64,ffprobe-x64}",
+      "x64ArchFiles": "**/Contents/Resources/{app.asar.unpacked/node_modules/**,decoder-aarch64-apple-darwin,decoder-x86_64-apple-darwin}",
       "icon": "build/icons/icon.icns",
       "category": "public.app-category.video",
       "identity": null,
@@ -112,22 +102,6 @@
         {
           "from": "electron/decoder-x86_64-apple-darwin",
           "to": "decoder-x86_64-apple-darwin"
-        },
-        {
-          "from": "electron/ffmpeg-x64",
-          "to": "ffmpeg-x64"
-        },
-        {
-          "from": "electron/ffmpeg-arm64",
-          "to": "ffmpeg-arm64"
-        },
-        {
-          "from": "electron/ffprobe-x64",
-          "to": "ffprobe-x64"
-        },
-        {
-          "from": "electron/ffprobe-arm64",
-          "to": "ffprobe-arm64"
         }
       ]
     },
@@ -141,14 +115,6 @@
         {
           "from": "electron/decoder-windows-amd64.exe",
           "to": "decoder-windows-amd64.exe"
-        },
-        {
-          "from": "electron/ffmpeg.exe",
-          "to": "ffmpeg.exe"
-        },
-        {
-          "from": "electron/ffprobe.exe",
-          "to": "ffprobe.exe"
         }
       ]
     },
@@ -194,7 +160,6 @@
   "trustedDependencies": [
     "core-js",
     "electron",
-    "ffmpeg-static",
     "protobufjs"
   ]
 }

@@ -13,6 +13,7 @@ export const performSeekWithEffects = ({
     setPendingSeek,
     setCurrentTime,
     setShowCanvas,
+    clientRemuxHardSeek = false,
 }: {
     targetTime: number;
     duration: number;
@@ -26,6 +27,7 @@ export const performSeekWithEffects = ({
     setPendingSeek: (value: number | null) => void;
     setCurrentTime: (value: number) => void;
     setShowCanvas: (value: boolean) => void;
+    clientRemuxHardSeek?: boolean;
 }) => {
     Session.performSeek(
         targetTime,
@@ -44,5 +46,6 @@ export const performSeekWithEffects = ({
             setShowCanvas,
             setIgnoreNextSeek: () => {},
         },
+        { clientRemuxHardSeek },
     );
 };

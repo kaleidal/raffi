@@ -11,6 +11,7 @@
     import PlayerLoadingScreen from "./components/PlayerLoadingScreen.svelte";
     import PlayerModals from "./components/PlayerModals.svelte";
     import PlayerWatchParty from "./components/PlayerWatchParty.svelte";
+    import LoadingSpinner from "../../components/common/LoadingSpinner.svelte";
     import type { ShowResponse } from "../../lib/library/types/meta_types";
     import { watchParty } from "../../lib/stores/watchPartyStore";
     import { localMode } from "../../lib/stores/authStore";
@@ -479,6 +480,7 @@
     let playerContainer: HTMLDivElement;
     let canvasElem: HTMLCanvasElement;
     let hls: any = null;
+    let mediaBunny: import("../../lib/media").MediaBunnyPlayback | null = null;
     let sessionId: string;
     let currentVideoSrc: string | null = null;
     let currentEmbedSrc: string | null = null;
@@ -621,6 +623,10 @@
         setHls: (value) => {
             hls = value;
         },
+        getMediaBunny: () => mediaBunny,
+        setMediaBunny: (value) => {
+            mediaBunny = value;
+        },
         setSessionId: (value) => {
             sessionId = value;
         },
@@ -699,6 +705,7 @@
             setPendingSeek: pendingSeek.set,
             setCurrentTime: currentTime.set,
             setShowCanvas: showCanvas.set,
+            clientRemuxHardSeek: Boolean(mediaBunny),
         });
     };
 
@@ -890,6 +897,10 @@
         clearBrowserAudioCheck();
         playerSessionLoader.cancelCurrentLoad();
         disposeNextEpisodePrefetch();
+        if (mediaBunny) {
+            void mediaBunny.destroy();
+            mediaBunny = null;
+        }
         Session.cleanupSession(
             hls,
             sessionId,
@@ -1173,6 +1184,7 @@
             return loadVideo(src);
         },
         handleClose,
+        getMediaBunny: () => mediaBunny,
     });
 
     let controlsOverlayElem: HTMLElement | null = null;
@@ -1475,7 +1487,7 @@
 
     {#if $playbackBuffering && !$loading && !miniPlayerActive && !embedSrc}
         <div class="pointer-events-none absolute inset-0 z-40 flex items-center justify-center" aria-label="Buffering">
-            <div class="h-14 w-14 animate-spin rounded-full border-4 border-white/25 border-t-white drop-shadow-lg"></div>
+            <LoadingSpinner size="56px" />
         </div>
     {/if}
 

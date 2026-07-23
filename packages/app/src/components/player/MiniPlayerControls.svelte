@@ -1,4 +1,6 @@
 <script lang="ts">
+    import LoadingSpinner from "../common/LoadingSpinner.svelte";
+
     export let currentTime = 0;
     export let duration = 0;
     export let pendingSeek: number | null = null;
@@ -46,7 +48,7 @@
 
     {#if loading}
         <div class="absolute inset-0 flex items-center justify-center">
-            <div class="h-10 w-10 rounded-full border-2 border-white/20 border-t-white/85 animate-spin"></div>
+            <LoadingSpinner size="40px" />
         </div>
     {/if}
 

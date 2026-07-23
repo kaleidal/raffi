@@ -12,6 +12,37 @@ export const playbackBuffering = writable(false);
 export const showCanvas = writable(false);
 export const hasStarted = writable(false);
 
+{
+    let lastStage = "";
+    let lastDetails = "";
+    let lastLoggedProgressBucket = -1;
+    loadingStage.subscribe((stage) => {
+        lastStage = stage;
+        lastLoggedProgressBucket = -1;
+        if (!stage) return;
+        if (lastDetails) {
+            console.log(`[player] ${stage} — ${lastDetails}`);
+        } else {
+            console.log(`[player] ${stage}`);
+        }
+    });
+    loadingDetails.subscribe((details) => {
+        lastDetails = details;
+        if (!details || !lastStage) return;
+        console.log(`[player] ${lastStage} — ${details}`);
+    });
+    loadingProgress.subscribe((progress) => {
+        if (progress == null || !lastStage) {
+            lastLoggedProgressBucket = -1;
+            return;
+        }
+        const bucket = Math.floor(progress * 20);
+        if (bucket === lastLoggedProgressBucket) return;
+        lastLoggedProgressBucket = bucket;
+        console.log(`[player] ${lastStage} — ${Math.round(progress * 100)}%`);
+    });
+}
+
 // Time and duration
 export const currentTime = writable(0);
 export const duration = writable(0);

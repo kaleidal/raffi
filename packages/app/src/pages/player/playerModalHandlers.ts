@@ -35,6 +35,7 @@ export const createPlayerModalHandlers = ({
     getVideoSrc,
     loadVideo,
     handleClose,
+    getMediaBunny,
 }: {
     getSessionId: () => string;
     getVideoElem: () => HTMLVideoElement | null | undefined;
@@ -45,6 +46,10 @@ export const createPlayerModalHandlers = ({
     getVideoSrc: () => string | null;
     loadVideo: (src: string) => void | Promise<void>;
     handleClose: () => void | Promise<void>;
+    getMediaBunny?: () => {
+        seek: (time: number) => Promise<number>;
+        setAudioTrack: (index: number, globalTime: number) => Promise<number>;
+    } | null;
 }) => {
     const onAudioSelect = (detail: any) => {
         trackEvent("audio_track_selected", {
@@ -97,6 +102,7 @@ export const createPlayerModalHandlers = ({
                                 setErrorMessage: errorMessage.set,
                                 setErrorDetails: errorDetails.set,
                             },
+                            getMediaBunny,
                         ),
                         {
                             setLoading: loading.set,
@@ -113,7 +119,9 @@ export const createPlayerModalHandlers = ({
                 setCurrentAudioLabel: currentAudioLabel.set,
                 setLoading: loading.set,
                 setLoadingStage: loadingStage.set,
+                setPlaybackOffset: playbackOffset.set,
             },
+            getMediaBunny,
         );
     };
 

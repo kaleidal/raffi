@@ -1,6 +1,14 @@
 import { get } from "svelte/store";
 import type { ShowResponse } from "../../lib/library/types/meta_types";
 import { decoderFetch, serverUrl } from "../../lib/client";
+import {
+    MediaBunnyPlayback,
+    enrichProbedStreamAudio,
+    formatAudioTrackLabel,
+    resolveHttpPlayback,
+    type ProbedStream,
+} from "../../lib/media";
+import { isDesktopPlatform } from "../../lib/platform";
 import type { Chapter, Track } from "./types";
 import * as Session from "./videoSession";
 import * as Subtitles from "./subtitles";
@@ -44,6 +52,8 @@ export type PlayerSessionLoaderDeps = {
     getVideoElem: () => HTMLVideoElement | undefined;
     getHls: () => any;
     setHls: (value: any) => void;
+    getMediaBunny: () => MediaBunnyPlayback | null;
+    setMediaBunny: (value: MediaBunnyPlayback | null) => void;
     setSessionId: (value: string) => void;
     getSessionId: () => string;
     getCueLinePercent: () => number;
@@ -67,6 +77,62 @@ export type PlayerSessionLoaderDeps = {
     awaitDomUpdate: () => Promise<void>;
 };
 
+function sessionFromProbe(meta: ProbedStream | null, src: string) {
+    const availableStreams =
+        meta?.audioTracks.map((track) => ({
+            type: "audio",
+            index: track.index,
+            title: formatAudioTrackLabel(track),
+            language: track.language || undefined,
+            codec: track.codecName || track.codec || undefined,
+            playable: track.playable,
+        })) ?? [];
+
+    return {
+        isDirectHttp: true,
+        sourceUrl: src,
+        durationSeconds: meta?.durationSeconds ?? 0,
+        availableStreams,
+        audioIndex: meta?.preferredAudioIndex ?? 0,
+        clientPlayback: true,
+    };
+}
+
+function applyClientAudioTracks(
+    meta: ProbedStream | null,
+    src: string,
+    data: any,
+    selectedIndex?: number,
+) {
+    const probed = sessionFromProbe(meta, src);
+    const streams = probed.availableStreams;
+    const audioIndex =
+        selectedIndex ??
+        data?.audioIndex ??
+        probed.audioIndex ??
+        0;
+
+    const nextAudioTracks: Track[] = streams.map((stream) => ({
+        id: stream.index,
+        label: stream.title || stream.language || `Audio ${stream.index}`,
+        selected: stream.index === audioIndex,
+        group: "Embedded",
+    }));
+
+    if (nextAudioTracks.length === 0) return data;
+
+    audioTracks.set(nextAudioTracks);
+    const selected = nextAudioTracks.find((track) => track.selected);
+    if (selected) currentAudioLabel.set(selected.label);
+
+    return {
+        ...data,
+        ...probed,
+        audioIndex,
+        availableStreams: streams,
+    };
+}
+
 export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
     let loadGeneration = 0;
     let activeAbortController: AbortController | null = null;
@@ -77,6 +143,11 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
         activeAbortController?.abort();
         activeAbortController = null;
         deps.stopTorrentStatusPolling();
+        const mediaBunny = deps.getMediaBunny();
+        if (mediaBunny) {
+            void mediaBunny.destroy();
+            deps.setMediaBunny(null);
+        }
         if (activeSessionId) {
             Session.cleanupServerSession(activeSessionId);
             activeSessionId = "";
@@ -104,10 +175,43 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
             const metaData = deps.getMetaData();
             const season = deps.getSeason();
             const episode = deps.getEpisode();
-            const directHttp = !opts?.reuseSession && Session.shouldBypassServerForHttpStream(
-                src,
-                deps.getVideoElem(),
-            );
+
+            const canTryClient =
+                !opts?.reuseSession &&
+                /^https?:\/\//i.test(src) &&
+                !/\.m3u8(\?|$)/i.test(src);
+
+            let clientPlayback:
+                | Awaited<ReturnType<typeof resolveHttpPlayback>>
+                | null = null;
+
+            if (canTryClient) {
+                loadingStage.set("Probing stream");
+                loadingDetails.set("Checking codecs without the local server...");
+                try {
+                    clientPlayback = await resolveHttpPlayback(
+                        src,
+                        deps.getVideoElem(),
+                        abortController.signal,
+                    );
+                } catch (error) {
+                    if (error instanceof DOMException && error.name === "AbortError") {
+                        return;
+                    }
+                    console.warn("Client playback probe failed", error);
+                    clientPlayback = {
+                        mode: isDesktopPlatform ? "server" : "unsupported",
+                        meta: null,
+                        reason: "probe-error",
+                    };
+                }
+            }
+
+            if (isStale()) return;
+
+            const useClientPlayback =
+                clientPlayback?.mode === "direct" ||
+                clientPlayback?.mode === "mediabunny";
 
             const result = await Session.loadVideoSession(
                 src,
@@ -152,7 +256,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                     }),
                 {
                     ...opts,
-                    directHttp,
+                    directHttp: useClientPlayback,
                 },
             );
 
@@ -187,6 +291,17 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
             if (isStale()) {
                 abandonOwnedSession();
                 return;
+            }
+
+            if (useClientPlayback && clientPlayback) {
+                result.sessionData = applyClientAudioTracks(
+                    clientPlayback.meta,
+                    src,
+                    {
+                        ...result.sessionData,
+                        ...sessionFromProbe(clientPlayback.meta, src),
+                    },
+                );
             }
 
             sessionData.set(result.sessionData);
@@ -243,11 +358,17 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                 deps.setPendingStartAfterSeekStyleModal(true);
             }
 
-            const bypassServer = Session.shouldBypassServerForHttpStream(src, videoElem);
-
-            if (bypassServer) {
-                loadingStage.set("Loading stream directly");
-                loadingDetails.set("Bypassing server transcoding");
+            if (useClientPlayback && clientPlayback) {
+                loadingStage.set(
+                    clientPlayback.mode === "mediabunny"
+                        ? "Remuxing in the app"
+                        : "Loading stream directly",
+                );
+                loadingDetails.set(
+                    clientPlayback.mode === "mediabunny"
+                        ? "Transcoding incompatible audio with MediaBunny"
+                        : "Playing without the local server",
+                );
                 loadingProgress.set(null);
 
                 const hls = deps.getHls();
@@ -260,7 +381,18 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                     deps.setHls(null);
                 }
 
-                playbackOffset.set(0);
+                const existingBunny = deps.getMediaBunny();
+                if (existingBunny) {
+                    await existingBunny.destroy();
+                    deps.setMediaBunny(null);
+                }
+
+                playbackOffset.set(
+                    clientPlayback.mode === "mediabunny"
+                        ? Math.max(0, effectiveStartTime)
+                        : 0,
+                );
+
                 void applyDefaultSubtitles({
                     sessionData: result.sessionData,
                     subtitleTracksValue: get(subtitleTracks),
@@ -272,11 +404,113 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                         subtitleTracks.update(updater),
                     setCurrentSubtitleLabel: currentSubtitleLabel.set,
                     handleSubtitleSelect: Subtitles.handleSubtitleSelect,
-                })
-                    .catch(() => {
-                        // ignore
-                    });
+                }).catch(() => {
+                    // ignore
+                });
+
                 loading.set(true);
+
+                if (clientPlayback.mode === "mediabunny") {
+                    const bunny = new MediaBunnyPlayback();
+                    bunny.onWindowStartChange = (globalStart) => {
+                        playbackOffset.set(globalStart);
+                    };
+                    deps.setMediaBunny(bunny);
+                    const attached = await bunny.attach(videoElem, src, {
+                        startTime: effectiveStartTime,
+                        signal: abortController.signal,
+                        meta: clientPlayback.meta,
+                        audioIndex:
+                            result.sessionData?.audioIndex ??
+                            clientPlayback.meta?.preferredAudioIndex ??
+                            0,
+                    });
+                    if (isStale()) {
+                        await bunny.destroy();
+                        deps.setMediaBunny(null);
+                        abandonOwnedSession();
+                        return;
+                    }
+                    if (attached.durationSeconds > 0) {
+                        duration.set(attached.durationSeconds);
+                    }
+
+                    result.sessionData = applyClientAudioTracks(
+                        attached.meta,
+                        src,
+                        result.sessionData,
+                        bunny.getAudioIndex(),
+                    );
+                    sessionData.set(result.sessionData);
+                    playbackOffset.set(attached.remuxOrigin);
+
+                    // Fill in disabled/extra container tracks without blocking start.
+                    void enrichProbedStreamAudio(
+                        src,
+                        attached.meta,
+                        abortController.signal,
+                    )
+                        .then((enriched) => {
+                            if (isStale()) return;
+                            bunny.replaceMeta(enriched);
+                            result.sessionData = applyClientAudioTracks(
+                                enriched,
+                                src,
+                                result.sessionData,
+                                bunny.getAudioIndex(),
+                            );
+                            sessionData.set(result.sessionData);
+                        })
+                        .catch(() => {
+                            // ignore
+                        });
+
+                    Session.attachSeekingListener(
+                        videoElem,
+                        Session.createSeekHandler(
+                            videoElem,
+                            deps.getHls,
+                            deps.getSessionId,
+                            () => get(pendingSeek),
+                            () => get(seekGuard),
+                            () => get(playbackOffset),
+                            () => get(subtitleTracks),
+                            () => get(currentSubtitleLabel),
+                            (track) =>
+                                Subtitles.handleSubtitleSelect(
+                                    track,
+                                    videoElem,
+                                    get(currentTime),
+                                    get(playbackOffset),
+                                    deps.getCueLinePercent,
+                                ),
+                            {
+                                setPendingSeek: pendingSeek.set,
+                                setSeekGuard: seekGuard.set,
+                                setBuffering: playbackBuffering.set,
+                                setShowCanvas: showCanvas.set,
+                                setFirstSeekLoad: firstSeekLoad.set,
+                                setPlaybackOffset: playbackOffset.set,
+                                setShowError: showError.set,
+                                setErrorMessage: errorMessage.set,
+                                setErrorDetails: errorDetails.set,
+                            },
+                            deps.getMediaBunny,
+                        ),
+                    );
+
+                    loading.set(false);
+                    loadingStage.set("");
+                    loadingDetails.set("");
+                    showCanvas.set(false);
+                    if (!needsSeekStyleModal && deps.autoPlay) {
+                        videoElem.play().catch(() => {
+                            // ignore
+                        });
+                    }
+                    abandonOwnedSession();
+                    return;
+                }
 
                 const onLoaded = () => {
                     const currentVideo = deps.getVideoElem();
@@ -287,6 +521,8 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                         currentVideo.duration > 0
                     ) {
                         duration.set(currentVideo.duration);
+                    } else if ((clientPlayback.meta?.durationSeconds ?? 0) > 0) {
+                        duration.set(clientPlayback.meta!.durationSeconds);
                     }
 
                     if (effectiveStartTime > 0) {
@@ -315,8 +551,36 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
 
                 videoElem.src = src;
                 videoElem.load();
+
+                if (clientPlayback.meta) {
+                    void enrichProbedStreamAudio(
+                        src,
+                        clientPlayback.meta,
+                        abortController.signal,
+                    )
+                        .then((enriched) => {
+                            if (isStale()) return;
+                            clientPlayback.meta = enriched;
+                            result.sessionData = applyClientAudioTracks(
+                                enriched,
+                                src,
+                                result.sessionData,
+                            );
+                            sessionData.set(result.sessionData);
+                        })
+                        .catch(() => {
+                            // ignore
+                        });
+                }
+
                 abandonOwnedSession();
                 return;
+            }
+
+            if (clientPlayback?.mode === "unsupported") {
+                throw new Error(
+                    "This stream needs codecs the browser cannot remux yet. Try another source.",
+                );
             }
 
             void applyDefaultSubtitles({
@@ -390,6 +654,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                         setErrorMessage: errorMessage.set,
                         setErrorDetails: errorDetails.set,
                     },
+                    deps.getMediaBunny,
                 ),
                 {
                     setLoading: loading.set,

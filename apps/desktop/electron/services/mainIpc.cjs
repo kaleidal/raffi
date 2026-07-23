@@ -10,6 +10,7 @@ function registerMainIpcHandlers({
   getMainWindow,
   getDecoderStatus,
   getDecoderAuthSecret,
+  ensureDecoderStarted,
   getDefenderExclusionStatus,
   applyDefenderExclusions,
   scanLibraryRoots,
@@ -135,6 +136,25 @@ function registerMainIpcHandlers({
   ipcMain.handle("DECODER_STATUS_GET", async () => {
     if (typeof getDecoderStatus !== "function") return null;
     return getDecoderStatus();
+  });
+
+  ipcMain.handle("DECODER_ENSURE_STARTED", async () => {
+    if (typeof ensureDecoderStarted !== "function") {
+      return { ok: false, error: "Unavailable" };
+    }
+    try {
+      await ensureDecoderStarted();
+      return {
+        ok: true,
+        status: typeof getDecoderStatus === "function" ? getDecoderStatus() : null,
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+        status: typeof getDecoderStatus === "function" ? getDecoderStatus() : null,
+      };
+    }
   });
 
   ipcMain.handle("DECODER_AUTH_SECRET_GET", async () => {

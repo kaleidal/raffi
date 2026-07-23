@@ -56,6 +56,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
         },
     },
     getDecoderStatus: () => ipcRenderer.invoke('DECODER_STATUS_GET'),
+    ensureDecoderStarted: () => ipcRenderer.invoke('DECODER_ENSURE_STARTED'),
     getDecoderAuthSecret: () => ipcRenderer.invoke('DECODER_AUTH_SECRET_GET'),
     getDefenderExclusionStatus: () => ipcRenderer.invoke('DEFENDER_EXCLUSION_STATUS'),
     applyDefenderExclusions: () => ipcRenderer.invoke('DEFENDER_APPLY_EXCLUSIONS'),

@@ -1,5 +1,5 @@
 import { get, writable } from "svelte/store";
-import { decoderFetch, serverUrl } from "../client";
+import { decoderFetch, ensureDecoderStarted, isDecoderReady, serverUrl } from "../client";
 
 const ALLOW_TORRENTING_KEY = "raffi_allow_torrenting";
 const TORRENT_WARNING_SHOWN_KEY = "torrentWarningShown";
@@ -47,11 +47,14 @@ const updateServerTorrenting = async (enabled: boolean) => {
 };
 
 export const setTorrentingAllowed = async (enabled: boolean) => {
+    await ensureDecoderStarted();
     await updateServerTorrenting(enabled);
     allowTorrenting.set(enabled);
 };
 
 export const syncTorrentingPreference = async () => {
+    // Lazy decoder: don't spawn the sidecar just to sync prefs on app launch.
+    if (!(await isDecoderReady())) return;
     await updateServerTorrenting(get(allowTorrenting));
 };
 
@@ -60,6 +63,7 @@ export const ensureTorrentingAllowed = async () => {
         throw new Error("Torrenting is disabled. Turn on Allow Torrenting in Settings to play torrent sources.");
     }
     // The playback server starts with torrenting disabled. Reassert the persisted
-    // preference here as well as at app startup so restarts and startup races are safe.
+    // preference when a torrent session actually needs the sidecar.
+    await ensureDecoderStarted();
     await updateServerTorrenting(true);
 };

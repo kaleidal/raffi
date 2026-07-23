@@ -307,7 +307,9 @@ bun run build
 - Community-maintained content catalogs
 
 #### Video Playback
-- Custom video player with HLS support
+- Custom video player with HLS support for torrents/local remux
+- HTTP/debrid streams prefer in-app playback via MediaBunny (probe + remux) or native `<video>` when compatible
+- Local Go sidecar is still used for torrents, local files, clips, and fallback remux
 - Multiple quality selection
 - Subtitle parsing (SRT/VTT)
 - Audio track switching

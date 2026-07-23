@@ -1,7 +1,9 @@
 <script lang="ts">
+    import { fade } from "svelte/transition";
     import type { ShowResponse } from "../../../lib/library/types/meta_types";
     import { ChevronLeft } from "@lucide/svelte";
     import { overlayZoomStyle } from "../../../lib/overlayZoom";
+    import LoadingSpinner from "../../../components/common/LoadingSpinner.svelte";
 
     const portal = (node: HTMLElement) => {
         if (typeof document === "undefined") {
@@ -22,59 +24,78 @@
     export let onClose: () => void;
     export let metaData: ShowResponse | null;
 
-	export let stage: string = "Loading...";
-	export let details: string = "";
-	export let progress: number | null = null;
+    export let stage: string = "Loading...";
+    export let details: string = "";
+    export let progress: number | null = null;
     export let backdropSrc: string | null = null;
     export let backdropMode: "art" | "frame" = "art";
 
+    const MOSAIC_COLS = 8;
+    const MOSAIC_ROWS = 5;
+    const MOSAIC_TILE_COUNT = MOSAIC_COLS * MOSAIC_ROWS;
+
+    const mosaicTiles = Array.from({ length: MOSAIC_TILE_COUNT }, (_, index) => {
+        const col = index % MOSAIC_COLS;
+        const row = Math.floor(index / MOSAIC_COLS);
+        return {
+            index,
+            bgPosX: MOSAIC_COLS > 1 ? (col / (MOSAIC_COLS - 1)) * 100 : 0,
+            bgPosY: MOSAIC_ROWS > 1 ? (row / (MOSAIC_ROWS - 1)) * 100 : 0,
+            wave: (row + col) / (MOSAIC_COLS + MOSAIC_ROWS - 2),
+        };
+    });
+
     $: effectiveBackdropSrc = backdropSrc ?? metaData?.meta?.background ?? metaData?.meta?.poster ?? "";
-    $: isFrameBackdrop = backdropMode === "frame" && Boolean(backdropSrc);
+    $: revealFraction = progress === null ? null : Math.max(0, Math.min(1, progress));
+    $: revealCount = revealFraction === null ? 0 : Math.round(revealFraction * MOSAIC_TILE_COUNT);
+    $: void backdropMode;
 </script>
 
 {#if loading}
     <div
         use:portal
-        class="fixed inset-0 z-50 flex items-center justify-center flex-col gap-8 overflow-hidden bg-black"
+        class="fixed inset-0 z-50 overflow-hidden bg-[#090909]"
         style={overlayZoomStyle}
+        role="status"
+        aria-busy="true"
+        aria-label={stage || "Loading video"}
+        transition:fade={{ duration: 280 }}
     >
-        {#if effectiveBackdropSrc}
-            <div class="absolute inset-0">
-                <img
-                    src={effectiveBackdropSrc}
-                    alt=""
-                    class={`h-full w-full object-cover ${isFrameBackdrop ? "scale-102 blur-lg opacity-70" : "scale-105 blur-xl opacity-62"}`}
-                />
-            </div>
-        {/if}
-
-        <div class={`absolute inset-0 ${isFrameBackdrop ? "bg-[#090909]/48" : "bg-[#090909]/58"}`}></div>
-        <div class={`absolute inset-0 bg-linear-to-t ${isFrameBackdrop ? "from-[#090909]/82 via-[#090909]/46 to-[#090909]/18" : "from-[#090909]/90 via-[#090909]/58 to-[#090909]/24"}`}></div>
-
-        {#if metaData}
-            <div class="relative z-10 flex flex-col items-center gap-8">
-                <img
-                    src={metaData.meta.logo ?? ""}
-                    alt="Logo"
-                    class="w-100 object-contain animate-pulse drop-shadow-[0_10px_40px_rgba(0,0,0,0.45)]"
-                />
-            </div>
-        {/if}
-
-        <div class="relative z-10 flex flex-col items-center gap-3 w-full max-w-130 px-8">
-            <div class="text-white/92 text-[18px] font-medium text-center">{stage}</div>
-            {#if details}
-                <div class="text-white/72 text-[14px] text-center wrap-break-word">{details}</div>
-            {/if}
-            {#if progress !== null}
-                <div class="w-full h-2 rounded-full bg-white/18 overflow-hidden backdrop-blur-sm">
+        <div
+            class="mosaic-grid"
+            style={`--mosaic-cols:${MOSAIC_COLS}; --mosaic-rows:${MOSAIC_ROWS};`}
+        >
+            {#each mosaicTiles as tile (tile.index)}
+                {@const settled = revealFraction !== null && tile.index < revealCount}
+                <div class="mosaic-tile">
                     <div
-                        class="h-full bg-white/72 transition-all duration-300"
-                        style={`width: ${Math.max(0, Math.min(1, progress)) * 100}%`}
-                    ></div>
+                        class="mosaic-tile-inner"
+                        class:mosaic-tile-inner--spinning={!settled}
+                        style={`--tile-delay:${(tile.wave * 1.4).toFixed(2)}s;${settled ? " transform: rotateY(0deg);" : ""}`}
+                    >
+                        <div
+                            class="mosaic-face mosaic-face-front"
+                            style={effectiveBackdropSrc
+                                ? `background-image:url('${effectiveBackdropSrc}'); background-size:${MOSAIC_COLS * 100}% ${MOSAIC_ROWS * 100}%; background-position:${tile.bgPosX}% ${tile.bgPosY}%;`
+                                : ""}
+                        ></div>
+                        <div class="mosaic-face mosaic-face-back"></div>
+                    </div>
                 </div>
-            {/if}
+            {/each}
         </div>
+
+        <div
+            class="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#090909]"
+        ></div>
+
+        <div class="absolute bottom-0 right-0 z-10 p-8 sm:p-10">
+            <LoadingSpinner size="44px" />
+        </div>
+
+        {#if details}
+            <span class="sr-only">{details}</span>
+        {/if}
 
         <div class="absolute left-0 top-0 p-10 z-50">
             <button
@@ -87,3 +108,56 @@
         </div>
     </div>
 {/if}
+
+<style>
+    .mosaic-grid {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        grid-template-columns: repeat(var(--mosaic-cols), 1fr);
+        grid-template-rows: repeat(var(--mosaic-rows), 1fr);
+        gap: 2px;
+        perspective: 1400px;
+        opacity: 0.6;
+    }
+
+    .mosaic-tile {
+        position: relative;
+        overflow: hidden;
+    }
+
+    .mosaic-tile-inner {
+        position: absolute;
+        inset: 0;
+        transform-style: preserve-3d;
+        transition: transform 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .mosaic-tile-inner--spinning {
+        animation: mosaic-flip 3.4s ease-in-out infinite;
+        animation-delay: var(--tile-delay);
+    }
+
+    .mosaic-face {
+        position: absolute;
+        inset: 0;
+        backface-visibility: hidden;
+        background-color: #1a1a1a;
+        background-repeat: no-repeat;
+    }
+
+    .mosaic-face-back {
+        transform: rotateY(180deg);
+        background-color: #090909;
+    }
+
+    @keyframes mosaic-flip {
+        0%,
+        100% {
+            transform: rotateY(0deg);
+        }
+        50% {
+            transform: rotateY(180deg);
+        }
+    }
+</style>
