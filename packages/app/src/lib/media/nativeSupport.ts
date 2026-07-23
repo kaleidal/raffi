@@ -16,7 +16,12 @@ export function supportsEac3Playback(videoElem?: HTMLVideoElement): boolean {
 
 const getMediaPathname = (src: string) => {
 	try {
-		return new URL(src).pathname.toLowerCase();
+		const url = new URL(src);
+		if (url.protocol === "raffi-media:") {
+			const localPath = url.searchParams.get("path");
+			if (localPath) return localPath.toLowerCase();
+		}
+		return url.pathname.toLowerCase();
 	} catch {
 		return src.toLowerCase();
 	}

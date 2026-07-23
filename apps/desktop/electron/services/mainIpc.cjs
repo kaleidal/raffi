@@ -261,6 +261,108 @@ function registerMainIpcHandlers({
     }
   });
 
+  ipcMain.handle("WRITE_CLIP_FILE", async (_event, payload) => {
+    try {
+      const targetPath = typeof payload?.targetPath === "string" ? payload.targetPath.trim() : "";
+      const data = payload?.data;
+      if (!targetPath) {
+        throw new Error("Invalid clip target path");
+      }
+      if (hasPathEscape(targetPath)) {
+        throw new Error("Path traversal is not allowed");
+      }
+      if (!data || !(data instanceof ArrayBuffer || ArrayBuffer.isView(data))) {
+        throw new Error("Invalid clip data");
+      }
+
+      const resolvedTarget = pathModule.resolve(targetPath);
+      let realTarget = resolvedTarget;
+      try {
+        realTarget = await resolveRealPath(resolvedTarget);
+      } catch {
+        // file may not exist yet
+      }
+
+      const targetAllowed =
+        allowedClipSaveTargets.has(resolvedTarget) ||
+        allowedClipSaveTargets.has(realTarget);
+      if (!targetAllowed) {
+        throw new Error("Clip target path was not selected via Save dialog");
+      }
+
+      const targetDir = pathModule.dirname(resolvedTarget);
+      await fs.promises.mkdir(targetDir, { recursive: true });
+      const bytes =
+        data instanceof ArrayBuffer
+          ? Buffer.from(data)
+          : Buffer.from(data.buffer, data.byteOffset, data.byteLength);
+      await fs.promises.writeFile(resolvedTarget, bytes);
+
+      allowedClipSaveTargets.delete(resolvedTarget);
+      allowedClipSaveTargets.delete(realTarget);
+
+      return { ok: true, filePath: resolvedTarget };
+    } catch (error) {
+      logToFile("WRITE_CLIP_FILE failed", error);
+      return { ok: false, filePath: null, error: String(error) };
+    }
+  });
+
+  ipcMain.handle("FETCH_COMMUNITY_ADDONS", async () => {
+    const upstreams = [
+      "https://api.strem.io/addonscollection.json",
+      "https://stremio-addons.com/catalog.json",
+    ];
+    const merged = [];
+    let lastError = null;
+
+    for (const url of upstreams) {
+      try {
+        const response = await fetch(url, {
+          headers: { Accept: "application/json" },
+          signal: AbortSignal.timeout(25_000),
+        });
+        if (!response.ok) {
+          lastError = new Error(`upstream ${url} returned ${response.status}`);
+          continue;
+        }
+        const json = await response.json();
+        if (Array.isArray(json)) {
+          merged.push(...json);
+        }
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    if (merged.length === 0) {
+      return {
+        ok: false,
+        addons: [],
+        error: lastError ? String(lastError) : "failed to fetch community addons",
+      };
+    }
+
+    const seen = new Set();
+    const deduped = [];
+    for (const raw of merged) {
+      if (!raw || typeof raw !== "object") continue;
+      const transport =
+        (typeof raw.transportUrl === "string" && raw.transportUrl.trim()) ||
+        (typeof raw.transport_url === "string" && raw.transport_url.trim()) ||
+        "";
+      let key = transport;
+      if (!key && raw.manifest && typeof raw.manifest.id === "string") {
+        key = raw.manifest.id.trim();
+      }
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      deduped.push(raw);
+    }
+
+    return { ok: true, addons: deduped, error: null };
+  });
+
   ipcMain.handle("PERSIST_CLIP_FILE", async (_event, payload) => {
     try {
       const sourcePath = typeof payload?.sourcePath === "string" ? payload.sourcePath.trim() : "";

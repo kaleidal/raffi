@@ -21,10 +21,19 @@ declare global {
             usesTitleBarOverlay?: boolean;
             getFilePath?: (file: any) => string;
             saveClipPath?: (suggestedName?: string) => Promise<{ canceled: boolean; filePath: string | null; error?: string }>;
+            writeClipFile?: (
+                targetPath: string,
+                data: ArrayBuffer,
+            ) => Promise<{ ok: boolean; filePath: string | null; error?: string }>;
             persistClipFile?: (
                 sourcePath: string,
                 targetPath: string,
             ) => Promise<{ ok: boolean; filePath: string | null; error?: string }>;
+            fetchCommunityAddons?: () => Promise<{
+                ok: boolean;
+                addons: unknown[];
+                error: string | null;
+            }>;
             windowControls?: {
                 getDisplayZoom?: () => Promise<number>;
                 syncMiniPlayerState?: (state: { enabled: boolean; canEnter: boolean }) => void;
