@@ -32,6 +32,30 @@ body {
   overflow-x: hidden;
 }
 
+/* Kill Chromium/Windows accent focus rings — they clash with the UI. */
+:focus,
+:focus-visible {
+  outline: none !important;
+}
+
+button:focus,
+button:focus-visible,
+[role="button"]:focus,
+[role="button"]:focus-visible,
+a:focus,
+a:focus-visible,
+input:focus,
+input:focus-visible,
+select:focus,
+select:focus-visible,
+textarea:focus,
+textarea:focus-visible,
+summary:focus,
+summary:focus-visible {
+  outline: none !important;
+  box-shadow: none;
+}
+
 /* Globally hide scrollbars */
 ::-webkit-scrollbar {
   display: none;

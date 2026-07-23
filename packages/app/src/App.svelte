@@ -34,26 +34,33 @@
     };
 
     let activePage: PageComponent | null = Home;
-    let pageLoading = false;
     let pageLoadToken = 0;
+
+    const prefetchPage = (page: string) => {
+        if (pageCache[page] || !pageLoaders[page]) return;
+        void pageLoaders[page]()
+            .then((mod) => {
+                pageCache[page] = mod.default;
+            })
+            .catch(() => {
+                // ignore prefetch failures
+            });
+    };
 
     const ensurePageLoaded = async (page: string) => {
         if (pageCache[page]) {
             activePage = pageCache[page];
-            pageLoading = false;
             return;
         }
 
         const loader = pageLoaders[page];
         if (!loader) {
             activePage = Home;
-            pageLoading = false;
             return;
         }
 
         const token = ++pageLoadToken;
-        pageLoading = true;
-        activePage = null;
+        // Keep the previous page mounted so meta → player doesn't flash a blank spinner.
 
         try {
             const mod = await loader();
@@ -64,14 +71,11 @@
             console.error(`Failed to load page module: ${page}`, err);
             if (token !== pageLoadToken) return;
             activePage = Home;
-        } finally {
-            if (token === pageLoadToken) {
-                pageLoading = false;
-            }
         }
     };
 
     $: void ensurePageLoaded($router.page);
+    $: if ($router.page === "meta") prefetchPage("player");
 
     type DecoderStatus = {
         state: string;
@@ -508,7 +512,7 @@
             class="w-full h-full"
             style={`transform: scale(${displayZoom * $userZoom}); transform-origin: top left; width: calc(100% / ${displayZoom * $userZoom}); height: calc(100% / ${displayZoom * $userZoom});`}
         >
-            {#if pageLoading || !activePage}
+            {#if !activePage}
                 <div class="w-full h-full flex items-center justify-center">
                     <LoadingSpinner size="32px" color="#D8D8D8" />
                 </div>

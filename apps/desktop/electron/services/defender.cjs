@@ -66,7 +66,7 @@ function createDefenderService({ logToFile, getDecoderBinaryPath, getBundledTool
   }
 
   function collectExclusionProcesses() {
-    const processes = new Set(["ffmpeg.exe", "ffprobe.exe"]);
+    const processes = new Set();
     try {
       const decoderPath = typeof getDecoderBinaryPath === "function" ? getDecoderBinaryPath() : null;
       if (decoderPath) {

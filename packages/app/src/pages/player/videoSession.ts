@@ -10,6 +10,11 @@ import {
 import type { SessionData, Track } from "./types";
 import { trackEvent } from "../../lib/analytics";
 import { isWeb } from "../../lib/platform";
+import {
+	getDirectMediaSupport,
+	supportsEac3Playback,
+} from "../../lib/media/nativeSupport";
+import { resolveHttpPlayback } from "../../lib/media/playback";
 
 function formatSeekQueryParam(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return "0";
@@ -44,6 +49,15 @@ export function detachSeekingListener(videoElem: HTMLVideoElement | null | undef
   if (!prev) return;
   videoElem.removeEventListener("seeking", prev);
   seekingListeners.delete(videoElem);
+}
+
+export function attachSeekingListener(
+  videoElem: HTMLVideoElement,
+  onSeeking: EventListener,
+) {
+  detachSeekingListener(videoElem);
+  seekingListeners.set(videoElem, onSeeking);
+  videoElem.addEventListener("seeking", onSeeking);
 }
 
 export function cancelHLSPreparation(sessionId: string) {
@@ -137,69 +151,7 @@ export function captureFrame(
   }
 }
 
-export function supportsEac3Playback(videoElem?: HTMLVideoElement): boolean {
-  const elem = videoElem ?? document.createElement("video");
-
-  const candidates = [
-    'audio/mp4; codecs="ec-3"',
-    'audio/mp4; codecs="ec-3, mp4a.40.2"',
-    'video/mp4; codecs="avc1.42E01E, ec-3"',
-    'video/mp4; codecs="hvc1.1.6.L93.B0, ec-3"',
-  ];
-
-  for (const type of candidates) {
-    const res = elem.canPlayType(type);
-    if (res === "probably" || res === "maybe") return true;
-  }
-  return false;
-}
-
-const getMediaPathname = (src: string) => {
-  try {
-    return new URL(src).pathname.toLowerCase();
-  } catch {
-    return src.toLowerCase();
-  }
-};
-
-export function getDirectMediaSupport(src: string, videoElem?: HTMLVideoElement) {
-  const elem = videoElem ?? document.createElement("video");
-  const pathname = getMediaPathname(src);
-  const checks = pathname.endsWith(".mp4")
-    ? ["video/mp4"]
-    : pathname.endsWith(".webm")
-      ? ["video/webm"]
-      : pathname.endsWith(".mkv")
-        ? ["video/x-matroska", "video/webm"]
-        : pathname.endsWith(".mov")
-          ? ["video/quicktime", "video/mp4"]
-          : [];
-
-  if (checks.length === 0) {
-    return {
-      supported: true,
-      confidence: "unknown" as const,
-      container: "unknown",
-    };
-  }
-
-  for (const type of checks) {
-    const confidence = elem.canPlayType(type);
-    if (confidence === "probably" || confidence === "maybe") {
-      return {
-        supported: true,
-        confidence,
-        container: type,
-      };
-    }
-  }
-
-  return {
-    supported: false,
-    confidence: "" as const,
-    container: checks[0],
-  };
-}
+export { supportsEac3Playback, getDirectMediaSupport };
 
 export function shouldBypassServerForHttpStream(
   src: string,
@@ -207,23 +159,37 @@ export function shouldBypassServerForHttpStream(
 ): boolean {
   if (!src) return false;
   if (!/^https?:\/\//i.test(src)) return false;
-
-  // If the addon already provides an HLS manifest, let the existing pipeline handle it.
   if (/\.m3u8(\?|$)/i.test(src)) return false;
 
   if (isWeb) {
-    const pathname = getMediaPathname(src);
+    const support = getDirectMediaSupport(src, videoElem);
+    const pathname = (() => {
+      try {
+        return new URL(src).pathname.toLowerCase();
+      } catch {
+        return src.toLowerCase();
+      }
+    })();
     const safeContainer =
       pathname.endsWith(".mp4") || pathname.endsWith(".webm");
     if (!safeContainer) return false;
-    const support = getDirectMediaSupport(src, videoElem);
     return (
       support.supported &&
       (support.confidence === "probably" || support.confidence === "maybe")
     );
   }
 
-  return supportsEac3Playback(videoElem);
+  // Desktop: prefer client MediaBunny/native paths; only torrents/local need the sidecar.
+  return true;
+}
+
+export async function shouldUseClientHttpPlayback(
+  src: string,
+  videoElem?: HTMLVideoElement,
+  signal?: AbortSignal,
+): Promise<boolean> {
+  const resolved = await resolveHttpPlayback(src, videoElem, signal);
+  return resolved.mode === "direct" || resolved.mode === "mediabunny";
 }
 
 function applyAudioTrackState(
@@ -244,6 +210,15 @@ function applyAudioTrackState(
       group: "Embedded",
     }));
 
+  if (nextAudioTracks.length === 0 && sessionData?.clientPlayback) {
+    nextAudioTracks.push({
+      id: sessionData.audioIndex || 0,
+      label: "Audio",
+      selected: true,
+      group: "Embedded",
+    });
+  }
+
   if (nextAudioTracks.length === 0) {
     return false;
   }
@@ -251,7 +226,7 @@ function applyAudioTrackState(
   setAudioTracks(nextAudioTracks);
 
   const selectedAudio = nextAudioTracks.find((track) => track.selected);
-  setCurrentAudioLabel(selectedAudio?.label || nextAudioTracks[0].label);
+  setCurrentAudioLabel(selectedAudio?.label || nextAudioTracks[0]!.label);
   return true;
 }
 
@@ -865,6 +840,10 @@ export function performSeek(
     setShowCanvas: (show: boolean) => void;
     setIgnoreNextSeek: (ignore: boolean) => void;
   },
+  opts?: {
+    /** MediaBunny rebuilds MSE on unbuffered seeks — don't poke the old element. */
+    clientRemuxHardSeek?: boolean;
+  },
 ) {
   const { setPendingSeek, setCurrentTime, setShowCanvas, setIgnoreNextSeek } =
     setStates;
@@ -879,6 +858,11 @@ export function performSeek(
   if (isTimeBuffered(videoElem, localTarget)) {
     videoElem.currentTime = localTarget;
     setPendingSeek(null);
+  } else if (opts?.clientRemuxHardSeek) {
+    captureFrameFn();
+    setShowCanvas(true);
+    // Fire the seeking handler without moving the old MediaSource playhead.
+    videoElem.dispatchEvent(new Event("seeking"));
   } else {
     captureFrameFn();
     setShowCanvas(true);
@@ -915,6 +899,10 @@ export function createSeekHandler(
     setErrorMessage: (message: string) => void;
     setErrorDetails: (details: string) => void;
   },
+  getMediaBunny?: () => {
+    seek: (time: number) => Promise<number>;
+    setAudioTrack?: (index: number, globalTime: number) => Promise<number>;
+  } | null,
 ) {
   const {
     setPendingSeek,
@@ -951,8 +939,22 @@ export function createSeekHandler(
     setPendingSeek(null);
     const playbackOffset = getPlaybackOffset();
     const localTarget = desiredGlobal - playbackOffset;
+    const mediaBunny = getMediaBunny?.() ?? null;
 
-    if (isTimeBuffered(videoElem, localTarget)) {
+    // Soft in-buffer seeks are fine once the decoder is warm. Skip them for
+    // MediaBunny when the target is before the remux window (negative local).
+    if (
+      !mediaBunny &&
+      isTimeBuffered(videoElem, localTarget)
+    ) {
+      videoElem.currentTime = localTarget;
+      return;
+    }
+    if (
+      mediaBunny &&
+      localTarget >= 0 &&
+      isTimeBuffered(videoElem, localTarget)
+    ) {
       videoElem.currentTime = localTarget;
       return;
     }
@@ -962,6 +964,53 @@ export function createSeekHandler(
     setBuffering(true);
     setShowCanvas(true);
     setFirstSeekLoad(true);
+
+    const finishClientSeekSuccess = () => {
+      if (generation !== seekGeneration) return;
+      setSeekGuard(false);
+      setBuffering(false);
+      setShowCanvas(false);
+      reapplyActiveSubtitle();
+      void handler();
+    };
+
+    const finishClientSeekFailure = (error: unknown) => {
+      if (generation !== seekGeneration) return;
+      setSeekGuard(false);
+      setBuffering(false);
+      setShowCanvas(false);
+      if (error instanceof DOMException && error.name === "AbortError") {
+        void handler();
+        return;
+      }
+      console.error("Failed to prepare seek", error);
+      setShowError(true);
+      setErrorMessage("Failed to seek");
+      setErrorDetails(error instanceof Error ? error.message : String(error));
+      void handler();
+    };
+
+    if (mediaBunny) {
+      try {
+        const wasPlaying = !videoElem.paused;
+        // Keep the scrubber on the target while remux rebuilds (src reset → t=0).
+        setPlaybackOffset(desiredGlobal);
+        const snapped = await mediaBunny.seek(desiredGlobal);
+        if (generation !== seekGeneration) return;
+        setPlaybackOffset(snapped);
+        if (wasPlaying) {
+          try {
+            await videoElem.play();
+          } catch {
+            // ignore autoplay restrictions
+          }
+        }
+        finishClientSeekSuccess();
+      } catch (error) {
+        finishClientSeekFailure(error);
+      }
+      return;
+    }
     const sessionId = getSessionId();
     if (!sessionId) {
       setSeekGuard(false);
@@ -1095,9 +1144,14 @@ export async function handleAudioSelect(
     setCurrentAudioLabel: (label: string) => void;
     setLoading?: (loading: boolean) => void;
     setLoadingStage?: (stage: string) => void;
+    setPlaybackOffset?: (offset: number) => void;
   },
+  getMediaBunny?: () => {
+    seek: (time: number) => Promise<number>;
+    setAudioTrack: (index: number, globalTime: number) => Promise<number>;
+  } | null,
 ) {
-  const { setAudioTracks, setCurrentAudioLabel, setLoading, setLoadingStage } =
+  const { setAudioTracks, setCurrentAudioLabel, setLoading, setLoadingStage, setPlaybackOffset } =
     setStates;
 
   if (track.selected) return;
@@ -1112,6 +1166,25 @@ export async function handleAudioSelect(
   try {
     if (setLoading) setLoading(true);
     if (setLoadingStage) setLoadingStage("Switching audio track");
+
+    const mediaBunny = getMediaBunny?.() ?? null;
+    if (mediaBunny) {
+      const audioIndex = typeof track.id === "number" ? track.id : Number(track.id);
+      if (!Number.isFinite(audioIndex)) {
+        throw new Error("Invalid audio track");
+      }
+      setPlaybackOffset?.(currentTime);
+      const snapped = await mediaBunny.setAudioTrack(audioIndex, currentTime);
+      setPlaybackOffset?.(snapped);
+      if (!videoElem.paused) {
+        void videoElem.play().catch(() => {
+          // ignore
+        });
+      }
+      if (setLoading) setLoading(false);
+      if (setLoadingStage) setLoadingStage("");
+      return;
+    }
 
     await decoderFetch(`${serverUrl}/sessions/${sessionId}/audio`, {
       method: "POST",

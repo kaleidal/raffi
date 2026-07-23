@@ -183,8 +183,8 @@ const defenderService = createDefenderService({
   logToFile,
   getDecoderBinaryPath: () => decoderService.getDecoderPath(),
   getBundledToolPaths: () => ({
-    ffmpeg: decoderService.getBundledToolPath("ffmpeg"),
-    ffprobe: decoderService.getBundledToolPath("ffprobe"),
+    ffmpeg: null,
+    ffprobe: null,
   }),
 });
 
@@ -307,7 +307,7 @@ app.whenReady().then(async () => {
     }
   }
   createWindow();
-  void startDecoderServerInBackground();
+  // Decoder starts on demand (torrent/local/server fallback) via DECODER_ENSURE_STARTED.
 });
 
 app.on("activate", () => {
@@ -340,6 +340,18 @@ registerMainIpcHandlers({
   getMainWindow: () => mainWindow,
   getDecoderStatus: () => decoderService.getDecoderStatus(),
   getDecoderAuthSecret: () => decoderService.getDecoderAuthSecret(),
+  ensureDecoderStarted: async () => {
+    await startDecoderServerInBackground();
+    const status = decoderService.getDecoderStatus();
+    if (status?.state !== "ready") {
+      throw new Error(
+        status?.message ||
+          status?.detail ||
+          "Playback server failed to start",
+      );
+    }
+    return status;
+  },
   getDefenderExclusionStatus: () => defenderService.getExclusionStatus(),
   applyDefenderExclusions: () => defenderService.applyExclusions(),
   scanLibraryRoots,
