@@ -32,9 +32,9 @@ Like Stremio, Raffi uses community addons to aggregate streaming sources, but go
 
 ### 📱 **Cross-Platform**
 - **Windows** - `.exe` and `.msi` installers
-- **Linux** - `.deb`, `.rpm`, and `.AppImage` packages  
+- **Linux** - `.deb`, `.rpm`, and `.AppImage` packages
 - **macOS** - `.dmg` and `.zip` distributions
-- **iOS & Android** - Mobile companion app (React Native/Expo)
+- **Web** - Browser app on Cloudflare
 
 ### 👥 **Watch Together**
 - Real-time watch parties with synchronized playback
@@ -62,7 +62,7 @@ Like Stremio, Raffi uses community addons to aggregate streaming sources, but go
 - Theme customization
 
 ### 🔧 **Advanced Features**
-- Torrent/magnet link streaming
+- Torrent/magnet link streaming via Limbo
 - Local file playback
 - Discord Rich Presence integration
 - Auto-updater
@@ -100,7 +100,6 @@ chmod +x Raffi-x.x.x.AppImage
 ### Prerequisites
 
 - **Node.js** 18+ or **Bun** 1.0+
-- **Go** 1.21+ (for server binary)
 - **Git**
 
 ### Project Structure
@@ -109,18 +108,16 @@ chmod +x Raffi-x.x.x.AppImage
 raffi/
 ├── apps/
 │   ├── desktop/       # Electron desktop shell
-│   ├── web/           # SvelteKit + Cloudflare web app
-│   └── mobile/        # React Native + Expo
+│   └── web/           # SvelteKit + Cloudflare web app
 ├── packages/
 │   └── app/           # Shared Svelte Raffi UI and app logic
 ├── services/
-│   ├── sync/          # Cloud sync API (Cloudflare Workers + D1)
-│   └── server/        # Local streaming server (Go)
+│   └── sync/          # Cloud sync API (Cloudflare Workers + D1)
 └── marketing/         # Public raffi.al site
 ```
 
 #### Desktop App (`apps/desktop/`)
-- **Framework**: Electron 39 with Svelte 5 and TypeScript
+- **Framework**: Electron with Svelte 5 and TypeScript
 - **Platforms**: Windows, macOS, Linux
 - **Features**: Full desktop experience with watch parties, Discord integration, local file playback
 - **Build**: electron-builder for multi-platform releases
@@ -131,13 +128,6 @@ raffi/
 - **UI**: Consumes the same shared Svelte package as desktop
 - **Deploy**: Cloudflare Pages/Workers target
 
-#### Mobile App (`apps/mobile/`)
-- **Framework**: React Native with Expo SDK 54
-- **Platforms**: iOS and Android
-- **Features**: Browse content, search, continue watching, native video playback
-- **Sync**: Shares authentication and watch progress with desktop through Raffi Sync
-- **Native Module**: Custom torrent-streamer module for on-device streaming
-
 #### Shared App (`packages/app/`)
 - **Framework**: Svelte 5
 - **Purpose**: The reusable Raffi app experience mounted by desktop and web
@@ -147,12 +137,6 @@ raffi/
 - **Runtime**: Cloudflare Workers
 - **Storage**: Cloudflare D1 for account data and Durable Objects for watch-party state
 - **Features**: Ave-authenticated cloud sync, Trakt token integration, watch-party coordination
-
-#### Streaming Server (`services/server/`)
-- **Language**: Go
-- **Purpose**: HLS transcoding server for video streams
-- **Bundled**: Compiled binaries included with desktop app
-- **Mobile**: Can be used as remote transcoding server for mobile devices
 
 #### Marketing Site (`marketing/`)
 - **Framework**: SvelteKit
@@ -184,10 +168,10 @@ bun run build:web
 ```bash
 bun install
 
-# Run in development mode (builds server + starts electron)
+# Run in development mode
 bun run dev:desktop
 
-# Run electron only (if server already built)
+# Run Electron only (Vite already running)
 bun --filter @raffi/desktop electron:dev:only
 
 # Build production release
@@ -205,42 +189,6 @@ bun run dev:web
 # Typecheck and build for Cloudflare
 bun run check:web
 bun run build:web
-```
-
-### Mobile Development
-
-```bash
-cd apps/mobile
-
-# Install dependencies
-bun install
-
-# Start Expo development server
-bun run start
-
-# Run on iOS simulator
-bun run ios
-
-# Run on Android emulator
-bun run android
-
-# Build for production
-bunx expo build:ios
-bunx expo build:android
-```
-
-**Note**: Mobile app requires the desktop server running for torrent streams. Update `STREAMING_SERVER` in `apps/mobile/app/player.tsx` with your local IP.
-
-### Server Development
-
-```bash
-cd services/server
-
-# Build server binary
-go build -o decoder .
-
-# Run server
-./decoder
 ```
 
 ### Website Development
@@ -264,7 +212,7 @@ bun run build
 
 #### Desktop App
 - **Frontend**: Svelte 5, TypeScript, Tailwind CSS
-- **Desktop Runtime**: Electron 39
+- **Desktop Runtime**: Electron
 - **Video Player**: HLS.js for adaptive streaming
 - **Storage**: Local app data with Raffi Sync cloud backup
 - **Build**: Vite + electron-builder
@@ -274,28 +222,13 @@ bun run build
 - **Frontend**: SvelteKit, TypeScript, Tailwind CSS
 - **Deployment**: Cloudflare Pages/Workers
 - **Playback**: Native video and HLS.js for direct HTTP/debrid streams
-- **Limitations**: Torrent, local file, export, and local server features stay desktop-only
-
-#### Mobile App
-- **Frontend**: React Native (React 19), TypeScript
-- **Framework**: Expo SDK 54 with new architecture enabled
-- **Video Player**: Expo Video (native)
-- **Navigation**: Expo Router (file-based routing)
-- **State Management**: Zustand
-- **Sync**: Raffi Sync API shared with desktop
-- **Native Module**: Custom torrent-streamer for on-device torrenting
-- **Key Features**: Tab navigation, dark theme, cross-device sync
+- **Limitations**: Torrent, local file, and clip export stay desktop-only
 
 #### Sync Service
 - **Runtime**: Cloudflare Workers
 - **Database**: Cloudflare D1
 - **State Coordination**: Durable Objects for active watch parties
 - **Auth**: Ave ID tokens verified at the API edge
-
-#### Streaming Server
-- **Language**: Go 1.21+
-- **Functionality**: HLS transcoding, torrent handling
-- **Deployment**: Bundled with desktop, standalone for mobile
 
 ### Key Features Implementation
 
@@ -307,11 +240,11 @@ bun run build
 - Community-maintained content catalogs
 
 #### Video Playback
-- Custom video player with HLS support for torrents/local remux
-- HTTP/debrid streams prefer in-app playback via MediaBunny (probe + remux) or native `<video>` when compatible
-- Local files and clip export also use MediaBunny on desktop (`raffi-media://` protocol for disk access)
-- Community addon catalog is fetched from Electron main (no Go proxy)
-- Local Go sidecar remains for torrents and rare codec fallback remux
+- Custom video player with HLS for addon streams
+- HTTP/debrid streams play in-app via MediaBunny (probe + remux) or native `<video>` when compatible
+- Local files and clip export use MediaBunny on desktop (`raffi-media://` for disk access)
+- Torrents stream through Limbo
+- Community addon catalog is fetched from Electron main
 - Embedded container subtitles are not extracted yet (addon/external subs still work)
 - Multiple quality selection
 - Subtitle parsing (SRT/VTT)
@@ -331,7 +264,7 @@ bun run build
 - Watched/unwatched states
 
 #### Cross-Device Synchronization
-- **Shared authentication** via Ave across desktop, web, and mobile
+- **Shared authentication** via Ave across desktop and web
 - **Watch progress sync** - Start on desktop or web, continue on another client
 - **Library sync** - Custom lists and favorites across devices
 - **Addon settings** - Configured addons available on all platforms
@@ -347,7 +280,7 @@ bun --filter @raffi/desktop dist -- --win
 # Linux
 bun --filter @raffi/desktop dist -- --linux
 
-# macOS  
+# macOS
 bun --filter @raffi/desktop dist -- --mac
 
 # All platforms
@@ -356,22 +289,6 @@ bun --filter @raffi/desktop dist
 
 Output will be in `apps/desktop/release/`
 
-### Build Mobile App
-
-```bash
-cd apps/mobile
-
-# Development builds
-bunx expo run:ios       # iOS
-bunx expo run:android   # Android
-
-# Production builds (requires EAS account)
-bunx eas build --platform ios
-bunx eas build --platform android
-```
-
-Builds will be available via Expo Application Services (EAS) dashboard.
-
 ### Build Configuration
 
 **Desktop** (`apps/desktop/package.json`):
@@ -379,13 +296,6 @@ Builds will be available via Expo Application Services (EAS) dashboard.
 - Build targets (Windows, Linux, macOS)
 - Icon paths and file associations
 - Auto-update settings
-
-**Mobile** (`apps/mobile/app.json`):
-- App metadata and identifiers
-- iOS bundle ID: `al.kaleid.mobile`
-- Android package: `al.kaleid.raffimobile`
-- Splash screen and icon configuration
-- Expo plugins and experiments
 
 ## Contributing
 
@@ -427,5 +337,5 @@ This project is licensed under the MIT License - see the [LICENSE](apps/desktop/
 ---
 
 <div align="center">
-Made with Svelte, Electron, and Go
+Made with Svelte and Electron
 </div>

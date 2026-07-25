@@ -28,9 +28,7 @@ body:
       description: Which part of the project is affected?
       options:
         - apps/desktop/
-        - apps/mobile/
         - apps/web/
-        - services/server/
         - services/sync/
         - Build, CI, or release tooling
         - Not sure
