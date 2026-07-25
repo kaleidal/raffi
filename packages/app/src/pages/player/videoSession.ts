@@ -1,1187 +1,505 @@
-// Video session and HLS management
-import Hls from "hls.js";
-import {
-  createSession,
-  decoderFetch,
-  getSessionUrl,
-  getStreamUrl,
-  serverUrl,
-} from "../../lib/client";
-import type { SessionData, Track } from "./types";
+// Client playback session helpers (direct / MediaBunny / addon HLS).
+import type Hls from "hls.js";
+import type { Track } from "./types";
 import { trackEvent } from "../../lib/analytics";
-import { isWeb } from "../../lib/platform";
 import {
 	getDirectMediaSupport,
 	supportsEac3Playback,
 } from "../../lib/media/nativeSupport";
-import { resolveHttpPlayback } from "../../lib/media/playback";
 
-function formatSeekQueryParam(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds < 0) return "0";
-  return seconds.toFixed(3);
-}
-
-async function sessionInfoError(response: Response): Promise<Error> {
-  const details = (await response.text().catch(() => "")).trim();
-  return new Error(details || `Failed to load session info (${response.status})`);
-}
-
-export function createHLSManifestUrl(
-  sessionId: string,
-  seekTime: number | null = null,
-): string {
-  let url = `${getStreamUrl(sessionId)}/child.m3u8`;
-  if (seekTime != null && Number.isFinite(seekTime) && seekTime > 0) {
-    const seekId = Math.random().toString(36).substring(7);
-    url = `${url}?seek=${formatSeekQueryParam(seekTime)}&seek_id=${seekId}`;
-  }
-  return url;
-}
-
-const manifestPreparationControllers = new Map<string, Set<AbortController>>();
 const seekingListeners = new WeakMap<HTMLVideoElement, EventListener>();
-let metadataRefreshGeneration = 0;
-let activeMetadataRefresh: AbortController | null = null;
 
 export function detachSeekingListener(videoElem: HTMLVideoElement | null | undefined) {
-  if (!videoElem) return;
-  const prev = seekingListeners.get(videoElem);
-  if (!prev) return;
-  videoElem.removeEventListener("seeking", prev);
-  seekingListeners.delete(videoElem);
+	if (!videoElem) return;
+	const prev = seekingListeners.get(videoElem);
+	if (!prev) return;
+	videoElem.removeEventListener("seeking", prev);
+	seekingListeners.delete(videoElem);
 }
 
 export function attachSeekingListener(
-  videoElem: HTMLVideoElement,
-  onSeeking: EventListener,
+	videoElem: HTMLVideoElement,
+	onSeeking: EventListener,
 ) {
-  detachSeekingListener(videoElem);
-  seekingListeners.set(videoElem, onSeeking);
-  videoElem.addEventListener("seeking", onSeeking);
-}
-
-export function cancelHLSPreparation(sessionId: string) {
-  const controllers = manifestPreparationControllers.get(sessionId);
-  if (!controllers) return;
-  for (const controller of controllers) {
-    controller.abort();
-  }
-  manifestPreparationControllers.delete(sessionId);
-}
-
-export async function prepareHLSManifest(
-  sessionId: string,
-  seekTime: number | null = null,
-  signal?: AbortSignal,
-): Promise<string> {
-  const url = createHLSManifestUrl(sessionId, seekTime);
-  const controller = new AbortController();
-  const abort = () => controller.abort();
-  signal?.addEventListener("abort", abort, { once: true });
-  if (signal?.aborted) controller.abort();
-
-  let controllers = manifestPreparationControllers.get(sessionId);
-  if (!controllers) {
-    controllers = new Set();
-    manifestPreparationControllers.set(sessionId, controllers);
-  }
-  controllers.add(controller);
-
-  try {
-    const response = await fetch(url, {
-      cache: "no-store",
-      signal: controller.signal,
-    });
-    if (!response.ok) {
-      const details = (await response.text().catch(() => "")).trim();
-      throw new Error(details || `Stream preparation failed (${response.status})`);
-    }
-    // Consume the response so the connection is released before HLS.js requests
-    // the now-ready manifest using the same URL and seek id.
-    await response.text();
-    return url;
-  } finally {
-    signal?.removeEventListener("abort", abort);
-    controllers.delete(controller);
-    if (controllers.size === 0) {
-      manifestPreparationControllers.delete(sessionId);
-    }
-  }
-}
-
-export function cleanupServerSession(sessionId: string) {
-  if (!sessionId) return;
-  cancelHLSPreparation(sessionId);
-  const url = `${serverUrl}/cleanup?id=${sessionId}`;
-  void decoderFetch(url, { method: "POST", keepalive: true }).catch(() => {});
+	detachSeekingListener(videoElem);
+	seekingListeners.set(videoElem, onSeeking);
+	videoElem.addEventListener("seeking", onSeeking);
 }
 
 export function isTimeBuffered(
-  elem: HTMLVideoElement,
-  target: number,
-  tolerance = 0.5,
+	elem: HTMLVideoElement,
+	target: number,
+	tolerance = 0.5,
 ): boolean {
-  const b = elem.buffered;
-  if (!b || b.length === 0) return false;
-  for (let i = 0; i < b.length; i++) {
-    const start = b.start(i);
-    const end = b.end(i);
-    if (target >= start - tolerance && target <= end + tolerance) {
-      return true;
-    }
-  }
-  return false;
+	const b = elem.buffered;
+	if (!b || b.length === 0) return false;
+	for (let i = 0; i < b.length; i++) {
+		const start = b.start(i);
+		const end = b.end(i);
+		if (target >= start - tolerance && target <= end + tolerance) {
+			return true;
+		}
+	}
+	return false;
 }
 
 export function captureFrame(
-  videoElem: HTMLVideoElement | null,
-  canvasElem: HTMLCanvasElement | null,
+	videoElem: HTMLVideoElement | null,
+	canvasElem: HTMLCanvasElement | null,
 ) {
-  if (!videoElem || !canvasElem) return;
-  canvasElem.width = videoElem.videoWidth;
-  canvasElem.height = videoElem.videoHeight;
-  const ctx = canvasElem.getContext("2d");
-  if (ctx) {
-    try {
-      ctx.drawImage(videoElem, 0, 0, canvasElem.width, canvasElem.height);
-    } catch {
-      // Cross-origin video (e.g. direct debrid links) can taint the canvas.
-      // In that case, just skip the frame capture.
-    }
-  }
+	if (!videoElem || !canvasElem) return;
+	canvasElem.width = videoElem.videoWidth;
+	canvasElem.height = videoElem.videoHeight;
+	const ctx = canvasElem.getContext("2d");
+	if (ctx) {
+		try {
+			ctx.drawImage(videoElem, 0, 0, canvasElem.width, canvasElem.height);
+		} catch {
+			// Cross-origin video can taint the canvas — skip.
+		}
+	}
 }
 
 export { supportsEac3Playback, getDirectMediaSupport };
 
-export function shouldBypassServerForHttpStream(
-  src: string,
-  videoElem?: HTMLVideoElement,
-): boolean {
-  if (!src) return false;
-  if (!/^https?:\/\//i.test(src)) return false;
-  if (/\.m3u8(\?|$)/i.test(src)) return false;
-
-  if (isWeb) {
-    const support = getDirectMediaSupport(src, videoElem);
-    const pathname = (() => {
-      try {
-        return new URL(src).pathname.toLowerCase();
-      } catch {
-        return src.toLowerCase();
-      }
-    })();
-    const safeContainer =
-      pathname.endsWith(".mp4") || pathname.endsWith(".webm");
-    if (!safeContainer) return false;
-    return (
-      support.supported &&
-      (support.confidence === "probably" || support.confidence === "maybe")
-    );
-  }
-
-  // Desktop: prefer client MediaBunny/native paths; only torrents/local need the sidecar.
-  return true;
-}
-
-export async function shouldUseClientHttpPlayback(
-  src: string,
-  videoElem?: HTMLVideoElement,
-  signal?: AbortSignal,
-): Promise<boolean> {
-  const resolved = await resolveHttpPlayback(src, videoElem, signal);
-  return resolved.mode === "direct" || resolved.mode === "mediabunny";
-}
-
-function applyAudioTrackState(
-  sessionData: any,
-  setAudioTracks: (tracks: Track[]) => void,
-  setCurrentAudioLabel: (label: string) => void,
-): boolean {
-  const streams = Array.isArray(sessionData?.availableStreams)
-    ? sessionData.availableStreams
-    : [];
-
-  const nextAudioTracks: Track[] = streams
-    .filter((stream: any) => stream?.type === "audio")
-    .map((stream: any) => ({
-      id: stream.index,
-      label: stream.title || stream.language || `Audio ${stream.index}`,
-      selected: stream.index === (sessionData.audioIndex || 0),
-      group: "Embedded",
-    }));
-
-  if (nextAudioTracks.length === 0 && sessionData?.clientPlayback) {
-    nextAudioTracks.push({
-      id: sessionData.audioIndex || 0,
-      label: "Audio",
-      selected: true,
-      group: "Embedded",
-    });
-  }
-
-  if (nextAudioTracks.length === 0) {
-    return false;
-  }
-
-  setAudioTracks(nextAudioTracks);
-
-  const selectedAudio = nextAudioTracks.find((track) => track.selected);
-  setCurrentAudioLabel(selectedAudio?.label || nextAudioTracks[0]!.label);
-  return true;
-}
-
-function buildEmbeddedSubtitleTracks(
-  _sessionId: string,
-  _sessionData: any,
-): Track[] {
-  // Embedded container subs used to be extracted via the Go/ffmpeg sidecar.
-  // Until MediaBunny can demux subtitle tracks, we only surface addon/external subs.
-  return [];
-}
-
-function mergeSubtitleTracks(
-  embeddedTracks: Track[],
-  existingTracks: Track[],
-): Track[] {
-  const offTrack = existingTracks.find((track) => track.id === "off") || {
-    id: "off",
-    label: "Off",
-    selected: true,
-    group: "None",
-  };
-  const otherTracks = existingTracks.filter(
-    (track) => track.id !== "off" && !track.isEmbedded,
-  );
-
-  return [offTrack, ...embeddedTracks, ...otherTracks];
-}
-
-function applyEmbeddedSubtitleState(
-  sessionId: string,
-  sessionData: any,
-  setSubtitleTracks: (tracks: Track[]) => void,
-  currentTracks: Track[],
-): boolean {
-  const embeddedTracks = buildEmbeddedSubtitleTracks(sessionId, sessionData);
-  if (embeddedTracks.length === 0) {
-    return false;
-  }
-
-  setSubtitleTracks(mergeSubtitleTracks(embeddedTracks, currentTracks));
-  return true;
-}
-
 export async function loadVideoSession(
-  src: string,
-  fileIdx: number | null,
-  startTime: number,
-  setStates: {
-    setLoading: (loading: boolean) => void;
-    setLoadingStage?: (stage: string) => void;
-    setLoadingDetails?: (details: string) => void;
-    setLoadingProgress?: (progress: number | null) => void;
-    setShowCanvas: (show: boolean) => void;
-    setIsPlaying: (playing: boolean) => void;
-    setHasStarted: (started: boolean) => void;
-    setShowError: (show: boolean) => void;
-    setErrorMessage: (msg: string) => void;
-    setErrorDetails: (details: string) => void;
-    setCurrentTime: (time: number) => void;
-    setDuration: (duration: number) => void;
-    setPlaybackOffset: (offset: number) => void;
-    setCurrentChapter: (chapter: any) => void;
-    setShowSkipIntro: (show: boolean) => void;
-    setShowNextEpisode: (show: boolean) => void;
-    setSeekGuard: (guard: boolean) => void;
-    setFirstSeekLoad: (load: boolean) => void;
-    setPendingSeek: (seek: number | null) => void;
-    setAudioTracks: (tracks: Track[]) => void;
-    setSubtitleTracks: (tracks: Track[]) => void;
-    setCurrentAudioLabel: (label: string) => void;
-    setCurrentSubtitleLabel: (label: string) => void;
-    setSessionData?: (sessionData: SessionData) => void;
-  },
-  fetchAddonSubtitles: () => Promise<void>,
-  options?: {
-    reuseSession?: { sessionId: string; sessionData: any };
-    directHttp?: boolean;
-  },
-): Promise<{ sessionId: string; sessionData: any }> {
-  const {
-    setLoading,
-    setLoadingStage,
-    setLoadingDetails,
-    setLoadingProgress,
-    setShowCanvas,
-    setIsPlaying,
-    setHasStarted,
-    setShowError,
-    setErrorMessage,
-    setErrorDetails,
-    setCurrentTime,
-    setDuration,
-    setPlaybackOffset,
-    setCurrentChapter,
-    setShowSkipIntro,
-    setShowNextEpisode,
-    setSeekGuard,
-    setFirstSeekLoad,
-    setPendingSeek,
-    setAudioTracks,
-    setSubtitleTracks,
-    setCurrentAudioLabel,
-    setCurrentSubtitleLabel,
-    setSessionData,
-  } = setStates;
+	src: string,
+	_fileIdx: number | null,
+	_startTime: number,
+	setStates: {
+		setLoading: (loading: boolean) => void;
+		setLoadingStage?: (stage: string) => void;
+		setLoadingDetails?: (details: string) => void;
+		setLoadingProgress?: (progress: number | null) => void;
+		setShowCanvas: (show: boolean) => void;
+		setIsPlaying: (playing: boolean) => void;
+		setHasStarted: (started: boolean) => void;
+		setShowError: (show: boolean) => void;
+		setErrorMessage: (msg: string) => void;
+		setErrorDetails: (details: string) => void;
+		setCurrentTime: (time: number) => void;
+		setDuration: (duration: number) => void;
+		setPlaybackOffset: (offset: number) => void;
+		setCurrentChapter: (chapter: any) => void;
+		setShowSkipIntro: (show: boolean) => void;
+		setShowNextEpisode: (show: boolean) => void;
+		setSeekGuard: (guard: boolean) => void;
+		setFirstSeekLoad: (load: boolean) => void;
+		setPendingSeek: (seek: number | null) => void;
+		setAudioTracks: (tracks: Track[]) => void;
+		setSubtitleTracks: (tracks: Track[]) => void;
+		setCurrentAudioLabel: (label: string) => void;
+		setCurrentSubtitleLabel: (label: string) => void;
+		setSessionData?: (sessionData: any) => void;
+	},
+	fetchAddonSubtitles: () => Promise<void>,
+	options?: {
+		reuseSession?: { sessionData: any };
+		directHttp?: boolean;
+	},
+): Promise<{ sessionData: any }> {
+	const {
+		setLoading,
+		setLoadingStage,
+		setLoadingDetails,
+		setLoadingProgress,
+		setShowCanvas,
+		setIsPlaying,
+		setHasStarted,
+		setShowError,
+		setErrorMessage,
+		setErrorDetails,
+		setCurrentTime,
+		setDuration,
+		setPlaybackOffset,
+		setCurrentChapter,
+		setShowSkipIntro,
+		setShowNextEpisode,
+		setSeekGuard,
+		setFirstSeekLoad,
+		setPendingSeek,
+		setAudioTracks,
+		setSubtitleTracks,
+		setCurrentAudioLabel,
+		setCurrentSubtitleLabel,
+		setSessionData,
+	} = setStates;
 
-  try {
-    const isReuse = Boolean(options?.reuseSession);
-    if (!isReuse) {
-      setLoading(true);
-      setLoadingStage?.("Initializing player");
-      setLoadingDetails?.("");
-      setLoadingProgress?.(null);
-    } else {
-      setLoadingStage?.("Continuing");
-      setLoadingDetails?.("");
-      setLoadingProgress?.(null);
-    }
-    setShowCanvas(false);
-    setIsPlaying(false);
-    setHasStarted(false);
-    setShowError(false);
-    setErrorMessage("");
-    setErrorDetails("");
+	try {
+		const isReuse = Boolean(options?.reuseSession);
+		if (!isReuse) {
+			setLoading(true);
+			setLoadingStage?.("Initializing player");
+			setLoadingDetails?.("");
+			setLoadingProgress?.(null);
+		} else {
+			setLoadingStage?.("Continuing");
+			setLoadingDetails?.("");
+			setLoadingProgress?.(null);
+		}
+		setShowCanvas(false);
+		setIsPlaying(false);
+		setHasStarted(false);
+		setShowError(false);
+		setErrorMessage("");
+		setErrorDetails("");
 
-    setCurrentTime(0);
-    setDuration(0);
-    setPlaybackOffset(0);
-    setCurrentChapter(null);
-    setShowSkipIntro(false);
-    setShowNextEpisode(false);
-    setSeekGuard(false);
-    setFirstSeekLoad(false);
-    setPendingSeek(null);
+		setCurrentTime(0);
+		setDuration(0);
+		setPlaybackOffset(0);
+		setCurrentChapter(null);
+		setShowSkipIntro(false);
+		setShowNextEpisode(false);
+		setSeekGuard(false);
+		setFirstSeekLoad(false);
+		setPendingSeek(null);
 
-    setAudioTracks([]);
-    setSubtitleTracks([]);
-    setCurrentAudioLabel("Default");
-    setCurrentSubtitleLabel("Off");
+		setAudioTracks([]);
+		setSubtitleTracks([]);
+		setCurrentAudioLabel("Default");
+		setCurrentSubtitleLabel("Off");
 
-    if (options?.directHttp) {
-      const sessionData = {
-        isDirectHttp: true,
-        sourceUrl: src,
-        durationSeconds: 0,
-      };
-      setSessionData?.(sessionData as SessionData);
-      setSubtitleTracks([
-        { id: "off", label: "Off", selected: true, group: "None" },
-      ]);
-      setLoadingStage?.("Loading subtitles");
-      setLoadingDetails?.("Fetching addon subtitles...");
-      await fetchAddonSubtitles();
-      setLoadingDetails?.("");
-      setLoadingProgress?.(null);
-      return { sessionId: "", sessionData };
-    }
+		if (options?.directHttp) {
+			const sessionData = {
+				isDirectHttp: true,
+				sourceUrl: src,
+				durationSeconds: 0,
+			};
+			setSessionData?.(sessionData);
+			setSubtitleTracks([
+				{ id: "off", label: "Off", selected: true, group: "None" },
+			]);
+			setLoadingStage?.("Loading subtitles");
+			setLoadingDetails?.("Fetching addon subtitles...");
+			await fetchAddonSubtitles();
+			setLoadingDetails?.("");
+			setLoadingProgress?.(null);
+			return { sessionData };
+		}
 
-    const kind = src.startsWith("magnet:") ? "torrent" : "http";
-    let sessionId: string;
-    let sessionData: any;
-
-    const reuse = options?.reuseSession;
-    if (reuse) {
-      sessionId = reuse.sessionId;
-      setLoadingStage?.("Using prefetched stream");
-      setLoadingDetails?.("");
-      const res = await decoderFetch(`${serverUrl}/sessions/${sessionId}?playback=1`);
-      if (!res.ok) throw await sessionInfoError(res);
-      sessionData = await res.json();
-      setPlaybackOffset(startTime);
-    } else if (fileIdx !== null && fileIdx !== undefined) {
-      console.log("Creating torrent session with file index:", fileIdx);
-
-      setLoadingStage?.("Creating torrent session");
-      setLoadingDetails?.("Adding torrent and selecting file...");
-      sessionId = await createSession(src, kind, startTime, fileIdx);
-      setPlaybackOffset(startTime);
-
-      setLoadingStage?.("Loading stream info");
-      setLoadingDetails?.("Probing metadata and tracks...");
-
-      const res = await decoderFetch(`${serverUrl}/sessions/${sessionId}`);
-      if (!res.ok) throw await sessionInfoError(res);
-      sessionData = await res.json();
-    } else {
-      setLoadingStage?.(
-        kind === "torrent"
-          ? "Creating torrent session"
-          : "Creating stream session",
-      );
-      setLoadingDetails?.(
-        kind === "torrent"
-          ? "Adding torrent and fetching metadata..."
-          : "Contacting local server...",
-      );
-      sessionId = await createSession(src, kind, startTime);
-      setPlaybackOffset(startTime);
-
-      setLoadingStage?.("Loading stream info");
-      setLoadingDetails?.("Probing metadata and tracks...");
-
-      const res = await decoderFetch(`${serverUrl}/sessions/${sessionId}`);
-      if (!res.ok) throw await sessionInfoError(res);
-      sessionData = await res.json();
-    }
-    if (sessionData.chapters) {
-      console.log("Loaded chapters:", sessionData.chapters);
-    }
-
-    const applySessionMetadata = (nextSessionData: any) => {
-      setSessionData?.(nextSessionData as SessionData);
-
-      const nextDuration = Number(nextSessionData?.durationSeconds || 0);
-      const hasDuration = Number.isFinite(nextDuration) && nextDuration > 0;
-      if (hasDuration) {
-        setDuration(nextDuration);
-      }
-
-      const hasAudioTracks = applyAudioTrackState(
-        nextSessionData,
-        setAudioTracks,
-        setCurrentAudioLabel,
-      );
-
-      return { hasDuration, hasAudioTracks };
-    };
-
-    const subtitleTracks: Track[] = [
-      { id: "off", label: "Off", selected: true, group: "None" },
-    ];
-    let currentSubtitleTracks: Track[] = subtitleTracks;
-    const updateSubtitleTracks = (tracks: Track[]) => {
-      currentSubtitleTracks = tracks;
-      setSubtitleTracks(tracks);
-    };
-    updateSubtitleTracks(subtitleTracks);
-    applyEmbeddedSubtitleState(
-      sessionId,
-      sessionData,
-      updateSubtitleTracks,
-      currentSubtitleTracks,
-    );
-
-    let { hasDuration, hasAudioTracks } = applySessionMetadata(sessionData);
-
-    if (!hasDuration || !hasAudioTracks) {
-      const refreshGeneration = ++metadataRefreshGeneration;
-      const refreshAbort = new AbortController();
-      activeMetadataRefresh?.abort();
-      activeMetadataRefresh = refreshAbort;
-
-      const refreshSessionMetadata = async () => {
-        for (let attempt = 0; attempt < 18; attempt++) {
-          if (
-            refreshAbort.signal.aborted ||
-            refreshGeneration !== metadataRefreshGeneration
-          ) {
-            return;
-          }
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-          if (
-            refreshAbort.signal.aborted ||
-            refreshGeneration !== metadataRefreshGeneration
-          ) {
-            return;
-          }
-
-          try {
-            const nextRes = await decoderFetch(getSessionUrl(sessionId), {
-              signal: refreshAbort.signal,
-            });
-            if (!nextRes.ok) {
-              continue;
-            }
-
-            const nextData = await nextRes.json();
-            if (
-              refreshAbort.signal.aborted ||
-              refreshGeneration !== metadataRefreshGeneration
-            ) {
-              return;
-            }
-            const nextState = applySessionMetadata(nextData);
-            hasDuration = hasDuration || nextState.hasDuration;
-            hasAudioTracks = hasAudioTracks || nextState.hasAudioTracks;
-            applyEmbeddedSubtitleState(
-              sessionId,
-              nextData,
-              updateSubtitleTracks,
-              currentSubtitleTracks,
-            );
-
-            if (hasDuration && hasAudioTracks) {
-              break;
-            }
-          } catch (err) {
-            if (err instanceof DOMException && err.name === "AbortError") {
-              return;
-            }
-            continue;
-          }
-        }
-      };
-
-      void refreshSessionMetadata();
-    }
-
-    setLoadingStage?.("Loading subtitles");
-    setLoadingDetails?.("Fetching addon subtitles...");
-    await fetchAddonSubtitles();
-    setLoadingDetails?.("");
-    setLoadingProgress?.(null);
-
-    return { sessionId, sessionData };
-  } catch (err) {
-    console.error("Error loading video:", err);
-    const sourceType = src.startsWith("magnet:")
-      ? "torrent"
-      : src.startsWith("http://") || src.startsWith("https://")
-        ? "direct"
-        : "local";
-    trackEvent("stream_load_failed", {
-      source_type: sourceType,
-      is_torrent: sourceType === "torrent",
-      is_local: sourceType === "local",
-      error_name: err instanceof Error ? err.name : "unknown",
-    });
-    setErrorMessage("Failed to initialize playback");
-    setErrorDetails(err instanceof Error ? err.message : String(err));
-    setShowError(true);
-    setLoading(false);
-    throw err;
-  }
-}
-
-export function initHLS(
-  videoElem: HTMLVideoElement,
-  sessionId: string,
-  startOffset: number,
-  autoPlay: boolean,
-  onSeeking: () => void,
-  setStates: {
-    setLoading: (loading: boolean) => void;
-    setShowCanvas: (show: boolean) => void;
-    setPlaybackOffset: (offset: number) => void;
-    setShowError: (show: boolean) => void;
-    setErrorMessage: (msg: string) => void;
-    setErrorDetails: (details: string) => void;
-  },
-  initialSeekTime: number | null = null,
-  bufferMode: "playback" | "prefetch" = "playback",
-  preparedManifestUrl: string | null = null,
-): Hls | null {
-  const {
-    setLoading,
-    setShowCanvas,
-    setPlaybackOffset,
-    setShowError,
-    setErrorMessage,
-    setErrorDetails,
-  } = setStates;
-
-  const treatAsLocalFile = videoElem?.dataset?.raffiSource === "local";
-  let didEnforceInitialStart = false;
-  const enforceLocalStartAtZero = () => {
-    if (didEnforceInitialStart) return;
-    if (startOffset !== 0) return;
-    if (!Number.isFinite(videoElem.duration) || videoElem.duration <= 0) return;
-    if (!Number.isFinite(videoElem.currentTime)) return;
-
-    if (videoElem.currentTime > 1) {
-      try {
-        videoElem.currentTime = 0;
-        didEnforceInitialStart = true;
-      } catch {
-        // ignore
-      }
-    }
-  };
-
-  let baseManifest = preparedManifestUrl || `${getStreamUrl(sessionId)}/child.m3u8`;
-  if (
-    !preparedManifestUrl &&
-    initialSeekTime != null &&
-    Number.isFinite(initialSeekTime) &&
-    initialSeekTime > 0
-  ) {
-    const seekId = Math.random().toString(36).substring(7);
-    baseManifest = `${baseManifest}?seek=${formatSeekQueryParam(initialSeekTime)}&seek_id=${seekId}`;
-  }
-  setPlaybackOffset(startOffset);
-
-  if (startOffset === 0) {
-    videoElem.currentTime = 0;
-  }
-
-  let hls: Hls | null = null;
-
-  if (Hls.isSupported()) {
-    const maxBufferLength = bufferMode === "prefetch" ? 12 : 50;
-    const maxMaxBufferLength = bufferMode === "prefetch" ? 12 : 80;
-    hls = new Hls({
-      lowLatencyMode: false,
-      maxBufferLength,
-      maxMaxBufferLength,
-      backBufferLength: 30,
-      maxBufferHole: 0,
-      maxFragLookUpTolerance: 0,
-      enableWorker: true,
-      appendErrorMaxRetry: 20,
-      manifestLoadingTimeOut: 30000,
-      manifestLoadingMaxRetry: 10,
-      manifestLoadingMaxRetryTimeout: 30000,
-      levelLoadingTimeOut: 30000,
-      levelLoadingMaxRetry: 10,
-      levelLoadingMaxRetryTimeout: 30000,
-      fragLoadPolicy: {
-        default: {
-          maxTimeToFirstByteMs: 10000,
-          maxLoadTimeMs: 120000,
-          timeoutRetry: {
-            maxNumRetry: 20,
-            retryDelayMs: 0,
-            maxRetryDelayMs: 15,
-          },
-          errorRetry: {
-            maxNumRetry: 6,
-            retryDelayMs: 1000,
-            maxRetryDelayMs: 8000,
-          },
-        },
-      },
-    });
-
-    const onInitialParsed = () => {
-      hls?.off(Hls.Events.MANIFEST_PARSED, onInitialParsed);
-      console.log("HLS MANIFEST_PARSED (initial)");
-      setLoading(false);
-      setShowCanvas(false);
-
-      // Best-effort: after manifest is parsed, browsers typically have enough info
-      // for currentTime corrections to stick.
-      enforceLocalStartAtZero();
-      setTimeout(enforceLocalStartAtZero, 200);
-      setTimeout(enforceLocalStartAtZero, 600);
-
-      if (autoPlay) {
-        videoElem.play().catch((err) => {
-          console.warn("autoplay failed:", err);
-        });
-      }
-    };
-
-    let networkRetries = 0;
-    let mediaRetries = 0;
-    const MAX_NETWORK_RETRIES = 5;
-    const MAX_MEDIA_RETRIES = 3;
-
-    hls.on(Hls.Events.MANIFEST_LOADED, (_, data) => {
-      console.log("MANIFEST_LOADED data:", data);
-      if (
-        data.networkDetails &&
-        data.networkDetails instanceof XMLHttpRequest
-      ) {
-        console.log("Network details is XHR");
-        const startHeader = data.networkDetails.getResponseHeader(
-          "X-Raffi-Slice-Start",
-        );
-        if (startHeader) {
-          const val = parseFloat(startHeader);
-          if (!isNaN(val)) {
-            console.log("Received slice start offset:", val);
-            const responseUrl = data.networkDetails.responseURL;
-            const isSeekManifest = responseUrl.includes("seek=");
-            if (!treatAsLocalFile || isSeekManifest) {
-              setPlaybackOffset(val);
-            }
-          } else {
-            console.warn("Invalid slice start header:", startHeader);
-          }
-        } else {
-          console.warn("No X-Raffi-Slice-Start header found");
-        }
-      }
-    });
-
-    hls.on(Hls.Events.MANIFEST_PARSED, onInitialParsed);
-
-    // Retries represent consecutive failures, not every transient failure over
-    // the lifetime of a movie. A successful fragment proves the pipeline has
-    // recovered and must reset the circuit breaker.
-    hls.on(Hls.Events.FRAG_LOADED, () => {
-      networkRetries = 0;
-    });
-    hls.on(Hls.Events.FRAG_BUFFERED, () => {
-      networkRetries = 0;
-      mediaRetries = 0;
-    });
-
-    hls.on(Hls.Events.ERROR, (_, data) => {
-      console.error("HLS ERROR", data);
-      if (data.fatal) {
-        switch (data.type) {
-          case Hls.ErrorTypes.NETWORK_ERROR:
-            networkRetries++;
-            if (networkRetries <= MAX_NETWORK_RETRIES) {
-              console.log(
-                `fatal network error, retry ${networkRetries}/${MAX_NETWORK_RETRIES}`,
-              );
-              hls?.startLoad();
-            } else {
-              hls?.destroy();
-              setErrorMessage("Network error");
-              setErrorDetails(
-                "Failed to load stream after multiple retries. Please try again or select another stream.",
-              );
-              setShowError(true);
-              setLoading(false);
-            }
-            break;
-          case Hls.ErrorTypes.MEDIA_ERROR:
-            mediaRetries++;
-            if (mediaRetries <= MAX_MEDIA_RETRIES) {
-              console.log(
-                `fatal media error, retry ${mediaRetries}/${MAX_MEDIA_RETRIES}`,
-              );
-              hls?.recoverMediaError();
-            } else {
-              hls?.destroy();
-              setErrorMessage("Media error");
-              setErrorDetails(
-                "Failed to decode stream. Please try another stream.",
-              );
-              setShowError(true);
-              setLoading(false);
-            }
-            break;
-          default:
-            hls?.destroy();
-            setErrorMessage("Failed to load stream");
-            setErrorDetails(data.details || "");
-            setShowError(true);
-            setLoading(false);
-            break;
-        }
-      }
-    });
-
-    hls.loadSource(baseManifest);
-    hls.attachMedia(videoElem);
-
-    // Extra safety for offset-start sources (one-shot only).
-    videoElem.addEventListener("loadedmetadata", enforceLocalStartAtZero, {
-      once: true,
-    });
-  } else if (videoElem.canPlayType("application/vnd.apple.mpegurl")) {
-    videoElem.src = baseManifest;
-    videoElem.addEventListener("loadedmetadata", () => {
-      enforceLocalStartAtZero();
-      if (autoPlay) {
-        videoElem.play().catch((err) => {
-          console.warn("autoplay failed:", err);
-        });
-      }
-    });
-  } else {
-    console.error("No HLS support");
-  }
-
-  detachSeekingListener(videoElem);
-  seekingListeners.set(videoElem, onSeeking);
-  videoElem.addEventListener("seeking", onSeeking);
-
-  return hls;
+		throw new Error(
+			src.startsWith("magnet:")
+				? "Torrent playback requires Limbo. Install Limbo and enable Allow Torrenting."
+				: "This stream cannot be played in-app. Try another source.",
+		);
+	} catch (err) {
+		console.error("Error loading video:", err);
+		const sourceType = src.startsWith("magnet:")
+			? "torrent"
+			: src.startsWith("http://") || src.startsWith("https://")
+				? "direct"
+				: "local";
+		trackEvent("stream_load_failed", {
+			source_type: sourceType,
+			is_torrent: sourceType === "torrent",
+			is_local: sourceType === "local",
+			error_name: err instanceof Error ? err.name : "unknown",
+		});
+		setErrorMessage("Failed to initialize playback");
+		setErrorDetails(err instanceof Error ? err.message : String(err));
+		setShowError(true);
+		setLoading(false);
+		throw err;
+	}
 }
 
 export function performSeek(
-  targetGlobal: number,
-  duration: number,
-  playbackOffset: number,
-  videoElem: HTMLVideoElement | null,
-  captureFrameFn: () => void,
-  updateDiscordActivity: () => void,
-  isWatchPartyHost: boolean,
-  ignoreNextSeek: boolean,
-  isPlaying: boolean,
-  updatePlaybackState: (time: number, playing: boolean) => void,
-  setStates: {
-    setPendingSeek: (seek: number | null) => void;
-    setCurrentTime: (time: number) => void;
-    setShowCanvas: (show: boolean) => void;
-    setIgnoreNextSeek: (ignore: boolean) => void;
-  },
-  opts?: {
-    /** MediaBunny rebuilds MSE on unbuffered seeks — don't poke the old element. */
-    clientRemuxHardSeek?: boolean;
-  },
+	targetGlobal: number,
+	duration: number,
+	playbackOffset: number,
+	videoElem: HTMLVideoElement | null,
+	captureFrameFn: () => void,
+	updateDiscordActivity: () => void,
+	isWatchPartyHost: boolean,
+	ignoreNextSeek: boolean,
+	isPlaying: boolean,
+	updatePlaybackState: (time: number, playing: boolean) => void,
+	setStates: {
+		setPendingSeek: (seek: number | null) => void;
+		setCurrentTime: (time: number) => void;
+		setShowCanvas: (show: boolean) => void;
+		setIgnoreNextSeek: (ignore: boolean) => void;
+	},
+	opts?: {
+		/** MediaBunny rebuilds MSE on unbuffered seeks — don't poke the old element. */
+		clientRemuxHardSeek?: boolean;
+	},
 ) {
-  const { setPendingSeek, setCurrentTime, setShowCanvas, setIgnoreNextSeek } =
-    setStates;
+	const { setPendingSeek, setCurrentTime, setShowCanvas, setIgnoreNextSeek } =
+		setStates;
 
-  if (!videoElem || duration <= 0) return;
+	if (!videoElem || duration <= 0) return;
 
-  targetGlobal = Math.max(0, Math.min(duration, targetGlobal));
+	targetGlobal = Math.max(0, Math.min(duration, targetGlobal));
 
-  setPendingSeek(targetGlobal);
-  const localTarget = targetGlobal - playbackOffset;
+	setPendingSeek(targetGlobal);
+	const localTarget = targetGlobal - playbackOffset;
 
-  if (isTimeBuffered(videoElem, localTarget)) {
-    videoElem.currentTime = localTarget;
-    setPendingSeek(null);
-  } else if (opts?.clientRemuxHardSeek) {
-    captureFrameFn();
-    setShowCanvas(true);
-    // Fire the seeking handler without moving the old MediaSource playhead.
-    videoElem.dispatchEvent(new Event("seeking"));
-  } else {
-    captureFrameFn();
-    setShowCanvas(true);
-    videoElem.currentTime = Math.max(localTarget, 0);
-  }
-  setCurrentTime(targetGlobal);
-  updateDiscordActivity();
+	if (isTimeBuffered(videoElem, localTarget)) {
+		videoElem.currentTime = localTarget;
+		setPendingSeek(null);
+	} else if (opts?.clientRemuxHardSeek) {
+		try {
+			videoElem.pause();
+		} catch {
+			// ignore
+		}
+		captureFrameFn();
+		setShowCanvas(true);
+		videoElem.dispatchEvent(new Event("seeking"));
+	} else {
+		try {
+			videoElem.pause();
+		} catch {
+			// ignore
+		}
+		captureFrameFn();
+		setShowCanvas(true);
+		videoElem.currentTime = Math.max(localTarget, 0);
+	}
+	setCurrentTime(targetGlobal);
+	updateDiscordActivity();
 
-  // Broadcast to watch party if host
-  if (isWatchPartyHost && !ignoreNextSeek) {
-    updatePlaybackState(targetGlobal, isPlaying);
-  }
-  setIgnoreNextSeek(false);
+	if (isWatchPartyHost && !ignoreNextSeek) {
+		updatePlaybackState(targetGlobal, isPlaying);
+	}
+	setIgnoreNextSeek(false);
 }
 
 export function createSeekHandler(
-  videoElem: HTMLVideoElement,
-  getHls: () => Hls | null,
-  getSessionId: () => string,
-  getPendingSeek: () => number | null,
-  getSeekGuard: () => boolean,
-  getPlaybackOffset: () => number,
-  getSubtitleTracks: () => Track[],
-  getCurrentSubtitleLabel: () => string,
-  handleSubtitleSelect: (track: Track) => void,
-  setStates: {
-    setPendingSeek: (seek: number | null) => void;
-    setSeekGuard: (guard: boolean) => void;
-    setBuffering: (buffering: boolean) => void;
-    setShowCanvas: (show: boolean) => void;
-    setFirstSeekLoad: (load: boolean) => void;
-    setPlaybackOffset: (offset: number) => void;
-    setShowError: (show: boolean) => void;
-    setErrorMessage: (message: string) => void;
-    setErrorDetails: (details: string) => void;
-  },
-  getMediaBunny?: () => {
-    seek: (time: number) => Promise<number>;
-    setAudioTrack?: (index: number, globalTime: number) => Promise<number>;
-  } | null,
+	videoElem: HTMLVideoElement,
+	getPendingSeek: () => number | null,
+	getSeekGuard: () => boolean,
+	getPlaybackOffset: () => number,
+	getSubtitleTracks: () => Track[],
+	getCurrentSubtitleLabel: () => string,
+	handleSubtitleSelect: (track: Track) => void,
+	setStates: {
+		setPendingSeek: (seek: number | null) => void;
+		setSeekGuard: (guard: boolean) => void;
+		setBuffering: (buffering: boolean) => void;
+		setShowCanvas: (show: boolean) => void;
+		setFirstSeekLoad: (load: boolean) => void;
+		setPlaybackOffset: (offset: number) => void;
+		setShowError: (show: boolean) => void;
+		setErrorMessage: (message: string) => void;
+		setErrorDetails: (details: string) => void;
+	},
+	getMediaBunny?: () => {
+		seek: (time: number) => Promise<number>;
+		setAudioTrack?: (index: number, globalTime: number) => Promise<number>;
+	} | null,
 ) {
-  const {
-    setPendingSeek,
-    setSeekGuard,
-    setBuffering,
-    setShowCanvas,
-    setFirstSeekLoad,
-    setPlaybackOffset,
-    setShowError,
-    setErrorMessage,
-    setErrorDetails,
-  } = setStates;
+	const {
+		setPendingSeek,
+		setSeekGuard,
+		setBuffering,
+		setShowCanvas,
+		setFirstSeekLoad,
+		setPlaybackOffset,
+		setShowError,
+		setErrorMessage,
+		setErrorDetails,
+	} = setStates;
 
-  let seekGeneration = 0;
-  const SEEK_TIMEOUT_MS = 18_000;
+	let seekGeneration = 0;
 
-  const reapplyActiveSubtitle = () => {
-    const currentSubtitleLabel = getCurrentSubtitleLabel();
-    if (currentSubtitleLabel === "Off") return;
-    const track = getSubtitleTracks().find((t) => t.selected);
-    if (track) {
-      handleSubtitleSelect(track);
-    }
-  };
+	const reapplyActiveSubtitle = () => {
+		const currentSubtitleLabel = getCurrentSubtitleLabel();
+		if (currentSubtitleLabel === "Off") return;
+		const track = getSubtitleTracks().find((t) => t.selected);
+		if (track) {
+			handleSubtitleSelect(track);
+		}
+	};
 
-  const handler = async () => {
-    if (!videoElem) return;
-    if (getSeekGuard()) return;
+	const handler = async () => {
+		if (!videoElem) return;
+		if (getSeekGuard()) return;
 
-    const pending = getPendingSeek();
-    if (pending == null) return;
+		const pending = getPendingSeek();
+		if (pending == null) return;
 
-    const desiredGlobal = pending;
-    setPendingSeek(null);
-    const playbackOffset = getPlaybackOffset();
-    const localTarget = desiredGlobal - playbackOffset;
-    const mediaBunny = getMediaBunny?.() ?? null;
+		const desiredGlobal = pending;
+		setPendingSeek(null);
+		const playbackOffset = getPlaybackOffset();
+		const localTarget = desiredGlobal - playbackOffset;
+		const mediaBunny = getMediaBunny?.() ?? null;
 
-    // Soft in-buffer seeks are fine once the decoder is warm. Skip them for
-    // MediaBunny when the target is before the remux window (negative local).
-    if (
-      !mediaBunny &&
-      isTimeBuffered(videoElem, localTarget)
-    ) {
-      videoElem.currentTime = localTarget;
-      return;
-    }
-    if (
-      mediaBunny &&
-      localTarget >= 0 &&
-      isTimeBuffered(videoElem, localTarget)
-    ) {
-      videoElem.currentTime = localTarget;
-      return;
-    }
+		if (!mediaBunny && isTimeBuffered(videoElem, localTarget)) {
+			videoElem.currentTime = localTarget;
+			return;
+		}
+		if (mediaBunny && localTarget >= 0 && isTimeBuffered(videoElem, localTarget)) {
+			videoElem.currentTime = localTarget;
+			return;
+		}
 
-    const generation = ++seekGeneration;
-    setSeekGuard(true);
-    setBuffering(true);
-    setShowCanvas(true);
-    setFirstSeekLoad(true);
+		const generation = ++seekGeneration;
+		const wasPlaying = !videoElem.paused;
+		setSeekGuard(true);
+		setBuffering(true);
+		setShowCanvas(true);
+		setFirstSeekLoad(true);
+		try {
+			videoElem.pause();
+		} catch {
+			// ignore
+		}
 
-    const finishClientSeekSuccess = () => {
-      if (generation !== seekGeneration) return;
-      setSeekGuard(false);
-      setBuffering(false);
-      setShowCanvas(false);
-      reapplyActiveSubtitle();
-      void handler();
-    };
+		const finishSuccess = () => {
+			if (generation !== seekGeneration) return;
+			setSeekGuard(false);
+			setBuffering(false);
+			setShowCanvas(false);
+			reapplyActiveSubtitle();
+			void handler();
+		};
 
-    const finishClientSeekFailure = (error: unknown) => {
-      if (generation !== seekGeneration) return;
-      setSeekGuard(false);
-      setBuffering(false);
-      setShowCanvas(false);
-      if (error instanceof DOMException && error.name === "AbortError") {
-        void handler();
-        return;
-      }
-      console.error("Failed to prepare seek", error);
-      setShowError(true);
-      setErrorMessage("Failed to seek");
-      setErrorDetails(error instanceof Error ? error.message : String(error));
-      void handler();
-    };
+		const finishFailure = (error: unknown) => {
+			if (generation !== seekGeneration) return;
+			setSeekGuard(false);
+			setBuffering(false);
+			setShowCanvas(false);
+			if (error instanceof DOMException && error.name === "AbortError") {
+				void handler();
+				return;
+			}
+			console.error("Failed to prepare seek", error);
+			setShowError(true);
+			setErrorMessage("Failed to seek");
+			setErrorDetails(error instanceof Error ? error.message : String(error));
+			void handler();
+		};
 
-    if (mediaBunny) {
-      try {
-        const wasPlaying = !videoElem.paused;
-        // Keep the scrubber on the target while remux rebuilds (src reset → t=0).
-        setPlaybackOffset(desiredGlobal);
-        const snapped = await mediaBunny.seek(desiredGlobal);
-        if (generation !== seekGeneration) return;
-        setPlaybackOffset(snapped);
-        if (wasPlaying) {
-          try {
-            await videoElem.play();
-          } catch {
-            // ignore autoplay restrictions
-          }
-        }
-        finishClientSeekSuccess();
-      } catch (error) {
-        finishClientSeekFailure(error);
-      }
-      return;
-    }
-    const sessionId = getSessionId();
-    if (!sessionId) {
-      setSeekGuard(false);
-      setBuffering(false);
-      setShowCanvas(false);
-      return;
-    }
-    const hlsInstance = getHls();
+		if (mediaBunny) {
+			try {
+				setPlaybackOffset(desiredGlobal);
+				const snapped = await mediaBunny.seek(desiredGlobal);
+				if (generation !== seekGeneration) return;
+				setPlaybackOffset(snapped);
+				if (wasPlaying) {
+					try {
+						await videoElem.play();
+					} catch {
+						// ignore autoplay restrictions
+					}
+				}
+				finishSuccess();
+			} catch (error) {
+				finishFailure(error);
+			}
+			return;
+		}
 
-    let timeoutId: ReturnType<typeof setTimeout> | null = setTimeout(() => {
-      if (generation !== seekGeneration) return;
-      console.error("Seek timed out", desiredGlobal);
-      setSeekGuard(false);
-      setBuffering(false);
-      setShowCanvas(false);
-      setShowError(true);
-      setErrorMessage("Seek timed out");
-      setErrorDetails("The stream did not become ready in time after seeking.");
-      void handler();
-    }, SEEK_TIMEOUT_MS);
+		// Direct / addon HLS — browser or hls.js fills the gap after currentTime moves.
+		const onSeeked = () => {
+			if (generation !== seekGeneration) return;
+			videoElem.removeEventListener("seeked", onSeeked);
+			videoElem.removeEventListener("error", onError);
+			if (wasPlaying) {
+				videoElem.play().catch((err) => {
+					console.warn("play after seek failed:", err);
+				});
+			}
+			finishSuccess();
+		};
+		const onError = () => {
+			if (generation !== seekGeneration) return;
+			videoElem.removeEventListener("seeked", onSeeked);
+			videoElem.removeEventListener("error", onError);
+			finishFailure(new Error("Seek failed"));
+		};
 
-    const clearSeekTimeout = () => {
-      if (timeoutId != null) {
-        clearTimeout(timeoutId);
-        timeoutId = null;
-      }
-    };
+		videoElem.addEventListener("seeked", onSeeked);
+		videoElem.addEventListener("error", onError);
+		try {
+			videoElem.currentTime = Math.max(localTarget, 0);
+		} catch (error) {
+			videoElem.removeEventListener("seeked", onSeeked);
+			videoElem.removeEventListener("error", onError);
+			finishFailure(error);
+		}
+	};
 
-    const finishSeekSuccess = () => {
-      if (generation !== seekGeneration) return;
-      clearSeekTimeout();
-      setSeekGuard(false);
-      setBuffering(false);
-      setShowCanvas(false);
-      reapplyActiveSubtitle();
-      void handler();
-    };
-
-    const finishSeekFailure = (error: unknown) => {
-      if (generation !== seekGeneration) return;
-      clearSeekTimeout();
-      setSeekGuard(false);
-      setBuffering(false);
-      setShowCanvas(false);
-      if (error instanceof DOMException && error.name === "AbortError") {
-        void handler();
-        return;
-      }
-      console.error("Failed to prepare seek", error);
-      setShowError(true);
-      setErrorMessage("Failed to seek");
-      setErrorDetails(error instanceof Error ? error.message : String(error));
-      void handler();
-    };
-
-    try {
-      const url = await prepareHLSManifest(sessionId, desiredGlobal);
-      if (generation !== seekGeneration) return;
-      console.log("Hard seek to", desiredGlobal, "->", url);
-
-      if (hlsInstance) {
-        const onSeekParsed = () => {
-          if (generation !== seekGeneration) return;
-          console.log("HLS MANIFEST_PARSED (seek)");
-          hlsInstance.off(Hls.Events.MANIFEST_PARSED, onSeekParsed);
-          finishSeekSuccess();
-          videoElem.play().catch((err) => {
-            console.warn("play after seek failed:", err);
-          });
-        };
-
-        hlsInstance.on(Hls.Events.MANIFEST_PARSED, onSeekParsed);
-        hlsInstance.stopLoad();
-        hlsInstance.loadSource(url);
-        hlsInstance.startLoad(0);
-      } else {
-        videoElem.src = url;
-        videoElem.onloadedmetadata = () => {
-          if (generation !== seekGeneration) return;
-          setPlaybackOffset(desiredGlobal);
-          videoElem.currentTime = 0;
-          finishSeekSuccess();
-          videoElem
-            .play()
-            .catch((err) => console.warn("play after seek failed:", err));
-        };
-      }
-    } catch (error) {
-      finishSeekFailure(error);
-    }
-  };
-
-  return handler;
+	return handler;
 }
 
 export function cleanupSession(
-  hls: Hls | null,
-  sessionId: string,
-  clearActivity: () => void,
-  leaveWatchParty: () => void,
-  isWatchPartyActive: boolean,
-  videoElem?: HTMLVideoElement | null,
+	hls: Hls | null,
+	clearActivity: () => void,
+	leaveWatchParty: () => void,
+	isWatchPartyActive: boolean,
+	videoElem?: HTMLVideoElement | null,
 ) {
-  clearActivity();
-  activeMetadataRefresh?.abort();
-  activeMetadataRefresh = null;
-  metadataRefreshGeneration += 1;
+	clearActivity();
 
-  if (isWatchPartyActive) {
-    leaveWatchParty();
-  }
+	if (isWatchPartyActive) {
+		leaveWatchParty();
+	}
 
-  if (hls) {
-    hls.destroy();
-  }
+	if (hls) {
+		hls.destroy();
+	}
 
-  detachSeekingListener(videoElem);
-  cleanupServerSession(sessionId);
+	detachSeekingListener(videoElem);
 }
 
 export async function handleAudioSelect(
-  track: Track,
-  audioTracks: Track[],
-  sessionId: string,
-  hls: Hls | null,
-  currentTime: number,
-  videoElem: HTMLVideoElement,
-  initHLSFn: (sessionId: string, time: number) => void,
-  setStates: {
-    setAudioTracks: (tracks: Track[]) => void;
-    setCurrentAudioLabel: (label: string) => void;
-    setLoading?: (loading: boolean) => void;
-    setLoadingStage?: (stage: string) => void;
-    setPlaybackOffset?: (offset: number) => void;
-  },
-  getMediaBunny?: () => {
-    seek: (time: number) => Promise<number>;
-    setAudioTrack: (index: number, globalTime: number) => Promise<number>;
-  } | null,
+	track: Track,
+	audioTracks: Track[],
+	currentTime: number,
+	videoElem: HTMLVideoElement,
+	setStates: {
+		setAudioTracks: (tracks: Track[]) => void;
+		setCurrentAudioLabel: (label: string) => void;
+		setLoading?: (loading: boolean) => void;
+		setLoadingStage?: (stage: string) => void;
+		setPlaybackOffset?: (offset: number) => void;
+	},
+	getMediaBunny?: () => {
+		seek: (time: number) => Promise<number>;
+		setAudioTrack: (index: number, globalTime: number) => Promise<number>;
+	} | null,
 ) {
-  const { setAudioTracks, setCurrentAudioLabel, setLoading, setLoadingStage, setPlaybackOffset } =
-    setStates;
+	const { setAudioTracks, setCurrentAudioLabel, setLoading, setLoadingStage, setPlaybackOffset } =
+		setStates;
 
-  if (track.selected) return;
+	if (track.selected) return;
 
-  const updatedTracks = audioTracks.map((t) => ({
-    ...t,
-    selected: t.id === track.id,
-  }));
-  setAudioTracks(updatedTracks);
-  setCurrentAudioLabel(track.label);
+	const updatedTracks = audioTracks.map((t) => ({
+		...t,
+		selected: t.id === track.id,
+	}));
+	setAudioTracks(updatedTracks);
+	setCurrentAudioLabel(track.label);
 
-  try {
-    if (setLoading) setLoading(true);
-    if (setLoadingStage) setLoadingStage("Switching audio track");
+	try {
+		if (setLoading) setLoading(true);
+		if (setLoadingStage) setLoadingStage("Switching audio track");
 
-    const mediaBunny = getMediaBunny?.() ?? null;
-    if (mediaBunny) {
-      const audioIndex = typeof track.id === "number" ? track.id : Number(track.id);
-      if (!Number.isFinite(audioIndex)) {
-        throw new Error("Invalid audio track");
-      }
-      setPlaybackOffset?.(currentTime);
-      const snapped = await mediaBunny.setAudioTrack(audioIndex, currentTime);
-      setPlaybackOffset?.(snapped);
-      if (!videoElem.paused) {
-        void videoElem.play().catch(() => {
-          // ignore
-        });
-      }
-      if (setLoading) setLoading(false);
-      if (setLoadingStage) setLoadingStage("");
-      return;
-    }
+		const mediaBunny = getMediaBunny?.() ?? null;
+		if (!mediaBunny) {
+			throw new Error("Audio track switching needs in-app remux for this stream");
+		}
 
-    await decoderFetch(`${serverUrl}/sessions/${sessionId}/audio`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ index: track.id }),
-    });
-
-    const time = currentTime;
-    if (hls) {
-      hls.destroy();
-    }
-    initHLSFn(sessionId, time);
-  } catch (err) {
-    console.error("Failed to switch audio:", err);
-    if (setLoading) setLoading(false);
-    if (setLoadingStage) setLoadingStage("");
-  }
+		const audioIndex = typeof track.id === "number" ? track.id : Number(track.id);
+		if (!Number.isFinite(audioIndex)) {
+			throw new Error("Invalid audio track");
+		}
+		setPlaybackOffset?.(currentTime);
+		const snapped = await mediaBunny.setAudioTrack(audioIndex, currentTime);
+		setPlaybackOffset?.(snapped);
+		if (!videoElem.paused) {
+			void videoElem.play().catch(() => {
+				// ignore
+			});
+		}
+		if (setLoading) setLoading(false);
+		if (setLoadingStage) setLoadingStage("");
+	} catch (err) {
+		console.error("Failed to switch audio:", err);
+		if (setLoading) setLoading(false);
+		if (setLoadingStage) setLoadingStage("");
+	}
 }

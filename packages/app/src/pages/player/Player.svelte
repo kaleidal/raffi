@@ -95,7 +95,6 @@
         startNextEpisodePrefetch,
         type NextEpisodePrefetchHandoff,
     } from "./nextEpisodePrefetch";
-    import { serverUrl } from "../../lib/client";
     import type { Chapter } from "./types";
 
     // Props
@@ -258,7 +257,7 @@
         const src = currentVideoSrc || videoSrc || "";
         const support = src ? Session.getDirectMediaSupport(src, videoElem) : null;
         const altStreamHint = isDesktopPlatform
-            ? "Try an MP4, WebM, or HLS stream. MKV/E-AC-3/DTS streams can be remuxed via the local playback server's transcoder settings."
+            ? "Try an MP4, WebM, or HLS stream. MKV and some audio codecs can be remuxed in-app with MediaBunny."
             : "Try an MP4, WebM, or HLS stream, or use the desktop app for MKV/E-AC-3/DTS streams.";
         if (support && !support.supported) {
             return `This browser does not report support for ${support.container}. ${altStreamHint}`;
@@ -481,7 +480,6 @@
     let canvasElem: HTMLCanvasElement;
     let hls: any = null;
     let mediaBunny: import("../../lib/media").MediaBunnyPlayback | null = null;
-    let sessionId: string;
     let currentVideoSrc: string | null = null;
     let currentEmbedSrc: string | null = null;
     let metadataCheckInterval: any;
@@ -604,7 +602,6 @@
     };
 
     const torrentStatusPoller = createTorrentStatusPoller({
-        serverUrl,
         onTorrentError: handleTorrentError,
     });
 
@@ -627,10 +624,6 @@
         setMediaBunny: (value) => {
             mediaBunny = value;
         },
-        setSessionId: (value) => {
-            sessionId = value;
-        },
-        getSessionId: () => sessionId,
         getCueLinePercent: () => cueLinePercent,
         shouldShowSeekStyleInfoModal,
         setPendingStartAfterSeekStyleModal: (value) => {
@@ -903,7 +896,6 @@
         }
         Session.cleanupSession(
             hls,
-            sessionId,
             Discord.clearDiscordActivity,
             WatchParty.leaveWatchParty,
             $watchParty.isActive,
@@ -1051,6 +1043,11 @@
     };
 
     const handlePause = () => {
+        // Hard seeks pause the element on purpose while remux/HLS rebuilds —
+        // don't treat that as a user pause (Trakt / Discord / watch party).
+        if (get(seekGuard) || get(pendingSeek) != null) {
+            return;
+        }
         isPlaying.set(false);
         if (
             !traktScrobbler.isStopSent() &&
@@ -1097,7 +1094,6 @@
         playerSessionLoader.cancelCurrentLoad();
         Session.cleanupSession(
             hls,
-            sessionId,
             Discord.clearDiscordActivity,
             WatchParty.leaveWatchParty,
             $watchParty.isActive,
@@ -1167,12 +1163,7 @@
     };
 
     const modalHandlers = createPlayerModalHandlers({
-        getSessionId: () => sessionId,
         getVideoElem: () => videoElem,
-        getHls: () => hls,
-        setHls: (value) => {
-            hls = value;
-        },
         getCueLinePercent: () => cueLinePercent,
         getPlaybackAnalyticsProps,
         getVideoSrc: () => videoSrc,
@@ -1223,14 +1214,12 @@
         handleNextEpisodeClick.cancel();
         Session.cleanupSession(
             hls,
-            sessionId,
             Discord.clearDiscordActivity,
             WatchParty.leaveWatchParty,
             $watchParty.isActive,
             videoElem,
         );
         hls = null;
-        sessionId = "";
         loading.set(true);
         loadingStage.set("Loading embedded player");
         loadingDetails.set("");
@@ -1261,7 +1250,6 @@
 
         const reuseSession = canReuseHandoff
             ? {
-                  sessionId: handoff.sessionId,
                   sessionData: handoff.sessionData,
               }
             : undefined;
@@ -1271,7 +1259,6 @@
         disposeNextEpisodePrefetch(reuseSession ? { transfer: true } : undefined);
         Session.cleanupSession(
             hls,
-            sessionId,
             Discord.clearDiscordActivity,
             WatchParty.leaveWatchParty,
             $watchParty.isActive,
@@ -1567,7 +1554,6 @@
                         volume={$volume}
                         {seekBarStyle}
                         chapterMarkers={effectiveChapterMarkers}
-                        {sessionId}
                         {videoSrc}
                         {metaData}
                         currentAudioLabel={$currentAudioLabel}

@@ -28,7 +28,7 @@ export type ClientClipResult = {
 };
 
 /**
- * Remux/transcode a time range to fragmented MP4 in-process (no Go sidecar).
+ * Remux/transcode a time range to fragmented MP4 in-process.
  */
 export async function exportClipWithMediaBunny(
 	req: ClientClipRequest,

@@ -1,212 +1,153 @@
 import { get } from "svelte/store";
 import { trackEvent } from "../../lib/analytics";
 import {
-    audioTracks,
-    currentAudioLabel,
-    currentSubtitleLabel,
-    currentTime,
-    errorDetails,
-    errorMessage,
-    firstSeekLoad,
-    loading,
-    loadingStage,
-    playbackBuffering,
-    pendingSeek,
-    playbackOffset,
-    seekGuard,
-    showAudioSelection,
-    showCanvas,
-    showError,
-    showSubtitleSelection,
-    showWatchPartyModal,
-    subtitleTracks,
+	audioTracks,
+	currentAudioLabel,
+	currentSubtitleLabel,
+	currentTime,
+	errorDetails,
+	errorMessage,
+	loading,
+	loadingStage,
+	playbackOffset,
+	showAudioSelection,
+	showError,
+	showSubtitleSelection,
+	showWatchPartyModal,
+	subtitleTracks,
 } from "./playerState";
 import { getTrackAnalyticsProps } from "./playerAnalytics";
 import * as Session from "./videoSession";
 import * as Subtitles from "./subtitles";
 
 export const createPlayerModalHandlers = ({
-    getSessionId,
-    getVideoElem,
-    getHls,
-    setHls,
-    getCueLinePercent,
-    getPlaybackAnalyticsProps,
-    getVideoSrc,
-    loadVideo,
-    handleClose,
-    getMediaBunny,
+	getVideoElem,
+	getCueLinePercent,
+	getPlaybackAnalyticsProps,
+	getVideoSrc,
+	loadVideo,
+	handleClose,
+	getMediaBunny,
 }: {
-    getSessionId: () => string;
-    getVideoElem: () => HTMLVideoElement | null | undefined;
-    getHls: () => any;
-    setHls: (value: any) => void;
-    getCueLinePercent: () => number;
-    getPlaybackAnalyticsProps: () => Record<string, any>;
-    getVideoSrc: () => string | null;
-    loadVideo: (src: string) => void | Promise<void>;
-    handleClose: () => void | Promise<void>;
-    getMediaBunny?: () => {
-        seek: (time: number) => Promise<number>;
-        setAudioTrack: (index: number, globalTime: number) => Promise<number>;
-    } | null;
+	getVideoElem: () => HTMLVideoElement | null | undefined;
+	getCueLinePercent: () => number;
+	getPlaybackAnalyticsProps: () => Record<string, unknown>;
+	getVideoSrc: () => string | null;
+	loadVideo: (src: string) => void | Promise<void>;
+	handleClose: () => void | Promise<void>;
+	getMediaBunny?: () => {
+		seek: (time: number) => Promise<number>;
+		setAudioTrack: (index: number, globalTime: number) => Promise<number>;
+	} | null;
 }) => {
-    const onAudioSelect = (detail: any) => {
-        trackEvent("audio_track_selected", {
-            ...getPlaybackAnalyticsProps(),
-            ...getTrackAnalyticsProps(detail, "audio"),
-        });
+	const onAudioSelect = (detail: unknown) => {
+		trackEvent("audio_track_selected", {
+			...getPlaybackAnalyticsProps(),
+			...getTrackAnalyticsProps(detail, "audio"),
+		});
 
-        const videoElem = getVideoElem();
-        if (!videoElem) return;
+		const videoElem = getVideoElem();
+		if (!videoElem) return;
 
-        Session.handleAudioSelect(
-            detail,
-            get(audioTracks),
-            getSessionId(),
-            getHls(),
-            get(currentTime),
-            videoElem,
-            (sid, time) =>
-                setHls(
-                    Session.initHLS(
-                        videoElem,
-                        sid,
-                        time,
-                        true,
-                        Session.createSeekHandler(
-                            videoElem,
-                            getHls,
-                            () => sid,
-                            () => get(pendingSeek),
-                            () => get(seekGuard),
-                            () => get(playbackOffset),
-                            () => get(subtitleTracks),
-                            () => get(currentSubtitleLabel),
-                            (track) =>
-                                Subtitles.handleSubtitleSelect(
-                                    track,
-                                    videoElem,
-                                    get(currentTime),
-                                    get(playbackOffset),
-                                    getCueLinePercent,
-                                ),
-                            {
-                                setPendingSeek: pendingSeek.set,
-                                setSeekGuard: seekGuard.set,
-                                setBuffering: playbackBuffering.set,
-                                setShowCanvas: showCanvas.set,
-                                setFirstSeekLoad: firstSeekLoad.set,
-                                setPlaybackOffset: playbackOffset.set,
-                                setShowError: showError.set,
-                                setErrorMessage: errorMessage.set,
-                                setErrorDetails: errorDetails.set,
-                            },
-                            getMediaBunny,
-                        ),
-                        {
-                            setLoading: loading.set,
-                            setShowCanvas: showCanvas.set,
-                            setPlaybackOffset: playbackOffset.set,
-                            setShowError: showError.set,
-                            setErrorMessage: errorMessage.set,
-                            setErrorDetails: errorDetails.set,
-                        },
-                    ),
-                ),
-            {
-                setAudioTracks: audioTracks.set,
-                setCurrentAudioLabel: currentAudioLabel.set,
-                setLoading: loading.set,
-                setLoadingStage: loadingStage.set,
-                setPlaybackOffset: playbackOffset.set,
-            },
-            getMediaBunny,
-        );
-    };
+		void Session.handleAudioSelect(
+			detail as import("./types").Track,
+			get(audioTracks),
+			get(currentTime),
+			videoElem,
+			{
+				setAudioTracks: audioTracks.set,
+				setCurrentAudioLabel: currentAudioLabel.set,
+				setLoading: loading.set,
+				setLoadingStage: loadingStage.set,
+				setPlaybackOffset: playbackOffset.set,
+			},
+			getMediaBunny,
+		);
+	};
 
-    const onSubtitleSelect = (detail: any) => {
-        trackEvent("subtitle_selected", {
-            ...getPlaybackAnalyticsProps(),
-            ...getTrackAnalyticsProps(detail, "subtitles"),
-        });
+	const onSubtitleSelect = (detail: unknown) => {
+		trackEvent("subtitle_selected", {
+			...getPlaybackAnalyticsProps(),
+			...getTrackAnalyticsProps(detail, "subtitles"),
+		});
 
-        const videoElem = getVideoElem();
-        if (!videoElem) return;
+		const videoElem = getVideoElem();
+		if (!videoElem) return;
 
-        subtitleTracks.update((tracks) =>
-            tracks.map((track) => ({
-                ...track,
-                selected: track.id === detail.id,
-            })),
-        );
-        currentSubtitleLabel.set(detail.label);
-        void Subtitles.handleSubtitleSelect(
-            detail,
-            videoElem,
-            get(currentTime),
-            get(playbackOffset),
-            getCueLinePercent,
-        );
-    };
+		const track = detail as import("./types").Track;
+		subtitleTracks.update((tracks) =>
+			tracks.map((entry) => ({
+				...entry,
+				selected: entry.id === track.id,
+			})),
+		);
+		currentSubtitleLabel.set(track.label);
+		void Subtitles.handleSubtitleSelect(
+			track,
+			videoElem,
+			get(currentTime),
+			get(playbackOffset),
+			getCueLinePercent,
+		);
+	};
 
-    const onSubtitleDelayChange = ({ seconds }: { seconds: number }) => {
-        trackEvent("subtitle_delay_changed", {
-            ...getPlaybackAnalyticsProps(),
-            delay_seconds: seconds,
-        });
+	const onSubtitleDelayChange = ({ seconds }: { seconds: number }) => {
+		trackEvent("subtitle_delay_changed", {
+			...getPlaybackAnalyticsProps(),
+			delay_seconds: seconds,
+		});
 
-        const selected = get(subtitleTracks).find((track) => track.selected);
-        if (!selected || selected.id === "off") return;
+		const selected = get(subtitleTracks).find((track) => track.selected);
+		if (!selected || selected.id === "off") return;
 
-        const videoElem = getVideoElem();
-        if (!videoElem) return;
+		const videoElem = getVideoElem();
+		if (!videoElem) return;
 
-        void Subtitles.handleSubtitleSelect(
-            selected,
-            videoElem,
-            get(currentTime),
-            get(playbackOffset),
-            getCueLinePercent,
-        );
-    };
+		void Subtitles.handleSubtitleSelect(
+			selected,
+			videoElem,
+			get(currentTime),
+			get(playbackOffset),
+			getCueLinePercent,
+		);
+	};
 
-    const onErrorRetry = () => {
-        trackEvent("player_error_retry", getPlaybackAnalyticsProps());
-        showError.set(false);
-        errorMessage.set("");
-        errorDetails.set("");
-        const src = getVideoSrc();
-        if (src) {
-            void loadVideo(src);
-        }
-    };
+	const onErrorRetry = () => {
+		trackEvent("player_error_retry", getPlaybackAnalyticsProps());
+		showError.set(false);
+		errorMessage.set("");
+		errorDetails.set("");
+		const src = getVideoSrc();
+		if (src) {
+			void loadVideo(src);
+		}
+	};
 
-    const onErrorBack = () => {
-        trackEvent("player_error_back", getPlaybackAnalyticsProps());
-        showError.set(false);
-        void handleClose();
-    };
+	const onErrorBack = () => {
+		trackEvent("player_error_back", getPlaybackAnalyticsProps());
+		showError.set(false);
+		void handleClose();
+	};
 
-    const onCloseAudio = () => showAudioSelection.set(false);
-    const onCloseSubtitle = () => showSubtitleSelection.set(false);
-    const onCloseWatchParty = () => showWatchPartyModal.set(false);
+	const onCloseAudio = () => showAudioSelection.set(false);
+	const onCloseSubtitle = () => showSubtitleSelection.set(false);
+	const onCloseWatchParty = () => showWatchPartyModal.set(false);
 
-    const onFileSelected = (file: any) => {
-        if (file?.path) {
-            void loadVideo(file.path);
-        }
-    };
+	const onFileSelected = (file: { path?: string } | null) => {
+		if (file?.path) {
+			void loadVideo(file.path);
+		}
+	};
 
-    return {
-        onAudioSelect,
-        onSubtitleSelect,
-        onSubtitleDelayChange,
-        onErrorRetry,
-        onErrorBack,
-        onCloseAudio,
-        onCloseSubtitle,
-        onCloseWatchParty,
-        onFileSelected,
-    };
+	return {
+		onAudioSelect,
+		onSubtitleSelect,
+		onSubtitleDelayChange,
+		onErrorRetry,
+		onErrorBack,
+		onCloseAudio,
+		onCloseSubtitle,
+		onCloseWatchParty,
+		onFileSelected,
+	};
 };

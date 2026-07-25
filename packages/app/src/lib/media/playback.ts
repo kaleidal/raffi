@@ -31,7 +31,6 @@ import { ensureMediaCodersRegistered } from "./registerCoders";
 export type HttpPlaybackMode =
 	| "direct"
 	| "mediabunny"
-	| "server"
 	| "addon-hls"
 	| "unsupported";
 
@@ -39,6 +38,7 @@ export type ResolvedHttpPlayback = {
 	mode: HttpPlaybackMode;
 	meta: ProbedStream | null;
 	reason: string;
+	error?: string;
 };
 
 const BROWSER_SAFE_AUDIO = new Set<AudioCodec | null>([
@@ -58,7 +58,7 @@ export async function resolveHttpPlayback(
 		return { mode: "unsupported", meta: null, reason: "empty" };
 	}
 	if (/^magnet:/i.test(src)) {
-		return { mode: "server", meta: null, reason: "torrent" };
+		return { mode: "unsupported", meta: null, reason: "torrent" };
 	}
 
 	const playable = toClientPlayableUrl(src);
@@ -66,7 +66,7 @@ export async function resolveHttpPlayback(
 		isLocalFilesystemPath(src) || isLocalMediaUrl(playable);
 
 	if (!/^https?:\/\//i.test(playable) && !isLocalMediaUrl(playable)) {
-		return { mode: "server", meta: null, reason: "non-http" };
+		return { mode: "unsupported", meta: null, reason: "non-http" };
 	}
 	if (/\.m3u8(\?|$)/i.test(playable)) {
 		return { mode: "addon-hls", meta: null, reason: "addon-hls" };
@@ -89,9 +89,6 @@ export async function resolveHttpPlayback(
 		if (localSource) {
 			if (canUseMediaBunnyRemux(meta)) {
 				return { mode: "mediabunny", meta, reason: "local-remux" };
-			}
-			if (isDesktopPlatform) {
-				return { mode: "server", meta, reason: "local-fallback-server" };
 			}
 			return { mode: "unsupported", meta, reason: "local-unsupported" };
 		}
@@ -122,19 +119,13 @@ export async function resolveHttpPlayback(
 			return { mode: "mediabunny", meta, reason: "remux-or-transcode" };
 		}
 
-		if (isDesktopPlatform) {
-			return { mode: "server", meta, reason: "fallback-server" };
-		}
-
 		return { mode: "unsupported", meta, reason: "no-browser-path" };
 	} catch (error) {
 		if (error instanceof DOMException && error.name === "AbortError") {
 			throw error;
 		}
 		console.warn("MediaBunny probe failed", error);
-		if (isDesktopPlatform) {
-			return { mode: "server", meta: null, reason: "probe-failed" };
-		}
+		const message = error instanceof Error ? error.message : String(error);
 		if (
 			directSupport.supported &&
 			(directSupport.confidence === "probably" ||
@@ -142,7 +133,12 @@ export async function resolveHttpPlayback(
 		) {
 			return { mode: "direct", meta: null, reason: "probe-failed-direct" };
 		}
-		return { mode: "unsupported", meta: null, reason: "probe-failed" };
+		return {
+			mode: "unsupported",
+			meta: null,
+			reason: "probe-failed",
+			error: message,
+		};
 	}
 }
 
@@ -234,6 +230,11 @@ export class MediaBunnyPlayback {
 	/** Restarts remux at/near globalTime. Returns the actual remux origin (keyframe-snapped). */
 	async seek(globalTime: number): Promise<number> {
 		if (!this.video || !this.src || !this.meta) return globalTime;
+		try {
+			this.video.pause();
+		} catch {
+			// ignore
+		}
 		const clamped = Math.max(
 			0,
 			Math.min(this.meta.durationSeconds || globalTime, globalTime),
@@ -255,7 +256,7 @@ export class MediaBunnyPlayback {
 		}
 		if (!track.playable || track.bunnyIndex == null) {
 			throw new Error(
-				"This audio track needs the local playback server (unsupported codec for in-app remux).",
+				"This audio track uses a codec that cannot be remuxed in-app.",
 			);
 		}
 		this.audioIndex = index;
@@ -290,12 +291,21 @@ export class MediaBunnyPlayback {
 		this.generation += 1;
 		this.bufferPaused = false;
 		this.reachedEof = false;
-		this.abort?.abort();
-		this.abort = null;
+
+		if (this.video) {
+			try {
+				this.video.pause();
+			} catch {
+				// ignore
+			}
+		}
 
 		if (this.conversion) {
 			await this.cancelConversion();
 		}
+
+		this.abort?.abort();
+		this.abort = null;
 
 		if (this.input) {
 			this.input.dispose();
@@ -443,7 +453,18 @@ export class MediaBunnyPlayback {
 			throw new Error("MediaBunny playback is not attached");
 		}
 
+		try {
+			this.video.pause();
+		} catch {
+			// ignore
+		}
+
 		const generation = ++this.generation;
+		// Cancel the remuxer before aborting the MSE pump so in-flight VideoSamples
+		// can be closed instead of being GC'd mid-decode.
+		if (this.conversion) {
+			await this.cancelConversion();
+		}
 		this.abort?.abort();
 		const abort = new AbortController();
 		this.abort = abort;
@@ -453,9 +474,6 @@ export class MediaBunnyPlayback {
 		const onOuterAbort = () => abort.abort();
 		outerSignal?.addEventListener("abort", onOuterAbort, { once: true });
 
-		if (this.conversion) {
-			await this.cancelConversion();
-		}
 		if (this.input) {
 			this.input.dispose();
 			this.input = null;

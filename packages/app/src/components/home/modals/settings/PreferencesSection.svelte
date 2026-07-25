@@ -135,7 +135,10 @@
 			trackEvent("torrenting_toggled", { enabled });
 		} catch (error) {
 			console.error("Failed to update torrenting setting", error);
-			torrentingError = "Could not update the playback server. Please try again.";
+			torrentingError =
+				error instanceof Error
+					? error.message
+					: "Could not update torrenting. Make sure Limbo is running.";
 		} finally {
 			torrentingSaving = false;
 		}
@@ -381,7 +384,7 @@
 		<div>
 			<p class="text-white font-medium">Allow Torrenting</p>
 			<p class="text-white/60 text-sm">
-				Allow Raffi to start, download, and seed torrent streams. Turning this off stops all torrent activity.
+				Play magnet sources through Limbo. Install and open Limbo, then turn this on.
 			</p>
 			{#if torrentingError}
 				<p class="mt-1 text-red-300 text-xs">{torrentingError}</p>
