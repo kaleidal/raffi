@@ -1,6 +1,6 @@
 # Raffi Sync
 
-Raffi Sync is the Cloudflare Worker API used by the desktop and mobile apps for account-backed cloud data.
+Raffi Sync is the Cloudflare Worker API used by the desktop and web apps for account-backed cloud data.
 
 Production apps use `https://sync.raffi.al` by default.
 
