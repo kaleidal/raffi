@@ -12,27 +12,26 @@
   "homepage": "https://raffi.al",
   "scripts": {
     "dev": "vite --strictPort",
-    "electron:dev": "bun run server:build && cross-env NODE_ENV=development concurrently -k \"bun run dev\" \"wait-on http://localhost:5173 && cross-env ELECTRON_DISABLE_SANDBOX=1 electron .\"",
+    "electron:dev": "cross-env NODE_ENV=development concurrently -k \"bun run dev\" \"wait-on http://localhost:5173 && cross-env ELECTRON_DISABLE_SANDBOX=1 electron .\"",
     "electron:dev:only": "cross-env ELECTRON_DISABLE_SANDBOX=1 electron .",
     "build": "vite build",
-    "server:build": "node build_binary.cjs",
-    "dist": "bun run server:build && bun run build && electron-builder",
+    "dist": "bun run build && electron-builder",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "check:all": "bun run --filter @raffi/app check && bun run check"
   },
   "devDependencies": {
-    "@sveltejs/vite-plugin-svelte": "^7.1.2",
+    "@sveltejs/vite-plugin-svelte": "^7.2.0",
     "@tsconfig/svelte": "^5.0.8",
-    "@types/node": "^25.9.1",
-    "concurrently": "^10.0.0",
+    "@types/node": "^26.1.1",
+    "concurrently": "^10.0.3",
     "cross-env": "^10.1.0",
-    "electron": "^42.3.0",
-    "electron-builder": "^26.8.1",
-    "svelte": "^5.56.0",
-    "svelte-check": "^4.4.8",
-    "typescript": "~6.0.3",
-    "vite": "^8.0.14",
-    "wait-on": "^9.0.10"
+    "electron": "^43.2.0",
+    "electron-builder": "^26.15.3",
+    "svelte": "^5.56.7",
+    "svelte-check": "^4.7.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.1.5",
+    "wait-on": "^9.1.0"
   },
   "build": {
     "appId": "al.kaleid.raffi",
@@ -61,13 +60,7 @@
       "artifactName": "Raffi-${version}-${arch}.${ext}",
       "executableName": "raffi",
       "icon": "build/icons",
-      "category": "Video",
-      "extraResources": [
-        {
-          "from": "electron/decoder-x86_64-unknown-linux-gnu",
-          "to": "decoder-x86_64-unknown-linux-gnu"
-        }
-      ]
+      "category": "Video"
     },
     "deb": {
       "packageName": "raffi"
@@ -90,33 +83,17 @@
           ]
         }
       ],
-      "x64ArchFiles": "**/Contents/Resources/{app.asar.unpacked/node_modules/**,decoder-aarch64-apple-darwin,decoder-x86_64-apple-darwin}",
+      "x64ArchFiles": "**/Contents/Resources/app.asar.unpacked/node_modules/**",
       "icon": "build/icons/icon.icns",
       "category": "public.app-category.video",
-      "identity": null,
-      "extraResources": [
-        {
-          "from": "electron/decoder-aarch64-apple-darwin",
-          "to": "decoder-aarch64-apple-darwin"
-        },
-        {
-          "from": "electron/decoder-x86_64-apple-darwin",
-          "to": "decoder-x86_64-apple-darwin"
-        }
-      ]
+      "identity": null
     },
     "win": {
       "target": [
         "nsis",
         "msi"
       ],
-      "icon": "build/icons/icon.ico",
-      "extraResources": [
-        {
-          "from": "electron/decoder-windows-amd64.exe",
-          "to": "decoder-windows-amd64.exe"
-        }
-      ]
+      "icon": "build/icons/icon.ico"
     },
     "fileAssociations": [
       {
@@ -153,9 +130,9 @@
   "dependencies": {
     "@raffi/app": "workspace:*",
     "@ryuziii/discord-rpc": "^1.0.1-rc.1",
-    "@tailwindcss/vite": "^4.3.0",
-    "electron-updater": "^6.8.3",
-    "tailwindcss": "^4.3.0"
+    "@tailwindcss/vite": "^4.3.3",
+    "electron-updater": "^6.8.9",
+    "tailwindcss": "^4.3.3"
   },
   "trustedDependencies": [
     "core-js",

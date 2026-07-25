@@ -13,7 +13,6 @@ const {
   registerPrivilegedSchemes,
   createLocalMediaProtocolHandler,
 } = require("./services/localMediaProtocol.cjs");
-const { createDecoderService } = require("./services/decoder.cjs");
 const { registerMainIpcHandlers } = require("./services/mainIpc.cjs");
 const { registerDiscordRpcHandlers } = require("./services/rpc.cjs");
 const { createMainWindow } = require("./services/window.cjs");
@@ -95,7 +94,6 @@ app.on("child-process-gone", (_event, details) => {
 });
 
 let mainWindow;
-let decoderStartupPromise = null;
 let fileToOpen = null;
 let pendingAveAuthPayload = null;
 let pendingTraktAuthPayload = null;
@@ -176,29 +174,8 @@ if (!gotTheLock) {
   });
 }
 
-const decoderService = createDecoderService({
-  isDev,
-  path,
-  fs,
-  spawn,
-  logToFile,
-  baseDir: __dirname,
-});
-
 const defenderService = createDefenderService({
   logToFile,
-  getDecoderBinaryPath: () => decoderService.getDecoderPath(),
-  getBundledToolPaths: () => ({
-    ffmpeg: null,
-    ffprobe: null,
-  }),
-});
-
-decoderService.onDecoderStatusChange((status) => {
-  if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.webContents) {
-    return;
-  }
-  mainWindow.webContents.send("DECODER_STATUS_CHANGED", status);
 });
 
 function createWindow() {
@@ -238,33 +215,6 @@ function createWindow() {
       pendingUpdateInfo = value;
     },
   });
-}
-
-function startDecoderServerInBackground() {
-  if (decoderStartupPromise) return decoderStartupPromise;
-
-  decoderStartupPromise = (async () => {
-    logToFile("Starting decoder server");
-    try {
-      await decoderService.startDecoderServer();
-    } catch (err) {
-      logToFile("Failed to start decoder server", err);
-      return;
-    }
-
-    logToFile("Waiting for decoder server to be ready");
-    const decoderReady = await decoderService.waitForDecoderReady();
-
-    if (!decoderReady) {
-      logToFile("Decoder server failed to start");
-      console.error("WARNING: Decoder server not responding, playback may not work properly");
-      return;
-    }
-
-    logToFile("Decoder server ready");
-  })();
-
-  return decoderStartupPromise;
 }
 
 app.whenReady().then(async () => {
@@ -318,7 +268,6 @@ app.whenReady().then(async () => {
     }
   }
   createWindow();
-  // Decoder starts on demand (torrent/local/server fallback) via DECODER_ENSURE_STARTED.
 });
 
 app.on("activate", () => {
@@ -335,8 +284,6 @@ app.on("activate", () => {
 
 function cleanup() {
   console.log("Cleaning up...");
-  console.log("Killing decoder server...");
-  decoderService.cleanupDecoder();
 }
 
 registerMainIpcHandlers({
@@ -349,20 +296,6 @@ registerMainIpcHandlers({
   cleanup,
   logToFile,
   getMainWindow: () => mainWindow,
-  getDecoderStatus: () => decoderService.getDecoderStatus(),
-  getDecoderAuthSecret: () => decoderService.getDecoderAuthSecret(),
-  ensureDecoderStarted: async () => {
-    await startDecoderServerInBackground();
-    const status = decoderService.getDecoderStatus();
-    if (status?.state !== "ready") {
-      throw new Error(
-        status?.message ||
-          status?.detail ||
-          "Playback server failed to start",
-      );
-    }
-    return status;
-  },
   getDefenderExclusionStatus: () => defenderService.getExclusionStatus(),
   applyDefenderExclusions: () => defenderService.applyExclusions(),
   scanLibraryRoots,

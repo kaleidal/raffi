@@ -3,7 +3,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 
-function createDefenderService({ logToFile, getDecoderBinaryPath, getBundledToolPaths }) {
+function createDefenderService({ logToFile }) {
   function isWindows() {
     return process.platform === "win32";
   }
@@ -40,42 +40,14 @@ function createDefenderService({ logToFile, getDecoderBinaryPath, getBundledTool
   }
 
   function collectExclusionPaths() {
-    const paths = new Set([
+    return [
       ...collectCoreTempPaths(),
       path.join(os.tmpdir(), "raffi", "clips"),
-    ]);
-
-    try {
-      const decoderPath = typeof getDecoderBinaryPath === "function" ? getDecoderBinaryPath() : null;
-      if (decoderPath) {
-        paths.add(path.dirname(decoderPath));
-      }
-    } catch (error) {
-      logToFile?.("Failed resolving decoder path for Defender exclusions", error);
-    }
-
-    try {
-      const tools = typeof getBundledToolPaths === "function" ? getBundledToolPaths() : null;
-      if (tools?.ffmpeg) paths.add(path.dirname(tools.ffmpeg));
-      if (tools?.ffprobe) paths.add(path.dirname(tools.ffprobe));
-    } catch (error) {
-      logToFile?.("Failed resolving media tool paths for Defender exclusions", error);
-    }
-
-    return [...paths].map((entry) => path.resolve(entry));
+    ].map((entry) => path.resolve(entry));
   }
 
   function collectExclusionProcesses() {
-    const processes = new Set();
-    try {
-      const decoderPath = typeof getDecoderBinaryPath === "function" ? getDecoderBinaryPath() : null;
-      if (decoderPath) {
-        processes.add(path.basename(decoderPath));
-      }
-    } catch {
-      // ignore
-    }
-    return [...processes];
+    return [];
   }
 
   function ensureDirectories(paths) {
