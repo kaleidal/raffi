@@ -191,10 +191,13 @@
         || phase === "reconciling"
         || phase === "uploading";
 
-    const canSignIn = () =>
-        !isBusy() && phase !== "preview" && email.trim().length > 0 && password.length > 0;
+    $: canSignIn =
+        !isBusy()
+        && phase !== "preview"
+        && email.trim().length > 0
+        && password.length > 0;
 
-    const canImportSelection = () =>
+    $: canImportSelection =
         phase === "preview"
         && !isBusy()
         && (selectedLibraryCount > 0 || selectedAddonCount > 0);
@@ -290,7 +293,7 @@
     };
 
     async function loadPreview() {
-        if (!canSignIn()) return;
+        if (!canSignIn) return;
         errorMessage = "";
         phase = "fetching";
         abortController = new AbortController();
@@ -320,7 +323,7 @@
     }
 
     async function runImport() {
-        if (!canImportSelection() || !previewData) return;
+        if (!canImportSelection || !previewData) return;
         errorMessage = "";
         abortController = new AbortController();
 
@@ -696,7 +699,7 @@
                         <button
                             type="submit"
                             class="px-5 py-2 rounded-2xl bg-white text-black font-semibold hover:bg-white/90 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                            disabled={!canSignIn()}
+                            disabled={!canSignIn}
                         >
                             Continue
                         </button>
@@ -704,7 +707,7 @@
                         <button
                             type="submit"
                             class="px-5 py-2 rounded-2xl bg-white text-black font-semibold hover:bg-white/90 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                            disabled={!canImportSelection()}
+                            disabled={!canImportSelection}
                         >
                             Import selected
                         </button>

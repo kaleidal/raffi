@@ -17,19 +17,19 @@
   },
   "devDependencies": {
     "@tsconfig/svelte": "^5.0.8",
-    "svelte": "^5.56.0",
-    "svelte-check": "^4.4.8",
-    "tailwindcss": "^4.3.0",
-    "typescript": "~6.0.3"
+    "svelte": "^5.56.7",
+    "svelte-check": "^4.7.3",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2"
   },
   "dependencies": {
-    "@ave-id/sdk": "^0.9.2",
-    "@lucide/svelte": "^1.17.0",
+    "@ave-id/sdk": "^0.10.1",
+    "@lucide/svelte": "^1.26.0",
     "@mediabunny/aac-encoder": "^1.51.0",
     "@mediabunny/ac3": "^1.51.0",
     "hls.js": "^1.6.16",
     "mediabunny": "^1.51.0",
-    "posthog-js": "^1.376.4"
+    "posthog-js": "^1.407.2"
   },
   "peerDependencies": {
     "svelte": "^5.0.0"
