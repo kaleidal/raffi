@@ -1,168 +1,101 @@
 import type Hls from "hls.js";
-import { createSession, decoderFetch, serverUrl } from "../../lib/client";
+import { isMagnetUrl } from "../../lib/media/localSource";
+import { resolveHttpPlayback } from "../../lib/media/playback";
 import * as Session from "./videoSession";
 
-const noop = () => {};
-
 export function getBufferedRatioFromStart(video: HTMLVideoElement): number {
-    const d = video.duration;
-    if (!Number.isFinite(d) || d <= 0) return 0;
-    const b = video.buffered;
-    if (!b || b.length === 0) return 0;
-    let maxEnd = 0;
-    for (let i = 0; i < b.length; i++) {
-        maxEnd = Math.max(maxEnd, b.end(i));
-    }
-    return Math.max(0, Math.min(1, maxEnd / d));
+	const d = video.duration;
+	if (!Number.isFinite(d) || d <= 0) return 0;
+	const b = video.buffered;
+	if (!b || b.length === 0) return 0;
+	let maxEnd = 0;
+	for (let i = 0; i < b.length; i++) {
+		maxEnd = Math.max(maxEnd, b.end(i));
+	}
+	return Math.max(0, Math.min(1, maxEnd / d));
 }
 
 export type NextEpisodePrefetchHandoff = {
-    sessionId: string;
-    sessionData: unknown;
-    src: string;
-    fileIdx: number | null;
+	sessionData: unknown;
+	src: string;
+	fileIdx: number | null;
 };
 
 export async function startNextEpisodePrefetch(
-    src: string,
-    fileIdx: number | null,
-    videoElem: HTMLVideoElement,
-    onBufferRatio: (ratio: number) => void,
+	src: string,
+	fileIdx: number | null,
+	videoElem: HTMLVideoElement,
+	onBufferRatio: (ratio: number) => void,
 ): Promise<{
-    dispose: ((opts?: { transfer?: boolean }) => void) | null;
-    handoff: NextEpisodePrefetchHandoff | null;
+	dispose: ((opts?: { transfer?: boolean }) => void) | null;
+	handoff: NextEpisodePrefetchHandoff | null;
 }> {
-    let hlsInstance: Hls | null = null;
-    let sessionId = "";
-    let sessionData: unknown = null;
-    let pollId: ReturnType<typeof setInterval> | null = null;
-    let prepareAbort: AbortController | null = null;
-    let disposed = false;
-    let sessionCleaned = false;
-    let transferred = false;
+	let hlsInstance: Hls | null = null;
+	let pollId: ReturnType<typeof setInterval> | null = null;
+	let disposed = false;
 
-    const stopPolling = () => {
-        if (pollId != null) {
-            clearInterval(pollId);
-            pollId = null;
-        }
-    };
+	const stopPolling = () => {
+		if (pollId != null) {
+			clearInterval(pollId);
+			pollId = null;
+		}
+	};
 
-    const cleanupSessionIfOwned = () => {
-        if (transferred || !sessionId || sessionCleaned) return;
-        sessionCleaned = true;
-        Session.cleanupServerSession(sessionId);
-    };
+	const dispose = (_opts?: { transfer?: boolean }) => {
+		disposed = true;
+		stopPolling();
+		if (hlsInstance) {
+			try {
+				hlsInstance.destroy();
+			} catch {
+				// ignore
+			}
+			hlsInstance = null;
+		}
+		Session.detachSeekingListener(videoElem);
+		try {
+			videoElem.pause();
+		} catch {
+			// ignore
+		}
+		videoElem.removeAttribute("src");
+		try {
+			videoElem.load();
+		} catch {
+			// ignore
+		}
+	};
 
-    const dispose = (opts?: { transfer?: boolean }) => {
-        disposed = true;
-        if (opts?.transfer) {
-            transferred = true;
-        }
-        prepareAbort?.abort();
-        prepareAbort = null;
-        stopPolling();
-        if (hlsInstance) {
-            try {
-                hlsInstance.destroy();
-            } catch {
-            }
-            hlsInstance = null;
-        }
-        Session.detachSeekingListener(videoElem);
-        try {
-            videoElem.pause();
-        } catch {
-        }
-        videoElem.removeAttribute("src");
-        try {
-            videoElem.load();
-        } catch {
-        }
-        cleanupSessionIfOwned();
-    };
+	try {
+		if (isMagnetUrl(src)) {
+			return { dispose: null, handoff: null };
+		}
 
-    try {
-        videoElem.muted = true;
-        videoElem.defaultMuted = true;
-        videoElem.playsInline = true;
-        videoElem.setAttribute("playsinline", "");
-        videoElem.preload = "auto";
+		videoElem.muted = true;
+		videoElem.defaultMuted = true;
+		videoElem.playsInline = true;
+		videoElem.setAttribute("playsinline", "");
+		videoElem.preload = "auto";
 
-        const bypass = Session.shouldBypassServerForHttpStream(src, videoElem);
-        if (bypass) {
-            videoElem.src = src;
-            videoElem.load();
-            pollId = setInterval(() => {
-                onBufferRatio(getBufferedRatioFromStart(videoElem));
-            }, 400);
-            return { dispose, handoff: null };
-        }
+		const resolved = await resolveHttpPlayback(src, videoElem);
+		if (disposed) {
+			dispose();
+			return { dispose: null, handoff: null };
+		}
 
-        const kind = src.startsWith("magnet:") ? "torrent" : "http";
-        if (fileIdx != null && fileIdx !== undefined) {
-            sessionId = await createSession(src, kind, 0, fileIdx, { prefetch: true });
-        } else {
-            sessionId = await createSession(src, kind, 0, undefined, { prefetch: true });
-        }
-        if (disposed) {
-            dispose();
-            return { dispose: null, handoff: null };
-        }
+		if (resolved.mode === "direct" || resolved.mode === "addon-hls") {
+			videoElem.src = src;
+			videoElem.load();
+			pollId = setInterval(() => {
+				onBufferRatio(getBufferedRatioFromStart(videoElem));
+			}, 400);
+			return { dispose, handoff: null };
+		}
 
-        const res = await decoderFetch(`${serverUrl}/sessions/${sessionId}`);
-        if (!res.ok) throw new Error("prefetch session info failed");
-        sessionData = await res.json();
-        if (disposed) {
-            dispose();
-            return { dispose: null, handoff: null };
-        }
-
-        prepareAbort = new AbortController();
-        const preparedManifestUrl = await Session.prepareHLSManifest(
-            sessionId,
-            null,
-            prepareAbort.signal,
-        );
-        prepareAbort = null;
-        if (disposed) {
-            dispose();
-            return { dispose: null, handoff: null };
-        }
-
-        hlsInstance = Session.initHLS(
-            videoElem,
-            sessionId,
-            0,
-            false,
-            noop,
-            {
-                setLoading: noop,
-                setShowCanvas: noop,
-                setPlaybackOffset: noop,
-                setShowError: noop,
-                setErrorMessage: noop,
-                setErrorDetails: noop,
-            },
-            null,
-            "prefetch",
-            preparedManifestUrl,
-        );
-
-        pollId = setInterval(() => {
-            onBufferRatio(getBufferedRatioFromStart(videoElem));
-        }, 400);
-
-        const handoff: NextEpisodePrefetchHandoff = {
-            sessionId,
-            sessionData,
-            src,
-            fileIdx,
-        };
-        return { dispose, handoff };
-    } catch (e) {
-        console.warn("Next episode prefetch failed", e);
-        dispose();
-        return { dispose: null, handoff: null };
-    }
+		return { dispose: null, handoff: null };
+	} catch (e) {
+		console.warn("Next episode prefetch failed", e);
+		dispose();
+		return { dispose: null, handoff: null };
+	}
 }

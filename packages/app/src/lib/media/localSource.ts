@@ -48,7 +48,7 @@ export function toClientPlayableUrl(src: string): string {
 export function canTryClientPlayback(src: string): boolean {
 	if (!src) return false;
 	if (isMagnetUrl(src)) return false;
-	if (/\.m3u8(\?|$)/i.test(src)) return false;
+	if (/\.m3u8(\?|$)/i.test(src)) return true;
 	if (isHttpUrl(src) || isLocalMediaUrl(src)) return true;
 	return isLocalFilesystemPath(src) && typeof window !== "undefined" && Boolean(window.electronAPI);
 }

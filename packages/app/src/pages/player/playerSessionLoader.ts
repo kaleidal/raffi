@@ -1,6 +1,5 @@
 import { get } from "svelte/store";
 import type { ShowResponse } from "../../lib/library/types/meta_types";
-import { decoderFetch, serverUrl } from "../../lib/client";
 import {
     MediaBunnyPlayback,
     enrichProbedStreamAudio,
@@ -8,8 +7,19 @@ import {
     resolveHttpPlayback,
     type ProbedStream,
 } from "../../lib/media";
-import { canTryClientPlayback, toClientPlayableUrl } from "../../lib/media/localSource";
-import { isDesktopPlatform } from "../../lib/platform";
+import {
+    canTryClientPlayback,
+    isMagnetUrl,
+    toClientPlayableUrl,
+} from "../../lib/media/localSource";
+import {
+    addLimboTorrent,
+    LimboUnavailableError,
+    removeLimboTorrent,
+    type LimboTorrentStatus,
+} from "../../lib/limbo/client";
+import { ensureTorrentingAllowed } from "../../lib/stores/torrenting";
+import { selectedStream } from "../meta/metaState";
 import type { Chapter, Track } from "./types";
 import * as Session from "./videoSession";
 import * as Subtitles from "./subtitles";
@@ -55,8 +65,6 @@ export type PlayerSessionLoaderDeps = {
     setHls: (value: any) => void;
     getMediaBunny: () => MediaBunnyPlayback | null;
     setMediaBunny: (value: MediaBunnyPlayback | null) => void;
-    setSessionId: (value: string) => void;
-    getSessionId: () => string;
     getCueLinePercent: () => number;
     shouldShowSeekStyleInfoModal: () => boolean;
     setPendingStartAfterSeekStyleModal: (value: boolean) => void;
@@ -72,8 +80,8 @@ export type PlayerSessionLoaderDeps = {
         effectiveStartTime: number;
         introDbChapters: Chapter[];
     }>;
-    startTorrentStatusPolling: (torrentInfoHash: string) => void;
-    awaitTorrentReady: (torrentInfoHash: string) => Promise<void>;
+    startTorrentStatusPolling: (torrentId: string) => void;
+    awaitTorrentReady: (torrentId: string) => Promise<void>;
     stopTorrentStatusPolling: () => void;
     awaitDomUpdate: () => Promise<void>;
 };
@@ -137,7 +145,7 @@ function applyClientAudioTracks(
 export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
     let loadGeneration = 0;
     let activeAbortController: AbortController | null = null;
-    let activeSessionId = "";
+    let activeLimboTorrentId = "";
 
     const cancelCurrentLoad = () => {
         loadGeneration += 1;
@@ -149,15 +157,68 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
             void mediaBunny.destroy();
             deps.setMediaBunny(null);
         }
-        if (activeSessionId) {
-            Session.cleanupServerSession(activeSessionId);
-            activeSessionId = "";
+        if (activeLimboTorrentId) {
+            void removeLimboTorrent(activeLimboTorrentId, false);
+            activeLimboTorrentId = "";
         }
+    };
+
+    const resolveLimboStream = async (
+        magnet: string,
+        fileIdx: number | null,
+        signal: AbortSignal,
+    ): Promise<{ streamUrl: string; status: LimboTorrentStatus }> => {
+        loadingStage.set("Connecting to Limbo");
+        loadingDetails.set("Making sure Limbo is running…");
+        loadingProgress.set(null);
+
+        try {
+            await ensureTorrentingAllowed();
+        } catch (error) {
+            if (error instanceof LimboUnavailableError) {
+                throw new Error(
+                    `${error.message} Get it at https://limbo.al`,
+                );
+            }
+            throw error;
+        }
+
+        if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+
+        loadingStage.set("Waiting for Limbo approval");
+        loadingDetails.set("Approve the request in Limbo if prompted…");
+        const created = await addLimboTorrent({
+            magnet,
+            fileIndex: fileIdx,
+            sequential: true,
+            name: (() => {
+                const stream = get(selectedStream);
+                if (!stream) return null;
+                return (
+                    stream.behaviorHints?.filename?.trim() ||
+                    stream.title?.trim() ||
+                    stream.name?.trim() ||
+                    null
+                );
+            })(),
+        });
+        activeLimboTorrentId = created.id;
+        deps.startTorrentStatusPolling(created.id);
+        await deps.awaitTorrentReady(created.id);
+
+        if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+
+        const { getLimboTorrent } = await import("../../lib/limbo/client");
+        const ready = await getLimboTorrent(created.id);
+        if (!ready.streamUrl) {
+            throw new Error("Limbo did not return a stream URL for this torrent");
+        }
+        return { streamUrl: ready.streamUrl, status: ready };
     };
 
     const loadVideo = async (
         src: string,
-        opts?: { reuseSession?: { sessionId: string; sessionData: any } },
+        opts?: { reuseSession?: { sessionData: any } },
     ) => {
         cancelCurrentLoad();
         const generation = loadGeneration;
@@ -177,20 +238,36 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
             const season = deps.getSeason();
             const episode = deps.getEpisode();
 
-            const playableSrc = toClientPlayableUrl(src);
+            let playbackSrc = src;
+            let limboStatus: LimboTorrentStatus | null = null;
+
+            if (isMagnetUrl(src)) {
+                const limbo = await resolveLimboStream(
+                    src,
+                    fileIdx,
+                    abortController.signal,
+                );
+                if (isStale()) return;
+                playbackSrc = limbo.streamUrl;
+                limboStatus = limbo.status;
+            }
+
+            const playableSrc = toClientPlayableUrl(playbackSrc);
             const canTryClient =
-                !opts?.reuseSession && canTryClientPlayback(src);
+                !opts?.reuseSession && canTryClientPlayback(playableSrc);
 
             let clientPlayback:
                 | Awaited<ReturnType<typeof resolveHttpPlayback>>
                 | null = null;
 
-            if (canTryClient) {
+            if (canTryClient || limboStatus) {
                 loadingStage.set("Probing stream");
                 loadingDetails.set(
-                    /^https?:\/\//i.test(src)
-                        ? "Checking codecs without the local server..."
-                        : "Checking local file codecs...",
+                    limboStatus
+                        ? "Checking torrent stream codecs..."
+                        : /^https?:\/\//i.test(playableSrc)
+                          ? "Checking codecs..."
+                          : "Checking local file codecs...",
                 );
                 try {
                     clientPlayback = await resolveHttpPlayback(
@@ -204,9 +281,10 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                     }
                     console.warn("Client playback probe failed", error);
                     clientPlayback = {
-                        mode: isDesktopPlatform ? "server" : "unsupported",
+                        mode: "unsupported",
                         meta: null,
                         reason: "probe-error",
+                        error: error instanceof Error ? error.message : String(error),
                     };
                 }
             }
@@ -215,9 +293,31 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
 
             const useClientPlayback =
                 clientPlayback?.mode === "direct" ||
-                clientPlayback?.mode === "mediabunny";
+                clientPlayback?.mode === "mediabunny" ||
+                clientPlayback?.mode === "addon-hls";
 
-            const sessionSource = useClientPlayback ? playableSrc : src;
+            if (limboStatus && !useClientPlayback) {
+                const probeReason = String(clientPlayback?.reason || "");
+                const probeError = String(clientPlayback?.error || "");
+                const details = `${probeReason} ${probeError}`.toLowerCase();
+                if (
+                    details.includes("404") ||
+                    details.includes("not found") ||
+                    details.includes("failed to fetch") ||
+                    details.includes("network")
+                ) {
+                    throw new Error(
+                        "Limbo could not serve this torrent stream yet. Wait a moment or try another source.",
+                    );
+                }
+                throw new Error(
+                    probeReason === "probe-error" || probeReason === "probe-failed"
+                        ? "Could not probe the Limbo torrent stream. Try another source."
+                        : "This torrent needs codecs Raffi cannot remux yet. Try another source.",
+                );
+            }
+
+            const sessionSource = useClientPlayback ? playableSrc : playbackSrc;
 
             const result = await Session.loadVideoSession(
                 sessionSource,
@@ -266,46 +366,29 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                 },
             );
 
-            if (isStale()) {
-                Session.cleanupServerSession(result.sessionId);
-                return;
-            }
+            if (isStale()) return;
 
-            activeSessionId = result.sessionId;
-            deps.setSessionId(result.sessionId);
-
-            const abandonOwnedSession = () => {
-                if (!activeSessionId) return;
-                Session.cleanupServerSession(activeSessionId);
-                activeSessionId = "";
-            };
-
-            if (result.sessionData?.isTorrent && result.sessionData?.torrentInfoHash) {
-                const torrentInfoHash = result.sessionData.torrentInfoHash;
-                deps.startTorrentStatusPolling(torrentInfoHash);
-                await deps.awaitTorrentReady(torrentInfoHash);
-
-                const readySession = await decoderFetch(`${serverUrl}/sessions/${result.sessionId}`);
-                if (!readySession.ok) {
-                    throw new Error("Failed to refresh ready torrent session info");
-                }
-                result.sessionData = await readySession.json();
+            if (limboStatus) {
+                result.sessionData = {
+                    ...result.sessionData,
+                    isTorrent: true,
+                    torrentInfoHash: limboStatus.infoHash,
+                    limboTorrentId: limboStatus.id,
+                    sourceUrl: playableSrc,
+                };
             } else {
                 deps.stopTorrentStatusPolling();
             }
 
-            if (isStale()) {
-                abandonOwnedSession();
-                return;
-            }
+            if (isStale()) return;
 
             if (useClientPlayback && clientPlayback) {
                 result.sessionData = applyClientAudioTracks(
                     clientPlayback.meta,
-                    src,
+                    sessionSource,
                     {
                         ...result.sessionData,
-                        ...sessionFromProbe(clientPlayback.meta, src),
+                        ...sessionFromProbe(clientPlayback.meta, sessionSource),
                     },
                 );
             }
@@ -319,23 +402,14 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                 season,
                 episode,
             });
-            if (isStale()) {
-                abandonOwnedSession();
-                return;
-            }
+            if (isStale()) return;
             const effectiveStartTime = playbackStart.effectiveStartTime;
             deps.setIntroDbChapters(playbackStart.introDbChapters);
 
             await deps.awaitDomUpdate();
-            if (isStale()) {
-                abandonOwnedSession();
-                return;
-            }
+            if (isStale()) return;
             const videoElem = deps.getVideoElem();
-            if (!videoElem) {
-                abandonOwnedSession();
-                return;
-            }
+            if (!videoElem) return;
 
             try {
                 const isLocalFile =
@@ -373,7 +447,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                 loadingDetails.set(
                     clientPlayback.mode === "mediabunny"
                         ? "Transcoding incompatible audio with MediaBunny"
-                        : "Playing without the local server",
+                        : "Starting playback",
                 );
                 loadingProgress.set(null);
 
@@ -416,6 +490,68 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
 
                 loading.set(true);
 
+                if (clientPlayback.mode === "addon-hls") {
+                    const Hls = (await import("hls.js")).default;
+                    if (Hls.isSupported()) {
+                        const hlsInstance = new Hls({
+                            enableWorker: true,
+                            lowLatencyMode: false,
+                            maxBufferLength: 50,
+                            maxMaxBufferLength: 80,
+                            backBufferLength: 30,
+                        });
+                        deps.setHls(hlsInstance);
+                        hlsInstance.attachMedia(videoElem);
+                        hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+                            if (effectiveStartTime > 0) {
+                                try {
+                                    videoElem.currentTime = effectiveStartTime;
+                                } catch {
+                                    // ignore
+                                }
+                            }
+                            loading.set(false);
+                            loadingStage.set("");
+                            loadingDetails.set("");
+                            showCanvas.set(false);
+                            if (!needsSeekStyleModal && deps.autoPlay) {
+                                videoElem.play().catch(() => {
+                                    // ignore
+                                });
+                            }
+                        });
+                        hlsInstance.loadSource(sessionSource);
+                    } else if (videoElem.canPlayType("application/vnd.apple.mpegurl")) {
+                        videoElem.src = sessionSource;
+                        videoElem.addEventListener(
+                            "loadedmetadata",
+                            () => {
+                                if (effectiveStartTime > 0) {
+                                    try {
+                                        videoElem.currentTime = effectiveStartTime;
+                                    } catch {
+                                        // ignore
+                                    }
+                                }
+                                loading.set(false);
+                                loadingStage.set("");
+                                loadingDetails.set("");
+                                showCanvas.set(false);
+                                if (!needsSeekStyleModal && deps.autoPlay) {
+                                    videoElem.play().catch(() => {
+                                        // ignore
+                                    });
+                                }
+                            },
+                            { once: true },
+                        );
+                        videoElem.load();
+                    } else {
+                        throw new Error("HLS playback is not supported on this device");
+                    }
+                    return;
+                }
+
                 if (clientPlayback.mode === "mediabunny") {
                     const bunny = new MediaBunnyPlayback();
                     bunny.onWindowStartChange = (globalStart) => {
@@ -434,7 +570,6 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                     if (isStale()) {
                         await bunny.destroy();
                         deps.setMediaBunny(null);
-                        abandonOwnedSession();
                         return;
                     }
                     if (attached.durationSeconds > 0) {
@@ -475,8 +610,6 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                         videoElem,
                         Session.createSeekHandler(
                             videoElem,
-                            deps.getHls,
-                            deps.getSessionId,
                             () => get(pendingSeek),
                             () => get(seekGuard),
                             () => get(playbackOffset),
@@ -514,7 +647,6 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                             // ignore
                         });
                     }
-                    abandonOwnedSession();
                     return;
                 }
 
@@ -579,7 +711,6 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                         });
                 }
 
-                abandonOwnedSession();
                 return;
             }
 
@@ -589,98 +720,13 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                 );
             }
 
-            void applyDefaultSubtitles({
-                sessionData: result.sessionData,
-                subtitleTracksValue: get(subtitleTracks),
-                videoElem,
-                currentTime: get(currentTime),
-                playbackOffset: get(playbackOffset),
-                cueLinePercent: deps.getCueLinePercent(),
-                setSubtitleTracks: (updater: (tracks: Track[]) => Track[]) =>
-                    subtitleTracks.update(updater),
-                setCurrentSubtitleLabel: currentSubtitleLabel.set,
-                handleSubtitleSelect: Subtitles.handleSubtitleSelect,
-            })
-                .catch(() => {
-                    // ignore
-                });
-
-            if (opts?.reuseSession) {
-                loadingStage.set("");
-                loadingDetails.set("");
-            } else {
-                loadingStage.set("Preparing stream");
-                loadingDetails.set("Starting HLS session...");
-            }
-            loadingProgress.set(null);
-
-            const sessionId = result.sessionId;
-            const initialSeekTime = effectiveStartTime !== startTime ? effectiveStartTime : null;
-            loadingDetails.set("Waiting for the first playable segment...");
-            const preparedManifestUrl = await Session.prepareHLSManifest(
-                sessionId,
-                initialSeekTime,
-                abortController.signal,
+            throw new Error(
+                "This stream cannot be played without a remux path. Try another source.",
             );
-            if (isStale()) {
-                abandonOwnedSession();
-                return;
-            }
-
-            const hlsInstance = Session.initHLS(
-                videoElem,
-                sessionId,
-                effectiveStartTime,
-                needsSeekStyleModal ? false : deps.autoPlay,
-                Session.createSeekHandler(
-                    videoElem,
-                    deps.getHls,
-                    deps.getSessionId,
-                    () => get(pendingSeek),
-                    () => get(seekGuard),
-                    () => get(playbackOffset),
-                    () => get(subtitleTracks),
-                    () => get(currentSubtitleLabel),
-                    (track) =>
-                        Subtitles.handleSubtitleSelect(
-                            track,
-                            videoElem,
-                            get(currentTime),
-                            get(playbackOffset),
-                            deps.getCueLinePercent,
-                        ),
-                    {
-                        setPendingSeek: pendingSeek.set,
-                        setSeekGuard: seekGuard.set,
-                        setBuffering: playbackBuffering.set,
-                        setShowCanvas: showCanvas.set,
-                        setFirstSeekLoad: firstSeekLoad.set,
-                        setPlaybackOffset: playbackOffset.set,
-                        setShowError: showError.set,
-                        setErrorMessage: errorMessage.set,
-                        setErrorDetails: errorDetails.set,
-                    },
-                    deps.getMediaBunny,
-                ),
-                {
-                    setLoading: loading.set,
-                    setShowCanvas: showCanvas.set,
-                    setPlaybackOffset: playbackOffset.set,
-                    setShowError: showError.set,
-                    setErrorMessage: errorMessage.set,
-                    setErrorDetails: errorDetails.set,
-                },
-                initialSeekTime,
-                "playback",
-                preparedManifestUrl,
-            );
-            deps.setHls(hlsInstance);
-            activeSessionId = "";
-
         } catch (err) {
-            if (activeSessionId) {
-                Session.cleanupServerSession(activeSessionId);
-                activeSessionId = "";
+            if (activeLimboTorrentId) {
+                void removeLimboTorrent(activeLimboTorrentId, false);
+                activeLimboTorrentId = "";
             }
             if (isStale() || (err instanceof DOMException && err.name === "AbortError")) {
                 return;

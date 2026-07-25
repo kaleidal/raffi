@@ -24,7 +24,6 @@
     export let volume = 1;
     export let videoSrc: string | null = null;
     export let metaData: ShowResponse | null = null;
-    export let sessionId: string;
     export let currentAudioLabel: string = "";
     export let currentSubtitleLabel: string = "";
     export let objectFit: "contain" | "cover" = "contain";
