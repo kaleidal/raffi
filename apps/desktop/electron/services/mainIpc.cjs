@@ -8,9 +8,6 @@ function registerMainIpcHandlers({
   cleanup,
   logToFile,
   getMainWindow,
-  getDecoderStatus,
-  getDecoderAuthSecret,
-  ensureDecoderStarted,
   getDefenderExclusionStatus,
   applyDefenderExclusions,
   scanLibraryRoots,
@@ -133,33 +130,9 @@ function registerMainIpcHandlers({
     return Number(mainWindow.__raffiGetDisplayZoom?.() ?? 1) || 1;
   });
 
-  ipcMain.handle("DECODER_STATUS_GET", async () => {
-    if (typeof getDecoderStatus !== "function") return null;
-    return getDecoderStatus();
-  });
-
-  ipcMain.handle("DECODER_ENSURE_STARTED", async () => {
-    if (typeof ensureDecoderStarted !== "function") {
-      return { ok: false, error: "Unavailable" };
-    }
-    try {
-      await ensureDecoderStarted();
-      return {
-        ok: true,
-        status: typeof getDecoderStatus === "function" ? getDecoderStatus() : null,
-      };
-    } catch (error) {
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
-        status: typeof getDecoderStatus === "function" ? getDecoderStatus() : null,
-      };
-    }
-  });
-
-  ipcMain.handle("DECODER_AUTH_SECRET_GET", async () => {
-    if (typeof getDecoderAuthSecret !== "function") return null;
-    return getDecoderAuthSecret() || null;
+  ipcMain.handle("LIMBO_API_DISCOVERY_READ", async () => {
+    const { readLimboApiDiscovery } = require("./limboDiscovery.cjs");
+    return readLimboApiDiscovery(fs);
   });
 
   ipcMain.handle("DEFENDER_EXCLUSION_STATUS", async () => {

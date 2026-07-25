@@ -11,7 +11,6 @@ BUILD_DIR="${TMP_BUILD_ROOT}/flatpak-build"
 
 cd "${APP_DIR}"
 
-bun run server:build
 bun run build
 bunx electron-builder --linux --dir
 

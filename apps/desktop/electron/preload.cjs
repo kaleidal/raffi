@@ -58,16 +58,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
             return () => ipcRenderer.removeListener('WINDOW_MINI_PLAYER_CHANGED', handler);
         },
     },
-    getDecoderStatus: () => ipcRenderer.invoke('DECODER_STATUS_GET'),
-    ensureDecoderStarted: () => ipcRenderer.invoke('DECODER_ENSURE_STARTED'),
-    getDecoderAuthSecret: () => ipcRenderer.invoke('DECODER_AUTH_SECRET_GET'),
+    readLimboApiDiscovery: () => ipcRenderer.invoke('LIMBO_API_DISCOVERY_READ'),
     getDefenderExclusionStatus: () => ipcRenderer.invoke('DEFENDER_EXCLUSION_STATUS'),
     applyDefenderExclusions: () => ipcRenderer.invoke('DEFENDER_APPLY_EXCLUSIONS'),
-    onDecoderStatusChanged: (callback) => {
-        const handler = (_event, value) => callback(value);
-        ipcRenderer.on('DECODER_STATUS_CHANGED', handler);
-        return () => ipcRenderer.removeListener('DECODER_STATUS_CHANGED', handler);
-    },
     onDisplayZoom: (callback) => {
         const handler = (_event, value) => callback(value);
         ipcRenderer.on('DISPLAY_ZOOM', handler);

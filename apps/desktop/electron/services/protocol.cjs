@@ -10,6 +10,8 @@ const ALLOWED_EXTERNAL_HOSTS = new Set([
   "www.stator.sh",
   "trakt.tv",
   "www.trakt.tv",
+  "limbo.al",
+  "www.limbo.al",
 ]);
 
 function isAllowedAddonConfigureUrl(value) {

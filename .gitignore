@@ -53,7 +53,7 @@ Thumbs.db
 *.swo
 *~
 
-# Decoded / staged binaries
+# Local tooling binaries (not shipped)
 ffmpeg
 ffmpeg.exe
 ffprobe
@@ -75,15 +75,11 @@ apps/desktop/electron/ffprobe.exe
 apps/desktop/electron/main
 apps/desktop/electron/raffi
 apps/desktop/release/
-apps/mobile/modules/**/android/.gradle/
-apps/mobile/modules/**/android/build/
 
 # Legacy / stale paths from pre-refactor layouts
 Raffi/
 raffi-desktop/
-raffi-server/
 services/raffi-desktop/
-services/raffi-server/
 
 # Misc
 tmp/
