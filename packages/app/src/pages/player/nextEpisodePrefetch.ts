@@ -1,6 +1,11 @@
 import type Hls from "hls.js";
 import { isMagnetUrl } from "../../lib/media/localSource";
-import { resolveHttpPlayback } from "../../lib/media/playback";
+import {
+	MediaBunnyPlayback,
+	resolveHttpPlayback,
+	type HttpPlaybackMode,
+	type ProbedStream,
+} from "../../lib/media";
 import * as Session from "./videoSession";
 
 export function getBufferedRatioFromStart(video: HTMLVideoElement): number {
@@ -19,6 +24,10 @@ export type NextEpisodePrefetchHandoff = {
 	sessionData: unknown;
 	src: string;
 	fileIdx: number | null;
+	mode: HttpPlaybackMode;
+	meta: ProbedStream | null;
+	mediaBunny: MediaBunnyPlayback | null;
+	hls: Hls | null;
 };
 
 export async function startNextEpisodePrefetch(
@@ -31,8 +40,10 @@ export async function startNextEpisodePrefetch(
 	handoff: NextEpisodePrefetchHandoff | null;
 }> {
 	let hlsInstance: Hls | null = null;
+	let mediaBunny: MediaBunnyPlayback | null = null;
 	let pollId: ReturnType<typeof setInterval> | null = null;
 	let disposed = false;
+	const abort = new AbortController();
 
 	const stopPolling = () => {
 		if (pollId != null) {
@@ -41,8 +52,16 @@ export async function startNextEpisodePrefetch(
 		}
 	};
 
-	const dispose = (_opts?: { transfer?: boolean }) => {
+	const dispose = (opts?: { transfer?: boolean }) => {
 		disposed = true;
+		if (opts?.transfer) {
+			stopPolling();
+			// Ownership moves to the main player — keep remux/HLS alive.
+			mediaBunny = null;
+			hlsInstance = null;
+			return;
+		}
+		abort.abort();
 		stopPolling();
 		if (hlsInstance) {
 			try {
@@ -53,6 +72,12 @@ export async function startNextEpisodePrefetch(
 			hlsInstance = null;
 		}
 		Session.detachSeekingListener(videoElem);
+		const bunny = mediaBunny;
+		mediaBunny = null;
+		if (bunny) {
+			void bunny.destroy();
+			return;
+		}
 		try {
 			videoElem.pause();
 		} catch {
@@ -68,7 +93,8 @@ export async function startNextEpisodePrefetch(
 
 	try {
 		if (isMagnetUrl(src)) {
-			return { dispose: null, handoff: null };
+			// Limbo resolution happens on play; don't spin retries here.
+			return { dispose: () => {}, handoff: null };
 		}
 
 		videoElem.muted = true;
@@ -77,23 +103,107 @@ export async function startNextEpisodePrefetch(
 		videoElem.setAttribute("playsinline", "");
 		videoElem.preload = "auto";
 
-		const resolved = await resolveHttpPlayback(src, videoElem);
-		if (disposed) {
+		const resolved = await resolveHttpPlayback(src, videoElem, abort.signal);
+		if (disposed || abort.signal.aborted) {
 			dispose();
 			return { dispose: null, handoff: null };
 		}
 
-		if (resolved.mode === "direct" || resolved.mode === "addon-hls") {
+		if (resolved.mode === "direct") {
 			videoElem.src = src;
 			videoElem.load();
 			pollId = setInterval(() => {
 				onBufferRatio(getBufferedRatioFromStart(videoElem));
 			}, 400);
-			return { dispose, handoff: null };
+			return {
+				dispose,
+				handoff: {
+					sessionData: { isDirectHttp: true, sourceUrl: src },
+					src,
+					fileIdx,
+					mode: "direct",
+					meta: resolved.meta,
+					mediaBunny: null,
+					hls: null,
+				},
+			};
 		}
 
-		return { dispose: null, handoff: null };
+		if (resolved.mode === "addon-hls") {
+			const HlsCtor = (await import("hls.js")).default;
+			if (HlsCtor.isSupported()) {
+				hlsInstance = new HlsCtor({
+					enableWorker: true,
+					lowLatencyMode: false,
+					maxBufferLength: 40,
+					maxMaxBufferLength: 60,
+					backBufferLength: 0,
+				});
+				hlsInstance.attachMedia(videoElem);
+				hlsInstance.loadSource(src);
+			} else if (videoElem.canPlayType("application/vnd.apple.mpegurl")) {
+				videoElem.src = src;
+				videoElem.load();
+			} else {
+				return { dispose: () => {}, handoff: null };
+			}
+			pollId = setInterval(() => {
+				onBufferRatio(getBufferedRatioFromStart(videoElem));
+			}, 400);
+			return {
+				dispose,
+				handoff: {
+					sessionData: { isAddonHls: true, sourceUrl: src },
+					src,
+					fileIdx,
+					mode: "addon-hls",
+					meta: null,
+					mediaBunny: null,
+					hls: hlsInstance,
+				},
+			};
+		}
+
+		if (resolved.mode === "mediabunny") {
+			const bunny = new MediaBunnyPlayback();
+			mediaBunny = bunny;
+			await bunny.attach(videoElem, src, {
+				startTime: 0,
+				signal: abort.signal,
+				meta: resolved.meta,
+				audioIndex: resolved.meta?.preferredAudioIndex ?? 0,
+			});
+			if (disposed || abort.signal.aborted) {
+				dispose();
+				return { dispose: null, handoff: null };
+			}
+			pollId = setInterval(() => {
+				onBufferRatio(getBufferedRatioFromStart(videoElem));
+			}, 400);
+			return {
+				dispose,
+				handoff: {
+					sessionData: {
+						isDirectHttp: true,
+						sourceUrl: src,
+						durationSeconds: resolved.meta?.durationSeconds ?? 0,
+					},
+					src,
+					fileIdx,
+					mode: "mediabunny",
+					meta: bunny.getMeta() ?? resolved.meta,
+					mediaBunny: bunny,
+					hls: null,
+				},
+			};
+		}
+
+		return { dispose: () => {}, handoff: null };
 	} catch (e) {
+		if (e instanceof DOMException && e.name === "AbortError") {
+			dispose();
+			return { dispose: null, handoff: null };
+		}
 		console.warn("Next episode prefetch failed", e);
 		dispose();
 		return { dispose: null, handoff: null };
