@@ -4,7 +4,8 @@ import type { ShowResponse } from "../../lib/library/types/meta_types";
 
 const OUTRO_FALLBACK_SECONDS = 45;
 export const CREDITS_FALLBACK_SECONDS = 60;
-export const NEXT_EPISODE_PREBUFFER_LEAD_SECONDS = 150;
+/** Start next-episode prefetch this far before credits/outro. */
+export const NEXT_EPISODE_PREBUFFER_LEAD_SECONDS = 120;
 export const BINGE_CREDITS_BUFFER_SECONDS = 5;
 
 const classifyChapterKind = (title: string): ChapterKind => {
@@ -158,14 +159,10 @@ export function getNextEpisodePrefetchWindow(
     if (!(duration > 0) || !(creditsAt > 0)) {
         return { startAt: 0, creditsAt: Math.max(0, creditsAt) };
     }
-    // Prefetch only in the last ~2.5 minutes (or nearer when credits are marked).
-    let startAt = Math.max(0, creditsAt - NEXT_EPISODE_PREBUFFER_LEAD_SECONDS);
-    const gap = Math.max(15, Math.min(90, NEXT_EPISODE_PREBUFFER_LEAD_SECONDS * 0.5));
-    if (startAt >= creditsAt - gap) {
-        startAt = Math.max(0, creditsAt - gap);
-    }
+    // Prefetch 1–2 minutes before outro/credits, not when credits already started.
+    const startAt = Math.max(0, creditsAt - NEXT_EPISODE_PREBUFFER_LEAD_SECONDS);
     if (startAt >= creditsAt) {
-        startAt = Math.max(0, creditsAt - 1);
+        return { startAt: Math.max(0, creditsAt - 1), creditsAt };
     }
     return { startAt, creditsAt };
 }

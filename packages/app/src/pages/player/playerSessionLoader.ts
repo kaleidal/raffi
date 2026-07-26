@@ -218,7 +218,15 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
 
     const loadVideo = async (
         src: string,
-        opts?: { reuseSession?: { sessionData: any } },
+        opts?: {
+            reuseSession?: {
+                sessionData: any;
+                mode?: "direct" | "mediabunny" | "addon-hls" | "unsupported";
+                meta?: ProbedStream | null;
+                mediaBunny?: MediaBunnyPlayback | null;
+                hls?: any;
+            };
+        },
     ) => {
         cancelCurrentLoad();
         const generation = loadGeneration;
@@ -228,6 +236,167 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
             generation !== loadGeneration || abortController.signal.aborted;
 
         try {
+            const reused = opts?.reuseSession;
+            if (
+                reused &&
+                (reused.mode === "direct" ||
+                    reused.mode === "mediabunny" ||
+                    reused.mode === "addon-hls")
+            ) {
+                loadingStage.set("Continuing");
+                loadingDetails.set("");
+                loadingProgress.set(null);
+
+                const videoElem = deps.getVideoElem();
+                if (!videoElem) return;
+
+                const sessionSource = toClientPlayableUrl(src);
+                let nextSession =
+                    reused.sessionData && typeof reused.sessionData === "object"
+                        ? { ...reused.sessionData }
+                        : sessionFromProbe(reused.meta ?? null, sessionSource);
+
+                nextSession = applyClientAudioTracks(
+                    reused.meta ?? null,
+                    sessionSource,
+                    nextSession,
+                    reused.mediaBunny?.getAudioIndex?.(),
+                );
+                sessionData.set(nextSession);
+
+                const metaData = deps.getMetaData();
+                const season = deps.getSeason();
+                const episode = deps.getEpisode();
+                const playbackStart = await deps.resolvePlaybackStart({
+                    sessionData: nextSession,
+                    startTime: deps.getStartTime(),
+                    metaData,
+                    season,
+                    episode,
+                });
+                if (isStale()) return;
+                deps.setIntroDbChapters(playbackStart.introDbChapters);
+
+                const durationSeconds =
+                    reused.meta?.durationSeconds ||
+                    (Number.isFinite(videoElem.duration) ? videoElem.duration : 0) ||
+                    nextSession.durationSeconds ||
+                    0;
+                if (durationSeconds > 0) {
+                    duration.set(durationSeconds);
+                }
+
+                playbackOffset.set(
+                    reused.mode === "mediabunny"
+                        ? (reused.mediaBunny?.getRemuxOrigin?.() ?? 0)
+                        : 0,
+                );
+                currentTime.set(get(playbackOffset));
+
+                subtitleTracks.set([
+                    { id: "off", label: "Off", selected: true, group: "None" },
+                ]);
+                try {
+                    const addonTracks = await Subtitles.fetchAddonSubtitles(
+                        metaData,
+                        season,
+                        episode,
+                    );
+                    if (!isStale() && addonTracks.length > 0) {
+                        subtitleTracks.update((current) => [...current, ...addonTracks]);
+                    }
+                } catch {
+                    // ignore
+                }
+                if (isStale()) return;
+
+                if (reused.mode === "mediabunny" && reused.mediaBunny) {
+                    const bunny = reused.mediaBunny;
+                    bunny.onWindowStartChange = (globalStart) => {
+                        playbackOffset.set(globalStart);
+                    };
+                    deps.setMediaBunny(bunny);
+                    Session.attachSeekingListener(
+                        videoElem,
+                        Session.createSeekHandler(
+                            videoElem,
+                            () => get(pendingSeek),
+                            () => get(seekGuard),
+                            () => get(playbackOffset),
+                            () => get(subtitleTracks),
+                            () => get(currentSubtitleLabel),
+                            (track) =>
+                                Subtitles.handleSubtitleSelect(
+                                    track,
+                                    videoElem,
+                                    get(currentTime),
+                                    get(playbackOffset),
+                                    deps.getCueLinePercent,
+                                ),
+                            {
+                                setPendingSeek: pendingSeek.set,
+                                setSeekGuard: seekGuard.set,
+                                setBuffering: playbackBuffering.set,
+                                setShowCanvas: showCanvas.set,
+                                setFirstSeekLoad: firstSeekLoad.set,
+                                setPlaybackOffset: playbackOffset.set,
+                                setShowError: showError.set,
+                                setErrorMessage: errorMessage.set,
+                                setErrorDetails: errorDetails.set,
+                            },
+                            deps.getMediaBunny,
+                        ),
+                    );
+                } else if (reused.mode === "addon-hls" && reused.hls) {
+                    deps.setHls(reused.hls);
+                } else {
+                    deps.setMediaBunny(null);
+                }
+
+                try {
+                    videoElem.muted = false;
+                    videoElem.defaultMuted = false;
+                } catch {
+                    // ignore
+                }
+
+                void applyDefaultSubtitles({
+                    sessionData: nextSession,
+                    subtitleTracksValue: get(subtitleTracks),
+                    videoElem,
+                    currentTime: get(currentTime),
+                    playbackOffset: get(playbackOffset),
+                    cueLinePercent: deps.getCueLinePercent(),
+                    setSubtitleTracks: (updater: (tracks: Track[]) => Track[]) =>
+                        subtitleTracks.update(updater),
+                    setCurrentSubtitleLabel: currentSubtitleLabel.set,
+                    handleSubtitleSelect: Subtitles.handleSubtitleSelect,
+                }).catch(() => {
+                    // ignore
+                });
+
+                Discord.updateDiscordActivity(
+                    metaData,
+                    season,
+                    episode,
+                    get(duration),
+                    0,
+                    false,
+                );
+
+                loading.set(false);
+                loadingStage.set("");
+                loadingDetails.set("");
+                showCanvas.set(false);
+                playbackBuffering.set(false);
+                if (deps.autoPlay) {
+                    videoElem.play().catch(() => {
+                        // ignore
+                    });
+                }
+                return;
+            }
+
             loadingStage.set("Initializing playback");
             loadingDetails.set("");
             loadingProgress.set(null);

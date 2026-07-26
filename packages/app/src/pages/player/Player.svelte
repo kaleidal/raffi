@@ -141,7 +141,12 @@
     let seekBarStyle: SeekBarStyle = "raffi";
     let pendingStartAfterSeekStyleModal = false;
     let introDbChapters: Chapter[] = [];
-    let nextEpisodePrefetchVideo: HTMLVideoElement | null = null;
+    let videoSurfaceA: HTMLVideoElement | undefined = undefined;
+    let videoSurfaceB: HTMLVideoElement | undefined = undefined;
+    let activeVideoSurface: 0 | 1 = 0;
+    $: videoElem = (activeVideoSurface === 0 ? videoSurfaceA : videoSurfaceB) as HTMLVideoElement;
+    $: nextEpisodePrefetchVideo =
+        (activeVideoSurface === 0 ? videoSurfaceB : videoSurfaceA) ?? null;
     let nextEpisodePrefetchDispose: ((opts?: { transfer?: boolean }) => void) | null =
         null;
     let nextEpisodePrefetchHandoff: NextEpisodePrefetchHandoff | null = null;
@@ -475,7 +480,6 @@
         }
     };
 
-    let videoElem: HTMLVideoElement;
     let playerContainer: HTMLDivElement;
     let canvasElem: HTMLCanvasElement;
     let hls: any = null;
@@ -615,7 +619,8 @@
         getMetaData: () => metaData,
         getSeason: () => season,
         getEpisode: () => episode,
-        getVideoElem: () => videoElem,
+        getVideoElem: () =>
+            (activeVideoSurface === 0 ? videoSurfaceA : videoSurfaceB) ?? undefined,
         getHls: () => hls,
         setHls: (value) => {
             hls = value;
@@ -975,7 +980,8 @@
                 !nextEpisodePrefetchStarting &&
                 Date.now() >= nextEpisodePrefetchRetryAt &&
                 nextEpisodePrefetchWindow.creditsAt > 0 &&
-                (time >= nextEpisodePrefetchStartAt || $showNextEpisode)
+                nextEpisodePrefetchStartAt < nextEpisodePrefetchWindow.creditsAt &&
+                time >= nextEpisodePrefetchStartAt
             ) {
                 nextEpisodePrefetchStarting = true;
                 const runId = ++nextEpisodePrefetchRunId;
@@ -1163,7 +1169,8 @@
     };
 
     const modalHandlers = createPlayerModalHandlers({
-        getVideoElem: () => videoElem,
+        getVideoElem: () =>
+            (activeVideoSurface === 0 ? videoSurfaceA : videoSurfaceB) ?? undefined,
         getCueLinePercent: () => cueLinePercent,
         getPlaybackAnalyticsProps,
         getVideoSrc: () => videoSrc,
@@ -1248,21 +1255,69 @@
             handoff.fileIdx === fileIdx &&
             startTime === 0;
 
+        const previousBunny = mediaBunny;
+        const previousHls = hls;
+
+        if (canReuseHandoff) {
+            // Keep MediaSource on the same element by flipping which surface is visible.
+            activeVideoSurface = activeVideoSurface === 0 ? 1 : 0;
+        }
+
         const reuseSession = canReuseHandoff
             ? {
                   sessionData: handoff.sessionData,
+                  mode: handoff.mode,
+                  meta: handoff.meta,
+                  mediaBunny: handoff.mediaBunny,
+                  hls: handoff.hls,
               }
             : undefined;
 
         playerSessionLoader.cancelCurrentLoad();
         handleNextEpisodeClick.cancel();
         disposeNextEpisodePrefetch(reuseSession ? { transfer: true } : undefined);
+
+        if (previousBunny && previousBunny !== reuseSession?.mediaBunny) {
+            void previousBunny.destroy();
+        }
+        if (reuseSession?.mediaBunny) {
+            mediaBunny = reuseSession.mediaBunny;
+        } else if (!canReuseHandoff) {
+            mediaBunny = null;
+        }
+
+        if (previousHls && previousHls !== reuseSession?.hls) {
+            try {
+                previousHls.destroy();
+            } catch {
+                // ignore
+            }
+        }
+        if (reuseSession?.hls) {
+            hls = reuseSession.hls;
+        } else if (!canReuseHandoff) {
+            hls = null;
+        }
+
+        // Clear the previous episode off the now-idle surface.
+        const idleVideo =
+            activeVideoSurface === 0 ? videoSurfaceB : videoSurfaceA;
+        if (canReuseHandoff && idleVideo && !previousBunny) {
+            try {
+                idleVideo.pause();
+                idleVideo.removeAttribute("src");
+                idleVideo.load();
+            } catch {
+                // ignore
+            }
+        }
+
         Session.cleanupSession(
-            hls,
+            null,
             Discord.clearDiscordActivity,
             WatchParty.leaveWatchParty,
             $watchParty.isActive,
-            videoElem,
+            canReuseHandoff ? null : videoElem,
         );
         loadVideo(videoSrc, reuseSession ? { reuseSession } : undefined);
     }
@@ -1380,16 +1435,10 @@
                 on:load={handleEmbedLoaded}
             ></iframe>
         {:else}
-            <video
-                bind:this={nextEpisodePrefetchVideo}
-                class="fixed left-[-9999px] top-0 w-px h-px opacity-0 pointer-events-none"
-                muted
-                playsinline
-                preload="auto"
-                aria-hidden="true"
-            ></video>
             <PlayerVideo
-                bind:videoElem
+                bind:videoA={videoSurfaceA}
+                bind:videoB={videoSurfaceB}
+                activeSurface={activeVideoSurface}
                 bind:canvasElem
                 objectFit={$objectFit}
                 showCanvas={$showCanvas}
