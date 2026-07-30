@@ -30,11 +30,61 @@ export type NextEpisodePrefetchHandoff = {
 	hls: Hls | null;
 };
 
+const PREFETCH_READY_TIMEOUT_MS = 20_000;
+
+const hasPlayableData = (video: HTMLVideoElement) =>
+	video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA ||
+	(video.buffered?.length ?? 0) > 0;
+
+const waitForPlayableData = (
+	video: HTMLVideoElement,
+	signal: AbortSignal,
+): Promise<void> => {
+	if (hasPlayableData(video)) return Promise.resolve();
+
+	return new Promise((resolve, reject) => {
+		let timeout: ReturnType<typeof setTimeout> | null = null;
+
+		const cleanup = () => {
+			if (timeout != null) clearTimeout(timeout);
+			video.removeEventListener("loadeddata", checkReady);
+			video.removeEventListener("canplay", checkReady);
+			video.removeEventListener("progress", checkReady);
+			video.removeEventListener("error", handleError);
+			signal.removeEventListener("abort", handleAbort);
+		};
+		const finish = (error?: unknown) => {
+			cleanup();
+			if (error) reject(error);
+			else resolve();
+		};
+		const checkReady = () => {
+			if (hasPlayableData(video)) finish();
+		};
+		const handleError = () =>
+			finish(video.error ?? new Error("The prefetched video could not be loaded"));
+		const handleAbort = () =>
+			finish(new DOMException("Next episode prefetch aborted", "AbortError"));
+
+		video.addEventListener("loadeddata", checkReady);
+		video.addEventListener("canplay", checkReady);
+		video.addEventListener("progress", checkReady);
+		video.addEventListener("error", handleError, { once: true });
+		signal.addEventListener("abort", handleAbort, { once: true });
+		timeout = setTimeout(
+			() => finish(new Error("Next episode prefetch timed out before becoming playable")),
+			PREFETCH_READY_TIMEOUT_MS,
+		);
+		checkReady();
+	});
+};
+
 export async function startNextEpisodePrefetch(
 	src: string,
 	fileIdx: number | null,
 	videoElem: HTMLVideoElement,
 	onBufferRatio: (ratio: number) => void,
+	signal?: AbortSignal,
 ): Promise<{
 	dispose: ((opts?: { transfer?: boolean }) => void) | null;
 	handoff: NextEpisodePrefetchHandoff | null;
@@ -42,8 +92,12 @@ export async function startNextEpisodePrefetch(
 	let hlsInstance: Hls | null = null;
 	let mediaBunny: MediaBunnyPlayback | null = null;
 	let pollId: ReturnType<typeof setInterval> | null = null;
+	let readyTimeout: ReturnType<typeof setTimeout> | null = null;
+	let readyTimedOut = false;
 	let disposed = false;
 	const abort = new AbortController();
+	const handleExternalAbort = () => abort.abort();
+	signal?.addEventListener("abort", handleExternalAbort, { once: true });
 
 	const stopPolling = () => {
 		if (pollId != null) {
@@ -52,8 +106,17 @@ export async function startNextEpisodePrefetch(
 		}
 	};
 
+	const clearReadyTimeout = () => {
+		if (readyTimeout != null) {
+			clearTimeout(readyTimeout);
+			readyTimeout = null;
+		}
+	};
+
 	const dispose = (opts?: { transfer?: boolean }) => {
 		disposed = true;
+		signal?.removeEventListener("abort", handleExternalAbort);
+		clearReadyTimeout();
 		if (opts?.transfer) {
 			stopPolling();
 			// Ownership moves to the main player — keep remux/HLS alive.
@@ -94,7 +157,8 @@ export async function startNextEpisodePrefetch(
 	try {
 		if (isMagnetUrl(src)) {
 			// Limbo resolution happens on play; don't spin retries here.
-			return { dispose: () => {}, handoff: null };
+			dispose();
+			return { dispose: null, handoff: null };
 		}
 
 		videoElem.muted = true;
@@ -103,8 +167,16 @@ export async function startNextEpisodePrefetch(
 		videoElem.setAttribute("playsinline", "");
 		videoElem.preload = "auto";
 
+		readyTimeout = setTimeout(() => {
+			readyTimedOut = true;
+			abort.abort();
+		}, PREFETCH_READY_TIMEOUT_MS);
+
 		const resolved = await resolveHttpPlayback(src, videoElem, abort.signal);
 		if (disposed || abort.signal.aborted) {
+			if (readyTimedOut) {
+				throw new Error("Next episode prefetch timed out while probing the stream");
+			}
 			dispose();
 			return { dispose: null, handoff: null };
 		}
@@ -112,6 +184,8 @@ export async function startNextEpisodePrefetch(
 		if (resolved.mode === "direct") {
 			videoElem.src = src;
 			videoElem.load();
+			await waitForPlayableData(videoElem, abort.signal);
+			clearReadyTimeout();
 			pollId = setInterval(() => {
 				onBufferRatio(getBufferedRatioFromStart(videoElem));
 			}, 400);
@@ -145,8 +219,11 @@ export async function startNextEpisodePrefetch(
 				videoElem.src = src;
 				videoElem.load();
 			} else {
-				return { dispose: () => {}, handoff: null };
+				dispose();
+				return { dispose: null, handoff: null };
 			}
+			await waitForPlayableData(videoElem, abort.signal);
+			clearReadyTimeout();
 			pollId = setInterval(() => {
 				onBufferRatio(getBufferedRatioFromStart(videoElem));
 			}, 400);
@@ -173,7 +250,11 @@ export async function startNextEpisodePrefetch(
 				meta: resolved.meta,
 				audioIndex: resolved.meta?.preferredAudioIndex ?? 0,
 			});
+			clearReadyTimeout();
 			if (disposed || abort.signal.aborted) {
+				if (readyTimedOut) {
+					throw new Error("Next episode prefetch timed out while preparing MediaBunny");
+				}
 				dispose();
 				return { dispose: null, handoff: null };
 			}
@@ -198,14 +279,19 @@ export async function startNextEpisodePrefetch(
 			};
 		}
 
-		return { dispose: () => {}, handoff: null };
+		dispose();
+		return { dispose: null, handoff: null };
 	} catch (e) {
-		if (e instanceof DOMException && e.name === "AbortError") {
+		if (e instanceof DOMException && e.name === "AbortError" && !readyTimedOut) {
 			dispose();
 			return { dispose: null, handoff: null };
 		}
-		console.warn("Next episode prefetch failed", e);
+		const error = readyTimedOut
+			? new Error("Next episode prefetch timed out before becoming playable", {
+					cause: e,
+				})
+			: e;
 		dispose();
-		return { dispose: null, handoff: null };
+		throw error;
 	}
 }

@@ -8,6 +8,7 @@ import {
 	Output,
 	type AudioCodec,
 	type InputAudioTrack,
+	type InputVideoTrack,
 	type VideoCodec,
 } from "mediabunny";
 import { isDesktopPlatform } from "../platform";
@@ -27,6 +28,10 @@ import {
 } from "./localSource";
 import { pickMseMimeType, pumpStreamToSourceBuffer, RESUME_BUFFER_AHEAD_SECONDS, TARGET_BUFFER_AHEAD_SECONDS, getBufferedAheadSeconds } from "./msePump";
 import { ensureMediaCodersRegistered } from "./registerCoders";
+import {
+	KeyframeCopyConversion,
+	type PlaybackConversion,
+} from "./keyframeCopyConversion";
 
 export type HttpPlaybackMode =
 	| "direct"
@@ -48,6 +53,50 @@ const BROWSER_SAFE_AUDIO = new Set<AudioCodec | null>([
 ]);
 
 const MSE_COPYABLE_AUDIO = new Set<AudioCodec | null>(["aac"]);
+const MP4_COPYABLE_VIDEO = new Set<VideoCodec>(["avc", "hevc", "av1"]);
+
+type MseVideoOutput = {
+	codec: VideoCodec;
+	forceTranscode: boolean;
+	mime: string;
+};
+
+async function resolveMseVideoOutput(
+	track: InputVideoTrack,
+	audioCodecString: string | null,
+): Promise<MseVideoOutput> {
+	const sourceCodec = await track.getCodec();
+	const sourceCodecString = await track.getCodecParameterString();
+
+	if (sourceCodec && MP4_COPYABLE_VIDEO.has(sourceCodec) && sourceCodecString) {
+		const mime = pickMseMimeType(sourceCodecString, audioCodecString);
+		if (mime) {
+			return {
+				codec: sourceCodec,
+				forceTranscode: false,
+				mime,
+			};
+		}
+	}
+
+	if (!(await track.canDecode())) {
+		const codec = sourceCodec?.toUpperCase() || "This";
+		throw new Error(
+			`${codec} video is not supported by MediaSource and cannot be decoded for H.264 transcoding`,
+		);
+	}
+
+	const mime = pickMseMimeType("avc1.4D401F", audioCodecString);
+	if (!mime) {
+		throw new Error("This browser cannot play H.264/AAC via MediaSource");
+	}
+
+	return {
+		codec: "avc",
+		forceTranscode: true,
+		mime,
+	};
+}
 
 export async function resolveHttpPlayback(
 	src: string,
@@ -163,7 +212,7 @@ export class MediaBunnyPlayback {
 	private mediaSource: MediaSource | null = null;
 	private sourceBuffer: SourceBuffer | null = null;
 	private objectUrl: string | null = null;
-	private conversion: Conversion | null = null;
+	private conversion: PlaybackConversion | null = null;
 	private input: Input | null = null;
 	private abort: AbortController | null = null;
 	private generation = 0;
@@ -409,7 +458,7 @@ export class MediaBunnyPlayback {
 	 * raced the writable stream (ERRORED) when the pump canceled the reader first.
 	 */
 	private async runConversionWindowed(
-		conversion: Conversion,
+		conversion: PlaybackConversion,
 		mediaSource: MediaSource,
 		generation: number,
 		abort: AbortController,
@@ -492,10 +541,32 @@ export class MediaBunnyPlayback {
 		});
 		this.input = input;
 
-		// Remux must begin on a keyframe or MSE shows a frozen frame while audio plays.
-		const snappedStart = await snapToVideoKeyframe(input, startTime);
+		const [primaryVideoTrack, inputAudioTracks] = await Promise.all([
+			input.getPrimaryVideoTrack(),
+			input.getAudioTracks(),
+		]);
+		if (!primaryVideoTrack) {
+			throw new Error("This stream does not contain a playable video track");
+		}
+
+		const snappedStart = await snapToVideoKeyframe(primaryVideoTrack, startTime);
 		this.remuxOrigin = snappedStart;
 		this.onWindowStartChange?.(snappedStart);
+
+		const selectedAudio = this.meta.audioTracks[this.audioIndex];
+		const selectedBunnyIndex =
+			selectedAudio?.bunnyIndex ??
+			(selectedAudio?.playable === false ? -1 : this.audioIndex);
+		const hasSelectedAudio =
+			selectedBunnyIndex >= 0 &&
+			selectedBunnyIndex < inputAudioTracks.length;
+		const selectedInputAudioTrack = hasSelectedAudio
+			? inputAudioTracks[selectedBunnyIndex]!
+			: null;
+		const videoOutput = await resolveMseVideoOutput(
+			primaryVideoTrack,
+			hasSelectedAudio ? "mp4a.40.2" : null,
+		);
 
 		const mediaSource = new MediaSource();
 		const objectUrl = URL.createObjectURL(mediaSource);
@@ -524,19 +595,7 @@ export class MediaBunnyPlayback {
 			throw new DOMException("Aborted", "AbortError");
 		}
 
-		const outVideoCodec = await this.resolveOutputVideoCodec();
-		const videoCodecString =
-			outVideoCodec === "avc"
-				? this.meta.video?.codec === "avc"
-					? this.meta.video.codecString
-					: "avc1.4D401F"
-				: this.meta.video?.codecString;
-		const mime = pickMseMimeType(videoCodecString ?? null, "mp4a.40.2");
-		if (!mime) {
-			throw new Error("This browser cannot play remuxed MP4 via MSE");
-		}
-
-		const sourceBuffer = mediaSource.addSourceBuffer(mime);
+		const sourceBuffer = mediaSource.addSourceBuffer(videoOutput.mime);
 		sourceBuffer.mode = "segments";
 		this.sourceBuffer = sourceBuffer;
 
@@ -559,46 +618,24 @@ export class MediaBunnyPlayback {
 			target: new AppendOnlyStreamTarget(writable),
 		});
 
-		const selectedAudio = this.meta.audioTracks[this.audioIndex];
-		const selectedBunnyIndex =
-			selectedAudio?.bunnyIndex ??
-			(selectedAudio?.playable === false ? -1 : this.audioIndex);
-		const conversion = await Conversion.init({
-			input,
-			output,
-			tracks: "all",
-			showWarnings: false,
-			video: async (track, n) => {
-				if (n !== 1) return { discard: true };
-				const codec = await track.getCodec();
-				if (codec === "avc" || codec === "hevc" || codec === "av1") {
-					return { codec };
-				}
-				if (await track.canDecode()) {
-					return { codec: "avc" as VideoCodec };
-				}
-				return { discard: true };
-			},
-			audio: async (track: InputAudioTrack, n: number) => {
-				const bunnyIndex = n - 1;
-				if (bunnyIndex !== selectedBunnyIndex) {
-					return { discard: true };
-				}
-				return audioConversionOptions(track);
-			},
-			trim: { start: snappedStart },
-		});
-
-		if (!conversion.isValid) {
-			const reason = conversion.discardedTracks
-				.map((entry) => `${entry.track.type}:${entry.reason}`)
-				.join(", ");
-			throw new Error(
-				reason
-					? `Unable to remux stream (${reason})`
-					: "Unable to remux stream",
-			);
-		}
+		const conversion = videoOutput.forceTranscode
+			? await createTranscodingConversion({
+					input,
+					output,
+					primaryVideoTrack,
+					selectedInputAudioTrack,
+					videoOutput,
+					startTimestamp: snappedStart,
+				})
+			: await KeyframeCopyConversion.init({
+					input,
+					output,
+					videoTrack: primaryVideoTrack,
+					videoCodec: videoOutput.codec,
+					audioTrack: selectedInputAudioTrack,
+					startTimestamp: snappedStart,
+					audio: audioConversionOptions,
+				});
 
 		this.conversion = conversion;
 
@@ -622,19 +659,89 @@ export class MediaBunnyPlayback {
 		outerSignal?.removeEventListener("abort", onOuterAbort);
 		return snappedStart;
 	}
-
-	private async resolveOutputVideoCodec(): Promise<VideoCodec> {
-		const codec = this.meta?.video?.codec ?? null;
-		if (codec === "avc" || codec === "hevc" || codec === "av1") return codec;
-		return "avc";
-	}
 }
 
-async function snapToVideoKeyframe(input: Input, startTime: number): Promise<number> {
+async function createTranscodingConversion(options: {
+	input: Input;
+	output: Output;
+	primaryVideoTrack: InputVideoTrack;
+	selectedInputAudioTrack: InputAudioTrack | null;
+	videoOutput: MseVideoOutput;
+	startTimestamp: number;
+}): Promise<Conversion> {
+	const conversion = await Conversion.init({
+		input: options.input,
+		output: options.output,
+		tracks: "all",
+		showWarnings: false,
+		video: (track) => {
+			if (track.id !== options.primaryVideoTrack.id) {
+				return { discard: true };
+			}
+			return {
+				codec: options.videoOutput.codec,
+				forceTranscode: true,
+			};
+		},
+		audio: async (track: InputAudioTrack) => {
+			if (track.id !== options.selectedInputAudioTrack?.id) {
+				return { discard: true };
+			}
+			return audioConversionOptions(track);
+		},
+		trim: { start: options.startTimestamp },
+	});
+
+	const retainedVideo = conversion.utilizedTracks.some(
+		(track) =>
+			track.isVideoTrack() && track.id === options.primaryVideoTrack.id,
+	);
+	if (!retainedVideo) {
+		const codec =
+			(await options.primaryVideoTrack.getCodec()) ??
+			(await options.primaryVideoTrack.getInternalCodecId()) ??
+			"unknown";
+		const reason = conversion.discardedTracks.find(
+			(entry) =>
+				entry.track.isVideoTrack() &&
+				entry.track.id === options.primaryVideoTrack.id,
+		)?.reason;
+		throw new Error(
+			`MediaBunny could not transcode ${codec} video on this platform${reason ? ` (${reason})` : ""}`,
+		);
+	}
+
+	if (options.selectedInputAudioTrack) {
+		const retainedAudio = conversion.utilizedTracks.some(
+			(track) =>
+				track.isAudioTrack() &&
+				track.id === options.selectedInputAudioTrack?.id,
+		);
+		if (!retainedAudio) {
+			const codec =
+				(await options.selectedInputAudioTrack.getCodec()) ??
+				(await options.selectedInputAudioTrack.getInternalCodecId()) ??
+				"unknown";
+			const reason = conversion.discardedTracks.find(
+				(entry) =>
+					entry.track.isAudioTrack() &&
+					entry.track.id === options.selectedInputAudioTrack?.id,
+			)?.reason;
+			throw new Error(
+				`MediaBunny could not decode ${codec} audio on this platform${reason ? ` (${reason})` : ""}`,
+			);
+		}
+	}
+
+	return conversion;
+}
+
+async function snapToVideoKeyframe(
+	videoTrack: InputVideoTrack,
+	startTime: number,
+): Promise<number> {
 	if (!(startTime > 0)) return 0;
 	try {
-		const videoTrack = await input.getPrimaryVideoTrack();
-		if (!videoTrack) return startTime;
 		const sink = new EncodedPacketSink(videoTrack);
 		const keyPacket = await sink.getKeyPacket(startTime, {
 			verifyKeyPackets: true,

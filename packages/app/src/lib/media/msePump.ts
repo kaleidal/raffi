@@ -128,19 +128,10 @@ export function pickMseMimeType(
 	audioCodecString: string | null,
 ): string | null {
 	const video = videoCodecString?.trim() || null;
-	const audio = audioCodecString?.trim() || "mp4a.40.2";
+	if (!video) return null;
 
-	const candidates: string[] = [];
-	if (video) {
-		candidates.push(`video/mp4; codecs="${video}, ${audio}"`);
-		candidates.push(`video/mp4; codecs="${video}"`);
-	}
-	candidates.push(`video/mp4; codecs="avc1.42E01E, ${audio}"`);
-	candidates.push(`video/mp4; codecs="avc1.4D401F, mp4a.40.2"`);
-	candidates.push("video/mp4");
-
-	for (const type of candidates) {
-		if (MediaSource.isTypeSupported(type)) return type;
-	}
-	return null;
+	const audio = audioCodecString?.trim() || null;
+	const codecs = audio ? `${video}, ${audio}` : video;
+	const type = `video/mp4; codecs="${codecs}"`;
+	return MediaSource.isTypeSupported(type) ? type : null;
 }
