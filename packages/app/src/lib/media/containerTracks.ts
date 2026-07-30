@@ -576,19 +576,8 @@ class RemoteBytes {
 		private signal?: AbortSignal,
 	) {}
 
-	static async open(url: string, signal?: AbortSignal): Promise<RemoteBytes> {
-		let size: number | null = null;
-		try {
-			const head = await fetch(url, {
-				method: "HEAD",
-				signal,
-			});
-			const len = head.headers.get("content-length");
-			if (len && Number.isFinite(Number(len))) size = Number(len);
-		} catch {
-			// Some CDNs block HEAD; size stays unknown.
-		}
-		return new RemoteBytes(url, size, signal);
+	static open(url: string, signal?: AbortSignal): RemoteBytes {
+		return new RemoteBytes(url, null, signal);
 	}
 
 	async read(start: number, length: number): Promise<Uint8Array> {
