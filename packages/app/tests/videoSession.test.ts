@@ -86,6 +86,7 @@ describe("createSeekHandler", () => {
 		);
 
 		await handler();
+		expect(video.pauseCalls).toBe(0);
 		video.dispatchEvent(new Event("seeked"));
 		await Promise.resolve();
 
@@ -93,5 +94,58 @@ describe("createSeekHandler", () => {
 		expect(video.playCalls).toBe(1);
 		expect(buffering).toEqual([true, false]);
 		expect(heldFrame).toEqual([true, false]);
+	});
+
+	test("releases a direct seek when the browser never emits seeked", async () => {
+		const video = new SeekableVideo();
+		video.paused = false;
+		let pendingSeek: number | null = 120;
+		let seekGuard = false;
+		let buffering = false;
+		let heldFrame = false;
+		let showedError = false;
+
+		const handler = createSeekHandler(
+			video as unknown as HTMLVideoElement,
+			() => pendingSeek,
+			() => seekGuard,
+			() => 0,
+			() => [],
+			() => "Off",
+			() => {},
+			{
+				setPendingSeek: (value) => {
+					pendingSeek = value;
+				},
+				setSeekGuard: (value) => {
+					seekGuard = value;
+				},
+				setBuffering: (value) => {
+					buffering = value;
+				},
+				setShowCanvas: (value) => {
+					heldFrame = value;
+				},
+				setFirstSeekLoad: () => {},
+				setPlaybackOffset: () => {},
+				setShowError: (value) => {
+					showedError = value;
+				},
+				setErrorMessage: () => {},
+				setErrorDetails: () => {},
+			},
+			() => null,
+			() => true,
+			1,
+		);
+
+		await handler();
+		await Bun.sleep(5);
+
+		expect(seekGuard).toBe(false);
+		expect(buffering).toBe(false);
+		expect(heldFrame).toBe(false);
+		expect(showedError).toBe(false);
+		expect(video.pauseCalls).toBe(0);
 	});
 });
