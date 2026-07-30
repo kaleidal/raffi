@@ -248,11 +248,6 @@ export function performSeek(
 		setShowCanvas(true);
 		videoElem.dispatchEvent(new Event("seeking"));
 	} else {
-		try {
-			videoElem.pause();
-		} catch {
-			// ignore
-		}
 		captureFrameFn();
 		setShowCanvas(true);
 		videoElem.currentTime = Math.max(localTarget, 0);
@@ -289,6 +284,7 @@ export function createSeekHandler(
 		seek: (time: number) => Promise<number>;
 		setAudioTrack?: (index: number, globalTime: number) => Promise<number>;
 	} | null,
+	getShouldResume?: () => boolean,
 ) {
 	const {
 		setPendingSeek,
@@ -336,7 +332,7 @@ export function createSeekHandler(
 		}
 
 		const generation = ++seekGeneration;
-		const wasPlaying = !videoElem.paused;
+		const wasPlaying = getShouldResume?.() ?? !videoElem.paused;
 		setSeekGuard(true);
 		setBuffering(true);
 		setShowCanvas(true);

@@ -11,6 +11,7 @@ import {
     canTryClientPlayback,
     isMagnetUrl,
     toClientPlayableUrl,
+    toDirectVideoUrl,
 } from "../../lib/media/localSource";
 import {
     addLimboTorrent,
@@ -147,6 +148,41 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
     let activeAbortController: AbortController | null = null;
     let activeLimboTorrentId = "";
 
+    const attachSeekHandler = (videoElem: HTMLVideoElement) => {
+        Session.attachSeekingListener(
+            videoElem,
+            Session.createSeekHandler(
+                videoElem,
+                () => get(pendingSeek),
+                () => get(seekGuard),
+                () => get(playbackOffset),
+                () => get(subtitleTracks),
+                () => get(currentSubtitleLabel),
+                (track) =>
+                    Subtitles.handleSubtitleSelect(
+                        track,
+                        videoElem,
+                        get(currentTime),
+                        get(playbackOffset),
+                        deps.getCueLinePercent,
+                    ),
+                {
+                    setPendingSeek: pendingSeek.set,
+                    setSeekGuard: seekGuard.set,
+                    setBuffering: playbackBuffering.set,
+                    setShowCanvas: showCanvas.set,
+                    setFirstSeekLoad: firstSeekLoad.set,
+                    setPlaybackOffset: playbackOffset.set,
+                    setShowError: showError.set,
+                    setErrorMessage: errorMessage.set,
+                    setErrorDetails: errorDetails.set,
+                },
+                deps.getMediaBunny,
+                () => get(isPlaying),
+            ),
+        );
+    };
+
     const cancelCurrentLoad = () => {
         loadGeneration += 1;
         activeAbortController?.abort();
@@ -267,15 +303,6 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                 const metaData = deps.getMetaData();
                 const season = deps.getSeason();
                 const episode = deps.getEpisode();
-                const playbackStart = await deps.resolvePlaybackStart({
-                    sessionData: nextSession,
-                    startTime: deps.getStartTime(),
-                    metaData,
-                    season,
-                    episode,
-                });
-                if (isStale()) return;
-                deps.setIntroDbChapters(playbackStart.introDbChapters);
 
                 const durationSeconds =
                     reused.meta?.durationSeconds ||
@@ -296,19 +323,6 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                 subtitleTracks.set([
                     { id: "off", label: "Off", selected: true, group: "None" },
                 ]);
-                try {
-                    const addonTracks = await Subtitles.fetchAddonSubtitles(
-                        metaData,
-                        season,
-                        episode,
-                    );
-                    if (!isStale() && addonTracks.length > 0) {
-                        subtitleTracks.update((current) => [...current, ...addonTracks]);
-                    }
-                } catch {
-                    // ignore
-                }
-                if (isStale()) return;
 
                 if (reused.mode === "mediabunny" && reused.mediaBunny) {
                     const bunny = reused.mediaBunny;
@@ -316,42 +330,13 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                         playbackOffset.set(globalStart);
                     };
                     deps.setMediaBunny(bunny);
-                    Session.attachSeekingListener(
-                        videoElem,
-                        Session.createSeekHandler(
-                            videoElem,
-                            () => get(pendingSeek),
-                            () => get(seekGuard),
-                            () => get(playbackOffset),
-                            () => get(subtitleTracks),
-                            () => get(currentSubtitleLabel),
-                            (track) =>
-                                Subtitles.handleSubtitleSelect(
-                                    track,
-                                    videoElem,
-                                    get(currentTime),
-                                    get(playbackOffset),
-                                    deps.getCueLinePercent,
-                                ),
-                            {
-                                setPendingSeek: pendingSeek.set,
-                                setSeekGuard: seekGuard.set,
-                                setBuffering: playbackBuffering.set,
-                                setShowCanvas: showCanvas.set,
-                                setFirstSeekLoad: firstSeekLoad.set,
-                                setPlaybackOffset: playbackOffset.set,
-                                setShowError: showError.set,
-                                setErrorMessage: errorMessage.set,
-                                setErrorDetails: errorDetails.set,
-                            },
-                            deps.getMediaBunny,
-                        ),
-                    );
                 } else if (reused.mode === "addon-hls" && reused.hls) {
                     deps.setHls(reused.hls);
                 } else {
                     deps.setMediaBunny(null);
                 }
+                attachSeekHandler(videoElem);
+                if (isStale()) return;
 
                 try {
                     videoElem.muted = false;
@@ -359,21 +344,6 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                 } catch {
                     // ignore
                 }
-
-                void applyDefaultSubtitles({
-                    sessionData: nextSession,
-                    subtitleTracksValue: get(subtitleTracks),
-                    videoElem,
-                    currentTime: get(currentTime),
-                    playbackOffset: get(playbackOffset),
-                    cueLinePercent: deps.getCueLinePercent(),
-                    setSubtitleTracks: (updater: (tracks: Track[]) => Track[]) =>
-                        subtitleTracks.update(updater),
-                    setCurrentSubtitleLabel: currentSubtitleLabel.set,
-                    handleSubtitleSelect: Subtitles.handleSubtitleSelect,
-                }).catch(() => {
-                    // ignore
-                });
 
                 Discord.updateDiscordActivity(
                     metaData,
@@ -394,6 +364,51 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                         // ignore
                     });
                 }
+
+                void deps
+                    .resolvePlaybackStart({
+                        sessionData: nextSession,
+                        startTime: deps.getStartTime(),
+                        metaData,
+                        season,
+                        episode,
+                    })
+                    .then((playbackStart) => {
+                        if (isStale()) return;
+                        deps.setIntroDbChapters(playbackStart.introDbChapters);
+                        if (
+                            playbackStart.effectiveStartTime > 0 &&
+                            videoElem.currentTime < playbackStart.effectiveStartTime
+                        ) {
+                            videoElem.currentTime = playbackStart.effectiveStartTime;
+                        }
+                    })
+                    .catch(() => {
+                        // ignore
+                    });
+
+                void Subtitles.fetchAddonSubtitles(metaData, season, episode)
+                    .then(async (addonTracks) => {
+                        if (isStale()) return;
+                        if (addonTracks.length > 0) {
+                            subtitleTracks.update((current) => [...current, ...addonTracks]);
+                        }
+                        await applyDefaultSubtitles({
+                            sessionData: nextSession,
+                            subtitleTracksValue: get(subtitleTracks),
+                            videoElem,
+                            currentTime: get(currentTime),
+                            playbackOffset: get(playbackOffset),
+                            cueLinePercent: deps.getCueLinePercent(),
+                            setSubtitleTracks: (updater: (tracks: Track[]) => Track[]) =>
+                                subtitleTracks.update(updater),
+                            setCurrentSubtitleLabel: currentSubtitleLabel.set,
+                            handleSubtitleSelect: Subtitles.handleSubtitleSelect,
+                        });
+                    })
+                    .catch(() => {
+                        // ignore
+                    });
                 return;
             }
 
@@ -660,6 +675,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                 loading.set(true);
 
                 if (clientPlayback.mode === "addon-hls") {
+                    attachSeekHandler(videoElem);
                     const Hls = (await import("hls.js")).default;
                     if (Hls.isSupported()) {
                         const hlsInstance = new Hls({
@@ -775,37 +791,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                             // ignore
                         });
 
-                    Session.attachSeekingListener(
-                        videoElem,
-                        Session.createSeekHandler(
-                            videoElem,
-                            () => get(pendingSeek),
-                            () => get(seekGuard),
-                            () => get(playbackOffset),
-                            () => get(subtitleTracks),
-                            () => get(currentSubtitleLabel),
-                            (track) =>
-                                Subtitles.handleSubtitleSelect(
-                                    track,
-                                    videoElem,
-                                    get(currentTime),
-                                    get(playbackOffset),
-                                    deps.getCueLinePercent,
-                                ),
-                            {
-                                setPendingSeek: pendingSeek.set,
-                                setSeekGuard: seekGuard.set,
-                                setBuffering: playbackBuffering.set,
-                                setShowCanvas: showCanvas.set,
-                                setFirstSeekLoad: firstSeekLoad.set,
-                                setPlaybackOffset: playbackOffset.set,
-                                setShowError: showError.set,
-                                setErrorMessage: errorMessage.set,
-                                setErrorDetails: errorDetails.set,
-                            },
-                            deps.getMediaBunny,
-                        ),
-                    );
+                    attachSeekHandler(videoElem);
 
                     loading.set(false);
                     loadingStage.set("");
@@ -856,7 +842,12 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                     once: true,
                 });
 
-                videoElem.src = sessionSource;
+                const directVideoSource = toDirectVideoUrl(sessionSource);
+                if (directVideoSource !== sessionSource) {
+                    videoElem.crossOrigin = "anonymous";
+                }
+                attachSeekHandler(videoElem);
+                videoElem.src = directVideoSource;
                 videoElem.load();
 
                 if (clientPlayback.meta) {

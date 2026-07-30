@@ -83,9 +83,58 @@ function resolveLocalPathFromRequest(requestUrl) {
   return null;
 }
 
+function resolveRemoteUrlFromRequest(requestUrl) {
+  let parsed;
+  try {
+    parsed = new URL(requestUrl);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== `${SCHEME}:` || parsed.hostname !== "remote") {
+    return null;
+  }
+
+  const source = parsed.searchParams.get("url");
+  if (!source) return null;
+  try {
+    const remote = new URL(source);
+    return remote.protocol === "http:" || remote.protocol === "https:"
+      ? remote
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function exposeMediaResponse(upstream) {
+  const headers = new Headers(upstream.headers);
+  headers.set("Access-Control-Allow-Origin", "*");
+  headers.set("Cross-Origin-Resource-Policy", "cross-origin");
+  headers.delete("Set-Cookie");
+  return new Response(upstream.body, {
+    status: upstream.status,
+    statusText: upstream.statusText,
+    headers,
+  });
+}
+
 function createLocalMediaProtocolHandler({ protocol, net, logToFile }) {
   protocol.handle(SCHEME, async (request) => {
     try {
+      const remoteUrl = resolveRemoteUrlFromRequest(request.url);
+      if (remoteUrl) {
+        const headers = new Headers();
+        for (const name of ["accept", "if-range", "range"]) {
+          const value = request.headers.get(name);
+          if (value) headers.set(name, value);
+        }
+        const upstream = await net.fetch(remoteUrl.href, {
+          method: request.method,
+          headers,
+        });
+        return exposeMediaResponse(upstream);
+      }
+
       const filePath = resolveLocalPathFromRequest(request.url);
       if (!filePath) {
         return new Response("Invalid local media URL", { status: 400 });
@@ -123,6 +172,8 @@ function createLocalMediaProtocolHandler({ protocol, net, logToFile }) {
           const headers = new Headers(upstream.headers);
           headers.set("Content-Type", contentType);
           headers.set("Accept-Ranges", "bytes");
+          headers.set("Access-Control-Allow-Origin", "*");
+          headers.set("Cross-Origin-Resource-Policy", "cross-origin");
           return new Response(upstream.body, {
             status: upstream.status,
             statusText: upstream.statusText,
@@ -134,6 +185,8 @@ function createLocalMediaProtocolHandler({ protocol, net, logToFile }) {
             status: 200,
             headers: {
               ...baseHeaders,
+              "Access-Control-Allow-Origin": "*",
+              "Cross-Origin-Resource-Policy": "cross-origin",
               "Content-Length": String(stats.size),
             },
           });
@@ -146,6 +199,8 @@ function createLocalMediaProtocolHandler({ protocol, net, logToFile }) {
           status: 416,
           headers: {
             ...baseHeaders,
+            "Access-Control-Allow-Origin": "*",
+            "Cross-Origin-Resource-Policy": "cross-origin",
             "Content-Range": `bytes */${stats.size}`,
           },
         });
@@ -161,6 +216,8 @@ function createLocalMediaProtocolHandler({ protocol, net, logToFile }) {
           const headers = new Headers(upstream.headers);
           headers.set("Content-Type", contentType);
           headers.set("Accept-Ranges", "bytes");
+          headers.set("Access-Control-Allow-Origin", "*");
+          headers.set("Cross-Origin-Resource-Policy", "cross-origin");
           return new Response(upstream.body, {
             status: upstream.status,
             headers,
@@ -179,6 +236,8 @@ function createLocalMediaProtocolHandler({ protocol, net, logToFile }) {
         status: 206,
         headers: {
           ...baseHeaders,
+          "Access-Control-Allow-Origin": "*",
+          "Cross-Origin-Resource-Policy": "cross-origin",
           "Content-Length": String(contentLength),
           "Content-Range": `bytes ${range.start}-${range.end}/${stats.size}`,
         },
