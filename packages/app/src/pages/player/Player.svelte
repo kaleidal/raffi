@@ -92,6 +92,7 @@
     import { createPlayerSessionLoader } from "./playerSessionLoader";
     import { createPlayerModalHandlers } from "./playerModalHandlers";
     import {
+        canReuseNextEpisodePrefetch,
         startNextEpisodePrefetch,
         type NextEpisodePrefetchHandoff,
     } from "./nextEpisodePrefetch";
@@ -114,6 +115,7 @@
     export let autoSkipFromNextEpisode: boolean = false;
 
     const imdbID = metaData?.meta?.imdb_id || null;
+    const NEXT_EPISODE_PREFETCH_CLICK_GRACE_MS = 750;
 
     const handleProgressInternal = (time: number, dur: number) => {
         if (onProgress) {
@@ -125,13 +127,21 @@
 
     const handleNextEpisodeInternal = async () => {
         if (nextEpisodePrefetchStarting && nextEpisodePrefetchTask) {
-            await nextEpisodePrefetchTask;
+            await Promise.race([
+                nextEpisodePrefetchTask,
+                new Promise<void>((resolve) =>
+                    setTimeout(resolve, NEXT_EPISODE_PREFETCH_CLICK_GRACE_MS),
+                ),
+            ]);
         }
         if (nextEpisodePrefetchResolved) {
             return NavigationLogic.playResolvedNextEpisode(
                 nextEpisodePrefetchResolved,
                 get(metaProgressMap),
             );
+        }
+        if (nextEpisodePrefetchStarting) {
+            disposeNextEpisodePrefetch();
         }
         if (onNextEpisode) {
             return onNextEpisode();
@@ -1004,6 +1014,7 @@
                             nextEpisodePrefetchRetryAt = Date.now() + 10_000;
                             return;
                         }
+                        nextEpisodePrefetchResolved = resolved;
                         const playable = streamToPlayableUrl(resolved.stream);
                         if (!playable) {
                             nextEpisodePrefetchRetryAt = Date.now() + 10_000;
@@ -1020,7 +1031,6 @@
                             dispose?.();
                             return;
                         }
-                        nextEpisodePrefetchResolved = resolved;
                         if (!dispose || !handoff) {
                             nextEpisodePrefetchRetryAt = Date.now() + 10_000;
                             return;
@@ -1267,11 +1277,12 @@
         bingeAutoAdvancing = false;
 
         const handoff = nextEpisodePrefetchHandoff;
-        const canReuseHandoff =
-            handoff &&
-            handoff.src === nextVideoSrc &&
-            handoff.fileIdx === fileIdx &&
-            startTime === 0;
+        const canReuseHandoff = canReuseNextEpisodePrefetch(
+            handoff,
+            nextVideoSrc,
+            fileIdx,
+            startTime,
+        );
 
         const previousBunny = mediaBunny;
         const previousHls = hls;

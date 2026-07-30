@@ -1,5 +1,8 @@
 import type Hls from "hls.js";
-import { isMagnetUrl } from "../../lib/media/localSource";
+import {
+	isMagnetUrl,
+	toDirectVideoUrl,
+} from "../../lib/media/localSource";
 import {
 	MediaBunnyPlayback,
 	resolveHttpPlayback,
@@ -29,6 +32,22 @@ export type NextEpisodePrefetchHandoff = {
 	mediaBunny: MediaBunnyPlayback | null;
 	hls: Hls | null;
 };
+
+export function canReuseNextEpisodePrefetch(
+	handoff: NextEpisodePrefetchHandoff | null,
+	src: string,
+	fileIdx: number | null,
+	startTime: number,
+): handoff is NextEpisodePrefetchHandoff {
+	if (!handoff || handoff.src !== src || handoff.fileIdx !== fileIdx) {
+		return false;
+	}
+	return (
+		startTime === 0 ||
+		handoff.mode === "direct" ||
+		handoff.mode === "addon-hls"
+	);
+}
 
 const PREFETCH_READY_TIMEOUT_MS = 20_000;
 
@@ -182,7 +201,11 @@ export async function startNextEpisodePrefetch(
 		}
 
 		if (resolved.mode === "direct") {
-			videoElem.src = src;
+			const directVideoSource = toDirectVideoUrl(src);
+			if (directVideoSource !== src) {
+				videoElem.crossOrigin = "anonymous";
+			}
+			videoElem.src = directVideoSource;
 			videoElem.load();
 			await waitForPlayableData(videoElem, abort.signal);
 			clearReadyTimeout();

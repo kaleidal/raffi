@@ -31,6 +31,12 @@ export function encodeLocalPathAsMediaUrl(filePath: string): string {
 	return url.toString();
 }
 
+export function encodeRemoteUrlAsMediaUrl(src: string): string {
+	const url = new URL("raffi-media://remote/");
+	url.searchParams.set("url", src);
+	return url.toString();
+}
+
 /**
  * Normalize a player source so MediaBunny / UrlSource can fetch it.
  * Local absolute paths become `raffi-media://` on Electron; elsewhere unchanged.
@@ -43,6 +49,17 @@ export function toClientPlayableUrl(src: string): string {
 		return encodeLocalPathAsMediaUrl(src);
 	}
 	return src;
+}
+
+export function toDirectVideoUrl(src: string): string {
+	if (
+		isHttpUrl(src) &&
+		typeof window !== "undefined" &&
+		window.electronAPI
+	) {
+		return encodeRemoteUrlAsMediaUrl(src);
+	}
+	return toClientPlayableUrl(src);
 }
 
 export function canTryClientPlayback(src: string): boolean {
