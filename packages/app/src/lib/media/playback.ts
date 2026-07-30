@@ -125,8 +125,7 @@ export async function resolveHttpPlayback(
 	const directSupport = getDirectMediaSupport(playable, videoElem);
 
 	try {
-		const { input, meta: probedMeta } = await probeRemoteStream(playable, signal);
-		input.dispose();
+		const probedMeta = await probeRemoteStream(playable, signal);
 		const meta = ensureAudioTracks(probedMeta);
 
 		if (signal?.aborted) {
@@ -215,6 +214,7 @@ export class MediaBunnyPlayback {
 	private conversion: PlaybackConversion | null = null;
 	private input: Input | null = null;
 	private abort: AbortController | null = null;
+	private networkAbort: AbortController | null = null;
 	private generation = 0;
 	private meta: ProbedStream | null = null;
 	private src = "";
@@ -246,8 +246,7 @@ export class MediaBunnyPlayback {
 			this.meta = ensureAudioTracks(opts.meta);
 		} else {
 			const probed = await probeRemoteStream(src, opts?.signal);
-			this.meta = ensureAudioTracks(probed.meta);
-			probed.input.dispose();
+			this.meta = ensureAudioTracks(probed);
 		}
 
 		const preferred =
@@ -340,6 +339,12 @@ export class MediaBunnyPlayback {
 		this.generation += 1;
 		this.bufferPaused = false;
 		this.reachedEof = false;
+		this.networkAbort?.abort();
+		this.networkAbort = null;
+		if (this.input) {
+			this.input.dispose();
+			this.input = null;
+		}
 
 		if (this.video) {
 			try {
@@ -355,11 +360,6 @@ export class MediaBunnyPlayback {
 
 		this.abort?.abort();
 		this.abort = null;
-
-		if (this.input) {
-			this.input.dispose();
-			this.input = null;
-		}
 
 		if (this.objectUrl) {
 			URL.revokeObjectURL(this.objectUrl);
@@ -509,24 +509,29 @@ export class MediaBunnyPlayback {
 		}
 
 		const generation = ++this.generation;
-		// Cancel the remuxer before aborting the MSE pump so in-flight VideoSamples
-		// can be closed instead of being GC'd mid-decode.
+		this.networkAbort?.abort();
+		this.networkAbort = null;
+		if (this.input) {
+			this.input.dispose();
+			this.input = null;
+		}
 		if (this.conversion) {
 			await this.cancelConversion();
 		}
 		this.abort?.abort();
 		const abort = new AbortController();
+		const networkAbort = new AbortController();
 		this.abort = abort;
+		this.networkAbort = networkAbort;
 		this.bufferPaused = false;
 		this.reachedEof = false;
 
-		const onOuterAbort = () => abort.abort();
+		const onOuterAbort = () => {
+			abort.abort();
+			networkAbort.abort();
+		};
 		outerSignal?.addEventListener("abort", onOuterAbort, { once: true });
 
-		if (this.input) {
-			this.input.dispose();
-			this.input = null;
-		}
 		if (this.objectUrl) {
 			URL.revokeObjectURL(this.objectUrl);
 			this.objectUrl = null;
@@ -536,6 +541,7 @@ export class MediaBunnyPlayback {
 			source: createRemoteUrlSource(this.src, {
 				parallelism: 2,
 				maxCacheSize: 32 * 1024 * 1024,
+				signal: networkAbort.signal,
 			}),
 			formats: ALL_FORMATS,
 		});

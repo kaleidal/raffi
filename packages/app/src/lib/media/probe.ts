@@ -107,18 +107,49 @@ const LANGUAGE_LABELS: Record<string, string> = {
 
 export function createRemoteUrlSource(
 	src: string,
-	opts?: { parallelism?: number; maxCacheSize?: number },
+	opts?: {
+		parallelism?: number;
+		maxCacheSize?: number;
+		signal?: AbortSignal;
+		fetchFn?: typeof fetch;
+	},
 ) {
+	const externalSignal = opts?.signal;
+	const baseFetch = opts?.fetchFn ?? globalThis.fetch;
+	const fetchFn = externalSignal
+		? (async (input: RequestInfo | URL, init?: RequestInit) => {
+				const requestAbort = new AbortController();
+				const internalSignal = init?.signal;
+				const abortRequest = () => requestAbort.abort();
+				externalSignal.addEventListener("abort", abortRequest, { once: true });
+				internalSignal?.addEventListener("abort", abortRequest, { once: true });
+				if (externalSignal.aborted || internalSignal?.aborted) {
+					requestAbort.abort();
+				}
+				try {
+					return await baseFetch(input, {
+						...init,
+						signal: requestAbort.signal,
+					});
+				} finally {
+					externalSignal.removeEventListener("abort", abortRequest);
+					internalSignal?.removeEventListener("abort", abortRequest);
+				}
+			}) as typeof fetch
+		: undefined;
+
 	return new UrlSource(src, {
 		parallelism: opts?.parallelism ?? 2,
 		maxCacheSize: opts?.maxCacheSize ?? 48 * 1024 * 1024,
+		fetchFn,
 	});
 }
 
-function createProbeUrlSource(src: string) {
+function createProbeUrlSource(src: string, signal: AbortSignal) {
 	return createRemoteUrlSource(src, {
 		parallelism: 2,
 		maxCacheSize: 8 * 1024 * 1024,
+		signal,
 	});
 }
 
@@ -167,15 +198,17 @@ export function preferredAudioIndex(tracks: ProbedAudioTrack[]): number {
 export async function probeRemoteStream(
 	src: string,
 	signal?: AbortSignal,
-): Promise<{ input: Input; meta: ProbedStream }> {
+): Promise<ProbedStream> {
 	ensureMediaCodersRegistered();
+	const networkAbort = new AbortController();
 
 	const input = new Input({
-		source: createProbeUrlSource(src),
+		source: createProbeUrlSource(src, networkAbort.signal),
 		formats: ALL_FORMATS,
 	});
 
 	const onAbort = () => {
+		networkAbort.abort();
 		input.dispose();
 	};
 	signal?.addEventListener("abort", onAbort, { once: true });
@@ -241,12 +274,11 @@ export async function probeRemoteStream(
 			preferredAudioIndex: preferredAudioIndex(listedAudio),
 		});
 
-		return { input, meta };
-	} catch (error) {
-		input.dispose();
-		throw error;
+		return meta;
 	} finally {
 		signal?.removeEventListener("abort", onAbort);
+		networkAbort.abort();
+		input.dispose();
 	}
 }
 
