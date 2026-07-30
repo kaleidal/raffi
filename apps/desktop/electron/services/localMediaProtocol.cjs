@@ -131,6 +131,7 @@ function createLocalMediaProtocolHandler({ protocol, net, logToFile }) {
         const upstream = await net.fetch(remoteUrl.href, {
           method: request.method,
           headers,
+          signal: request.signal,
         });
         return exposeMediaResponse(upstream);
       }
@@ -243,6 +244,9 @@ function createLocalMediaProtocolHandler({ protocol, net, logToFile }) {
         },
       });
     } catch (error) {
+      if (request.signal.aborted || error?.name === "AbortError") {
+        throw error;
+      }
       logToFile?.("raffi-media protocol handler failed", error);
       return new Response("Internal error", { status: 500 });
     }
