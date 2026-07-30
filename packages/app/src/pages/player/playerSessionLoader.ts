@@ -9,9 +9,9 @@ import {
 } from "../../lib/media";
 import {
     canTryClientPlayback,
+    isHttpUrl,
     isMagnetUrl,
     toClientPlayableUrl,
-    toDirectVideoUrl,
 } from "../../lib/media/localSource";
 import {
     addLimboTorrent,
@@ -844,12 +844,13 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                     once: true,
                 });
 
-                const directVideoSource = toDirectVideoUrl(sessionSource);
-                if (directVideoSource !== sessionSource) {
+                if (clientPlayback.meta && isHttpUrl(sessionSource)) {
                     videoElem.crossOrigin = "anonymous";
+                } else {
+                    videoElem.removeAttribute("crossorigin");
                 }
                 attachSeekHandler(videoElem);
-                videoElem.src = directVideoSource;
+                videoElem.src = sessionSource;
                 videoElem.load();
 
                 if (clientPlayback.meta) {
