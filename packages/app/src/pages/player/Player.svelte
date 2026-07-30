@@ -123,7 +123,10 @@
         }
     };
 
-    const handleNextEpisodeInternal = () => {
+    const handleNextEpisodeInternal = async () => {
+        if (nextEpisodePrefetchStarting && nextEpisodePrefetchTask) {
+            await nextEpisodePrefetchTask;
+        }
         if (nextEpisodePrefetchResolved) {
             return NavigationLogic.playResolvedNextEpisode(
                 nextEpisodePrefetchResolved,
@@ -154,6 +157,8 @@
     let bingeAutoAdvancing = false;
     let nextEpisodePrefetchRunId = 0;
     let nextEpisodePrefetchStarting = false;
+    let nextEpisodePrefetchTask: Promise<void> | null = null;
+    let nextEpisodePrefetchAbort: AbortController | null = null;
     let nextEpisodePrefetchRetryAt = 0;
     let effectiveChapterMarkers: Chapter[] = [];
     let skipButtonLabel = "Skip Intro";
@@ -565,6 +570,9 @@
     const disposeNextEpisodePrefetch = (opts?: { transfer?: boolean }) => {
         nextEpisodePrefetchRunId += 1;
         nextEpisodePrefetchStarting = false;
+        nextEpisodePrefetchAbort?.abort();
+        nextEpisodePrefetchAbort = null;
+        nextEpisodePrefetchTask = null;
         nextEpisodePrefetchRetryAt = 0;
         if (nextEpisodePrefetchDispose) {
             nextEpisodePrefetchDispose(opts);
@@ -978,6 +986,7 @@
                 !$watchParty.isActive &&
                 !nextEpisodePrefetchDispose &&
                 !nextEpisodePrefetchStarting &&
+                !nextEpisodePrefetchResolved &&
                 Date.now() >= nextEpisodePrefetchRetryAt &&
                 nextEpisodePrefetchWindow.creditsAt > 0 &&
                 nextEpisodePrefetchStartAt < nextEpisodePrefetchWindow.creditsAt &&
@@ -985,7 +994,9 @@
             ) {
                 nextEpisodePrefetchStarting = true;
                 const runId = ++nextEpisodePrefetchRunId;
-                void (async () => {
+                const prefetchAbort = new AbortController();
+                nextEpisodePrefetchAbort = prefetchAbort;
+                nextEpisodePrefetchTask = (async () => {
                     try {
                         const resolved = await NavigationLogic.resolveNextEpisodeStream(imdbID);
                         if (runId !== nextEpisodePrefetchRunId) return;
@@ -1003,23 +1014,30 @@
                             playable.fileIdx,
                             nextEpisodePrefetchVideo,
                             () => {},
+                            prefetchAbort.signal,
                         );
                         if (runId !== nextEpisodePrefetchRunId) {
                             dispose?.();
                             return;
                         }
-                        if (!dispose) {
+                        nextEpisodePrefetchResolved = resolved;
+                        if (!dispose || !handoff) {
                             nextEpisodePrefetchRetryAt = Date.now() + 10_000;
                             return;
                         }
                         nextEpisodePrefetchDispose = dispose;
                         nextEpisodePrefetchHandoff = handoff;
-                        nextEpisodePrefetchResolved = resolved;
                     } catch (error) {
-                        console.warn("Next episode prefetch attempt failed", error);
-                        nextEpisodePrefetchRetryAt = Date.now() + 10_000;
+                        if (!(error instanceof DOMException && error.name === "AbortError")) {
+                            console.warn("Next episode prefetch attempt failed", error);
+                            nextEpisodePrefetchRetryAt = Date.now() + 10_000;
+                        }
                     } finally {
-                        nextEpisodePrefetchStarting = false;
+                        if (runId === nextEpisodePrefetchRunId) {
+                            nextEpisodePrefetchStarting = false;
+                            nextEpisodePrefetchAbort = null;
+                            nextEpisodePrefetchTask = null;
+                        }
                     }
                 })();
             }
@@ -1236,13 +1254,13 @@
         embedLoadFallbackTimeout = setTimeout(finishEmbedLoad, 1200);
     }
 
-    $: if (videoSrc && videoSrc !== currentVideoSrc) {
+    const transitionToVideoSource = (nextVideoSrc: string) => {
         clearEmbedLoadFallback();
         currentEmbedSrc = null;
         introDbChapters = [];
         effectiveChapterMarkers = [];
         skipButtonLabel = "Skip Intro";
-        currentVideoSrc = videoSrc;
+        currentVideoSrc = nextVideoSrc;
         hasStarted = false;
         playbackStartTracked = false;
         playbackClosedTracked = false;
@@ -1251,7 +1269,7 @@
         const handoff = nextEpisodePrefetchHandoff;
         const canReuseHandoff =
             handoff &&
-            handoff.src === videoSrc &&
+            handoff.src === nextVideoSrc &&
             handoff.fileIdx === fileIdx &&
             startTime === 0;
 
@@ -1319,7 +1337,11 @@
             $watchParty.isActive,
             canReuseHandoff ? null : videoElem,
         );
-        loadVideo(videoSrc, reuseSession ? { reuseSession } : undefined);
+        loadVideo(nextVideoSrc, reuseSession ? { reuseSession } : undefined);
+    };
+
+    $: if (videoSrc && videoSrc !== currentVideoSrc) {
+        transitionToVideoSource(videoSrc);
     }
 
     $: effectiveChapterMarkers = Chapters.getEffectiveChapterSegments($sessionData, introDbChapters);

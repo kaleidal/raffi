@@ -120,6 +120,32 @@ const DEFAULT_WINDOW_HEIGHT = 1000;
 const isDev = !app.isPackaged;
 const linuxDesktopId = process.env.FLATPAK_ID || "raffi";
 if (process.platform === "linux") {
+  const enabledFeatures = new Set(
+    app.commandLine
+      .getSwitchValue("enable-features")
+      .split(",")
+      .map((feature) => feature.trim())
+      .filter(Boolean),
+  );
+  enabledFeatures.add("AcceleratedVideoDecoder");
+
+  try {
+    const hasNvidiaGpu = fs
+      .readdirSync("/sys/class/drm")
+      .filter((entry) => /^card\d+$/.test(entry))
+      .some((entry) => {
+        const vendorPath = path.join("/sys/class/drm", entry, "device/vendor");
+        return fs.readFileSync(vendorPath, "utf8").trim() === "0x10de";
+      });
+    if (hasNvidiaGpu) {
+      enabledFeatures.add("VaapiOnNvidiaGPUs");
+    }
+  } catch {}
+
+  app.commandLine.appendSwitch(
+    "enable-features",
+    [...enabledFeatures].join(","),
+  );
   app.commandLine.appendSwitch("class", isFlatpak ? linuxDesktopId : "Raffi");
 }
 app.setName("Raffi");
