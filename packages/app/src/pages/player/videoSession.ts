@@ -7,19 +7,22 @@ import {
 	supportsEac3Playback,
 } from "../../lib/media/nativeSupport";
 
-const seekingListeners = new WeakMap<HTMLVideoElement, EventListener>();
+type SeekingHandler = EventListener & { cancel?: () => void };
+
+const seekingListeners = new WeakMap<HTMLVideoElement, SeekingHandler>();
 
 export function detachSeekingListener(videoElem: HTMLVideoElement | null | undefined) {
 	if (!videoElem) return;
 	const prev = seekingListeners.get(videoElem);
 	if (!prev) return;
 	videoElem.removeEventListener("seeking", prev);
+	prev.cancel?.();
 	seekingListeners.delete(videoElem);
 }
 
 export function attachSeekingListener(
 	videoElem: HTMLVideoElement,
-	onSeeking: EventListener,
+	onSeeking: SeekingHandler,
 ) {
 	detachSeekingListener(videoElem);
 	seekingListeners.set(videoElem, onSeeking);
@@ -285,6 +288,7 @@ export function createSeekHandler(
 		setAudioTrack?: (index: number, globalTime: number) => Promise<number>;
 	} | null,
 	getShouldResume?: () => boolean,
+	directSeekTimeoutMs = 15_000,
 ) {
 	const {
 		setPendingSeek,
@@ -299,6 +303,7 @@ export function createSeekHandler(
 	} = setStates;
 
 	let seekGeneration = 0;
+	let activeDirectCleanup: (() => void) | null = null;
 
 	const reapplyActiveSubtitle = () => {
 		const currentSubtitleLabel = getCurrentSubtitleLabel();
@@ -337,11 +342,6 @@ export function createSeekHandler(
 		setBuffering(true);
 		setShowCanvas(true);
 		setFirstSeekLoad(true);
-		try {
-			videoElem.pause();
-		} catch {
-			// ignore
-		}
 
 		const finishSuccess = () => {
 			if (generation !== seekGeneration) return;
@@ -370,6 +370,7 @@ export function createSeekHandler(
 
 		if (mediaBunny) {
 			try {
+				videoElem.pause();
 				setPlaybackOffset(desiredGlobal);
 				const snapped = await mediaBunny.seek(desiredGlobal);
 				if (generation !== seekGeneration) return;
@@ -388,11 +389,22 @@ export function createSeekHandler(
 			return;
 		}
 
-		// Direct / addon HLS — browser or hls.js fills the gap after currentTime moves.
-		const onSeeked = () => {
-			if (generation !== seekGeneration) return;
+		let timeout: ReturnType<typeof setTimeout> | null = null;
+		const cleanup = () => {
+			if (timeout != null) {
+				clearTimeout(timeout);
+				timeout = null;
+			}
 			videoElem.removeEventListener("seeked", onSeeked);
 			videoElem.removeEventListener("error", onError);
+			if (activeDirectCleanup === cleanup) {
+				activeDirectCleanup = null;
+			}
+		};
+		activeDirectCleanup = cleanup;
+		const onSeeked = () => {
+			if (generation !== seekGeneration) return;
+			cleanup();
 			if (wasPlaying) {
 				videoElem.play().catch((err) => {
 					console.warn("play after seek failed:", err);
@@ -402,23 +414,43 @@ export function createSeekHandler(
 		};
 		const onError = () => {
 			if (generation !== seekGeneration) return;
-			videoElem.removeEventListener("seeked", onSeeked);
-			videoElem.removeEventListener("error", onError);
+			cleanup();
 			finishFailure(new Error("Seek failed"));
 		};
 
 		videoElem.addEventListener("seeked", onSeeked);
 		videoElem.addEventListener("error", onError);
+		timeout = setTimeout(() => {
+			if (generation !== seekGeneration) return;
+			cleanup();
+			setSeekGuard(false);
+			setBuffering(false);
+			setShowCanvas(false);
+			if (wasPlaying && videoElem.paused) {
+				void videoElem.play().catch(() => {
+					// ignore
+				});
+			}
+			void handler();
+		}, directSeekTimeoutMs);
 		try {
-			videoElem.currentTime = Math.max(localTarget, 0);
+			const target = Math.max(localTarget, 0);
+			if (Math.abs(videoElem.currentTime - target) > 0.05) {
+				videoElem.currentTime = target;
+			}
 		} catch (error) {
-			videoElem.removeEventListener("seeked", onSeeked);
-			videoElem.removeEventListener("error", onError);
+			cleanup();
 			finishFailure(error);
 		}
 	};
 
-	return handler;
+	const seekingHandler = handler as SeekingHandler;
+	seekingHandler.cancel = () => {
+		seekGeneration += 1;
+		activeDirectCleanup?.();
+		activeDirectCleanup = null;
+	};
+	return seekingHandler;
 }
 
 export function cleanupSession(
