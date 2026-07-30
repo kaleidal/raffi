@@ -83,59 +83,9 @@ function resolveLocalPathFromRequest(requestUrl) {
   return null;
 }
 
-function resolveRemoteUrlFromRequest(requestUrl) {
-  let parsed;
-  try {
-    parsed = new URL(requestUrl);
-  } catch {
-    return null;
-  }
-  if (parsed.protocol !== `${SCHEME}:` || parsed.hostname !== "remote") {
-    return null;
-  }
-
-  const source = parsed.searchParams.get("url");
-  if (!source) return null;
-  try {
-    const remote = new URL(source);
-    return remote.protocol === "http:" || remote.protocol === "https:"
-      ? remote
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-function exposeMediaResponse(upstream) {
-  const headers = new Headers(upstream.headers);
-  headers.set("Access-Control-Allow-Origin", "*");
-  headers.set("Cross-Origin-Resource-Policy", "cross-origin");
-  headers.delete("Set-Cookie");
-  return new Response(upstream.body, {
-    status: upstream.status,
-    statusText: upstream.statusText,
-    headers,
-  });
-}
-
 function createLocalMediaProtocolHandler({ protocol, net, logToFile }) {
   protocol.handle(SCHEME, async (request) => {
     try {
-      const remoteUrl = resolveRemoteUrlFromRequest(request.url);
-      if (remoteUrl) {
-        const headers = new Headers();
-        for (const name of ["accept", "if-range", "range"]) {
-          const value = request.headers.get(name);
-          if (value) headers.set(name, value);
-        }
-        const upstream = await net.fetch(remoteUrl.href, {
-          method: request.method,
-          headers,
-          signal: request.signal,
-        });
-        return exposeMediaResponse(upstream);
-      }
-
       const filePath = resolveLocalPathFromRequest(request.url);
       if (!filePath) {
         return new Response("Invalid local media URL", { status: 400 });
@@ -169,6 +119,7 @@ function createLocalMediaProtocolHandler({ protocol, net, logToFile }) {
           const upstream = await net.fetch(fileUrl, {
             method: request.method,
             headers: request.headers,
+            signal: request.signal,
           });
           const headers = new Headers(upstream.headers);
           headers.set("Content-Type", contentType);
@@ -212,6 +163,7 @@ function createLocalMediaProtocolHandler({ protocol, net, logToFile }) {
         const fileUrl = pathToFileURL(filePath).href;
         const upstream = await net.fetch(fileUrl, {
           headers: { Range: rangeHeader },
+          signal: request.signal,
         });
         if (upstream.status === 206 || upstream.status === 200) {
           const headers = new Headers(upstream.headers);

@@ -1,7 +1,7 @@
 import type Hls from "hls.js";
 import {
+	isHttpUrl,
 	isMagnetUrl,
-	toDirectVideoUrl,
 } from "../../lib/media/localSource";
 import {
 	MediaBunnyPlayback,
@@ -201,11 +201,12 @@ export async function startNextEpisodePrefetch(
 		}
 
 		if (resolved.mode === "direct") {
-			const directVideoSource = toDirectVideoUrl(src);
-			if (directVideoSource !== src) {
+			if (resolved.meta && isHttpUrl(src)) {
 				videoElem.crossOrigin = "anonymous";
+			} else {
+				videoElem.removeAttribute("crossorigin");
 			}
-			videoElem.src = directVideoSource;
+			videoElem.src = src;
 			videoElem.load();
 			await waitForPlayableData(videoElem, abort.signal);
 			clearReadyTimeout();
