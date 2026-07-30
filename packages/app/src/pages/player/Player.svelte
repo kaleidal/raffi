@@ -1306,9 +1306,6 @@
         handleNextEpisodeClick.cancel();
         disposeNextEpisodePrefetch(reuseSession ? { transfer: true } : undefined);
 
-        if (previousBunny && previousBunny !== reuseSession?.mediaBunny) {
-            void previousBunny.destroy();
-        }
         if (reuseSession?.mediaBunny) {
             mediaBunny = reuseSession.mediaBunny;
         } else if (!canReuseHandoff) {

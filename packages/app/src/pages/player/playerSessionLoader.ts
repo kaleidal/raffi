@@ -183,13 +183,15 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
         );
     };
 
-    const cancelCurrentLoad = () => {
+    const cancelCurrentLoad = (
+        preservedMediaBunny: MediaBunnyPlayback | null = null,
+    ) => {
         loadGeneration += 1;
         activeAbortController?.abort();
         activeAbortController = null;
         deps.stopTorrentStatusPolling();
         const mediaBunny = deps.getMediaBunny();
-        if (mediaBunny) {
+        if (mediaBunny && mediaBunny !== preservedMediaBunny) {
             void mediaBunny.destroy();
             deps.setMediaBunny(null);
         }
@@ -264,7 +266,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
             };
         },
     ) => {
-        cancelCurrentLoad();
+        cancelCurrentLoad(opts?.reuseSession?.mediaBunny ?? null);
         const generation = loadGeneration;
         const abortController = new AbortController();
         activeAbortController = abortController;
