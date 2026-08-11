@@ -7,6 +7,7 @@ const SCHEME = "raffi-transcode";
 const STDERR_LIMIT = 32 * 1024;
 const CLAIM_TIMEOUT_MS = 15_000;
 const STARTUP_TIMEOUT_MS = 30_000;
+const STOP_TIMEOUT_MS = 2_000;
 const MAX_SESSIONS = 2;
 
 const ffmpegPrivilegedScheme = {
@@ -108,8 +109,15 @@ function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, r
     session.stopped = true;
     clearTimeout(session.claimTimer);
     clearTimeout(session.startupTimer);
+    session.finishStartup?.(new Error("FFmpeg playback stopped"));
     session.output.destroy();
-    if (!session.child.killed) session.child.kill("SIGTERM");
+    if (session.child.exitCode === null) {
+      session.child.kill("SIGTERM");
+      session.killTimer = setTimeout(() => {
+        if (session.child.exitCode === null) session.child.kill("SIGKILL");
+      }, STOP_TIMEOUT_MS);
+      session.killTimer.unref?.();
+    }
     return true;
   }
 
@@ -138,6 +146,7 @@ function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, r
       stopped: false,
       claimTimer: null,
       startupTimer: null,
+      killTimer: null,
     };
     sessions.set(sessionId, session);
     child.stdout.pipe(output, { end: false });
@@ -167,6 +176,7 @@ function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, r
     child.once("error", (error) => {
       sessions.delete(sessionId);
       session.stopped = true;
+      clearTimeout(session.killTimer);
       output.destroy(error);
       session.finishStartup(error);
     });
@@ -174,6 +184,7 @@ function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, r
       sessions.delete(sessionId);
       clearTimeout(session.claimTimer);
       clearTimeout(session.startupTimer);
+      clearTimeout(session.killTimer);
       if (session.stopped) return;
       if (code === 0) {
         session.finishStartup(new Error("FFmpeg produced no playable media"));
