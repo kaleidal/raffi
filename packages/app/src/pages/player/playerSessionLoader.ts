@@ -767,9 +767,11 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                             signal: abortController.signal,
                             meta: clientPlayback.meta,
                             audioIndex:
-                                result.sessionData?.audioIndex ??
-                                clientPlayback.meta?.preferredAudioIndex ??
-                                0,
+                                clientPlayback.mode === "ffmpeg"
+                                    ? undefined
+                                    : result.sessionData?.audioIndex ??
+                                      clientPlayback.meta?.preferredAudioIndex ??
+                                      0,
                         },
                     );
                     if (isStale()) {

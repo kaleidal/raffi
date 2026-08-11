@@ -122,7 +122,7 @@ raffi/
 - **Platforms**: Windows, macOS, Linux
 - **Features**: Full desktop experience with watch parties, Discord integration, local file playback
 - **Build**: electron-builder for multi-platform releases
-- **Playback**: MediaBunny remuxes compatible streams in the renderer. DTS and other unsupported audio streams use a bundled FFmpeg process that copies video and converts only audio to AAC.
+- **Playback**: MediaBunny remuxes compatible streams in the renderer. DTS and other unsupported audio streams use a bundled FFmpeg process that copies video and converts only audio to browser-safe multichannel Opus.
 
 Desktop packages pin checksummed Linux x64, Windows x64, and universal macOS binaries from the public [kaleidal/ffmpeg-builds](https://github.com/kaleidal/ffmpeg-builds) repository. `bun --filter @raffi/desktop prepare:ffmpeg` downloads and verifies the artifact for the current platform; `dist` runs this automatically and bundles the executable plus its license and build metadata outside the app ASAR.
 

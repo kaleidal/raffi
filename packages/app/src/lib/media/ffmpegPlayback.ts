@@ -1,5 +1,5 @@
 import { pickMseMimeType, pumpStreamToSourceBuffer, TARGET_BUFFER_AHEAD_SECONDS } from "./msePump";
-import { ensureAudioTracks, type ProbedStream } from "./probe";
+import { ensureAudioTracks, preferredAudioIndex, type ProbedStream } from "./probe";
 
 export type ClientPlaybackController = {
 	onWindowStartChange: ((globalStart: number) => void) | null;
@@ -77,7 +77,11 @@ function waitForInitialBuffer(sourceBuffer: SourceBuffer, signal?: AbortSignal) 
 function enableFfmpegAudio(meta: ProbedStream): ProbedStream {
 	const normalized = ensureAudioTracks(meta);
 	const audioTracks = normalized.audioTracks.map((track) => ({ ...track, playable: true }));
-	return { ...normalized, audioTracks };
+	return {
+		...normalized,
+		audioTracks,
+		preferredAudioIndex: preferredAudioIndex(audioTracks),
+	};
 }
 
 export function canUseFfmpegPlayback(meta: ProbedStream): boolean {
@@ -86,7 +90,7 @@ export function canUseFfmpegPlayback(meta: ProbedStream): boolean {
 	if (meta.audioTracks.length === 0 || meta.audioTracks.every((track) => track.playable)) {
 		return false;
 	}
-	return pickMseMimeType(meta.video.codecString, "mp4a.40.2") !== null;
+	return pickMseMimeType(meta.video.codecString, "opus") !== null;
 }
 
 export class FfmpegPlayback implements ClientPlaybackController {
@@ -204,11 +208,16 @@ export class FfmpegPlayback implements ClientPlaybackController {
 			const selectedAudio = this.meta.audioTracks.find(
 				(track) => track.index === this.audioIndex,
 			);
+			const copyAudio =
+				selectedAudio?.codec === "aac" &&
+				selectedAudio.channels !== null &&
+				selectedAudio.channels <= 2;
+			const audioCodecString = copyAudio ? "mp4a.40.2" : "opus";
 			const started = await getBridge().start({
 				source: this.source,
 				startTime,
 				audioIndex: this.audioIndex,
-				copyAudio: selectedAudio?.codec === "aac",
+				copyAudio,
 			});
 			if (generation !== this.generation || abort.signal.aborted) {
 				await getBridge().stop(started.sessionId);
@@ -224,7 +233,7 @@ export class FfmpegPlayback implements ClientPlaybackController {
 			this.objectUrl = URL.createObjectURL(mediaSource);
 			this.video.src = this.objectUrl;
 			await waitForSourceOpen(mediaSource, abort.signal);
-			const mime = pickMseMimeType(this.meta.video.codecString, "mp4a.40.2");
+			const mime = pickMseMimeType(this.meta.video.codecString, audioCodecString);
 			if (!mime) throw new Error("This video codec cannot be copied into an MP4 stream");
 			const sourceBuffer = mediaSource.addSourceBuffer(mime);
 			sourceBuffer.mode = "segments";

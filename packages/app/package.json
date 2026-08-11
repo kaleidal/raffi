@@ -31,7 +31,7 @@
     "@mediabunny/ac3": "^1.53.0",
     "hls.js": "^1.6.17",
     "mediabunny": "^1.53.0",
-    "posthog-js": "^1.415.4"
+    "posthog-js": "^1.415.5"
   },
   "peerDependencies": {
     "svelte": "^5.0.0"
