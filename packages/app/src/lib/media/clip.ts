@@ -46,10 +46,20 @@ export async function exportClipWithMediaBunny(
 		throw new Error("This source cannot be clipped in-app yet");
 	}
 
+	const networkAbort = new AbortController();
+	let conversion: Conversion | null = null;
+	const abort = () => {
+		networkAbort.abort();
+		void conversion?.cancel().catch(() => {});
+	};
+	req.signal?.addEventListener("abort", abort, { once: true });
+	if (req.signal?.aborted) abort();
+
 	const input = new Input({
 		source: createRemoteUrlSource(playable, {
 			parallelism: 2,
 			maxCacheSize: 48 * 1024 * 1024,
+			signal: networkAbort.signal,
 		}),
 		formats: ALL_FORMATS,
 	});
@@ -63,7 +73,8 @@ export async function exportClipWithMediaBunny(
 			target,
 		});
 
-		const conversion = await Conversion.init({
+		const primaryAudioTrack = await input.getPrimaryAudioTrack();
+		conversion = await Conversion.init({
 			input,
 			output,
 			tracks: "primary",
@@ -108,24 +119,28 @@ export async function exportClipWithMediaBunny(
 			);
 		}
 
+		if (
+			primaryAudioTrack &&
+			!conversion.utilizedTracks.some(
+				(track) => track.isAudioTrack() && track.id === primaryAudioTrack.id,
+			)
+		) {
+			const codec =
+				(await primaryAudioTrack.getCodec()) ??
+				(await primaryAudioTrack.getInternalCodecId()) ??
+				"unknown";
+			throw new Error(
+				`MediaBunny cannot export ${codec} audio on this platform`,
+			);
+		}
+
 		if (req.onProgress) {
 			conversion.onProgress = (progress) => {
 				req.onProgress?.(progress);
 			};
 		}
 
-		const abort = () => {
-			void conversion.cancel().catch(() => {
-				// ignore
-			});
-		};
-		req.signal?.addEventListener("abort", abort, { once: true });
-
-		try {
-			await conversion.execute();
-		} finally {
-			req.signal?.removeEventListener("abort", abort);
-		}
+		await conversion.execute();
 
 		if (req.signal?.aborted) {
 			throw new DOMException("Aborted", "AbortError");
@@ -141,6 +156,8 @@ export async function exportClipWithMediaBunny(
 			mimeType: "video/mp4",
 		};
 	} finally {
+		req.signal?.removeEventListener("abort", abort);
+		networkAbort.abort();
 		input.dispose();
 	}
 }

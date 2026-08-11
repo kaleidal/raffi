@@ -32,10 +32,12 @@ import {
 	KeyframeCopyConversion,
 	type PlaybackConversion,
 } from "./keyframeCopyConversion";
+import { canUseFfmpegPlayback } from "./ffmpegPlayback";
 
 export type HttpPlaybackMode =
 	| "direct"
 	| "mediabunny"
+	| "ffmpeg"
 	| "addon-hls"
 	| "unsupported";
 
@@ -132,6 +134,10 @@ export async function resolveHttpPlayback(
 			throw new DOMException("Aborted", "AbortError");
 		}
 
+		if (canUseFfmpegPlayback(meta)) {
+			return { mode: "ffmpeg", meta, reason: "unsupported-audio-transcode" };
+		}
+
 		// Local files go through MediaBunny — Chromium+custom-protocol <video>
 		// seeking is unreliable; UrlSource range fetches are stable.
 		if (localSource) {
@@ -167,6 +173,26 @@ export async function resolveHttpPlayback(
 			return { mode: "mediabunny", meta, reason: "remux-or-transcode" };
 		}
 
+		if (meta.audio && !meta.audioTracks.some((track) => track.playable)) {
+			const codecs = [
+				...new Set(
+					meta.audioTracks
+						.map((track) => track.codecName || track.codec)
+						.filter((codec): codec is string => Boolean(codec)),
+				),
+			];
+			const label = codecs.length > 0 ? codecs.join(", ") : "unknown";
+			const dts = codecs.some((codec) => /DTS/i.test(codec));
+			return {
+				mode: "unsupported",
+				meta,
+				reason: "unsupported-audio-codec",
+				error: dts
+					? "MediaBunny does not support DTS audio. Choose another audio track or stream."
+					: `MediaBunny cannot decode ${label} audio on this platform. Choose another audio track or stream.`,
+			};
+		}
+
 		return { mode: "unsupported", meta, reason: "no-browser-path" };
 	} catch (error) {
 		if (error instanceof DOMException && error.name === "AbortError") {
@@ -192,6 +218,9 @@ export async function resolveHttpPlayback(
 
 function canUseMediaBunnyRemux(meta: ProbedStream): boolean {
 	if (!meta.video) return false;
+	if (meta.audio && !meta.audioTracks.some((track) => track.playable)) {
+		return false;
+	}
 	if (!isMseFriendlyVideo(meta.video.codec) && !meta.video.canDecode) {
 		return false;
 	}
@@ -493,7 +522,7 @@ export class MediaBunnyPlayback {
 			if (generation !== this.generation) return;
 			if (abort.signal.aborted) return;
 			if (isBenignConversionError(error)) return;
-			console.error("MediaBunny remux failed", error);
+			throw error;
 		}
 	}
 
@@ -559,7 +588,9 @@ export class MediaBunnyPlayback {
 		this.remuxOrigin = snappedStart;
 		this.onWindowStartChange?.(snappedStart);
 
-		const selectedAudio = this.meta.audioTracks[this.audioIndex];
+		const selectedAudio = this.meta.audioTracks.find(
+			(track) => track.index === this.audioIndex,
+		);
 		const selectedBunnyIndex =
 			selectedAudio?.bunnyIndex ??
 			(selectedAudio?.playable === false ? -1 : this.audioIndex);
@@ -644,8 +675,17 @@ export class MediaBunnyPlayback {
 				});
 
 		this.conversion = conversion;
+		let rejectPipeline: (error: unknown) => void = () => {};
+		const pipelineFailure = new Promise<never>((_resolve, reject) => {
+			rejectPipeline = reject;
+		});
 
-		const pump = pumpStreamToSourceBuffer(readable, sourceBuffer, abort.signal);
+		const pump = pumpStreamToSourceBuffer(
+			readable,
+			sourceBuffer,
+			abort.signal,
+			this.video,
+		);
 		const execute = this.runConversionWindowed(
 			conversion,
 			mediaSource,
@@ -658,10 +698,24 @@ export class MediaBunnyPlayback {
 			if (abort.signal.aborted) return;
 			if (isBenignConversionError(error)) return;
 			console.error("MediaBunny remux failed", error);
+			this.networkAbort?.abort();
+			void this.cancelConversion();
+			try {
+				if (mediaSource.readyState === "open") {
+					mediaSource.endOfStream("decode");
+				}
+			} catch {}
+			rejectPipeline(error);
 		});
 
-		await waitForFirstBuffer(sourceBuffer, abort.signal);
-		await waitForBufferedThrough(sourceBuffer, this.video, 0.35, abort.signal);
+		await Promise.race([
+			waitForFirstBuffer(sourceBuffer, abort.signal),
+			pipelineFailure,
+		]);
+		await Promise.race([
+			waitForBufferedThrough(sourceBuffer, this.video, 0.35, abort.signal),
+			pipelineFailure,
+		]);
 		outerSignal?.removeEventListener("abort", onOuterAbort);
 		return snappedStart;
 	}
@@ -770,7 +824,7 @@ function isBenignConversionError(error: unknown): boolean {
 	const message = error instanceof Error ? error.message : String(error);
 	return (
 		name === "ConversionCanceledError" ||
-		/cancel|abort|ERRORED writable|QuotaExceeded|reclaimed due to inactivity/i.test(
+		/cancel|abort|ERRORED writable|reclaimed due to inactivity/i.test(
 			`${name} ${message}`,
 		)
 	);

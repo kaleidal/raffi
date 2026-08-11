@@ -1,0 +1,21 @@
+{
+  "repository": "kaleidal/ffmpeg-builds",
+  "tag": "v9.0-raffi.1",
+  "targets": {
+    "linux-x64": {
+      "asset": "raffi-ffmpeg-linux-x64.tar.gz",
+      "sha256": "fc7a80211f92319d16875d90b1832bde553af1816cc5eada3bcb6df3661641c9",
+      "metadata": ["BUILD-INFO.txt", "LICENSE.FFMPEG", "LICENSE.OPENSSL"]
+    },
+    "win32-x64": {
+      "asset": "raffi-ffmpeg-windows-x64.zip",
+      "sha256": "be029674eaaaf90a1bbd54f0960cf1c73cb17b87b4e88cfcb10e27e9d9381e03",
+      "metadata": ["BUILD-INFO.txt", "LICENSE.FFMPEG"]
+    },
+    "darwin-universal": {
+      "asset": "raffi-ffmpeg-macos-universal.tar.gz",
+      "sha256": "6fb1fcb53b825daa7c9e2ed2fae3d2c04638c68f8f109ccf4a6e383e5703c733",
+      "metadata": ["BUILD-INFO.arm64.txt", "BUILD-INFO.x64.txt", "LICENSE.FFMPEG"]
+    }
+  }
+}

@@ -283,7 +283,7 @@ export function createSeekHandler(
 		setErrorMessage: (message: string) => void;
 		setErrorDetails: (details: string) => void;
 	},
-	getMediaBunny?: () => {
+	getPlaybackController?: () => {
 		seek: (time: number) => Promise<number>;
 		setAudioTrack?: (index: number, globalTime: number) => Promise<number>;
 	} | null,
@@ -325,13 +325,13 @@ export function createSeekHandler(
 		setPendingSeek(null);
 		const playbackOffset = getPlaybackOffset();
 		const localTarget = desiredGlobal - playbackOffset;
-		const mediaBunny = getMediaBunny?.() ?? null;
+		const playbackController = getPlaybackController?.() ?? null;
 
-		if (!mediaBunny && isTimeBuffered(videoElem, localTarget)) {
+		if (!playbackController && isTimeBuffered(videoElem, localTarget)) {
 			videoElem.currentTime = localTarget;
 			return;
 		}
-		if (mediaBunny && localTarget >= 0 && isTimeBuffered(videoElem, localTarget)) {
+		if (playbackController && localTarget >= 0 && isTimeBuffered(videoElem, localTarget)) {
 			videoElem.currentTime = localTarget;
 			return;
 		}
@@ -368,11 +368,11 @@ export function createSeekHandler(
 			void handler();
 		};
 
-		if (mediaBunny) {
+		if (playbackController) {
 			try {
 				videoElem.pause();
 				setPlaybackOffset(desiredGlobal);
-				const snapped = await mediaBunny.seek(desiredGlobal);
+				const snapped = await playbackController.seek(desiredGlobal);
 				if (generation !== seekGeneration) return;
 				setPlaybackOffset(snapped);
 				if (wasPlaying) {
@@ -485,7 +485,7 @@ export async function handleAudioSelect(
 		setLoadingStage?: (stage: string) => void;
 		setPlaybackOffset?: (offset: number) => void;
 	},
-	getMediaBunny?: () => {
+	getPlaybackController?: () => {
 		seek: (time: number) => Promise<number>;
 		setAudioTrack: (index: number, globalTime: number) => Promise<number>;
 	} | null,
@@ -506,8 +506,8 @@ export async function handleAudioSelect(
 		if (setLoading) setLoading(true);
 		if (setLoadingStage) setLoadingStage("Switching audio track");
 
-		const mediaBunny = getMediaBunny?.() ?? null;
-		if (!mediaBunny) {
+		const playbackController = getPlaybackController?.() ?? null;
+		if (!playbackController) {
 			throw new Error("Audio track switching needs in-app remux for this stream");
 		}
 
@@ -516,7 +516,7 @@ export async function handleAudioSelect(
 			throw new Error("Invalid audio track");
 		}
 		setPlaybackOffset?.(currentTime);
-		const snapped = await mediaBunny.setAudioTrack(audioIndex, currentTime);
+		const snapped = await playbackController.setAudioTrack(audioIndex, currentTime);
 		setPlaybackOffset?.(snapped);
 		if (!videoElem.paused) {
 			void videoElem.play().catch(() => {

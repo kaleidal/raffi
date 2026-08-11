@@ -24,5 +24,9 @@ export {
 	isLocalFilesystemPath,
 	encodeLocalPathAsMediaUrl,
 } from "./localSource";
-export { exportClipWithMediaBunny } from "./clip";
 export { ensureMediaCodersRegistered } from "./registerCoders";
+export {
+	FfmpegPlayback,
+	canUseFfmpegPlayback,
+	type ClientPlaybackController,
+} from "./ffmpegPlayback";

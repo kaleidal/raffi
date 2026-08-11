@@ -149,7 +149,6 @@ export const handleNextEpisode = async (imdbID: string, progressMap: any) => {
         }
 
         if (match) {
-            console.log("Auto-selecting matching stream:", match);
             playResolvedNextEpisode({ stream: match, nextEpisode: nextEp }, progressMap);
         } else {
             selectedStreamUrl.set(null);
@@ -157,7 +156,6 @@ export const handleNextEpisode = async (imdbID: string, progressMap: any) => {
             router.back();
         }
     } else {
-        console.log("No next episode found");
         selectedStreamUrl.set(null);
         router.back();
     }

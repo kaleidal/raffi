@@ -8,6 +8,7 @@ import {
 	resolveHttpPlayback,
 	type HttpPlaybackMode,
 	type ProbedStream,
+	type ClientPlaybackController,
 } from "../../lib/media";
 import * as Session from "./videoSession";
 
@@ -29,7 +30,7 @@ export type NextEpisodePrefetchHandoff = {
 	fileIdx: number | null;
 	mode: HttpPlaybackMode;
 	meta: ProbedStream | null;
-	mediaBunny: MediaBunnyPlayback | null;
+	playbackController: ClientPlaybackController | null;
 	hls: Hls | null;
 };
 
@@ -221,7 +222,7 @@ export async function startNextEpisodePrefetch(
 					fileIdx,
 					mode: "direct",
 					meta: resolved.meta,
-					mediaBunny: null,
+						playbackController: null,
 					hls: null,
 				},
 			};
@@ -259,7 +260,7 @@ export async function startNextEpisodePrefetch(
 					fileIdx,
 					mode: "addon-hls",
 					meta: null,
-					mediaBunny: null,
+						playbackController: null,
 					hls: hlsInstance,
 				},
 			};
@@ -297,7 +298,7 @@ export async function startNextEpisodePrefetch(
 					fileIdx,
 					mode: "mediabunny",
 					meta: bunny.getMeta() ?? resolved.meta,
-					mediaBunny: bunny,
+						playbackController: bunny,
 					hls: null,
 				},
 			};

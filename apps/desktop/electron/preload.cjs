@@ -38,6 +38,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
         pickFolder: () => ipcRenderer.invoke('LOCAL_LIBRARY_PICK_FOLDER'),
         scan: (roots) => ipcRenderer.invoke('LOCAL_LIBRARY_SCAN', roots),
     },
+    ffmpegPlayback: {
+        start: (request) => ipcRenderer.invoke('FFMPEG_PLAYBACK_START', request),
+        stop: (sessionId) => ipcRenderer.invoke('FFMPEG_PLAYBACK_STOP', sessionId),
+    },
     windowControls: {
         minimize: () => ipcRenderer.send('WINDOW_MINIMIZE'),
         toggleMaximize: () => ipcRenderer.send('WINDOW_TOGGLE_MAXIMIZE'),

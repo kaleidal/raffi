@@ -27,7 +27,7 @@ export const createPlayerModalHandlers = ({
 	getVideoSrc,
 	loadVideo,
 	handleClose,
-	getMediaBunny,
+	getPlaybackController,
 }: {
 	getVideoElem: () => HTMLVideoElement | null | undefined;
 	getCueLinePercent: () => number;
@@ -35,7 +35,7 @@ export const createPlayerModalHandlers = ({
 	getVideoSrc: () => string | null;
 	loadVideo: (src: string) => void | Promise<void>;
 	handleClose: () => void | Promise<void>;
-	getMediaBunny?: () => {
+	getPlaybackController?: () => {
 		seek: (time: number) => Promise<number>;
 		setAudioTrack: (index: number, globalTime: number) => Promise<number>;
 	} | null;
@@ -61,7 +61,7 @@ export const createPlayerModalHandlers = ({
 				setLoadingStage: loadingStage.set,
 				setPlaybackOffset: playbackOffset.set,
 			},
-			getMediaBunny,
+			getPlaybackController,
 		);
 	};
 

@@ -1,7 +1,7 @@
 const path = require("path");
 const os = require("os");
 
-function candidateLimboApiPaths(fs) {
+function candidateLimboApiPaths() {
   const home = os.homedir();
   const candidates = [];
 
@@ -30,7 +30,7 @@ function candidateLimboApiPaths(fs) {
 }
 
 async function readLimboApiDiscovery(fs) {
-  for (const filePath of candidateLimboApiPaths(fs)) {
+  for (const filePath of candidateLimboApiPaths()) {
     try {
       const raw = await fs.promises.readFile(filePath, "utf8");
       const parsed = JSON.parse(raw);
@@ -53,5 +53,4 @@ async function readLimboApiDiscovery(fs) {
 
 module.exports = {
   readLimboApiDiscovery,
-  candidateLimboApiPaths,
 };

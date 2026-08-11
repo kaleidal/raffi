@@ -20,6 +20,15 @@ declare global {
             disableRPC: () => void;
             usesTitleBarOverlay?: boolean;
             getFilePath?: (file: any) => string;
+            ffmpegPlayback?: {
+                start: (request: {
+                    source: string;
+                    startTime: number;
+                    audioIndex: number;
+                    copyAudio: boolean;
+                }) => Promise<{ sessionId: string; streamUrl: string; startTime: number }>;
+                stop: (sessionId: string) => Promise<boolean>;
+            };
             saveClipPath?: (suggestedName?: string) => Promise<{ canceled: boolean; filePath: string | null; error?: string }>;
             writeClipFile?: (
                 targetPath: string,

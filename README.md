@@ -99,8 +99,9 @@ chmod +x Raffi-x.x.x.AppImage
 
 ### Prerequisites
 
-- **Node.js** 18+ or **Bun** 1.0+
+- **Bun** 1.3+
 - **Git**
+- **tar** (included with current Windows, macOS, and Linux developer environments)
 
 ### Project Structure
 
@@ -121,6 +122,9 @@ raffi/
 - **Platforms**: Windows, macOS, Linux
 - **Features**: Full desktop experience with watch parties, Discord integration, local file playback
 - **Build**: electron-builder for multi-platform releases
+- **Playback**: MediaBunny remuxes compatible streams in the renderer. DTS and other unsupported audio streams use a bundled FFmpeg process that copies video and converts only audio to AAC.
+
+Desktop packages pin checksummed Linux x64, Windows x64, and universal macOS binaries from the public [kaleidal/ffmpeg-builds](https://github.com/kaleidal/ffmpeg-builds) repository. `bun --filter @raffi/desktop prepare:ffmpeg` downloads and verifies the artifact for the current platform; `dist` runs this automatically and bundles the executable plus its license and build metadata outside the app ASAR.
 
 #### Web App (`apps/web/`)
 - **Framework**: SvelteKit with Cloudflare adapter
@@ -213,7 +217,7 @@ bun run build
 #### Desktop App
 - **Frontend**: Svelte 5, TypeScript, Tailwind CSS
 - **Desktop Runtime**: Electron
-- **Video Player**: HLS.js for adaptive streaming
+- **Video Player**: native media playback, HLS.js, MediaBunny, and bundled FFmpeg audio conversion
 - **Storage**: Local app data with Raffi Sync cloud backup
 - **Build**: Vite + electron-builder
 - **Key Libraries**: `@lucide/svelte`, `posthog-js`, `@ryuziii/discord-rpc`

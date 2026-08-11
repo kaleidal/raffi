@@ -17,8 +17,12 @@ const { registerMainIpcHandlers } = require("./services/mainIpc.cjs");
 const { registerDiscordRpcHandlers } = require("./services/rpc.cjs");
 const { createMainWindow } = require("./services/window.cjs");
 const { createDefenderService } = require("./services/defender.cjs");
+const {
+  ffmpegPrivilegedScheme,
+  createFfmpegPlaybackService,
+} = require("./services/ffmpegPlayback.cjs");
 
-registerPrivilegedSchemes(protocol);
+registerPrivilegedSchemes(protocol, [ffmpegPrivilegedScheme]);
 
 const { logFallback, logToFile } = createLogger(app);
 
@@ -87,6 +91,7 @@ app.on("window-all-closed", () => {
 
 app.on("render-process-gone", (_event, details) => {
   logToFile("Render process gone", details);
+  ffmpegPlaybackService?.cleanup();
 });
 
 app.on("child-process-gone", (_event, details) => {
@@ -98,6 +103,7 @@ let fileToOpen = null;
 let pendingAveAuthPayload = null;
 let pendingTraktAuthPayload = null;
 let pendingUpdateInfo = null;
+let ffmpegPlaybackService = null;
 const handleProtocolUrl = createProtocolUrlHandler({
   logToFile,
   getMainWindow: () => mainWindow,
@@ -250,6 +256,19 @@ app.whenReady().then(async () => {
   } catch (error) {
     logToFile("Failed to register raffi-media protocol", error);
   }
+  try {
+    ffmpegPlaybackService = createFfmpegPlaybackService({
+      app,
+      protocol,
+      ipcMain,
+      spawn,
+      baseDir: __dirname,
+      resourcesPath: process.resourcesPath,
+      logToFile,
+    });
+  } catch (error) {
+    logToFile("Failed to register FFmpeg playback", error);
+  }
   if (pendingAppUserModelId) {
     app.setAppUserModelId(pendingAppUserModelId);
   }
@@ -274,8 +293,6 @@ app.whenReady().then(async () => {
 
   if (process.platform === "win32" || process.platform === "linux") {
     const argv = process.argv;
-    console.log("Command line args:", argv);
-
     const deepLink = argv.find((arg) => typeof arg === "string" && arg.startsWith("raffi://"));
     if (deepLink && handleProtocolUrl(deepLink)) {
       // handled as auth callback
@@ -289,7 +306,6 @@ app.whenReady().then(async () => {
     }
 
     if (filePath && !filePath.startsWith("-") && !filePath.startsWith("raffi://")) {
-      console.log("Found file to open:", filePath);
       fileToOpen = filePath;
     }
   }
@@ -309,7 +325,7 @@ app.on("activate", () => {
 });
 
 function cleanup() {
-  console.log("Cleaning up...");
+  ffmpegPlaybackService?.cleanup();
 }
 
 registerMainIpcHandlers({

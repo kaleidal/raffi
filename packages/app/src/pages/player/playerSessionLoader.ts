@@ -2,10 +2,12 @@ import { get } from "svelte/store";
 import type { ShowResponse } from "../../lib/library/types/meta_types";
 import {
     MediaBunnyPlayback,
+    FfmpegPlayback,
     enrichProbedStreamAudio,
     formatAudioTrackLabel,
     resolveHttpPlayback,
     type ProbedStream,
+    type ClientPlaybackController,
 } from "../../lib/media";
 import {
     canTryClientPlayback,
@@ -64,8 +66,8 @@ export type PlayerSessionLoaderDeps = {
     getVideoElem: () => HTMLVideoElement | undefined;
     getHls: () => any;
     setHls: (value: any) => void;
-    getMediaBunny: () => MediaBunnyPlayback | null;
-    setMediaBunny: (value: MediaBunnyPlayback | null) => void;
+    getPlaybackController: () => ClientPlaybackController | null;
+    setPlaybackController: (value: ClientPlaybackController | null) => void;
     getCueLinePercent: () => number;
     shouldShowSeekStyleInfoModal: () => boolean;
     setPendingStartAfterSeekStyleModal: (value: boolean) => void;
@@ -177,23 +179,23 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                     setErrorMessage: errorMessage.set,
                     setErrorDetails: errorDetails.set,
                 },
-                deps.getMediaBunny,
+                deps.getPlaybackController,
                 () => get(isPlaying),
             ),
         );
     };
 
     const cancelCurrentLoad = (
-        preservedMediaBunny: MediaBunnyPlayback | null = null,
+        preservedController: ClientPlaybackController | null = null,
     ) => {
         loadGeneration += 1;
         activeAbortController?.abort();
         activeAbortController = null;
         deps.stopTorrentStatusPolling();
-        const mediaBunny = deps.getMediaBunny();
-        if (mediaBunny && mediaBunny !== preservedMediaBunny) {
-            void mediaBunny.destroy();
-            deps.setMediaBunny(null);
+        const playbackController = deps.getPlaybackController();
+        if (playbackController && playbackController !== preservedController) {
+            void playbackController.destroy();
+            deps.setPlaybackController(null);
         }
         if (activeLimboTorrentId) {
             void removeLimboTorrent(activeLimboTorrentId, false);
@@ -259,14 +261,14 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
         opts?: {
             reuseSession?: {
                 sessionData: any;
-                mode?: "direct" | "mediabunny" | "addon-hls" | "unsupported";
+                mode?: "direct" | "mediabunny" | "ffmpeg" | "addon-hls" | "unsupported";
                 meta?: ProbedStream | null;
-                mediaBunny?: MediaBunnyPlayback | null;
+                playbackController?: ClientPlaybackController | null;
                 hls?: any;
             };
         },
     ) => {
-        cancelCurrentLoad(opts?.reuseSession?.mediaBunny ?? null);
+        cancelCurrentLoad(opts?.reuseSession?.playbackController ?? null);
         const generation = loadGeneration;
         const abortController = new AbortController();
         activeAbortController = abortController;
@@ -279,6 +281,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                 reused &&
                 (reused.mode === "direct" ||
                     reused.mode === "mediabunny" ||
+                    reused.mode === "ffmpeg" ||
                     reused.mode === "addon-hls")
             ) {
                 loadingStage.set("Continuing");
@@ -298,7 +301,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                     reused.meta ?? null,
                     sessionSource,
                     nextSession,
-                    reused.mediaBunny?.getAudioIndex?.(),
+                    reused.playbackController?.getAudioIndex?.(),
                 );
                 sessionData.set(nextSession);
 
@@ -316,8 +319,8 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                 }
 
                 playbackOffset.set(
-                    reused.mode === "mediabunny"
-                        ? (reused.mediaBunny?.getRemuxOrigin?.() ?? 0)
+                    reused.mode === "mediabunny" || reused.mode === "ffmpeg"
+                        ? (reused.playbackController?.getRemuxOrigin?.() ?? 0)
                         : 0,
                 );
                 currentTime.set(get(playbackOffset));
@@ -326,16 +329,19 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                     { id: "off", label: "Off", selected: true, group: "None" },
                 ]);
 
-                if (reused.mode === "mediabunny" && reused.mediaBunny) {
-                    const bunny = reused.mediaBunny;
-                    bunny.onWindowStartChange = (globalStart) => {
+                if (
+                    (reused.mode === "mediabunny" || reused.mode === "ffmpeg") &&
+                    reused.playbackController
+                ) {
+                    const controller = reused.playbackController;
+                    controller.onWindowStartChange = (globalStart) => {
                         playbackOffset.set(globalStart);
                     };
-                    deps.setMediaBunny(bunny);
+                    deps.setPlaybackController(controller);
                 } else if (reused.mode === "addon-hls" && reused.hls) {
                     deps.setHls(reused.hls);
                 } else {
-                    deps.setMediaBunny(null);
+                    deps.setPlaybackController(null);
                 }
                 attachSeekHandler(videoElem);
                 if (isStale()) return;
@@ -480,6 +486,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
             const useClientPlayback =
                 clientPlayback?.mode === "direct" ||
                 clientPlayback?.mode === "mediabunny" ||
+                clientPlayback?.mode === "ffmpeg" ||
                 clientPlayback?.mode === "addon-hls";
 
             if (limboStatus && !useClientPlayback) {
@@ -626,13 +633,15 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
 
             if (useClientPlayback && clientPlayback) {
                 loadingStage.set(
-                    clientPlayback.mode === "mediabunny"
-                        ? "Remuxing in the app"
+                    clientPlayback.mode === "mediabunny" || clientPlayback.mode === "ffmpeg"
+                        ? clientPlayback.mode === "ffmpeg"
+                            ? "Converting audio"
+                            : "Remuxing in the app"
                         : "Loading stream directly",
                 );
                 loadingDetails.set(
-                    clientPlayback.mode === "mediabunny"
-                        ? "Transcoding incompatible audio with MediaBunny"
+                    clientPlayback.mode === "mediabunny" || clientPlayback.mode === "ffmpeg"
+                        ? "Preparing a browser-compatible stream"
                         : "Starting playback",
                 );
                 loadingProgress.set(null);
@@ -647,14 +656,14 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                     deps.setHls(null);
                 }
 
-                const existingBunny = deps.getMediaBunny();
-                if (existingBunny) {
-                    await existingBunny.destroy();
-                    deps.setMediaBunny(null);
+                const existingController = deps.getPlaybackController();
+                if (existingController) {
+                    await existingController.destroy();
+                    deps.setPlaybackController(null);
                 }
 
                 playbackOffset.set(
-                    clientPlayback.mode === "mediabunny"
+                    clientPlayback.mode === "mediabunny" || clientPlayback.mode === "ffmpeg"
                         ? Math.max(0, effectiveStartTime)
                         : 0,
                 );
@@ -739,24 +748,33 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                     return;
                 }
 
-                if (clientPlayback.mode === "mediabunny") {
-                    const bunny = new MediaBunnyPlayback();
-                    bunny.onWindowStartChange = (globalStart) => {
+                if (
+                    clientPlayback.mode === "mediabunny" ||
+                    clientPlayback.mode === "ffmpeg"
+                ) {
+                    const controller = clientPlayback.mode === "ffmpeg"
+                        ? new FfmpegPlayback()
+                        : new MediaBunnyPlayback();
+                    controller.onWindowStartChange = (globalStart) => {
                         playbackOffset.set(globalStart);
                     };
-                    deps.setMediaBunny(bunny);
-                    const attached = await bunny.attach(videoElem, sessionSource, {
-                        startTime: effectiveStartTime,
-                        signal: abortController.signal,
-                        meta: clientPlayback.meta,
-                        audioIndex:
-                            result.sessionData?.audioIndex ??
-                            clientPlayback.meta?.preferredAudioIndex ??
-                            0,
-                    });
+                    deps.setPlaybackController(controller);
+                    const attached = await controller.attach(
+                        videoElem,
+                        clientPlayback.mode === "ffmpeg" ? playbackSrc : sessionSource,
+                        {
+                            startTime: effectiveStartTime,
+                            signal: abortController.signal,
+                            meta: clientPlayback.meta,
+                            audioIndex:
+                                result.sessionData?.audioIndex ??
+                                clientPlayback.meta?.preferredAudioIndex ??
+                                0,
+                        },
+                    );
                     if (isStale()) {
-                        await bunny.destroy();
-                        deps.setMediaBunny(null);
+                        await controller.destroy();
+                        deps.setPlaybackController(null);
                         return;
                     }
                     if (attached.durationSeconds > 0) {
@@ -767,7 +785,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                         attached.meta,
                         sessionSource,
                         result.sessionData,
-                        bunny.getAudioIndex(),
+                        controller.getAudioIndex(),
                     );
                     sessionData.set(result.sessionData);
                     playbackOffset.set(attached.remuxOrigin);
@@ -780,12 +798,12 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                     )
                         .then((enriched) => {
                             if (isStale()) return;
-                            bunny.replaceMeta(enriched);
+                            controller.replaceMeta(enriched);
                             result.sessionData = applyClientAudioTracks(
-                                enriched,
+                                controller.getMeta() ?? enriched,
                                 src,
                                 result.sessionData,
-                                bunny.getAudioIndex(),
+                                controller.getAudioIndex(),
                             );
                             sessionData.set(result.sessionData);
                         })
@@ -879,7 +897,8 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
 
             if (clientPlayback?.mode === "unsupported") {
                 throw new Error(
-                    "This stream needs codecs the browser cannot remux yet. Try another source.",
+                    clientPlayback.error ||
+                        "This stream needs codecs the browser cannot remux yet. Try another source.",
                 );
             }
 

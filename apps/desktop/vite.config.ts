@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import tailwindcss from "@tailwindcss/vite";
-import { resolve } from 'path'
+import { resolve } from 'node:path'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -9,14 +9,13 @@ export default defineConfig({
   plugins: [svelte(), tailwindcss()],
   resolve: {
     alias: {
-      '@raffi/app': resolve(__dirname, '../../packages/app'),
-      '@raffi/app/': resolve(__dirname, '../../packages/app/'),
+      '@raffi/app': resolve(import.meta.dirname, '../../packages/app'),
+      '@raffi/app/': resolve(import.meta.dirname, '../../packages/app/'),
     },
     dedupe: ['svelte'],
   },
   optimizeDeps: {
     include: ['@raffi/app'],
-    exclude: [],
   },
   build: {
     chunkSizeWarningLimit: 1000,

@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { listMatroskaAudioTracks } from "../src/lib/media/containerTracks";
-import { createRemoteUrlSource } from "../src/lib/media/probe";
+import {
+	canRemuxOrTranscodeAudio,
+	createRemoteUrlSource,
+	preferredAudioIndex,
+} from "../src/lib/media/probe";
 
 describe("MediaBunny network lifecycle", () => {
 	test("aborts active UrlSource fetches with the owning pipeline", async () => {
@@ -56,5 +60,38 @@ describe("MediaBunny network lifecycle", () => {
 
 		expect(methods).toEqual([undefined]);
 		expect(ranges).toEqual(["bytes=0-63"]);
+	});
+});
+
+describe("MediaBunny audio planning", () => {
+	test("rejects unknown DTS tracks and selects a playable fallback", () => {
+		expect(canRemuxOrTranscodeAudio(null, false)).toBe(false);
+		expect(canRemuxOrTranscodeAudio("aac", false)).toBe(true);
+		expect(canRemuxOrTranscodeAudio("ac3", true)).toBe(true);
+
+		const selected = preferredAudioIndex([
+			{
+				index: 4,
+				codec: null,
+				codecName: "A_DTS",
+				language: "eng",
+				title: null,
+				channels: 6,
+				playable: false,
+				bunnyIndex: 0,
+			},
+			{
+				index: 9,
+				codec: "aac",
+				codecName: "A_AAC",
+				language: "jpn",
+				title: null,
+				channels: 2,
+				playable: true,
+				bunnyIndex: 1,
+			},
+		]);
+
+		expect(selected).toBe(9);
 	});
 });
