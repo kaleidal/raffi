@@ -6,6 +6,7 @@ const { PassThrough, Readable } = require("stream");
 const SCHEME = "raffi-transcode";
 const STDERR_LIMIT = 32 * 1024;
 const CLAIM_TIMEOUT_MS = 15_000;
+const STARTUP_TIMEOUT_MS = 30_000;
 const MAX_SESSIONS = 2;
 
 const ffmpegPrivilegedScheme = {
@@ -55,7 +56,29 @@ function validateAudioIndex(value) {
   return index;
 }
 
-function buildArguments({ source, startTime, audioIndex, copyAudio }) {
+function resolveCaFile(source) {
+  if (process.platform !== "linux" || !/^https:\/\//i.test(source)) return null;
+  const candidates = [
+    process.env.SSL_CERT_FILE,
+    process.env.NIX_SSL_CERT_FILE,
+    "/etc/ssl/cert.pem",
+    "/etc/ssl/certs/ca-certificates.crt",
+    "/etc/pki/tls/certs/ca-bundle.crt",
+    "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
+    "/etc/ssl/ca-bundle.pem",
+    "/var/lib/ca-certificates/ca-bundle.pem",
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate !== "string" || !path.isAbsolute(candidate)) continue;
+    try {
+      fs.accessSync(candidate, fs.constants.R_OK);
+      if (fs.statSync(candidate).isFile()) return candidate;
+    } catch {}
+  }
+  throw new Error("FFmpeg could not find the Linux system CA certificate bundle");
+}
+
+function buildArguments({ source, startTime, audioIndex, copyAudio, caFile }) {
   const audioArguments = copyAudio
     ? ["-c:a", "copy"]
     : ["-c:a", "aac", "-b:a", "256k"];
@@ -64,7 +87,8 @@ function buildArguments({ source, startTime, audioIndex, copyAudio }) {
     : "file,crypto,data";
   return [
     "-hide_banner", "-loglevel", "error", "-nostdin",
-    "-ss", String(startTime), "-protocol_whitelist", protocolWhitelist, "-i", source,
+    "-ss", String(startTime), "-protocol_whitelist", protocolWhitelist,
+    ...(caFile ? ["-ca_file", caFile] : []), "-i", source,
     "-map", "0:v:0", "-map", `0:a:${audioIndex}`,
     "-c:v", "copy", ...audioArguments,
     "-movflags", "frag_keyframe+empty_moov+default_base_moof",
@@ -83,6 +107,7 @@ function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, r
     sessions.delete(sessionId);
     session.stopped = true;
     clearTimeout(session.claimTimer);
+    clearTimeout(session.startupTimer);
     session.output.destroy();
     if (!session.child.killed) session.child.kill("SIGTERM");
     return true;
@@ -94,13 +119,14 @@ function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, r
     const startTime = validateStartTime(payload?.startTime);
     const audioIndex = validateAudioIndex(payload?.audioIndex);
     const copyAudio = payload?.copyAudio === true;
+    const caFile = resolveCaFile(source);
     while (sessions.size >= MAX_SESSIONS) {
       stop(sessions.keys().next().value);
     }
     const sessionId = crypto.randomUUID();
     const output = new PassThrough({ highWaterMark: 512 * 1024 });
     output.on("error", () => {});
-    const child = spawn(ffmpegPath, buildArguments({ source, startTime, audioIndex, copyAudio }), {
+    const child = spawn(ffmpegPath, buildArguments({ source, startTime, audioIndex, copyAudio, caFile }), {
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
     });
@@ -111,44 +137,58 @@ function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, r
       claimed: false,
       stopped: false,
       claimTimer: null,
+      startupTimer: null,
     };
     sessions.set(sessionId, session);
-    session.claimTimer = setTimeout(() => stop(sessionId), CLAIM_TIMEOUT_MS);
     child.stdout.pipe(output, { end: false });
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", (chunk) => {
       session.stderr = `${session.stderr}${chunk}`.slice(-STDERR_LIMIT);
     });
+    const startup = new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(session.startupTimer);
+        child.stdout.off("data", handleOutput);
+        if (error) reject(error);
+        else resolve();
+      };
+      const handleOutput = () => finish();
+      child.stdout.once("data", handleOutput);
+      session.startupTimer = setTimeout(() => {
+        const error = new Error("FFmpeg did not produce a playable stream within 30 seconds");
+        finish(error);
+        stop(sessionId);
+      }, STARTUP_TIMEOUT_MS);
+      session.finishStartup = finish;
+    });
+    child.once("error", (error) => {
+      sessions.delete(sessionId);
+      session.stopped = true;
+      output.destroy(error);
+      session.finishStartup(error);
+    });
     child.once("exit", (code, signal) => {
       sessions.delete(sessionId);
       clearTimeout(session.claimTimer);
+      clearTimeout(session.startupTimer);
       if (session.stopped) return;
       if (code === 0) {
+        session.finishStartup(new Error("FFmpeg produced no playable media"));
         output.end();
         return;
       }
-      const detail = session.stderr.trim() || `FFmpeg exited with ${code ?? signal}`;
+      const rawDetail = session.stderr.trim() || `FFmpeg exited with ${code ?? signal}`;
+      const detail = rawDetail.split(source).join("<media source>");
+      session.finishStartup(new Error(detail));
       output.destroy(new Error(detail));
       logToFile?.("FFmpeg playback failed", detail);
     });
 
-    await new Promise((resolve, reject) => {
-      const handleSpawn = () => { cleanup(); resolve(); };
-      const handleError = (error) => {
-        cleanup();
-        sessions.delete(sessionId);
-        clearTimeout(session.claimTimer);
-        session.stopped = true;
-        output.destroy(error);
-        reject(error);
-      };
-      const cleanup = () => {
-        child.off("spawn", handleSpawn);
-        child.off("error", handleError);
-      };
-      child.once("spawn", handleSpawn);
-      child.once("error", handleError);
-    });
+    await startup;
+    session.claimTimer = setTimeout(() => stop(sessionId), CLAIM_TIMEOUT_MS);
 
     return { sessionId, streamUrl: `${SCHEME}://stream/${sessionId}`, startTime };
   }
