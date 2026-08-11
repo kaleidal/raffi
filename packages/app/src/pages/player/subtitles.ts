@@ -216,7 +216,6 @@ export async function handleSubtitleSelect(
     }
 
     if (track.id !== "off" && track.url) {
-        console.log("Starting manual subtitle fetch:", track.url);
         currentSubtitleAbort = new AbortController();
 
         const textTrack = video.addTextTrack(
@@ -235,7 +234,6 @@ export async function handleSubtitleSelect(
             }
 
             if (track.isAddon || track.isLocal || track.url.startsWith("blob:")) {
-                console.log("Fetching addon subtitle:", track.url);
                 response = await fetch(track.url, {
                     signal: currentSubtitleAbort.signal,
                 });
@@ -328,7 +326,6 @@ export async function fetchAddonSubtitles(
         const newTracks: Track[] = [];
         for (const addon of subtitleAddons) {
             const url = `${addon.transport_url}/subtitles/${type}/${id}.json`;
-            console.log("Fetching addon subtitles:", url);
 
             try {
                 const res = await fetch(url);
@@ -380,11 +377,6 @@ export function updateCuePositions(videoElem: HTMLVideoElement | null, cueLinePe
             }
         }
     }
-}
-
-export function getCurrentCueLine(controlsVisible: boolean) {
-    // Back-compat fallback (prefer computeCueLinePercent in Player.svelte).
-    return controlsVisible ? 78 : 92;
 }
 
 export function computeCueLinePercent(

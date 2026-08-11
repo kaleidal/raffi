@@ -1,5 +1,4 @@
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
-export type JsonRecord = Record<string, JsonValue>;
 
 export interface AuthedUser {
   id: string;
@@ -59,7 +58,7 @@ export interface RemoteState {
   userMeta: UserMeta | null;
 }
 
-export interface SyncDeletes {
+interface SyncDeletes {
   addons: string[];
   library: string[];
   lists: string[];
@@ -73,19 +72,6 @@ export interface SyncPayload {
   listItems: ListItem[];
   userMeta?: Pick<UserMeta, "settings" | "updated_at"> | null;
   deletes: SyncDeletes;
-}
-
-export interface TraktIntegration {
-  user_id: string;
-  username: string | null;
-  slug: string | null;
-  access_token: string;
-  refresh_token: string;
-  scope: string | null;
-  token_type: string | null;
-  expires_at: number | null;
-  created_at: string;
-  updated_at: string;
 }
 
 export interface WatchParty {

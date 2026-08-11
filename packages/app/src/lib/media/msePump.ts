@@ -24,6 +24,8 @@ export function waitForSourceBufferIdle(sourceBuffer: SourceBuffer): Promise<voi
 }
 
 const BATCH_BYTES = 256 * 1024;
+const RETAIN_BUFFER_BEHIND_SECONDS = 30;
+const BUFFER_TRIM_HYSTERESIS_SECONDS = 5;
 
 function concatChunks(chunks: Uint8Array[], total: number): Uint8Array {
 	if (chunks.length === 1) return chunks[0]!;
@@ -40,17 +42,42 @@ async function appendBytes(
 	sourceBuffer: SourceBuffer,
 	bytes: Uint8Array,
 	signal?: AbortSignal,
+	video?: HTMLVideoElement | null,
 ): Promise<void> {
 	await waitForSourceBufferIdle(sourceBuffer);
 	if (signal?.aborted) {
 		throw new DOMException("Aborted", "AbortError");
 	}
-	sourceBuffer.appendBuffer(
-		bytes.buffer.slice(
-			bytes.byteOffset,
-			bytes.byteOffset + bytes.byteLength,
-		) as ArrayBuffer,
-	);
+	await trimOldBuffer(sourceBuffer, video, signal);
+	const buffer = bytes.buffer.slice(
+		bytes.byteOffset,
+		bytes.byteOffset + bytes.byteLength,
+	) as ArrayBuffer;
+	try {
+		sourceBuffer.appendBuffer(buffer);
+	} catch (error) {
+		if (!(error instanceof DOMException) || error.name !== "QuotaExceededError") {
+			throw error;
+		}
+		await trimOldBuffer(sourceBuffer, video, signal, 5);
+		sourceBuffer.appendBuffer(buffer);
+	}
+	await waitForSourceBufferIdle(sourceBuffer);
+}
+
+async function trimOldBuffer(
+	sourceBuffer: SourceBuffer,
+	video: HTMLVideoElement | null | undefined,
+	signal?: AbortSignal,
+	retainSeconds = RETAIN_BUFFER_BEHIND_SECONDS,
+): Promise<void> {
+	if (!video || sourceBuffer.buffered.length === 0) return;
+	const removeEnd = video.currentTime - retainSeconds;
+	if (removeEnd <= 0) return;
+	const firstStart = sourceBuffer.buffered.start(0);
+	if (removeEnd - firstStart < BUFFER_TRIM_HYSTERESIS_SECONDS) return;
+	if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+	sourceBuffer.remove(0, removeEnd);
 	await waitForSourceBufferIdle(sourceBuffer);
 }
 
@@ -85,6 +112,8 @@ export async function pumpStreamToSourceBuffer(
 	readable: ReadableStream<Uint8Array>,
 	sourceBuffer: SourceBuffer,
 	signal?: AbortSignal,
+	video?: HTMLVideoElement | null,
+	maxBufferAheadSeconds?: number,
 ): Promise<"complete"> {
 	const reader = readable.getReader();
 	const pending: Uint8Array[] = [];
@@ -96,13 +125,19 @@ export async function pumpStreamToSourceBuffer(
 		const bytes = concatChunks(pending, pendingSize);
 		pending.length = 0;
 		pendingSize = 0;
-		await appendBytes(sourceBuffer, bytes, signal);
+		await appendBytes(sourceBuffer, bytes, signal, video);
 	};
 
 	try {
 		while (true) {
 			if (signal?.aborted) {
 				throw new DOMException("Aborted", "AbortError");
+			}
+			if (
+				maxBufferAheadSeconds != null &&
+				getBufferedAheadSeconds(sourceBuffer, video ?? null) >= maxBufferAheadSeconds
+			) {
+				await waitForBufferCapacity(sourceBuffer, video, maxBufferAheadSeconds, signal);
 			}
 			const { done, value } = await reader.read();
 			if (done) break;
@@ -121,6 +156,31 @@ export async function pumpStreamToSourceBuffer(
 			// ignore
 		}
 	}
+}
+
+function waitForBufferCapacity(
+	sourceBuffer: SourceBuffer,
+	video: HTMLVideoElement | null | undefined,
+	limit: number,
+	signal?: AbortSignal,
+) {
+	if (!video) return Promise.resolve();
+	return new Promise<void>((resolve, reject) => {
+		const finish = (error?: unknown) => {
+			video.removeEventListener("timeupdate", check);
+			signal?.removeEventListener("abort", handleAbort);
+			if (error) reject(error);
+			else resolve();
+		};
+		const check = () => {
+			if (getBufferedAheadSeconds(sourceBuffer, video) <= limit * 0.4) finish();
+		};
+		const handleAbort = () => finish(new DOMException("Aborted", "AbortError"));
+		video.addEventListener("timeupdate", check);
+		signal?.addEventListener("abort", handleAbort, { once: true });
+		if (signal?.aborted) handleAbort();
+		else check();
+	});
 }
 
 export function pickMseMimeType(

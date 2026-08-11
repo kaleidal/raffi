@@ -8,28 +8,25 @@
     "build": "vite build",
     "preview": "vite preview",
     "sync": "svelte-kit sync",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "check": "svelte-kit sync && svelte-check --tsgo --tsconfig ./tsconfig.json",
     "postinstall": "svelte-kit sync || true",
     "deploy": "bun run build && wrangler pages deploy .svelte-kit/cloudflare"
   },
   "devDependencies": {
+    "@typescript/native": "npm:typescript@^7.0.2",
     "@sveltejs/adapter-cloudflare": "^7.2.9",
-    "@sveltejs/kit": "^2.70.1",
-    "@sveltejs/vite-plugin-svelte": "^7.2.0",
+    "@sveltejs/kit": "^2.70.2",
+    "@sveltejs/vite-plugin-svelte": "^7.3.0",
     "@tailwindcss/vite": "^4.3.3",
-    "@types/node": "^26.1.1",
-    "svelte": "^5.56.7",
-    "svelte-check": "^4.7.3",
+    "@types/node": "^26.2.0",
+    "svelte": "^5.56.8",
+    "svelte-check": "^4.7.5",
     "tailwindcss": "^4.3.3",
-    "typescript": "^7.0.2",
-    "vite": "^8.1.5",
-    "wrangler": "^4.114.0"
+    "typescript": "^6.0.2",
+    "vite": "^8.2.1",
+    "wrangler": "^4.120.1"
   },
   "dependencies": {
-    "@ave-id/sdk": "^0.10.1",
-    "@lucide/svelte": "^1.26.0",
-    "@raffi/app": "workspace:*",
-    "hls.js": "^1.6.16",
-    "posthog-js": "^1.407.2"
+    "@raffi/app": "workspace:*"
   }
 }

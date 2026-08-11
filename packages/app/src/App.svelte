@@ -254,7 +254,6 @@
         // Listen for file open events
         if ((window as any).electronAPI?.onOpenFile) {
             (window as any).electronAPI.onOpenFile((filePath: string) => {
-                console.log("Opening file:", filePath);
                 router.navigate("player", { 
                     videoSrc: filePath,
                     startTime: 0,

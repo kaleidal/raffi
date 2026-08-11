@@ -43,9 +43,9 @@
         lastThumbnail = detailsThumbnail ?? null;
     }
 
-    async function updateDescriptionClipState() {
+    async function updateDescriptionClipState(description = episodeDescription) {
         await tick();
-        if (!descriptionContainer || !descriptionText || !episodeDescription) {
+        if (!descriptionContainer || !descriptionText || !description) {
             descriptionIsClipped = false;
             return;
         }
@@ -73,7 +73,7 @@
         resizeObserver?.disconnect();
     });
 
-    $: episodeDescription, updateDescriptionClipState();
+    $: updateDescriptionClipState(episodeDescription);
 </script>
 
 <aside

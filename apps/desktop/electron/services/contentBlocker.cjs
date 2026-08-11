@@ -141,5 +141,4 @@ function registerContentBlocker({ session, logToFile }) {
 
 module.exports = {
   registerContentBlocker,
-  shouldBlockRequest,
 };

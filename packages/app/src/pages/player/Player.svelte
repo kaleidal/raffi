@@ -498,7 +498,7 @@
     let playerContainer: HTMLDivElement;
     let canvasElem: HTMLCanvasElement;
     let hls: any = null;
-    let mediaBunny: import("../../lib/media").MediaBunnyPlayback | null = null;
+    let playbackController: import("../../lib/media").ClientPlaybackController | null = null;
     let currentVideoSrc: string | null = null;
     let currentEmbedSrc: string | null = null;
     let metadataCheckInterval: any;
@@ -643,9 +643,9 @@
         setHls: (value) => {
             hls = value;
         },
-        getMediaBunny: () => mediaBunny,
-        setMediaBunny: (value) => {
-            mediaBunny = value;
+        getPlaybackController: () => playbackController,
+        setPlaybackController: (value) => {
+            playbackController = value;
         },
         getCueLinePercent: () => cueLinePercent,
         shouldShowSeekStyleInfoModal,
@@ -721,7 +721,7 @@
             setPendingSeek: pendingSeek.set,
             setCurrentTime: currentTime.set,
             setShowCanvas: showCanvas.set,
-            clientRemuxHardSeek: Boolean(mediaBunny),
+            clientRemuxHardSeek: Boolean(playbackController),
         });
     };
 
@@ -866,9 +866,6 @@
                 (isNaN(durationVal) || durationVal === 0)
             ) {
                 if (!reprobeAttempted) {
-                    console.log(
-                        "Missing metadata detected, attempting to reload session...",
-                    );
                     reprobeAttempted = true;
                     reloadSession();
                 } else if (currentTime > 10) {
@@ -913,9 +910,9 @@
         clearBrowserAudioCheck();
         playerSessionLoader.cancelCurrentLoad();
         disposeNextEpisodePrefetch();
-        if (mediaBunny) {
-            void mediaBunny.destroy();
-            mediaBunny = null;
+        if (playbackController) {
+            void playbackController.destroy();
+            playbackController = null;
         }
         Session.cleanupSession(
             hls,
@@ -1210,7 +1207,7 @@
             return loadVideo(src);
         },
         handleClose,
-        getMediaBunny: () => mediaBunny,
+        getPlaybackController: () => playbackController,
     });
 
     let controlsOverlayElem: HTMLElement | null = null;
@@ -1284,7 +1281,7 @@
             startTime,
         );
 
-        const previousBunny = mediaBunny;
+        const previousController = playbackController;
         const previousHls = hls;
 
         if (canReuseHandoff) {
@@ -1297,7 +1294,7 @@
                   sessionData: handoff.sessionData,
                   mode: handoff.mode,
                   meta: handoff.meta,
-                  mediaBunny: handoff.mediaBunny,
+                  playbackController: handoff.playbackController,
                   hls: handoff.hls,
               }
             : undefined;
@@ -1306,10 +1303,10 @@
         handleNextEpisodeClick.cancel();
         disposeNextEpisodePrefetch(reuseSession ? { transfer: true } : undefined);
 
-        if (reuseSession?.mediaBunny) {
-            mediaBunny = reuseSession.mediaBunny;
+        if (reuseSession?.playbackController) {
+            playbackController = reuseSession.playbackController;
         } else if (!canReuseHandoff) {
-            mediaBunny = null;
+            playbackController = null;
         }
 
         if (previousHls && previousHls !== reuseSession?.hls) {
@@ -1328,7 +1325,7 @@
         // Clear the previous episode off the now-idle surface.
         const idleVideo =
             activeVideoSurface === 0 ? videoSurfaceB : videoSurfaceA;
-        if (canReuseHandoff && idleVideo && !previousBunny) {
+        if (canReuseHandoff && idleVideo && !previousController) {
             try {
                 idleVideo.pause();
                 idleVideo.removeAttribute("src");

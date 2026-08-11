@@ -7,19 +7,20 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "bun run build && wrangler dev",
-    "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
+    "check": "svelte-check --tsgo --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
     "deploy": "bun run build && wrangler deploy"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "^1.47.0",
-    "@sveltejs/vite-plugin-svelte": "^7.2.0",
+    "@typescript/native": "npm:typescript@^7.0.2",
+    "@cloudflare/vite-plugin": "^1.51.2",
+    "@sveltejs/vite-plugin-svelte": "^7.3.0",
     "@tsconfig/svelte": "^5.0.8",
-    "@types/node": "^26.1.1",
-    "svelte": "^5.56.7",
-    "svelte-check": "^4.7.3",
-    "typescript": "^7.0.2",
-    "vite": "^8.1.5",
-    "wrangler": "^4.114.0"
+    "@types/node": "^26.2.0",
+    "svelte": "^5.56.8",
+    "svelte-check": "^4.7.5",
+    "typescript": "^6.0.2",
+    "vite": "^8.2.1",
+    "wrangler": "^4.120.1"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",

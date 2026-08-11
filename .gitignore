@@ -13,6 +13,8 @@ release
 
 # Framework / tooling caches
 .svelte-kit
+.svelte-check
+.wrangler
 .next
 .nuxt
 .vite
@@ -75,6 +77,7 @@ apps/desktop/electron/ffprobe.exe
 apps/desktop/electron/main
 apps/desktop/electron/raffi
 apps/desktop/release/
+apps/desktop/vendor/ffmpeg/
 
 # Legacy / stale paths from pre-refactor layouts
 Raffi/

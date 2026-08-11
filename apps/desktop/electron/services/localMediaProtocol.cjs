@@ -5,7 +5,7 @@ const { Readable } = require("stream");
 
 const SCHEME = "raffi-media";
 
-function registerPrivilegedSchemes(protocol) {
+function registerPrivilegedSchemes(protocol, additionalSchemes = []) {
   protocol.registerSchemesAsPrivileged([
     {
       scheme: SCHEME,
@@ -18,6 +18,7 @@ function registerPrivilegedSchemes(protocol) {
         corsEnabled: true,
       },
     },
+    ...additionalSchemes,
   ]);
 }
 
@@ -206,7 +207,6 @@ function createLocalMediaProtocolHandler({ protocol, net, logToFile }) {
 }
 
 module.exports = {
-  SCHEME,
   registerPrivilegedSchemes,
   createLocalMediaProtocolHandler,
 };

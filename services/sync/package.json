@@ -4,10 +4,10 @@
   "type": "module",
   "private": true,
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260724.1",
+    "@cloudflare/workers-types": "^5.20260811.1",
     "@types/bun": "^1.3.14",
     "typescript": "^7.0.2",
-    "wrangler": "^4.114.0"
+    "wrangler": "^4.120.1"
   },
   "dependencies": {
     "@ave-id/sdk": "^0.10.1"

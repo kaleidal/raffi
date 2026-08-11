@@ -184,15 +184,28 @@ export function formatAudioTrackLabel(track: {
 }
 
 export function preferredAudioIndex(tracks: ProbedAudioTrack[]): number {
-	const engPlayable = tracks.findIndex(
+	const engPlayable = tracks.find(
 		(track) => normalizeLang(track.language) === "eng" && track.playable,
 	);
-	if (engPlayable >= 0) return engPlayable;
-	const playable = tracks.findIndex((track) => track.playable);
-	if (playable >= 0) return playable;
-	const eng = tracks.findIndex((track) => normalizeLang(track.language) === "eng");
-	if (eng >= 0) return eng;
-	return 0;
+	if (engPlayable) return engPlayable.index;
+	const playable = tracks.find((track) => track.playable);
+	if (playable) return playable.index;
+	const eng = tracks.find((track) => normalizeLang(track.language) === "eng");
+	if (eng) return eng.index;
+	return tracks[0]?.index ?? 0;
+}
+
+export function canRemuxOrTranscodeAudio(
+	codec: AudioCodec | null,
+	canDecode: boolean,
+) {
+	return codec === "aac" || (codec !== null && canDecode);
+}
+
+async function canPrepareAudioTrack(track: InputAudioTrack, codec: AudioCodec | null) {
+	if (codec === "aac") return true;
+	if (!codec) return false;
+	return canRemuxOrTranscodeAudio(codec, await track.canDecode());
 }
 
 export async function probeRemoteStream(
@@ -236,6 +249,7 @@ export async function probeRemoteStream(
 			audioTracks.map(async (track, index) => {
 				const codec = await track.getCodec();
 				const internalId = await track.getInternalCodecId();
+				const playable = await canPrepareAudioTrack(track, codec);
 				return {
 					index,
 					codec,
@@ -243,7 +257,7 @@ export async function probeRemoteStream(
 					language: (await track.getLanguageCode()) || null,
 					title: (await track.getName()) || null,
 					channels: await track.getNumberOfChannels(),
-					playable: true,
+					playable,
 					bunnyIndex: index,
 				};
 			}),
@@ -252,6 +266,7 @@ export async function probeRemoteStream(
 		if (listedAudio.length === 0 && primaryAudio) {
 			const codec = await primaryAudio.getCodec();
 			const internalId = await primaryAudio.getInternalCodecId();
+			const playable = await canPrepareAudioTrack(primaryAudio, codec);
 			listedAudio = [
 				{
 					index: 0,
@@ -260,7 +275,7 @@ export async function probeRemoteStream(
 					language: (await primaryAudio.getLanguageCode()) || null,
 					title: (await primaryAudio.getName()) || null,
 					channels: await primaryAudio.getNumberOfChannels(),
-					playable: true,
+					playable,
 					bunnyIndex: 0,
 				},
 			];
@@ -317,8 +332,10 @@ export function ensureAudioTracks(meta: ProbedStream): ProbedStream {
 		language: meta.audio.language,
 		title: meta.audio.title,
 		channels: meta.audio.channels,
-		playable: true,
-		bunnyIndex: 0,
+		playable: canRemuxOrTranscodeAudio(meta.audio.codec, meta.audio.canDecode),
+		bunnyIndex: canRemuxOrTranscodeAudio(meta.audio.codec, meta.audio.canDecode)
+			? 0
+			: null,
 	};
 	return {
 		...meta,
@@ -340,9 +357,12 @@ function mergeContainerAudioTracks(
 		const merged: ProbedAudioTrack[] = containerTracks.map((stream, index) => {
 			const match = findMatchingBunnyTrack(bunny, stream, index, usedBunny);
 			if (match) usedBunny.add(match.index);
-			const playable =
-				match != null ||
-				(bunny.length === 0 && index === 0 && meta.audio != null);
+			const primaryFallback =
+				bunny.length === 0 &&
+				index === 0 &&
+				meta.audio != null &&
+				canRemuxOrTranscodeAudio(meta.audio.codec, meta.audio.canDecode);
+			const playable = match?.playable === true || primaryFallback;
 			return {
 				index,
 				codec: match?.codec ?? mapContainerCodec(stream.codecId),
@@ -490,7 +510,8 @@ async function describeAudio(track: InputAudioTrack) {
 	return {
 		codec,
 		codecString: await track.getCodecParameterString(),
-		canDecode: NATIVE_AUDIO.has(codec) ? true : await track.canDecode(),
+		canDecode:
+			codec !== null && (NATIVE_AUDIO.has(codec) || (await track.canDecode())),
 		channels: await track.getNumberOfChannels(),
 		sampleRate: await track.getSampleRate(),
 		language: (await track.getLanguageCode()) || null,
