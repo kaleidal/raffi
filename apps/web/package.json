@@ -24,7 +24,7 @@
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.2",
     "vite": "^8.2.1",
-    "wrangler": "^4.120.1"
+    "wrangler": "^4.121.0"
   },
   "dependencies": {
     "@raffi/app": "workspace:*"

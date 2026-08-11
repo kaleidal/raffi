@@ -82,7 +82,7 @@ function resolveCaFile(source) {
 function buildArguments({ source, startTime, audioIndex, copyAudio, caFile }) {
   const audioArguments = copyAudio
     ? ["-c:a", "copy"]
-    : ["-c:a", "aac", "-b:a", "256k"];
+    : ["-c:a", "libopus", "-b:a", "320k"];
   const protocolWhitelist = /^https?:\/\//i.test(source)
     ? "http,https,tcp,tls,httpproxy"
     : "file,crypto,data";

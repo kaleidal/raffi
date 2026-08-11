@@ -27,7 +27,7 @@
     "@types/node": "^26.2.0",
     "concurrently": "^10.0.4",
     "cross-env": "^10.1.0",
-    "electron": "^43.3.0",
+    "electron": "^43.4.0",
     "electron-builder": "^26.15.3",
     "electron-builder-squirrel-windows": "^26.15.3",
     "svelte": "^5.56.8",
