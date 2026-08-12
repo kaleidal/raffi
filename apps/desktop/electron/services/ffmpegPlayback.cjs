@@ -88,7 +88,15 @@ function resolveCaFile(source) {
   throw new Error("FFmpeg could not find the Linux system CA certificate bundle");
 }
 
-function buildArguments({ source, startTime, audioIndex, audioChannels, copyAudio, caFile }) {
+function buildArguments({
+  source,
+  startTime,
+  audioIndex,
+  audioChannels,
+  copyAudio,
+  caFile,
+  httpSeekable = true,
+}) {
   const surroundArguments = audioChannels === 6
     ? ["-af", "aformat=channel_layouts=5.1", "-mapping_family", "1"]
     : [];
@@ -98,16 +106,31 @@ function buildArguments({ source, startTime, audioIndex, audioChannels, copyAudi
   const protocolWhitelist = /^https?:\/\//i.test(source)
     ? "http,https,tcp,tls,httpproxy"
     : "file,crypto,data";
+  const sequentialHttpArguments = /^https?:\/\//i.test(source) && !httpSeekable
+    ? ["-seekable", "0"]
+    : [];
+  const inputSeekArguments = httpSeekable
+    ? ["-ss", String(startTime), "-noaccurate_seek"]
+    : [];
+  const outputSeekArguments = httpSeekable
+    ? []
+    : ["-ss", String(startTime)];
   return [
     "-hide_banner", "-loglevel", "error", "-nostdin",
-    "-ss", String(startTime), "-noaccurate_seek", "-protocol_whitelist", protocolWhitelist,
-    ...(caFile ? ["-ca_file", caFile] : []), "-i", source,
+    ...inputSeekArguments, "-protocol_whitelist", protocolWhitelist,
+    ...(caFile ? ["-ca_file", caFile] : []), ...sequentialHttpArguments, "-i", source,
+    ...outputSeekArguments,
     "-map", "0:v:0", "-map", `0:a:${audioIndex}`,
     "-c:v", "copy", ...audioArguments,
     "-movflags", "frag_keyframe+empty_moov+default_base_moof",
     "-frag_duration", "500000", "-avoid_negative_ts", "make_zero",
     "-max_muxing_queue_size", "4096", "-f", "mp4", "pipe:1",
   ];
+}
+
+function isHttpRangeFailure(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /Unexpected offset|Stream ends prematurely|File ended prematurely/i.test(message);
 }
 
 function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, resourcesPath, logToFile }) {
@@ -133,7 +156,7 @@ function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, r
     return true;
   }
 
-  async function start(payload) {
+  async function startAttempt(payload, httpSeekable) {
     await fs.promises.access(ffmpegPath, fs.constants.X_OK);
     const source = validateSource(payload?.source);
     const startTime = validateStartTime(payload?.startTime);
@@ -154,6 +177,7 @@ function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, r
       audioChannels,
       copyAudio,
       caFile,
+      httpSeekable,
     }), {
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
@@ -215,13 +239,30 @@ function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, r
       const detail = rawDetail.split(source).join("<media source>");
       session.finishStartup(new Error(detail));
       output.destroy(new Error(detail));
-      logToFile?.("FFmpeg playback failed", detail);
     });
 
     await startup;
     session.claimTimer = setTimeout(() => stop(sessionId), CLAIM_TIMEOUT_MS);
 
     return { sessionId, streamUrl: `${SCHEME}://stream/${sessionId}`, startTime };
+  }
+
+  async function start(payload) {
+    try {
+      return await startAttempt(payload, true);
+    } catch (error) {
+      if (!/^https?:\/\//i.test(payload?.source) || !isHttpRangeFailure(error)) {
+        logToFile?.("FFmpeg playback failed", error);
+        throw error;
+      }
+      logToFile?.("FFmpeg source rejected byte ranges; retrying sequentially");
+      try {
+        return await startAttempt(payload, false);
+      } catch (fallbackError) {
+        logToFile?.("FFmpeg sequential playback failed", fallbackError);
+        throw fallbackError;
+      }
+    }
   }
 
   ipcMain.handle("FFMPEG_PLAYBACK_START", (_event, payload) => start(payload));
@@ -252,4 +293,8 @@ function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, r
   };
 }
 
-module.exports = { ffmpegPrivilegedScheme, buildArguments, createFfmpegPlaybackService };
+module.exports = {
+  ffmpegPrivilegedScheme,
+  buildArguments,
+  createFfmpegPlaybackService,
+};
