@@ -18,3 +18,45 @@ export function firstNonNegativeNumber(...values: unknown[]): number | null {
 	}
 	return null;
 }
+
+export function readEmbedProgress(value: unknown): {
+	time: number;
+	duration: number | null;
+} | null {
+	const data = parseEmbedMessageData(value);
+	if (!data) return null;
+	const detail = data.data || data.detail || data.payload || data;
+	const playerEvent = data.type === "PLAYER_EVENT" ? data.data : null;
+	const mediaDataWatched = data.type === "MEDIA_DATA"
+		? data.data?.progress?.watched ?? data.data?.progress
+		: null;
+	const time = firstNonNegativeNumber(
+		detail.timestamp,
+		detail.currentTime,
+		detail.current_time,
+		detail.seconds,
+		detail.time,
+		detail.player_progress,
+		playerEvent?.currentTime,
+		playerEvent?.time,
+		mediaDataWatched,
+		data.timestamp,
+		data.currentTime,
+		data.current_time,
+		data.seconds,
+		data.time,
+	);
+	if (time == null) return null;
+	return {
+		time,
+		duration: firstNonNegativeNumber(
+			detail.duration,
+			detail.player_duration,
+			detail.durationSeconds,
+			detail.duration_seconds,
+			playerEvent?.duration,
+			data.duration,
+			data.durationSeconds,
+		),
+	};
+}

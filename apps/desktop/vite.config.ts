@@ -37,6 +37,7 @@ export default defineConfig(({ command }) => ({
           groups: [
             { name: 'hls', test: 'node_modules/hls.js/' },
             { name: 'posthog', test: 'node_modules/posthog-js/' },
+            { name: 'mediabunny-codecs', test: 'node_modules/@mediabunny/' },
             { name: 'mediabunny', test: 'node_modules/mediabunny/' },
             { name: 'lucide', test: 'node_modules/lucide-svelte/' },
           ],

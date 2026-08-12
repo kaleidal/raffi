@@ -28,6 +28,7 @@ import * as Subtitles from "./subtitles";
 import * as Discord from "./discord";
 import { autoEnableDefaultSubtitles as applyDefaultSubtitles } from "./subtitleAutoSelect";
 import { applyClientAudioTracks, sessionFromProbe } from "./playerSessionMetadata";
+import { attachHlsPlayback } from "./hlsPlayback";
 import {
     isPlaying,
     loading,
@@ -131,6 +132,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
 
     const cancelCurrentLoad = (
         preservedController: ClientPlaybackController | null = null,
+        preservedHls: any = null,
     ) => {
         loadGeneration += 1;
         activeAbortController?.abort();
@@ -140,6 +142,14 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
         if (playbackController && playbackController !== preservedController) {
             void playbackController.destroy();
             deps.setPlaybackController(null);
+        }
+        const hls = deps.getHls();
+        if (hls && hls !== preservedHls) {
+            try {
+                hls.destroy();
+            } catch {
+            }
+            deps.setHls(null);
         }
         if (activeLimboTorrentId) {
             void removeLimboTorrent(activeLimboTorrentId, false);
@@ -212,7 +222,10 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
             };
         },
     ) => {
-        cancelCurrentLoad(opts?.reuseSession?.playbackController ?? null);
+        cancelCurrentLoad(
+            opts?.reuseSession?.playbackController ?? null,
+            opts?.reuseSession?.hls ?? null,
+        );
         const generation = loadGeneration;
         const abortController = new AbortController();
         activeAbortController = abortController;
@@ -631,64 +644,31 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
 
                 if (clientPlayback.mode === "addon-hls") {
                     attachSeekHandler(videoElem);
-                    const Hls = (await import("hls.js")).default;
-                    if (Hls.isSupported()) {
-                        const hlsInstance = new Hls({
-                            enableWorker: true,
-                            lowLatencyMode: false,
-                            maxBufferLength: 50,
-                            maxMaxBufferLength: 80,
-                            backBufferLength: 30,
-                        });
-                        deps.setHls(hlsInstance);
-                        hlsInstance.attachMedia(videoElem);
-                        hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
-                            if (effectiveStartTime > 0) {
-                                try {
-                                    videoElem.currentTime = effectiveStartTime;
-                                } catch {
-                                    // ignore
-                                }
-                            }
+                    const hlsInstance = await attachHlsPlayback({
+                        video: videoElem,
+                        source: sessionSource,
+                        startTime: effectiveStartTime,
+                        autoPlay: !needsSeekStyleModal && deps.autoPlay,
+                        onReady: () => {
                             loading.set(false);
                             loadingStage.set("");
                             loadingDetails.set("");
                             showCanvas.set(false);
-                            if (!needsSeekStyleModal && deps.autoPlay) {
-                                videoElem.play().catch(() => {
-                                    // ignore
-                                });
+                        },
+                        onFatalError: (error, failedInstance) => {
+                            loading.set(false);
+                            loadingStage.set("");
+                            loadingDetails.set("");
+                            showCanvas.set(false);
+                            if (deps.getHls() === failedInstance) {
+                                deps.setHls(null);
                             }
-                        });
-                        hlsInstance.loadSource(sessionSource);
-                    } else if (videoElem.canPlayType("application/vnd.apple.mpegurl")) {
-                        videoElem.src = sessionSource;
-                        videoElem.addEventListener(
-                            "loadedmetadata",
-                            () => {
-                                if (effectiveStartTime > 0) {
-                                    try {
-                                        videoElem.currentTime = effectiveStartTime;
-                                    } catch {
-                                        // ignore
-                                    }
-                                }
-                                loading.set(false);
-                                loadingStage.set("");
-                                loadingDetails.set("");
-                                showCanvas.set(false);
-                                if (!needsSeekStyleModal && deps.autoPlay) {
-                                    videoElem.play().catch(() => {
-                                        // ignore
-                                    });
-                                }
-                            },
-                            { once: true },
-                        );
-                        videoElem.load();
-                    } else {
-                        throw new Error("HLS playback is not supported on this device");
-                    }
+                            errorMessage.set("HLS playback failed");
+                            errorDetails.set(error.message);
+                            showError.set(true);
+                        },
+                    });
+                    deps.setHls(hlsInstance);
                     return;
                 }
 

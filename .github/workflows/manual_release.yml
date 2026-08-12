@@ -7,7 +7,26 @@ permissions:
   contents: write
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Validate release source
+        run: bun run validate
+
   release:
+    needs: validate
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -23,18 +42,8 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Setup Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: '1.25.4'
-
-      - name: Install MinGW (Windows)
-        if: matrix.os == 'windows-latest'
-        run: choco install mingw
-
       - name: Install dependencies
-        run: bun install
-        working-directory: apps/desktop
+        run: bun install --frozen-lockfile
 
       - name: Build and publish
         env:

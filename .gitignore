@@ -78,6 +78,7 @@ apps/desktop/electron/main
 apps/desktop/electron/raffi
 apps/desktop/release/
 apps/desktop/vendor/ffmpeg/
+apps/desktop/electron-dist/
 
 # Legacy / stale paths from pre-refactor layouts
 Raffi/
