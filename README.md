@@ -64,7 +64,7 @@ Like Stremio, Raffi uses community addons to aggregate streaming sources, but go
 ### 🔧 **Advanced Features**
 - Torrent/magnet link streaming via Limbo
 - Local file playback
-- Discord Rich Presence integration
+- Discord Rich Presence with cover art, playback progress, title context, and Raffi/IMDb links
 - Auto-updater
 - Offline mode support
 
@@ -217,7 +217,7 @@ bun --filter @raffi/marketing build
 - **Video Player**: native media playback, HLS.js, MediaBunny, and bundled FFmpeg audio conversion
 - **Storage**: Local app data with Raffi Sync cloud backup
 - **Build**: Vite + electron-builder
-- **Key Libraries**: `@lucide/svelte`, `posthog-js`, `@ryuziii/discord-rpc`
+- **Key Libraries**: `@lucide/svelte`, `posthog-js`, MediaBunny, and HLS.js
 
 #### Web App
 - **Frontend**: SvelteKit, TypeScript, Tailwind CSS
