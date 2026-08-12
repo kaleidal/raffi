@@ -29,9 +29,9 @@
     "@lucide/svelte": "^1.31.0",
     "@mediabunny/aac-encoder": "^1.53.0",
     "@mediabunny/ac3": "^1.53.0",
-    "hls.js": "^1.6.17",
+    "hls.js": "^1.6.18",
     "mediabunny": "^1.53.0",
-    "posthog-js": "^1.415.5"
+    "posthog-js": "^1.415.6"
   },
   "peerDependencies": {
     "svelte": "^5.0.0"

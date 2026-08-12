@@ -6,7 +6,6 @@
     import {
         hideFromContinueWatching,
         forgetProgress,
-        updateLibraryProgress,
     } from "../../../lib/db/db";
     import ListsPopup from "../../meta/modals/ListsPopup.svelte";
     import TrailerModal from "../../meta/modals/TrailerModal.svelte";
@@ -18,30 +17,6 @@
  
     export let continueWatchingMeta: (ShowResponse & { libraryItem: any })[] =
         [];
-
-    $: {
-        continueWatchingMeta.forEach(async (item) => {
-            if (
-                item.meta &&
-                item.meta.poster &&
-                !item.libraryItem.poster &&
-                item.libraryItem.imdb_id
-            ) {
-                try {
-                    await updateLibraryProgress(
-                        item.libraryItem.imdb_id,
-                        item.libraryItem.progress,
-                        item.libraryItem.type,
-                        undefined,
-                        item.meta.poster,
-                    );
-                    item.libraryItem.poster = item.meta.poster;
-                } catch (e) {
-                    console.error("Failed to backfill poster", e);
-                }
-            }
-        });
-    }
 
     function navigateToMeta(imdbId: string, type: string) {
         router.navigate("meta", { imdbId, type });
@@ -284,7 +259,7 @@
                 bind:this={scrollContainer}
                 on:scroll={updateScrollButtons}
             >
-                {#each continueWatchingMeta as title}
+                {#each continueWatchingMeta as title (title.meta.imdb_id)}
                     {#if title.meta}
                         {@const progress = title.libraryItem.progress}
                         {@const isMovie = title.meta.type === "movie"}

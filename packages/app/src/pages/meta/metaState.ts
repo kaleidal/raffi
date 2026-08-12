@@ -6,12 +6,12 @@ import type { Stream, ProgressMap, LastWatched } from "./types";
 // Meta Data State
 export const loadedMeta = writable<boolean>(false);
 export const metaData = writable<ShowResponse | null>(null);
+export const metaLoadError = writable<string | null>(null);
 export const backgroundFailed = writable<boolean>(false);
 export const logoFailed = writable<boolean>(false);
 
 // Library/Progress State
 export const progressMap = writable<ProgressMap>({});
-export const libraryItem = writable<any>(null);
 export const lastWatched = writable<LastWatched>({ season: 1, episode: 0 });
 
 // Season/Episode State
@@ -25,8 +25,6 @@ export const selectedEpisode = writable<any>(null);
 export const streams = writable<Stream[]>([]);
 export const loadingStreams = writable<boolean>(false);
 export const selectedStream = writable<Stream | null>(null);
-export const selectedStreamUrl = writable<string | null>(null);
-export const selectedFileIdx = writable<number | null>(null);
 export const failedStreamKeys = writable<string[]>([]);
 export const streamFailureMessage = writable<string>("");
 export const selectedAddon = writable<string>("");
@@ -35,7 +33,6 @@ export const addons = writable<Addon[]>([]);
 // UI State
 export const streamsPopupVisible = writable<boolean>(false);
 
-export const playerVisible = writable<boolean>(false);
 export const showTorrentWarning = writable<boolean>(false);
 export const pendingTorrentStream = writable<Stream | null>(null);
 export const showEpisodeContextMenu = writable<boolean>(false);
@@ -48,10 +45,10 @@ export const contextEpisode = writable<any>(null);
 export function resetMetaState() {
     loadedMeta.set(false);
     metaData.set(null);
+    metaLoadError.set(null);
     backgroundFailed.set(false);
     logoFailed.set(false);
     progressMap.set({});
-    libraryItem.set(null);
     lastWatched.set({ season: 1, episode: 0 });
     episodes.set(0);
     seasons.set(0);
@@ -61,15 +58,12 @@ export function resetMetaState() {
     streams.set([]);
     loadingStreams.set(false);
     selectedStream.set(null);
-    selectedStreamUrl.set(null);
-    selectedFileIdx.set(null);
     failedStreamKeys.set([]);
     streamFailureMessage.set("");
     selectedAddon.set("");
     addons.set([]);
     streamsPopupVisible.set(false);
 
-    playerVisible.set(false);
     showTorrentWarning.set(false);
     pendingTorrentStream.set(null);
     showEpisodeContextMenu.set(false);

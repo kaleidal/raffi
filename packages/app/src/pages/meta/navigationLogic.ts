@@ -1,7 +1,7 @@
 import { get } from "svelte/store";
 import {
     metaData, selectedEpisode, currentSeason, selectedStream,
-    selectedStreamUrl, showTorrentWarning,
+    showTorrentWarning,
     pendingTorrentStream, progressMap as progressMapStore
 } from "./metaState";
 import { router } from "../../lib/stores/router";
@@ -82,7 +82,6 @@ export const playResolvedNextEpisode = (
     if (isTorrent && !hasAcknowledgedTorrentWarning()) {
         pendingTorrentStream.set(stream);
         showTorrentWarning.set(true);
-        selectedStreamUrl.set(null);
         selectedEpisode.set(nextEpisode);
         router.back();
     } else if (!isTorrent || get(allowTorrenting)) {
@@ -92,7 +91,6 @@ export const playResolvedNextEpisode = (
             autoSkipFromNextEpisode: true,
         });
     } else {
-        selectedStreamUrl.set(null);
         selectedEpisode.set(nextEpisode);
         router.back();
     }
@@ -151,12 +149,10 @@ export const handleNextEpisode = async (imdbID: string, progressMap: any) => {
         if (match) {
             playResolvedNextEpisode({ stream: match, nextEpisode: nextEp }, progressMap);
         } else {
-            selectedStreamUrl.set(null);
             selectedEpisode.set(nextEp);
             router.back();
         }
     } else {
-        selectedStreamUrl.set(null);
         router.back();
     }
 };
