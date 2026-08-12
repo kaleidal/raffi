@@ -1,5 +1,12 @@
+import { ALL_FORMATS, Input } from "mediabunny";
 import { pickMseMimeType, pumpStreamToSourceBuffer, TARGET_BUFFER_AHEAD_SECONDS } from "./msePump";
-import { ensureAudioTracks, preferredAudioIndex, type ProbedStream } from "./probe";
+import {
+	createRemoteUrlSource,
+	ensureAudioTracks,
+	preferredAudioIndex,
+	type ProbedStream,
+} from "./probe";
+import { snapToVideoKeyframe } from "./videoKeyframes";
 
 export type ClientPlaybackController = {
 	onWindowStartChange: ((globalStart: number) => void) | null;
@@ -103,6 +110,8 @@ export class FfmpegPlayback implements ClientPlaybackController {
 	private mediaSource: MediaSource | null = null;
 	private objectUrl: string | null = null;
 	private abort: AbortController | null = null;
+	private input: Input | null = null;
+	private networkAbort: AbortController | null = null;
 	private generation = 0;
 	onWindowStartChange: ((globalStart: number) => void) | null = null;
 
@@ -170,6 +179,10 @@ export class FfmpegPlayback implements ClientPlaybackController {
 		this.generation += 1;
 		this.abort?.abort();
 		this.abort = null;
+		this.networkAbort?.abort();
+		this.networkAbort = null;
+		this.input?.dispose();
+		this.input = null;
 		await this.stopSession();
 		if (this.objectUrl) URL.revokeObjectURL(this.objectUrl);
 		this.objectUrl = null;
@@ -205,6 +218,10 @@ export class FfmpegPlayback implements ClientPlaybackController {
 		outerSignal?.addEventListener("abort", handleOuterAbort, { once: true });
 
 		try {
+			const snappedStart = await this.snapStartTime(startTime);
+			if (generation !== this.generation || abort.signal.aborted) {
+				throw new DOMException("Aborted", "AbortError");
+			}
 			const selectedAudio = this.meta.audioTracks.find(
 				(track) => track.index === this.audioIndex,
 			);
@@ -215,7 +232,7 @@ export class FfmpegPlayback implements ClientPlaybackController {
 			const audioCodecString = copyAudio ? "mp4a.40.2" : "opus";
 			const started = await getBridge().start({
 				source: this.source,
-				startTime,
+				startTime: snappedStart,
 				audioIndex: this.audioIndex,
 				audioChannels: selectedAudio?.channels ?? null,
 				copyAudio,
@@ -239,7 +256,7 @@ export class FfmpegPlayback implements ClientPlaybackController {
 			const sourceBuffer = mediaSource.addSourceBuffer(mime);
 			sourceBuffer.mode = "segments";
 			if (this.meta.durationSeconds > 0) {
-				mediaSource.duration = Math.max(0, this.meta.durationSeconds - startTime);
+				mediaSource.duration = Math.max(0, this.meta.durationSeconds - snappedStart);
 			}
 			const response = await fetch(started.streamUrl, { signal: abort.signal });
 			if (!response.ok || !response.body) {
@@ -275,6 +292,32 @@ export class FfmpegPlayback implements ClientPlaybackController {
 			throw error;
 		} finally {
 			outerSignal?.removeEventListener("abort", handleOuterAbort);
+		}
+	}
+
+	private async snapStartTime(startTime: number) {
+		if (!(startTime > 0)) return 0;
+		try {
+			if (!this.input) {
+				this.networkAbort = new AbortController();
+				this.input = new Input({
+					source: createRemoteUrlSource(this.source, {
+						parallelism: 2,
+						maxCacheSize: 16 * 1024 * 1024,
+						signal: this.networkAbort.signal,
+					}),
+					formats: ALL_FORMATS,
+				});
+			}
+			const videoTrack = await this.input.getPrimaryVideoTrack();
+			return videoTrack ? snapToVideoKeyframe(videoTrack, startTime) : startTime;
+		} catch (error) {
+			console.warn("Failed to inspect the FFmpeg seek keyframe", error);
+			this.input?.dispose();
+			this.input = null;
+			this.networkAbort?.abort();
+			this.networkAbort = null;
+			return startTime;
 		}
 	}
 }

@@ -100,7 +100,7 @@ function buildArguments({ source, startTime, audioIndex, audioChannels, copyAudi
     : "file,crypto,data";
   return [
     "-hide_banner", "-loglevel", "error", "-nostdin",
-    "-ss", String(startTime), "-protocol_whitelist", protocolWhitelist,
+    "-ss", String(startTime), "-noaccurate_seek", "-protocol_whitelist", protocolWhitelist,
     ...(caFile ? ["-ca_file", caFile] : []), "-i", source,
     "-map", "0:v:0", "-map", `0:a:${audioIndex}`,
     "-c:v", "copy", ...audioArguments,
