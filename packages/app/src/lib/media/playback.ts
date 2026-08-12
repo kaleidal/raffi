@@ -10,19 +10,13 @@ import {
 	type InputVideoTrack,
 	type VideoCodec,
 } from "mediabunny";
-import { isDesktopPlatform } from "../platform";
-import { getDirectMediaSupport, supportsEac3Playback } from "./nativeSupport";
 import {
 	createRemoteUrlSource,
 	ensureAudioTracks,
-	isMseFriendlyVideo,
-	isNativeFriendlyAudio,
 	probeRemoteStream,
 	type ProbedStream,
 } from "./probe";
 import {
-	isLocalFilesystemPath,
-	isLocalMediaUrl,
 	toClientPlayableUrl,
 } from "./localSource";
 import { pickMseMimeType, pumpStreamToSourceBuffer, RESUME_BUFFER_AHEAD_SECONDS, TARGET_BUFFER_AHEAD_SECONDS, getBufferedAheadSeconds } from "./msePump";
@@ -31,28 +25,8 @@ import {
 	KeyframeCopyConversion,
 	type PlaybackConversion,
 } from "./keyframeCopyConversion";
-import { canUseFfmpegPlayback } from "./ffmpegPlayback";
 import { snapToVideoKeyframe } from "./videoKeyframes";
-
-export type HttpPlaybackMode =
-	| "direct"
-	| "mediabunny"
-	| "ffmpeg"
-	| "addon-hls"
-	| "unsupported";
-
-export type ResolvedHttpPlayback = {
-	mode: HttpPlaybackMode;
-	meta: ProbedStream | null;
-	reason: string;
-	error?: string;
-};
-
-const BROWSER_SAFE_AUDIO = new Set<AudioCodec | null>([
-	"aac",
-	"mp3",
-	"opus",
-]);
+export { resolveHttpPlayback, type HttpPlaybackMode, type ResolvedHttpPlayback } from "./playbackPlanning";
 
 const MSE_COPYABLE_AUDIO = new Set<AudioCodec | null>(["aac"]);
 const MP4_COPYABLE_VIDEO = new Set<VideoCodec>(["avc", "hevc", "av1"]);
@@ -98,133 +72,6 @@ async function resolveMseVideoOutput(
 		forceTranscode: true,
 		mime,
 	};
-}
-
-export async function resolveHttpPlayback(
-	src: string,
-	videoElem?: HTMLVideoElement,
-	signal?: AbortSignal,
-): Promise<ResolvedHttpPlayback> {
-	if (!src) {
-		return { mode: "unsupported", meta: null, reason: "empty" };
-	}
-	if (/^magnet:/i.test(src)) {
-		return { mode: "unsupported", meta: null, reason: "torrent" };
-	}
-
-	const playable = toClientPlayableUrl(src);
-	const localSource =
-		isLocalFilesystemPath(src) || isLocalMediaUrl(playable);
-
-	if (!/^https?:\/\//i.test(playable) && !isLocalMediaUrl(playable)) {
-		return { mode: "unsupported", meta: null, reason: "non-http" };
-	}
-	if (/\.m3u8(\?|$)/i.test(playable)) {
-		return { mode: "addon-hls", meta: null, reason: "addon-hls" };
-	}
-
-	const supportsEac3 = supportsEac3Playback(videoElem);
-	const directSupport = getDirectMediaSupport(playable, videoElem);
-
-	try {
-		const probedMeta = await probeRemoteStream(playable, signal);
-		const meta = ensureAudioTracks(probedMeta);
-
-		if (signal?.aborted) {
-			throw new DOMException("Aborted", "AbortError");
-		}
-
-		if (canUseFfmpegPlayback(meta)) {
-			return { mode: "ffmpeg", meta, reason: "unsupported-audio-transcode" };
-		}
-
-		// Local files go through MediaBunny — Chromium+custom-protocol <video>
-		// seeking is unreliable; UrlSource range fetches are stable.
-		if (localSource) {
-			if (canUseMediaBunnyRemux(meta)) {
-				return { mode: "mediabunny", meta, reason: "local-remux" };
-			}
-			return { mode: "unsupported", meta, reason: "local-unsupported" };
-		}
-
-		const audioOk = isNativeFriendlyAudio(meta.audio?.codec ?? null, supportsEac3);
-		const containerOk =
-			directSupport.supported &&
-			(directSupport.confidence === "probably" ||
-				directSupport.confidence === "maybe" ||
-				directSupport.container === "unknown");
-
-		if (containerOk && audioOk && meta.video) {
-			return { mode: "direct", meta, reason: "native-compatible" };
-		}
-
-		if (!isDesktopPlatform && !containerOk) {
-			const webAudioOk = BROWSER_SAFE_AUDIO.has(meta.audio?.codec ?? null);
-			if (
-				(directSupport.container === "video/mp4" ||
-					directSupport.container === "video/webm") &&
-				webAudioOk
-			) {
-				return { mode: "direct", meta, reason: "web-safe-container" };
-			}
-		}
-
-		if (canUseMediaBunnyRemux(meta)) {
-			return { mode: "mediabunny", meta, reason: "remux-or-transcode" };
-		}
-
-		if (meta.audio && !meta.audioTracks.some((track) => track.playable)) {
-			const codecs = [
-				...new Set(
-					meta.audioTracks
-						.map((track) => track.codecName || track.codec)
-						.filter((codec): codec is string => Boolean(codec)),
-				),
-			];
-			const label = codecs.length > 0 ? codecs.join(", ") : "unknown";
-			const dts = codecs.some((codec) => /DTS/i.test(codec));
-			return {
-				mode: "unsupported",
-				meta,
-				reason: "unsupported-audio-codec",
-				error: dts
-					? "MediaBunny does not support DTS audio. Choose another audio track or stream."
-					: `MediaBunny cannot decode ${label} audio on this platform. Choose another audio track or stream.`,
-			};
-		}
-
-		return { mode: "unsupported", meta, reason: "no-browser-path" };
-	} catch (error) {
-		if (error instanceof DOMException && error.name === "AbortError") {
-			throw error;
-		}
-		console.warn("MediaBunny probe failed", error);
-		const message = error instanceof Error ? error.message : String(error);
-		if (
-			directSupport.supported &&
-			(directSupport.confidence === "probably" ||
-				directSupport.confidence === "maybe")
-		) {
-			return { mode: "direct", meta: null, reason: "probe-failed-direct" };
-		}
-		return {
-			mode: "unsupported",
-			meta: null,
-			reason: "probe-failed",
-			error: message,
-		};
-	}
-}
-
-function canUseMediaBunnyRemux(meta: ProbedStream): boolean {
-	if (!meta.video) return false;
-	if (meta.audio && !meta.audioTracks.some((track) => track.playable)) {
-		return false;
-	}
-	if (!isMseFriendlyVideo(meta.video.codec) && !meta.video.canDecode) {
-		return false;
-	}
-	return typeof MediaSource !== "undefined";
 }
 
 export type MediaBunnyAttachResult = {

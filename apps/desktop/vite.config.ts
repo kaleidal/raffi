@@ -4,9 +4,19 @@ import tailwindcss from "@tailwindcss/vite";
 import { resolve } from 'node:path'
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   base: './',
-  plugins: [svelte(), tailwindcss()],
+  plugins: [
+    {
+      name: 'raffi-csp',
+      transformIndexHtml: (html) => html.replace(
+        '__RAFFI_DEV_EVAL__',
+        command === 'serve' ? "'unsafe-eval'" : '',
+      ),
+    },
+    svelte(),
+    tailwindcss(),
+  ],
   resolve: {
     alias: {
       '@raffi/app': resolve(import.meta.dirname, '../../packages/app'),
@@ -21,12 +31,15 @@ export default defineConfig({
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
-        manualChunks: (id) => {
-          if (!id.includes('node_modules')) return;
-          if (id.includes('hls.js')) return 'hls';
-          if (id.includes('posthog')) return 'posthog';
-          if (id.includes('lucide')) return 'lucide';
-          return 'vendor';
+        strictExecutionOrder: true,
+        codeSplitting: {
+          includeDependenciesRecursively: false,
+          groups: [
+            { name: 'hls', test: 'node_modules/hls.js/' },
+            { name: 'posthog', test: 'node_modules/posthog-js/' },
+            { name: 'mediabunny', test: 'node_modules/mediabunny/' },
+            { name: 'lucide', test: 'node_modules/lucide-svelte/' },
+          ],
         },
       },
     },
@@ -37,4 +50,4 @@ export default defineConfig({
       allow: ['../..'],
     },
   },
-})
+}))

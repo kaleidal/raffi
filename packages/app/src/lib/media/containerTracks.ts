@@ -1,3 +1,5 @@
+import { RemoteBytes } from "./remoteBytes";
+
 export type ContainerAudioTrack = {
 	index: number;
 	codecId: string | null;
@@ -566,48 +568,4 @@ function readU64(data: Uint8Array, offset: number): bigint {
 	const hi = BigInt(readU32(data, offset));
 	const lo = BigInt(readU32(data, offset + 4));
 	return (hi << 32n) | lo;
-}
-
-class RemoteBytes {
-	private cache = new Map<string, Uint8Array>();
-	private constructor(
-		readonly url: string,
-		readonly size: number | null,
-		private signal?: AbortSignal,
-	) {}
-
-	static open(url: string, signal?: AbortSignal): RemoteBytes {
-		return new RemoteBytes(url, null, signal);
-	}
-
-	async read(start: number, length: number): Promise<Uint8Array> {
-		if (length <= 0) return new Uint8Array();
-		const end = start + length - 1;
-		const key = `${start}:${end}`;
-		const cached = this.cache.get(key);
-		if (cached) return cached;
-
-		const response = await fetch(this.url, {
-			headers: { Range: `bytes=${start}-${end}` },
-			signal: this.signal,
-		});
-		if (!(response.ok || response.status === 206)) {
-			throw new Error(`Range request failed (${response.status})`);
-		}
-		const buffer = new Uint8Array(await response.arrayBuffer());
-		this.cache.set(key, buffer);
-
-		if (this.size == null) {
-			const range = response.headers.get("content-range");
-			const match = range?.match(/\/(\d+)\s*$/);
-			if (match) {
-				(this as { size: number | null }).size = Number(match[1]);
-			}
-		}
-		return buffer;
-	}
-
-	close() {
-		this.cache.clear();
-	}
 }

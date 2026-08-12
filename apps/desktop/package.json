@@ -10,6 +10,7 @@
     "email": "hello@kaleid.al"
   },
   "homepage": "https://raffi.al",
+  "desktopName": "raffi.desktop",
   "scripts": {
     "dev": "vite --strictPort",
     "electron:dev": "bun run prepare:ffmpeg && cross-env NODE_ENV=development concurrently -k \"bun run dev\" \"wait-on http://localhost:5173 && cross-env ELECTRON_DISABLE_SANDBOX=1 electron .\"",
@@ -18,7 +19,8 @@
     "prepare:ffmpeg": "bun scripts/prepare-ffmpeg.mjs",
     "dist": "bun run prepare:ffmpeg && bun run build && electron-builder",
     "check": "svelte-check --tsgo --tsconfig ./tsconfig.json",
-    "check:all": "bun run --filter @raffi/app check && bun run check"
+    "check:all": "bun run --filter @raffi/app check && bun run check",
+    "test:playback": "bun run prepare:ffmpeg && bun test tests/playback-matrix.test.ts"
   },
   "devDependencies": {
     "@typescript/native": "npm:typescript@^7.0.2",
@@ -61,6 +63,7 @@
     ],
     "asar": true,
     "linux": {
+      "syncDesktopName": true,
       "target": [
         "deb",
         "AppImage",

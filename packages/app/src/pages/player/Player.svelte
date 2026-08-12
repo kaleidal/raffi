@@ -90,6 +90,7 @@
     import { performSeekWithEffects } from "./playerSeek";
     import { createNextEpisodeHandler } from "./playerNextEpisode";
     import { createPlayerSessionLoader } from "./playerSessionLoader";
+    import { firstNonNegativeNumber, parseEmbedMessageData } from "./embedProgress";
     import { createPlayerModalHandlers } from "./playerModalHandlers";
     import {
         canReuseNextEpisodePrefetch,
@@ -362,26 +363,6 @@
         trackEvent("playback_closed", getPlaybackAnalyticsProps());
     };
 
-    const parseEmbedMessageData = (value: any) => {
-        if (!value) return null;
-        if (typeof value === "string") {
-            try {
-                return JSON.parse(value);
-            } catch {
-                return null;
-            }
-        }
-        return typeof value === "object" ? value : null;
-    };
-
-    const numberFrom = (...values: any[]) => {
-        for (const value of values) {
-            const numeric = Number(value);
-            if (Number.isFinite(numeric) && numeric >= 0) return numeric;
-        }
-        return null;
-    };
-
     const handleEmbedMessage = (event: MessageEvent) => {
         if (!embedSrc || !imdbID || !metaData) return;
 
@@ -396,7 +377,7 @@
             ? (data.data?.progress?.watched ?? data.data?.progress) 
             : null;
 
-        const time = numberFrom(
+        const time = firstNonNegativeNumber(
             detail.timestamp,
             detail.currentTime,
             detail.current_time,
@@ -412,7 +393,7 @@
             data.seconds,
             data.time,
         );
-        const durationValue = numberFrom(
+        const durationValue = firstNonNegativeNumber(
             detail.duration,
             detail.player_duration,
             detail.durationSeconds,
