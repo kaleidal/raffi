@@ -1,4 +1,5 @@
 import { ALL_FORMATS, Input } from "mediabunny";
+import { toClientPlayableUrl } from "./localSource";
 import { pickMseMimeType, pumpStreamToSourceBuffer, TARGET_BUFFER_AHEAD_SECONDS } from "./msePump";
 import {
 	createRemoteUrlSource,
@@ -301,7 +302,7 @@ export class FfmpegPlayback implements ClientPlaybackController {
 			if (!this.input) {
 				this.networkAbort = new AbortController();
 				this.input = new Input({
-					source: createRemoteUrlSource(this.source, {
+					source: createRemoteUrlSource(toClientPlayableUrl(this.source), {
 						parallelism: 2,
 						maxCacheSize: 16 * 1024 * 1024,
 						signal: this.networkAbort.signal,

@@ -15,6 +15,7 @@
     import {
         loadedMeta,
         metaData,
+        metaLoadError,
         backgroundFailed,
         logoFailed,
         progressMap,
@@ -110,6 +111,7 @@
     });
 
     onDestroy(() => {
+        DataLoader.cancelMetaDataLoad();
         document.body.style.overflow = "";
         const scrollContainer = document.querySelector("[data-scroll-container]");
         if (scrollContainer instanceof HTMLElement) {
@@ -129,16 +131,12 @@
     }
 
     $: if (imdbID) {
-        DataLoader.loadMetaData(imdbID, titleType, expectedName).then(
-            (type) => {
-                if (type !== titleType) {
-                    // Update router if type changed (fallback)
-                }
-            },
-        );
+        void DataLoader.loadMetaData(imdbID, titleType, expectedName);
     }
 
-    $: if ($loadedMeta && $metaData) {
+    $: if ($metaLoadError) {
+        unsupportedReason = $metaLoadError;
+    } else if ($loadedMeta && $metaData) {
         if (!$metaData.meta?.background) {
             unsupportedReason = "This title is missing metadata.";
         } else if (
@@ -157,6 +155,8 @@
             backgroundAspect = null;
             useOverlayScrollHint = false;
         }
+    } else {
+        unsupportedReason = null;
     }
 
     $: {

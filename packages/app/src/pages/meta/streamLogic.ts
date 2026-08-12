@@ -1,8 +1,8 @@
 import { get } from "svelte/store";
 import {
     loadingStreams, streams, streamsPopupVisible, selectedEpisode,
-    selectedAddon, metaData, selectedStreamUrl,
-    selectedStream, selectedFileIdx, showTorrentWarning, pendingTorrentStream,
+    selectedAddon, metaData,
+    selectedStream, showTorrentWarning, pendingTorrentStream,
     streamFailureMessage,
     progressMap,
 } from "./metaState";
@@ -139,9 +139,22 @@ export const fetchStreams = async (
         }
 
         const addonUrl = get(selectedAddon);
+        const localStreams = getLocalStreamsFor(imdbID, type as any, episode);
+        if (!addonUrl) {
+            streams.set(localStreams as any);
+            if (localStreams.length === 0) {
+                streamFailureMessage.set("Install a stream addon to find online sources.");
+            } else {
+                clearStreamFailureMessage();
+            }
+            return localStreams as any;
+        }
         const response = await fetch(
             addonUrl + "/stream/" + type + "/" + streamId + ".json",
         );
+        if (!response.ok) {
+            throw new Error(`Stream addon returned ${response.status}`);
+        }
         const result = await response.json();
         if (isStaleStreamFetch(requestId)) return [];
 
@@ -149,7 +162,6 @@ export const fetchStreams = async (
             ? result.streams
             : [];
 
-        const localStreams = getLocalStreamsFor(imdbID, type as any, episode);
         const combined = [...(localStreams as any), ...remoteStreams];
         streams.set(combined);
         trackEvent("stream_list_loaded", {
@@ -217,15 +229,19 @@ export const fetchStreamListForEpisodeOnly = async (episode: any, imdbID: string
     }
 
     const addonUrl = get(selectedAddon);
+    const localStreams = getLocalStreamsFor(imdbID, type as any, episode);
+    if (!addonUrl) return localStreams as any;
     try {
         const response = await fetch(
             addonUrl + "/stream/" + type + "/" + streamId + ".json",
         );
+        if (!response.ok) {
+            throw new Error(`Stream addon returned ${response.status}`);
+        }
         const result = await response.json();
         const remoteStreams: Stream[] = Array.isArray(result.streams)
             ? result.streams
             : [];
-        const localStreams = getLocalStreamsFor(imdbID, type as any, episode);
         return [...(localStreams as any), ...remoteStreams];
     } catch (e) {
         console.error("fetchStreamListForEpisodeOnly failed", e);
@@ -264,9 +280,6 @@ export const playStream = (
     if (url) {
         clearStreamFailureMessage();
         selectedStream.set(stream);
-        selectedStreamUrl.set(url);
-        selectedFileIdx.set(fileIdx);
-
         const data = get(metaData);
         const episode = get(selectedEpisode);
         let startTime = 0;
@@ -373,11 +386,6 @@ export const markCurrentStreamAsFailed = (reason?: string) => {
     );
 };
 
-
-export const closePlayer = () => {
-    selectedStreamUrl.set(null);
-    router.back();
-};
 
 export const closeStreamsPopup = () => {
     streamFetchGeneration += 1;

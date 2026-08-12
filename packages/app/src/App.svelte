@@ -32,49 +32,65 @@
     const pageCache: Record<string, PageComponent> = {
         home: Home,
     };
+    const pendingPages: Record<string, Promise<PageComponent> | undefined> = {};
 
-    let activePage: PageComponent | null = Home;
+    let activePage: PageComponent = Home;
+    let routeLoading = false;
     let pageLoadToken = 0;
+
+    const loadPage = (page: string) => {
+        const cached = pageCache[page];
+        if (cached) return Promise.resolve(cached);
+
+        const loader = pageLoaders[page];
+        if (!loader) return Promise.resolve(Home);
+
+        const pending = pendingPages[page];
+        if (pending) return pending;
+
+        const promise = loader()
+            .then((mod) => {
+                pageCache[page] = mod.default;
+                return mod.default;
+            })
+            .finally(() => {
+                delete pendingPages[page];
+            });
+        pendingPages[page] = promise;
+        return promise;
+    };
 
     const prefetchPage = (page: string) => {
         if (pageCache[page] || !pageLoaders[page]) return;
-        void pageLoaders[page]()
-            .then((mod) => {
-                pageCache[page] = mod.default;
-            })
-            .catch(() => {
-                // ignore prefetch failures
-            });
+        void loadPage(page).catch(() => {});
     };
 
     const ensurePageLoaded = async (page: string) => {
-        if (pageCache[page]) {
-            activePage = pageCache[page];
-            return;
-        }
-
-        const loader = pageLoaders[page];
-        if (!loader) {
-            activePage = Home;
-            return;
-        }
-
         const token = ++pageLoadToken;
-        // Keep the previous page mounted so meta → player doesn't flash a blank spinner.
+        const cached = pageCache[page];
+        if (cached) {
+            activePage = cached;
+            routeLoading = false;
+            return;
+        }
+
+        routeLoading = true;
 
         try {
-            const mod = await loader();
-            pageCache[page] = mod.default;
+            const component = await loadPage(page);
             if (token !== pageLoadToken) return;
-            activePage = mod.default;
+            activePage = component;
         } catch (err) {
             console.error(`Failed to load page module: ${page}`, err);
             if (token !== pageLoadToken) return;
             activePage = Home;
+        } finally {
+            if (token === pageLoadToken) routeLoading = false;
         }
     };
 
     $: void ensurePageLoaded($router.page);
+    $: if ($router.page === "home") prefetchPage("meta");
     $: if ($router.page === "meta") prefetchPage("player");
 
     let showTitleBar = false;
@@ -374,12 +390,16 @@
             class="w-full h-full"
             style={`transform: scale(${displayZoom * $userZoom}); transform-origin: top left; width: calc(100% / ${displayZoom * $userZoom}); height: calc(100% / ${displayZoom * $userZoom});`}
         >
-            {#if !activePage}
-                <div class="w-full h-full flex items-center justify-center">
-                    <LoadingSpinner size="32px" color="#D8D8D8" />
+            <svelte:component this={activePage} {...$router.params as any} />
+
+            {#if routeLoading}
+                <div
+                    class="fixed inset-0 z-[400] flex items-center justify-center bg-[#090909]"
+                    aria-live="polite"
+                    aria-label="Loading page"
+                >
+                    <LoadingSpinner size="60px" color="#D8D8D8" />
                 </div>
-            {:else}
-                <svelte:component this={activePage} {...$router.params as any} />
             {/if}
         </div>
     </div>
