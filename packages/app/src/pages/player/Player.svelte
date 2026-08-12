@@ -404,6 +404,7 @@
         }
         trackPlaybackClosed();
         await exitFullscreenIfNeeded();
+        await playerSessionLoader.cancelCurrentLoad();
         if (!router.back()) {
             router.navigate("home");
         }

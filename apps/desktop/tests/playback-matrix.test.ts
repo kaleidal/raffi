@@ -3,9 +3,14 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createRequire } from "node:module";
+import { EventEmitter } from "node:events";
+import { PassThrough } from "node:stream";
 
 const require = createRequire(import.meta.url);
-const { buildArguments } = require("../electron/services/ffmpegPlayback.cjs");
+const {
+	buildArguments,
+	createFfmpegPlaybackService,
+} = require("../electron/services/ffmpegPlayback.cjs");
 const desktopDir = join(import.meta.dir, "..");
 const ffmpeg = join(desktopDir, "vendor", "ffmpeg", process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg");
 const electron = join(
@@ -62,6 +67,55 @@ function serveFixture(honorRanges = true) {
 }
 
 describe("desktop playback compatibility matrix", () => {
+	test("waits for FFmpeg to exit before releasing a playback session", async () => {
+		const handlers = new Map<string, (...args: any[]) => any>();
+		const child = Object.assign(new EventEmitter(), {
+			stdout: new PassThrough(),
+			stderr: new PassThrough(),
+			exitCode: null as number | null,
+			killSignals: [] as string[],
+			kill(signal: string) {
+				this.killSignals.push(signal);
+				return true;
+			},
+		});
+		createFfmpegPlaybackService({
+			app: { isPackaged: false },
+			protocol: { handle() {} },
+			ipcMain: {
+				handle(name: string, handler: (...args: any[]) => any) {
+					handlers.set(name, handler);
+				},
+			},
+			spawn: () => child,
+			baseDir: join(desktopDir, "electron"),
+			resourcesPath: "",
+		});
+
+		const startPromise = handlers.get("FFMPEG_PLAYBACK_START")!({}, {
+			source: localSource,
+			startTime: 0,
+			audioIndex: 1,
+			audioChannels: 6,
+			copyAudio: false,
+		});
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		child.stdout.write(Buffer.from("mp4"));
+		const started = await startPromise;
+		let stopped = false;
+		const stopPromise = handlers.get("FFMPEG_PLAYBACK_STOP")!({}, started.sessionId)
+			.then(() => {
+				stopped = true;
+			});
+		await Promise.resolve();
+		expect(stopped).toBe(false);
+		expect(child.killSignals).toEqual(["SIGTERM"]);
+		child.exitCode = 0;
+		child.emit("exit", 0, null);
+		await stopPromise;
+		expect(stopped).toBe(true);
+	});
+
 	test("Chromium MSE accepts the emitted AAC and Opus MP4 codecs", async () => {
 		const environment = { ...process.env };
 		delete environment.ELECTRON_RUN_AS_NODE;
