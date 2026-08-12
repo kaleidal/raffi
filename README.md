@@ -121,12 +121,12 @@ raffi/
 - **Framework**: Electron with Svelte 5 and TypeScript
 - **Platforms**: Windows, macOS, Linux
 - **Features**: Full desktop experience with watch parties, Discord integration, local file playback
-- **Build**: electron-builder for multi-platform releases
+- **Build**: Bun bundles the Electron main/preload processes and electron-builder creates multi-platform releases. Production packages exclude source files, development dependencies, and unused Chromium locales.
 - **Playback**: MediaBunny remuxes compatible streams in the renderer. DTS and other unsupported audio streams use a bundled FFmpeg process that copies video and converts only audio to browser-safe multichannel Opus.
 
 Desktop packages pin checksummed Linux x64, Windows x64, and universal macOS binaries from the public [kaleidal/ffmpeg-builds](https://github.com/kaleidal/ffmpeg-builds) repository. `bun --filter @raffi/desktop prepare:ffmpeg` downloads and verifies the artifact for the current platform; `dist` runs this automatically and bundles the executable plus its license and build metadata outside the app ASAR.
 
-Run `bun --filter @raffi/desktop test:playback` to verify Chromium MSE support plus local and HTTP-range playback for stereo AAC and non-default multichannel DTS tracks. The fixture also covers audio switching and playback from a non-zero seek.
+Run `bun run validate` from the repository root to typecheck every workspace and run the app and desktop playback suites. The playback fixture verifies Chromium MSE support plus local and HTTP-range playback for stereo AAC and non-default multichannel DTS tracks, including audio switching and playback from a non-zero seek.
 
 #### Web App (`apps/web/`)
 - **Framework**: SvelteKit with Cloudflare adapter
@@ -200,16 +200,11 @@ bun run build:web
 ### Website Development
 
 ```bash
-cd marketing
-
-# Install dependencies
-bun install
-
 # Run development server
-bun run dev
+bun --filter @raffi/marketing dev
 
 # Build for production
-bun run build
+bun --filter @raffi/marketing build
 ```
 
 ## Architecture
@@ -280,6 +275,9 @@ bun run build
 ### Build Desktop App
 
 ```bash
+# Verify all workspaces and playback paths first
+bun run validate
+
 # Windows
 bun --filter @raffi/desktop dist -- --win
 
@@ -302,6 +300,7 @@ Output will be in `apps/desktop/release/`
 - Build targets (Windows, Linux, macOS)
 - Icon paths and file associations
 - Auto-update settings
+- Minimal production file allowlist and English Chromium locale
 
 ## Contributing
 

@@ -15,7 +15,7 @@
     "dev": "vite --strictPort",
     "electron:dev": "bun run prepare:ffmpeg && cross-env NODE_ENV=development concurrently -k \"bun run dev\" \"wait-on http://localhost:5173 && cross-env ELECTRON_DISABLE_SANDBOX=1 electron .\"",
     "electron:dev:only": "bun run prepare:ffmpeg && cross-env ELECTRON_DISABLE_SANDBOX=1 electron .",
-    "build": "vite build",
+    "build": "bun scripts/build-electron.mjs && vite build",
     "prepare:ffmpeg": "bun scripts/prepare-ffmpeg.mjs",
     "dist": "bun run prepare:ffmpeg && bun run build && electron-builder",
     "check": "svelte-check --tsgo --tsconfig ./tsconfig.json",
@@ -27,13 +27,17 @@
     "@sveltejs/vite-plugin-svelte": "^7.3.0",
     "@tsconfig/svelte": "^5.0.8",
     "@types/node": "^26.2.0",
+    "@raffi/app": "workspace:*",
+    "@ryuziii/discord-rpc": "^1.0.1-rc.1",
+    "@tailwindcss/vite": "^4.3.3",
     "concurrently": "^10.0.4",
     "cross-env": "^10.1.0",
     "electron": "^43.4.0",
     "electron-builder": "^26.15.3",
-    "electron-builder-squirrel-windows": "^26.15.3",
+    "electron-updater": "^6.8.9",
     "svelte": "^5.56.8",
     "svelte-check": "^4.7.5",
+    "tailwindcss": "^4.3.3",
     "typescript": "^6.0.2",
     "vite": "^8.2.1",
     "wait-on": "^9.1.0"
@@ -41,6 +45,12 @@
   "build": {
     "appId": "al.kaleid.raffi",
     "productName": "Raffi",
+    "extraMetadata": {
+      "main": "electron-dist/main.cjs"
+    },
+    "electronLanguages": [
+      "en-US"
+    ],
     "directories": {
       "buildResources": "build",
       "output": "release"
@@ -52,7 +62,8 @@
     },
     "files": [
       "dist/**/*",
-      "electron/**/*",
+      "electron-dist/**/*",
+      "LICENSE",
       "package.json"
     ],
     "extraResources": [
@@ -95,7 +106,6 @@
           ]
         }
       ],
-      "x64ArchFiles": "**/Contents/Resources/app.asar.unpacked/node_modules/**",
       "icon": "build/icons/icon.icns",
       "category": "public.app-category.video",
       "identity": null
@@ -133,18 +143,7 @@
         "name": "Video File",
         "role": "Viewer"
       }
-    ],
-    "asarUnpack": [
-      "node_modules/**/*.node",
-      "node_modules/**/prebuilds/**"
     ]
-  },
-  "dependencies": {
-    "@raffi/app": "workspace:*",
-    "@ryuziii/discord-rpc": "^1.0.1-rc.1",
-    "@tailwindcss/vite": "^4.3.3",
-    "electron-updater": "^6.8.9",
-    "tailwindcss": "^4.3.3"
   },
   "trustedDependencies": [
     "core-js",

@@ -8,15 +8,11 @@
     "apps/desktop": {
       "name": "@raffi/desktop",
       "version": "0.12.0",
-      "dependencies": {
+      "devDependencies": {
         "@raffi/app": "workspace:*",
         "@ryuziii/discord-rpc": "^1.0.1-rc.1",
-        "@tailwindcss/vite": "^4.3.3",
-        "electron-updater": "^6.8.9",
-        "tailwindcss": "^4.3.3",
-      },
-      "devDependencies": {
         "@sveltejs/vite-plugin-svelte": "^7.3.0",
+        "@tailwindcss/vite": "^4.3.3",
         "@tsconfig/svelte": "^5.0.8",
         "@types/node": "^26.2.0",
         "@typescript/native": "npm:typescript@^7.0.2",
@@ -24,9 +20,10 @@
         "cross-env": "^10.1.0",
         "electron": "^43.4.0",
         "electron-builder": "^26.15.3",
-        "electron-builder-squirrel-windows": "^26.15.3",
+        "electron-updater": "^6.8.9",
         "svelte": "^5.56.8",
         "svelte-check": "^4.7.5",
+        "tailwindcss": "^4.3.3",
         "typescript": "^6.0.2",
         "vite": "^8.2.1",
         "wait-on": "^9.1.0",
@@ -120,7 +117,6 @@
   "overrides": {
     "brace-expansion": "1.1.18",
     "cookie": "0.7.2",
-    "electron-builder-squirrel-windows": "26.15.3",
     "fast-uri": "3.1.5",
     "form-data": "4.0.6",
     "js-yaml": "4.3.1",

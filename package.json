@@ -10,7 +10,13 @@
     "build:desktop": "bun --filter @raffi/desktop build",
     "check:desktop": "bun --filter @raffi/desktop check",
     "check:app": "bun --filter @raffi/app check",
-    "check": "bun run check:app && bun run check:web && bun run check:desktop"
+    "check:sync": "bun --filter @raffi/sync check",
+    "check:marketing": "bun --filter @raffi/marketing check",
+    "test:app": "bun test packages/app/tests",
+    "test:playback": "bun --filter @raffi/desktop test:playback",
+    "test": "bun run test:app && bun run test:playback",
+    "check": "bun run check:app && bun run check:web && bun run check:desktop && bun run check:sync && bun run check:marketing",
+    "validate": "bun run check && bun run test"
   },
   "workspaces": [
     "apps/*",
@@ -21,7 +27,6 @@
   "overrides": {
     "brace-expansion": "1.1.18",
     "cookie": "0.7.2",
-    "electron-builder-squirrel-windows": "26.15.3",
     "fast-uri": "3.1.5",
     "form-data": "4.0.6",
     "js-yaml": "4.3.1",

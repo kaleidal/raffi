@@ -90,7 +90,8 @@
     import { performSeekWithEffects } from "./playerSeek";
     import { createNextEpisodeHandler } from "./playerNextEpisode";
     import { createPlayerSessionLoader } from "./playerSessionLoader";
-    import { firstNonNegativeNumber, parseEmbedMessageData } from "./embedProgress";
+    import { createBrowserPlaybackGuard } from "./browserPlaybackGuard";
+    import { readEmbedProgress } from "./embedProgress";
     import { createPlayerModalHandlers } from "./playerModalHandlers";
     import {
         canReuseNextEpisodePrefetch,
@@ -268,59 +269,6 @@
         showSubtitleSelection.set(true);
     };
 
-    const clearBrowserAudioCheck = () => {
-        if (!browserAudioCheckTimeout) return;
-        clearTimeout(browserAudioCheckTimeout);
-        browserAudioCheckTimeout = null;
-    };
-
-    const getBrowserPlaybackDetails = () => {
-        const src = currentVideoSrc || videoSrc || "";
-        const support = src ? Session.getDirectMediaSupport(src, videoElem) : null;
-        const altStreamHint = isDesktopPlatform
-            ? "Try an MP4, WebM, or HLS stream. MKV and some audio codecs can be remuxed in-app with MediaBunny."
-            : "Try an MP4, WebM, or HLS stream, or use the desktop app for MKV/E-AC-3/DTS streams.";
-        if (support && !support.supported) {
-            return `This browser does not report support for ${support.container}. ${altStreamHint}`;
-        }
-        return `The browser rejected this stream. ${altStreamHint}`;
-    };
-
-    const showBrowserPlaybackError = (reason: string) => {
-        clearBrowserAudioCheck();
-        try {
-            videoElem?.pause();
-        } catch {
-        }
-        loading.set(false);
-        showCanvas.set(false);
-        showError.set(true);
-        errorMessage.set("Browser cannot play this stream");
-        errorDetails.set(`${reason} ${getBrowserPlaybackDetails()}`);
-        trackEvent("browser_direct_stream_failed", {
-            reason,
-            ...getPlaybackAnalyticsProps(),
-        });
-    };
-
-    const handleVideoError = () => {
-        const error = videoElem?.error;
-        const reason = error?.message || `Media error ${error?.code ?? "unknown"}.`;
-        showBrowserPlaybackError(reason);
-    };
-
-    const scheduleBrowserAudioCheck = () => {
-        clearBrowserAudioCheck();
-        if (embedSrc || !videoSrc || !/^https?:\/\//i.test(videoSrc)) return;
-        browserAudioCheckTimeout = setTimeout(() => {
-            if (!videoElem || videoElem.paused || videoElem.ended) return;
-            const firefoxHasAudio = (videoElem as any).mozHasAudio;
-            if (firefoxHasAudio === false) {
-                showBrowserPlaybackError("The stream loaded without a playable audio track.");
-            }
-        }, 3500);
-    };
-
     const openWatchPartyModal = () => {
         if (embedSrc || $localMode || !$cloudSyncStatus.cloudFeaturesAvailable) {
             showWatchPartyModal.set(false);
@@ -356,6 +304,25 @@
             watchPartyActive: $watchParty.isActive,
         });
 
+    const browserPlaybackGuard = createBrowserPlaybackGuard({
+        getVideo: () => videoElem,
+        getSource: () => currentVideoSrc || videoSrc || "",
+        hasEmbed: () => Boolean(embedSrc),
+        isDesktop: isDesktopPlatform,
+        getAnalytics: getPlaybackAnalyticsProps,
+        track: trackEvent,
+        showError: (reason, details) => {
+            loading.set(false);
+            showCanvas.set(false);
+            showError.set(true);
+            errorMessage.set("Browser cannot play this stream");
+            errorDetails.set(`${reason} ${details}`);
+        },
+    });
+    const clearBrowserAudioCheck = browserPlaybackGuard.clearAudioCheck;
+    const handleVideoError = browserPlaybackGuard.handleVideoError;
+    const scheduleBrowserAudioCheck = browserPlaybackGuard.scheduleAudioCheck;
+
     const trackPlaybackClosed = () => {
         if (playbackClosedTracked) return;
         if (!currentVideoSrc) return;
@@ -366,55 +333,21 @@
     const handleEmbedMessage = (event: MessageEvent) => {
         if (!embedSrc || !imdbID || !metaData) return;
 
-        const data = parseEmbedMessageData(event.data);
-        if (!data) return;
+        const progress = readEmbedProgress(event.data);
+        if (!progress) return;
 
-        const detail = data.data || data.detail || data.payload || data;
-
-        // Extra support for players like Vidlink that use PLAYER_EVENT or MEDIA_DATA
-        const playerEvent = data.type === "PLAYER_EVENT" ? data.data : null;
-        const mediaDataWatched = data.type === "MEDIA_DATA" 
-            ? (data.data?.progress?.watched ?? data.data?.progress) 
-            : null;
-
-        const time = firstNonNegativeNumber(
-            detail.timestamp,
-            detail.currentTime,
-            detail.current_time,
-            detail.seconds,
-            detail.time,
-            detail.player_progress,
-            playerEvent?.currentTime,
-            playerEvent?.time,
-            mediaDataWatched,
-            data.timestamp,
-            data.currentTime,
-            data.current_time,
-            data.seconds,
-            data.time,
-        );
-        const durationValue = firstNonNegativeNumber(
-            detail.duration,
-            detail.player_duration,
-            detail.durationSeconds,
-            detail.duration_seconds,
-            playerEvent?.duration,
-            data.duration,
-            data.durationSeconds,
-        );
-
-        if (time == null) return;
-
-        const nextDuration = durationValue && durationValue > 0 ? durationValue : $duration;
+        const nextDuration = progress.duration && progress.duration > 0
+            ? progress.duration
+            : $duration;
         const now = Date.now();
         if (now - lastEmbedProgressAt < 1000) return;
         lastEmbedProgressAt = now;
 
         hasStarted = true;
-        currentTime.set(time);
+        currentTime.set(progress.time);
         if (nextDuration > 0) {
             duration.set(nextDuration);
-            void ProgressLogic.handleProgress(time, nextDuration, imdbID, true);
+            void ProgressLogic.handleProgress(progress.time, nextDuration, imdbID, true);
         }
     };
 
@@ -491,7 +424,6 @@
     let reprobeAttempted = false;
     let torrentFailureExitTimeout: ReturnType<typeof setTimeout> | null = null;
     let embedLoadFallbackTimeout: ReturnType<typeof setTimeout> | null = null;
-    let browserAudioCheckTimeout: ReturnType<typeof setTimeout> | null = null;
     let lastEmbedProgressAt = 0;
 
     const getTraktMediaType = (): "movie" | "episode" => {
