@@ -34,14 +34,14 @@ async function describeOutput(output: string) {
 	return run(["-hide_banner", "-i", output, "-map", "0", "-f", "null", "-"]);
 }
 
-function serveFixture() {
+function serveFixture(honorRanges = true) {
 	const fixture = Bun.file(localSource);
 	return Bun.serve({
 		port: 0,
 		async fetch(request) {
 			const size = fixture.size;
 			const range = request.headers.get("range")?.match(/^bytes=(\d+)-(\d*)$/);
-			if (!range) {
+			if (!range || !honorRanges) {
 				return new Response(fixture, {
 					headers: { "Accept-Ranges": "bytes", "Content-Length": String(size) },
 				});
@@ -100,6 +100,33 @@ describe("desktop playback compatibility matrix", () => {
 			const description = await describeOutput(output);
 			expect(description).toContain("Video: h264");
 			expect(description).toMatch(/Audio: aac \(LC\).*48000 Hz, stereo/);
+		} finally {
+			server.stop(true);
+		}
+	});
+
+	test("streams from an HTTP origin that ignores byte ranges", async () => {
+		const server = serveFixture(false);
+		try {
+			const output = join(outputDir, "sequential-http.mp4");
+			const args = buildArguments({
+				source: `http://127.0.0.1:${server.port}/fixture.mkv`,
+				startTime: 4,
+				audioIndex: 1,
+				audioChannels: 6,
+				copyAudio: false,
+				caFile: null,
+				httpSeekable: false,
+			});
+			expect(args.slice(args.indexOf("-seekable"), args.indexOf("-seekable") + 2)).toEqual([
+				"-seekable",
+				"0",
+			]);
+			args[args.length - 1] = output;
+			await run(["-y", ...args]);
+			const description = await describeOutput(output);
+			expect(description).toContain("Video: h264");
+			expect(description).toContain("Audio: opus");
 		} finally {
 			server.stop(true);
 		}
