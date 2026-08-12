@@ -57,6 +57,15 @@ function validateAudioIndex(value) {
   return index;
 }
 
+function validateAudioChannels(value) {
+  if (value == null) return null;
+  const channels = Number(value);
+  if (!Number.isSafeInteger(channels) || channels < 1 || channels > 32) {
+    throw new Error("Invalid FFmpeg audio channel count");
+  }
+  return channels;
+}
+
 function resolveCaFile(source) {
   if (process.platform !== "linux" || !/^https:\/\//i.test(source)) return null;
   const candidates = [
@@ -79,10 +88,13 @@ function resolveCaFile(source) {
   throw new Error("FFmpeg could not find the Linux system CA certificate bundle");
 }
 
-function buildArguments({ source, startTime, audioIndex, copyAudio, caFile }) {
+function buildArguments({ source, startTime, audioIndex, audioChannels, copyAudio, caFile }) {
+  const surroundArguments = audioChannels === 6
+    ? ["-af", "aformat=channel_layouts=5.1", "-mapping_family", "1"]
+    : [];
   const audioArguments = copyAudio
     ? ["-c:a", "copy"]
-    : ["-c:a", "libopus", "-b:a", "320k"];
+    : ["-c:a", "libopus", "-b:a", "320k", ...surroundArguments];
   const protocolWhitelist = /^https?:\/\//i.test(source)
     ? "http,https,tcp,tls,httpproxy"
     : "file,crypto,data";
@@ -126,6 +138,7 @@ function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, r
     const source = validateSource(payload?.source);
     const startTime = validateStartTime(payload?.startTime);
     const audioIndex = validateAudioIndex(payload?.audioIndex);
+    const audioChannels = validateAudioChannels(payload?.audioChannels);
     const copyAudio = payload?.copyAudio === true;
     const caFile = resolveCaFile(source);
     while (sessions.size >= MAX_SESSIONS) {
@@ -134,7 +147,14 @@ function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, r
     const sessionId = crypto.randomUUID();
     const output = new PassThrough({ highWaterMark: 512 * 1024 });
     output.on("error", () => {});
-    const child = spawn(ffmpegPath, buildArguments({ source, startTime, audioIndex, copyAudio, caFile }), {
+    const child = spawn(ffmpegPath, buildArguments({
+      source,
+      startTime,
+      audioIndex,
+      audioChannels,
+      copyAudio,
+      caFile,
+    }), {
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
     });

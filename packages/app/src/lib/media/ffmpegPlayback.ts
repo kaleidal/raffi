@@ -217,6 +217,7 @@ export class FfmpegPlayback implements ClientPlaybackController {
 				source: this.source,
 				startTime,
 				audioIndex: this.audioIndex,
+				audioChannels: selectedAudio?.channels ?? null,
 				copyAudio,
 			});
 			if (generation !== this.generation || abort.signal.aborted) {
