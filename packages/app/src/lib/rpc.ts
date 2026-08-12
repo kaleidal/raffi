@@ -1,4 +1,5 @@
 export interface ActivityDetails {
+    type?: 0 | 2 | 3 | 5;
     details?: string;
     state?: string;
     startTimestamp?: number;
@@ -8,6 +9,7 @@ export interface ActivityDetails {
     smallImageKey?: string;
     smallImageText?: string;
     instance?: boolean;
+    buttons?: Array<{ label: string; url: string }>;
 }
 
 declare global {

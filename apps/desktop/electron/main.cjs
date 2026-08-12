@@ -43,44 +43,6 @@ const pendingAppUserModelId =
 logFallback("Main process booting");
 logToFile("Main process booting");
 
-function isDiscordIPCConnectError(err) {
-  const msg = (err && (err.message || String(err))) || "";
-  // Matches the exact failure users hit when Discord isn't installed/running.
-  return (
-    ((err && err.name === "DiscordRPCError") ||
-      msg.includes("DiscordRPCError")) &&
-    (msg.includes("IPC connection error") ||
-      msg.includes("discord-ipc-") ||
-      msg.includes("\\\\.\\pipe\\discord-ipc") ||
-      msg.includes("connect ENOENT"))
-  );
-}
-
-// The discord RPC lib can throw from a socket error handler (not just reject a promise).
-// Without a handler, Electron shows a fatal crash dialog. We only swallow the specific
-// Discord IPC connect failure, and let all other errors crash normally.
-process.on("uncaughtException", (err) => {
-  if (isDiscordIPCConnectError(err)) {
-    console.log("Ignoring Discord IPC connect failure:", err?.message || err);
-    logToFile("Ignoring Discord IPC connect failure", err);
-    return;
-  }
-  logToFile("Uncaught exception in main process", err);
-  throw err;
-});
-
-process.on("unhandledRejection", (reason) => {
-  if (isDiscordIPCConnectError(reason)) {
-    console.log(
-      "Ignoring Discord IPC rejection:",
-      (reason && reason.message) || reason,
-    );
-    logToFile("Ignoring Discord IPC rejection", reason);
-    return;
-  }
-  logToFile("Unhandled rejection in main process", reason);
-});
-
 app.on("ready", () => {
   logToFile("App ready");
 });
@@ -365,7 +327,7 @@ process.on("SIGTERM", () => {
   process.exit(0);
 });
 
-const rpcService = registerDiscordRpcHandlers({ ipcMain, isDiscordIPCConnectError });
+const rpcService = registerDiscordRpcHandlers({ ipcMain });
 
 app.on("will-quit", () => {
   try {

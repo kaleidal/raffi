@@ -20,7 +20,8 @@
     "dist": "bun run prepare:ffmpeg && bun run build && electron-builder",
     "check": "svelte-check --tsgo --tsconfig ./tsconfig.json",
     "check:all": "bun run --filter @raffi/app check && bun run check",
-    "test:playback": "bun run prepare:ffmpeg && bun test tests/playback-matrix.test.ts"
+    "test": "bun run prepare:ffmpeg && bun test tests",
+    "test:playback": "bun run test"
   },
   "devDependencies": {
     "@typescript/native": "npm:typescript@^7.0.2",
@@ -28,7 +29,6 @@
     "@tsconfig/svelte": "^5.0.8",
     "@types/node": "^26.2.0",
     "@raffi/app": "workspace:*",
-    "@ryuziii/discord-rpc": "^1.0.1-rc.1",
     "@tailwindcss/vite": "^4.3.3",
     "concurrently": "^10.0.4",
     "cross-env": "^10.1.0",

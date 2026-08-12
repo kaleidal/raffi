@@ -1,138 +1,181 @@
-const { DiscordRPCClient } = require("@ryuziii/discord-rpc");
+const { DiscordIpcClient } = require("./discordIpc.cjs");
 
-function registerDiscordRpcHandlers({ ipcMain, isDiscordIPCConnectError }) {
-  const clientId = "1443935459079094396";
-  const RPC_CONNECT_COOLDOWN_MS = 15_000;
+const CLIENT_ID = "1443935459079094396";
+const MIN_UPDATE_INTERVAL_MS = 4_100;
+const MAX_RECONNECT_DELAY_MS = 60_000;
 
-  let rpc;
-  let rpcEnabled = true;
-  let rpcConnected = false;
-  let rpcConnectPromise = null;
-  let lastRpcConnectAttemptAt = 0;
-  let pendingActivity = null;
+function text(value) {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim();
+  return normalized ? normalized.slice(0, 128) : undefined;
+}
 
-  function applyActivity(data) {
-    if (!rpc || !rpcConnected) return;
+function httpsUrl(value) {
+  if (typeof value !== "string") return undefined;
+  try {
+    const url = new URL(value);
+    const normalized = url.toString();
+    return url.protocol === "https:" && normalized.length <= 512
+      ? normalized
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
+function unixTimestamp(value) {
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : undefined;
+}
+
+function normalizeActivity(value) {
+  const details = text(value?.details);
+  const state = text(value?.state);
+  const largeImage = httpsUrl(value?.largeImageKey) || text(value?.largeImageKey);
+  const smallImage = httpsUrl(value?.smallImageKey) || text(value?.smallImageKey);
+  const buttons = Array.isArray(value?.buttons)
+    ? value.buttons
+        .map((button) => ({
+          label: text(button?.label)?.slice(0, 32),
+          url: httpsUrl(button?.url),
+        }))
+        .filter((button) => button.label && button.url)
+        .slice(0, 2)
+    : [];
+  const start = unixTimestamp(value?.startTimestamp);
+  const end = unixTimestamp(value?.endTimestamp);
+  const activity = {
+    type: [0, 2, 3, 5].includes(value?.type) ? value.type : 3,
+    details,
+    state,
+    instance: false,
+    buttons: buttons.length ? buttons : undefined,
+    timestamps: start || end ? { start, end } : undefined,
+    assets: largeImage || smallImage
+      ? {
+          large_image: largeImage,
+          large_text: text(value?.largeImageText),
+          small_image: smallImage,
+          small_text: text(value?.smallImageText),
+        }
+      : undefined,
+  };
+  return JSON.parse(JSON.stringify(activity));
+}
+
+function registerDiscordRpcHandlers({ ipcMain }) {
+  let enabled = true;
+  let desiredActivity = null;
+  let reconnectDelay = 2_000;
+  let reconnectTimer = null;
+  let updateTimer = null;
+  let lastUpdateAt = 0;
+  let lastPayload = "";
+
+  const client = new DiscordIpcClient({
+    clientId: CLIENT_ID,
+    onDisconnect: () => scheduleReconnect(),
+    onError: (error) => console.warn("Discord RPC:", error.message),
+  });
+
+  function clearTimer(name) {
+    const timer = name === "reconnect" ? reconnectTimer : updateTimer;
+    if (timer) clearTimeout(timer);
+    if (name === "reconnect") reconnectTimer = null;
+    else updateTimer = null;
+  }
+
+  function scheduleReconnect() {
+    if (!enabled || !desiredActivity || reconnectTimer) return;
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      void connect();
+    }, reconnectDelay);
+    reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY_MS);
+  }
+
+  async function connect() {
+    if (!enabled || !desiredActivity || client.ready) return;
     try {
-      if (data.useProgressBar && data.duration > 0) {
-        const options = {
-          state: data.state,
-          largeImageKey: data.largeImageKey || "raffi_logo",
-          largeImageText: data.largeImageText || "Raffi",
-          smallImageKey: data.smallImageKey || "play",
-          smallImageText: data.smallImageText || "Playing",
-        };
-
-        rpc.setProgressBar(data.details, data.duration, options);
-      } else {
-        rpc.setActivity({
-          state: data.state,
-          largeImageKey: data.largeImageKey || "raffi_logo",
-          largeImageText: data.largeImageText || "Raffi",
-          smallImageKey: data.smallImageKey || "play",
-          smallImageText: data.smallImageText || "Playing",
-        });
-      }
-    } catch (err) {
-      console.log("RPC_SET_ACTIVITY error:", err);
+      await client.connect();
+      reconnectDelay = 2_000;
+      flushActivity(true);
+    } catch {
+      scheduleReconnect();
     }
   }
 
-  function createRPCClient() {
-    const client = new DiscordRPCClient({ clientId, transport: "ipc" });
-    client.on("error", (err) => {
-      console.log("Discord RPC error (ignored):", err?.message || err);
-      destroyRPC();
-    });
-    return client;
-  }
-
-  function initRPC() {
-    if (!rpcEnabled || rpcConnected) return;
-
-    const now = Date.now();
-    if (rpcConnectPromise) return;
-    if (now - lastRpcConnectAttemptAt < RPC_CONNECT_COOLDOWN_MS) return;
-    lastRpcConnectAttemptAt = now;
-
-    if (!rpc) rpc = createRPCClient();
-
-    rpcConnectPromise = rpc
-      .connect()
-      .then(() => {
-        rpcConnected = true;
-        rpcConnectPromise = null;
-        if (pendingActivity) {
-          const next = pendingActivity;
-          pendingActivity = null;
-          applyActivity(next);
-        }
-      })
-      .catch((err) => {
-        rpcConnectPromise = null;
-        rpcConnected = false;
-
-        if (isDiscordIPCConnectError(err)) {
-          rpcEnabled = false;
-          pendingActivity = null;
-        }
-        destroyRPC();
-      });
-  }
-
-  function destroyRPC() {
-    if (!rpc) return;
-    try {
-      rpcConnected = false;
-      rpcConnectPromise = null;
-      try {
-        rpc.removeAllListeners?.();
-      } catch {}
-      rpc.destroy();
-    } catch {}
-    rpc = null;
-  }
-
-  initRPC();
-
-  ipcMain.on("RPC_SET_ACTIVITY", (_event, data) => {
-    if (!rpcEnabled) return;
-
-    pendingActivity = data;
-    if (!rpcConnected) {
-      initRPC();
+  function flushActivity(force = false) {
+    clearTimer("update");
+    if (!enabled || !desiredActivity) return;
+    if (!client.ready) {
+      void connect();
       return;
     }
+    const payload = JSON.stringify(desiredActivity);
+    if (!force && payload === lastPayload) return;
+    const wait = MIN_UPDATE_INTERVAL_MS - (Date.now() - lastUpdateAt);
+    if (!force && wait > 0) {
+      updateTimer = setTimeout(() => flushActivity(), wait);
+      return;
+    }
+    try {
+      client.setActivity(desiredActivity);
+      lastPayload = payload;
+      lastUpdateAt = Date.now();
+    } catch {
+      scheduleReconnect();
+    }
+  }
 
-    applyActivity(data);
+  ipcMain.on("RPC_SET_ACTIVITY", (_event, value) => {
+    if (!enabled) return;
+    desiredActivity = normalizeActivity(value);
+    flushActivity();
   });
 
   ipcMain.on("RPC_CLEAR_ACTIVITY", () => {
-    pendingActivity = null;
-    if (!rpc || !rpcConnected) return;
-    try {
-      rpc.clearActivity();
-    } catch (err) {
-      console.log("RPC_CLEAR_ACTIVITY error:", err);
+    desiredActivity = null;
+    lastPayload = "";
+    clearTimer("update");
+    clearTimer("reconnect");
+    if (client.ready) {
+      try {
+        client.clearActivity();
+      } catch {
+      }
     }
   });
 
   ipcMain.on("RPC_ENABLE", () => {
-    rpcEnabled = true;
-    initRPC();
+    enabled = true;
+    flushActivity();
   });
 
   ipcMain.on("RPC_DISABLE", () => {
-    rpcEnabled = false;
-    destroyRPC();
+    enabled = false;
+    desiredActivity = null;
+    lastPayload = "";
+    clearTimer("update");
+    clearTimer("reconnect");
+    if (client.ready) {
+      try {
+        client.clearActivity();
+      } catch {
+      }
+    }
+    client.destroy();
   });
 
   return {
-    destroyRPC,
+    destroyRPC() {
+      clearTimer("update");
+      clearTimer("reconnect");
+      client.destroy();
+    },
   };
 }
 
 module.exports = {
+  normalizeActivity,
   registerDiscordRpcHandlers,
 };
