@@ -14,7 +14,6 @@ function registerPrivilegedSchemes(protocol, additionalSchemes = []) {
         secure: true,
         supportFetchAPI: true,
         stream: true,
-        bypassCSP: true,
         corsEnabled: true,
       },
     },

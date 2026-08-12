@@ -12,6 +12,8 @@ import {
 	type ContainerAudioTrack,
 } from "./containerTracks";
 import { ensureMediaCodersRegistered } from "./registerCoders";
+import { codecsCompatible, friendlyCodecName, isMseFriendlyVideo, mapContainerCodec, NATIVE_AUDIO, normalizeCodecId } from "./codecSupport";
+export { isMseFriendlyVideo, isNativeFriendlyAudio } from "./codecSupport";
 
 export type ProbedAudioTrack = {
 	index: number;
@@ -47,14 +49,6 @@ export type ProbedStream = {
 	audioTracks: ProbedAudioTrack[];
 	preferredAudioIndex: number;
 };
-
-const NATIVE_AUDIO = new Set<AudioCodec | null>([
-	"aac",
-	"mp3",
-	"opus",
-	"flac",
-	"vorbis",
-]);
 
 const LANGUAGE_LABELS: Record<string, string> = {
 	eng: "English",
@@ -442,57 +436,6 @@ function findMatchingBunnyTrack(
 		: null;
 }
 
-function normalizeCodecId(value: string | AudioCodec | null | undefined): string {
-	return (value || "").toString().trim().toLowerCase().replace(/^a_/, "");
-}
-
-function codecsCompatible(a: string, b: string): boolean {
-	if (!a || !b) return false;
-	if (a === b) return true;
-	if (a.includes(b) || b.includes(a)) return true;
-	const aliases: Record<string, string[]> = {
-		eac3: ["eac3", "ec-3", "a_eac3"],
-		ac3: ["ac3", "ac-3", "a_ac3"],
-		aac: ["aac", "mp4a", "a_aac"],
-		mp3: ["mp3", "mpeg/l3", "a_mpeg/l3"],
-		opus: ["opus", "a_opus"],
-		flac: ["flac", "a_flac"],
-	};
-	for (const group of Object.values(aliases)) {
-		const aHit = group.some((item) => a.includes(item.replace(/^a_/, "")));
-		const bHit = group.some((item) => b.includes(item.replace(/^a_/, "")));
-		if (aHit && bHit) return true;
-	}
-	return false;
-}
-
-function mapContainerCodec(codecId: string | null): AudioCodec | null {
-	if (!codecId) return null;
-	const id = codecId.toUpperCase();
-	if (id.startsWith("A_AAC") || id === "MP4A") return "aac";
-	if (id.includes("MPEG/L3") || id === "MP3") return "mp3";
-	if (id.includes("OPUS")) return "opus";
-	if (id.includes("VORBIS")) return "vorbis";
-	if (id.includes("FLAC")) return "flac";
-	if (id === "A_AC3" || id === "AC-3") return "ac3";
-	if (id === "A_EAC3" || id === "EC-3") return "eac3";
-	return null;
-}
-
-function friendlyCodecName(codecName: string | null | undefined): string {
-	if (!codecName) return "";
-	const id = codecName.toUpperCase();
-	if (id.includes("EAC3") || id.includes("EC-3")) return "E-AC-3";
-	if (id.includes("AC3") || id.includes("AC-3")) return "AC-3";
-	if (id.includes("TRUEHD") || id.includes("MLP")) return "TrueHD";
-	if (id.includes("DTS")) return "DTS";
-	if (id.includes("AAC") || id === "MP4A") return "AAC";
-	if (id.includes("OPUS")) return "Opus";
-	if (id.includes("FLAC")) return "FLAC";
-	if (id.includes("MPEG/L3") || id === "MP3") return "MP3";
-	return codecName;
-}
-
 async function describeVideo(track: InputVideoTrack) {
 	const codec = await track.getCodec();
 	return {
@@ -517,23 +460,4 @@ async function describeAudio(track: InputAudioTrack) {
 		language: (await track.getLanguageCode()) || null,
 		title: (await track.getName()) || null,
 	};
-}
-
-export function isNativeFriendlyAudio(
-	codec: AudioCodec | null,
-	supportsEac3: boolean,
-): boolean {
-	if (NATIVE_AUDIO.has(codec)) return true;
-	if (supportsEac3 && (codec === "eac3" || codec === "ac3")) return true;
-	return false;
-}
-
-export function isMseFriendlyVideo(codec: VideoCodec | null): boolean {
-	return (
-		codec === "avc" ||
-		codec === "hevc" ||
-		codec === "av1" ||
-		codec === "vp9" ||
-		codec === "vp8"
-	);
 }

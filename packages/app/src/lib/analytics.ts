@@ -1,4 +1,4 @@
-import posthog from "posthog-js";
+import type { PostHog } from "posthog-js";
 import type { AppUser } from "./auth/types";
 import type { Route } from "./stores/router";
 
@@ -14,10 +14,13 @@ const DEFAULT_HOST = "https://eu.i.posthog.com";
 const DEFAULT_API_KEY = "phc_KfZzLVnffYNKrVo9iyWmAgrN7cY2wE9GVmeTIAl9SIy";
 
 let initialized = false;
+let posthog: PostHog | null = null;
+let initialization: Promise<void> | null = null;
 let lastPage: Route | null = null;
 let lastUserId: string | null = null;
 let lastUserTraits: Record<string, any> = {};
 let appSessionId: string | null = null;
+const pendingCaptures: Array<() => void> = [];
 
 const isBrowser = () => typeof window !== "undefined";
 
@@ -81,13 +84,13 @@ const ensureAppSessionId = () => {
 
 const getSessionLinkage = () => ({
     app_session_id: appSessionId ?? ensureAppSessionId(),
-    ph_distinct_id: initialized ? posthog.get_distinct_id() : null,
-    ph_session_id: initialized ? posthog.get_session_id() : null,
+    ph_distinct_id: posthog?.get_distinct_id() ?? null,
+    ph_session_id: posthog?.get_session_id() ?? null,
     user_id: lastUserId,
 });
 
 const registerBaseProperties = () => {
-    if (!initialized || !isBrowser()) return;
+    if (!posthog || !isBrowser()) return;
     posthog.register({
         app: "raffi",
         platform: (window as any)?.electronAPI ? "electron" : "web",
@@ -107,7 +110,7 @@ const persistSettings = (settings: AnalyticsSettings) => {
 };
 
 const applyConsent = (settings: AnalyticsSettings) => {
-    if (!initialized) return;
+    if (!posthog) return;
 
     if (settings.enabled) {
         posthog.opt_in_capturing();
@@ -134,55 +137,69 @@ export const setAnalyticsSettings = (settings: AnalyticsSettings) => {
     applyConsent(settings);
 };
 
-const canCapture = () => initialized && !posthog.has_opted_out_capturing();
+const canCapture = () => Boolean(posthog && !posthog.has_opted_out_capturing());
 
 export const initAnalytics = () => {
-    if (initialized || !isBrowser()) return;
+    if (initialized || initialization || !isBrowser()) return;
 
     const apiKey = (import.meta.env.VITE_POSTHOG_KEY as string | undefined) ?? DEFAULT_API_KEY;
     if (!apiKey) return;
 
     const host = (import.meta.env.VITE_POSTHOG_HOST as string | undefined) ?? DEFAULT_HOST;
 
-    posthog.init(apiKey, {
-        api_host: host,
-        autocapture: false,
-        capture_dead_clicks: false,
-        capture_exceptions: true,
-        capture_pageview: false,
-        capture_pageleave: false,
-        opt_out_capturing_by_default: false,
-        disable_session_recording: true,
-        session_recording: {
-            maskAllInputs: true,
-        },
-        persistence: "localStorage",
-        defaults: '2025-11-30'
+    initialization = import("posthog-js").then(({ default: client }) => {
+        posthog = client;
+        client.init(apiKey, {
+            api_host: host,
+            autocapture: false,
+            capture_dead_clicks: false,
+            capture_exceptions: true,
+            capture_pageview: false,
+            capture_pageleave: false,
+            opt_out_capturing_by_default: false,
+            disable_session_recording: true,
+            session_recording: {
+                maskAllInputs: true,
+            },
+            persistence: "localStorage",
+            defaults: "2025-11-30",
+        });
+
+        initialized = true;
+        ensureAppSessionId();
+        registerBaseProperties();
+        applyConsent(getAnalyticsSettings());
+        trackEvent("analytics_session_started");
+        for (const capture of pendingCaptures.splice(0)) capture();
+    }).catch((error) => {
+        pendingCaptures.length = 0;
+        console.warn("Analytics initialization failed", error);
+    }).finally(() => {
+        initialization = null;
     });
-
-    initialized = true;
-    ensureAppSessionId();
-
-    registerBaseProperties();
-
-    applyConsent(getAnalyticsSettings());
-
-    trackEvent("analytics_session_started");
 };
 
 export const trackEvent = (event: string, properties?: Record<string, any>) => {
+    if (initialization && !initialized) {
+        pendingCaptures.push(() => trackEvent(event, properties));
+        return;
+    }
     if (!canCapture()) return;
-    posthog.capture(event, {
+    posthog!.capture(event, {
         ...getSessionLinkage(),
         ...(properties ?? {}),
     });
 };
 
 export const trackPageView = (page: Route) => {
+    if (initialization && !initialized) {
+        pendingCaptures.push(() => trackPageView(page));
+        return;
+    }
     if (!canCapture()) return;
     if (page === lastPage) return;
     lastPage = page;
-    posthog.capture("page_view", {
+    posthog!.capture("page_view", {
         page,
         ...getSessionLinkage(),
     });
@@ -200,11 +217,11 @@ export const setAnalyticsUser = (user: AppUser | null) => {
     if (!canCapture()) return;
 
     if (lastUserId) {
-        posthog.identify(lastUserId, lastUserTraits);
-        posthog.register({ user_id: lastUserId });
+        posthog!.identify(lastUserId, lastUserTraits);
+        posthog!.register({ user_id: lastUserId });
         trackEvent("analytics_user_identified");
     } else {
-        posthog.reset();
+        posthog!.reset();
         registerBaseProperties();
         lastPage = null;
     }

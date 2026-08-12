@@ -126,6 +126,8 @@ raffi/
 
 Desktop packages pin checksummed Linux x64, Windows x64, and universal macOS binaries from the public [kaleidal/ffmpeg-builds](https://github.com/kaleidal/ffmpeg-builds) repository. `bun --filter @raffi/desktop prepare:ffmpeg` downloads and verifies the artifact for the current platform; `dist` runs this automatically and bundles the executable plus its license and build metadata outside the app ASAR.
 
+Run `bun --filter @raffi/desktop test:playback` to verify Chromium MSE support plus local and HTTP-range playback for stereo AAC and non-default multichannel DTS tracks. The fixture also covers audio switching and playback from a non-zero seek.
+
 #### Web App (`apps/web/`)
 - **Framework**: SvelteKit with Cloudflare adapter
 - **Purpose**: Browser-first Raffi for direct HTTP and debrid streams

@@ -252,4 +252,4 @@ function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, r
   };
 }
 
-module.exports = { ffmpegPrivilegedScheme, createFfmpegPlaybackService };
+module.exports = { ffmpegPrivilegedScheme, buildArguments, createFfmpegPlaybackService };

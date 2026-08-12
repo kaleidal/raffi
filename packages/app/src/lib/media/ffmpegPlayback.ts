@@ -111,8 +111,7 @@ export class FfmpegPlayback implements ClientPlaybackController {
 	private mediaSource: MediaSource | null = null;
 	private objectUrl: string | null = null;
 	private abort: AbortController | null = null;
-	private input: Input | null = null;
-	private networkAbort: AbortController | null = null;
+	private keyframeAbort: AbortController | null = null;
 	private generation = 0;
 	onWindowStartChange: ((globalStart: number) => void) | null = null;
 
@@ -180,10 +179,8 @@ export class FfmpegPlayback implements ClientPlaybackController {
 		this.generation += 1;
 		this.abort?.abort();
 		this.abort = null;
-		this.networkAbort?.abort();
-		this.networkAbort = null;
-		this.input?.dispose();
-		this.input = null;
+		this.keyframeAbort?.abort();
+		this.keyframeAbort = null;
 		await this.stopSession();
 		if (this.objectUrl) URL.revokeObjectURL(this.objectUrl);
 		this.objectUrl = null;
@@ -212,6 +209,7 @@ export class FfmpegPlayback implements ClientPlaybackController {
 		const generation = ++this.generation;
 		this.video.pause();
 		this.abort?.abort();
+		this.keyframeAbort?.abort();
 		await this.stopSession();
 		const abort = new AbortController();
 		this.abort = abort;
@@ -219,7 +217,7 @@ export class FfmpegPlayback implements ClientPlaybackController {
 		outerSignal?.addEventListener("abort", handleOuterAbort, { once: true });
 
 		try {
-			const snappedStart = await this.snapStartTime(startTime);
+			const snappedStart = await this.snapStartTime(startTime, abort.signal);
 			if (generation !== this.generation || abort.signal.aborted) {
 				throw new DOMException("Aborted", "AbortError");
 			}
@@ -296,29 +294,35 @@ export class FfmpegPlayback implements ClientPlaybackController {
 		}
 	}
 
-	private async snapStartTime(startTime: number) {
+	private async snapStartTime(startTime: number, signal?: AbortSignal) {
 		if (!(startTime > 0)) return 0;
+		const keyframeAbort = new AbortController();
+		const handleAbort = () => keyframeAbort.abort();
+		signal?.addEventListener("abort", handleAbort, { once: true });
+		this.keyframeAbort = keyframeAbort;
+		const input = new Input({
+			source: createRemoteUrlSource(toClientPlayableUrl(this.source), {
+				parallelism: 2,
+				maxCacheSize: 16 * 1024 * 1024,
+				signal: keyframeAbort.signal,
+			}),
+			formats: ALL_FORMATS,
+		});
 		try {
-			if (!this.input) {
-				this.networkAbort = new AbortController();
-				this.input = new Input({
-					source: createRemoteUrlSource(toClientPlayableUrl(this.source), {
-						parallelism: 2,
-						maxCacheSize: 16 * 1024 * 1024,
-						signal: this.networkAbort.signal,
-					}),
-					formats: ALL_FORMATS,
-				});
-			}
-			const videoTrack = await this.input.getPrimaryVideoTrack();
-			return videoTrack ? snapToVideoKeyframe(videoTrack, startTime) : startTime;
+			const videoTrack = await input.getPrimaryVideoTrack();
+			return videoTrack
+				? await snapToVideoKeyframe(videoTrack, startTime)
+				: startTime;
 		} catch (error) {
+			if (keyframeAbort.signal.aborted) {
+				throw new DOMException("Aborted", "AbortError");
+			}
 			console.warn("Failed to inspect the FFmpeg seek keyframe", error);
-			this.input?.dispose();
-			this.input = null;
-			this.networkAbort?.abort();
-			this.networkAbort = null;
 			return startTime;
+		} finally {
+			signal?.removeEventListener("abort", handleAbort);
+			input.dispose();
+			if (this.keyframeAbort === keyframeAbort) this.keyframeAbort = null;
 		}
 	}
 }
