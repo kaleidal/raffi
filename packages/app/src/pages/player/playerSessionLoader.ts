@@ -94,6 +94,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
     let loadGeneration = 0;
     let activeAbortController: AbortController | null = null;
     let activeLimboTorrentId = "";
+    let cleanupPromise = Promise.resolve();
 
     const attachSeekHandler = (videoElem: HTMLVideoElement) => {
         Session.attachSeekingListener(
@@ -139,8 +140,8 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
         activeAbortController = null;
         deps.stopTorrentStatusPolling();
         const playbackController = deps.getPlaybackController();
+        const limboTorrentId = activeLimboTorrentId;
         if (playbackController && playbackController !== preservedController) {
-            void playbackController.destroy();
             deps.setPlaybackController(null);
         }
         const hls = deps.getHls();
@@ -151,10 +152,20 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
             }
             deps.setHls(null);
         }
-        if (activeLimboTorrentId) {
-            void removeLimboTorrent(activeLimboTorrentId, false);
-            activeLimboTorrentId = "";
-        }
+        activeLimboTorrentId = "";
+        cleanupPromise = cleanupPromise.then(async () => {
+            if (playbackController && playbackController !== preservedController) {
+                try {
+                    await playbackController.destroy();
+                } catch (error) {
+                    console.warn("Playback cleanup failed", error);
+                }
+            }
+            if (limboTorrentId) {
+                await removeLimboTorrent(limboTorrentId, false);
+            }
+        });
+        return cleanupPromise;
     };
 
     const resolveLimboStream = async (
@@ -222,11 +233,13 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
             };
         },
     ) => {
-        cancelCurrentLoad(
+        const cleanup = cancelCurrentLoad(
             opts?.reuseSession?.playbackController ?? null,
             opts?.reuseSession?.hls ?? null,
         );
         const generation = loadGeneration;
+        await cleanup;
+        if (generation !== loadGeneration) return;
         const abortController = new AbortController();
         activeAbortController = abortController;
         const isStale = () =>

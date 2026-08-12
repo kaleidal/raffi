@@ -137,22 +137,24 @@ function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, r
   const sessions = new Map();
   const ffmpegPath = resolveFfmpegPath({ app, baseDir, resourcesPath });
 
-  function stop(sessionId) {
+  async function stop(sessionId) {
     const session = sessions.get(sessionId);
     if (!session) return false;
-    sessions.delete(sessionId);
-    session.stopped = true;
-    clearTimeout(session.claimTimer);
-    clearTimeout(session.startupTimer);
-    session.finishStartup?.(new Error("FFmpeg playback stopped"));
-    session.output.destroy();
-    if (session.child.exitCode === null) {
-      session.child.kill("SIGTERM");
-      session.killTimer = setTimeout(() => {
-        if (session.child.exitCode === null) session.child.kill("SIGKILL");
-      }, STOP_TIMEOUT_MS);
-      session.killTimer.unref?.();
+    if (!session.stopped) {
+      session.stopped = true;
+      clearTimeout(session.claimTimer);
+      clearTimeout(session.startupTimer);
+      session.finishStartup?.(new Error("FFmpeg playback stopped"));
+      session.output.destroy();
+      if (session.child.exitCode === null) {
+        session.child.kill("SIGTERM");
+        session.killTimer = setTimeout(() => {
+          if (session.child.exitCode === null) session.child.kill("SIGKILL");
+        }, STOP_TIMEOUT_MS);
+        session.killTimer.unref?.();
+      }
     }
+    await session.exited;
     return true;
   }
 
@@ -165,7 +167,7 @@ function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, r
     const copyAudio = payload?.copyAudio === true;
     const caFile = resolveCaFile(source);
     while (sessions.size >= MAX_SESSIONS) {
-      stop(sessions.keys().next().value);
+      await stop(sessions.keys().next().value);
     }
     const sessionId = crypto.randomUUID();
     const output = new PassThrough({ highWaterMark: 512 * 1024 });
@@ -182,9 +184,14 @@ function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, r
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
     });
+    let finishExit;
+    const exited = new Promise((resolve) => {
+      finishExit = resolve;
+    });
     const session = {
       child,
       output,
+      exited,
       stderr: "",
       claimed: false,
       stopped: false,
@@ -213,7 +220,7 @@ function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, r
       session.startupTimer = setTimeout(() => {
         const error = new Error("FFmpeg did not produce a playable stream within 30 seconds");
         finish(error);
-        stop(sessionId);
+        void stop(sessionId);
       }, STARTUP_TIMEOUT_MS);
       session.finishStartup = finish;
     });
@@ -223,12 +230,14 @@ function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, r
       clearTimeout(session.killTimer);
       output.destroy(error);
       session.finishStartup(error);
+      finishExit();
     });
     child.once("exit", (code, signal) => {
       sessions.delete(sessionId);
       clearTimeout(session.claimTimer);
       clearTimeout(session.startupTimer);
       clearTimeout(session.killTimer);
+      finishExit();
       if (session.stopped) return;
       if (code === 0) {
         session.finishStartup(new Error("FFmpeg produced no playable media"));
@@ -242,7 +251,7 @@ function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, r
     });
 
     await startup;
-    session.claimTimer = setTimeout(() => stop(sessionId), CLAIM_TIMEOUT_MS);
+    session.claimTimer = setTimeout(() => void stop(sessionId), CLAIM_TIMEOUT_MS);
 
     return { sessionId, streamUrl: `${SCHEME}://stream/${sessionId}`, startTime };
   }
@@ -275,7 +284,7 @@ function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, r
     if (!session || session.claimed) return new Response("Not found", { status: 404 });
     session.claimed = true;
     clearTimeout(session.claimTimer);
-    request.signal.addEventListener("abort", () => stop(sessionId), { once: true });
+    request.signal.addEventListener("abort", () => void stop(sessionId), { once: true });
     return new Response(Readable.toWeb(session.output), {
       headers: {
         "Content-Type": "video/mp4",
@@ -288,7 +297,7 @@ function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, r
 
   return {
     cleanup() {
-      for (const sessionId of [...sessions.keys()]) stop(sessionId);
+      for (const sessionId of [...sessions.keys()]) void stop(sessionId);
     },
   };
 }
