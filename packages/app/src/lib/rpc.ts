@@ -25,6 +25,7 @@ declare global {
                     source: string;
                     startTime: number;
                     audioIndex: number;
+                    audioChannels: number | null;
                     copyAudio: boolean;
                 }) => Promise<{ sessionId: string; streamUrl: string; startTime: number }>;
                 stop: (sessionId: string) => Promise<boolean>;
