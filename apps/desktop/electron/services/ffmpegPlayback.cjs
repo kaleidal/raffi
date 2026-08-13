@@ -8,6 +8,7 @@ const STDERR_LIMIT = 32 * 1024;
 const CLAIM_TIMEOUT_MS = 15_000;
 const STARTUP_TIMEOUT_MS = 30_000;
 const STOP_TIMEOUT_MS = 2_000;
+const STOP_RELEASE_TIMEOUT_MS = 4_000;
 const MAX_SESSIONS = 2;
 
 const ffmpegPrivilegedScheme = {
@@ -133,14 +134,27 @@ function isHttpRangeFailure(error) {
   return /Unexpected offset|Stream ends prematurely|File ended prematurely/i.test(message);
 }
 
+async function waitForSessionClose(session) {
+  let releaseTimer;
+  await Promise.race([
+    session.closed,
+    new Promise((resolve) => {
+      releaseTimer = setTimeout(resolve, STOP_RELEASE_TIMEOUT_MS);
+      releaseTimer.unref?.();
+    }),
+  ]);
+  clearTimeout(releaseTimer);
+}
+
 function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, resourcesPath, logToFile }) {
   const sessions = new Map();
   const ffmpegPath = resolveFfmpegPath({ app, baseDir, resourcesPath });
 
-  async function stop(sessionId) {
+  function stop(sessionId) {
     const session = sessions.get(sessionId);
-    if (!session) return false;
-    if (!session.stopped) {
+    if (!session) return Promise.resolve(false);
+    if (session.stopPromise) return session.stopPromise;
+    session.stopPromise = (async () => {
       session.stopped = true;
       clearTimeout(session.claimTimer);
       clearTimeout(session.startupTimer);
@@ -153,9 +167,11 @@ function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, r
         }, STOP_TIMEOUT_MS);
         session.killTimer.unref?.();
       }
-    }
-    await session.exited;
-    return true;
+      await waitForSessionClose(session);
+      if (sessions.get(sessionId) === session) sessions.delete(sessionId);
+      return true;
+    })();
+    return session.stopPromise;
   }
 
   async function startAttempt(payload, httpSeekable) {
@@ -184,20 +200,21 @@ function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, r
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
     });
-    let finishExit;
-    const exited = new Promise((resolve) => {
-      finishExit = resolve;
+    let finishClose;
+    const closed = new Promise((resolve) => {
+      finishClose = resolve;
     });
     const session = {
       child,
       output,
-      exited,
+      closed,
       stderr: "",
       claimed: false,
       stopped: false,
       claimTimer: null,
       startupTimer: null,
       killTimer: null,
+      stopPromise: null,
     };
     sessions.set(sessionId, session);
     child.stdout.pipe(output, { end: false });
@@ -225,19 +242,16 @@ function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, r
       session.finishStartup = finish;
     });
     child.once("error", (error) => {
-      sessions.delete(sessionId);
       session.stopped = true;
       clearTimeout(session.killTimer);
       output.destroy(error);
       session.finishStartup(error);
-      finishExit();
+      finishClose();
     });
     child.once("exit", (code, signal) => {
-      sessions.delete(sessionId);
       clearTimeout(session.claimTimer);
       clearTimeout(session.startupTimer);
       clearTimeout(session.killTimer);
-      finishExit();
       if (session.stopped) return;
       if (code === 0) {
         session.finishStartup(new Error("FFmpeg produced no playable media"));
@@ -249,8 +263,18 @@ function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, r
       session.finishStartup(new Error(detail));
       output.destroy(new Error(detail));
     });
+    child.once("close", () => {
+      if (sessions.get(sessionId) === session) sessions.delete(sessionId);
+      finishClose();
+    });
 
-    await startup;
+    try {
+      await startup;
+    } catch (error) {
+      await waitForSessionClose(session);
+      if (sessions.get(sessionId) === session) sessions.delete(sessionId);
+      throw error;
+    }
     session.claimTimer = setTimeout(() => void stop(sessionId), CLAIM_TIMEOUT_MS);
 
     return { sessionId, streamUrl: `${SCHEME}://stream/${sessionId}`, startTime };

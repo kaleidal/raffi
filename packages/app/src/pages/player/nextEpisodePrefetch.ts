@@ -5,6 +5,7 @@ import {
 } from "../../lib/media/localSource";
 import {
 	MediaBunnyPlayback,
+	FfmpegPlayback,
 	resolveHttpPlayback,
 	type HttpPlaybackMode,
 	type ProbedStream,
@@ -110,7 +111,7 @@ export async function startNextEpisodePrefetch(
 	handoff: NextEpisodePrefetchHandoff | null;
 }> {
 	let hlsInstance: Hls | null = null;
-	let mediaBunny: MediaBunnyPlayback | null = null;
+	let playbackController: ClientPlaybackController | null = null;
 	let pollId: ReturnType<typeof setInterval> | null = null;
 	let readyTimeout: ReturnType<typeof setTimeout> | null = null;
 	let readyTimedOut = false;
@@ -139,8 +140,7 @@ export async function startNextEpisodePrefetch(
 		clearReadyTimeout();
 		if (opts?.transfer) {
 			stopPolling();
-			// Ownership moves to the main player — keep remux/HLS alive.
-			mediaBunny = null;
+			playbackController = null;
 			hlsInstance = null;
 			return;
 		}
@@ -155,10 +155,10 @@ export async function startNextEpisodePrefetch(
 			hlsInstance = null;
 		}
 		Session.detachSeekingListener(videoElem);
-		const bunny = mediaBunny;
-		mediaBunny = null;
-		if (bunny) {
-			void bunny.destroy();
+		const controller = playbackController;
+		playbackController = null;
+		if (controller) {
+			void controller.destroy();
 			return;
 		}
 		try {
@@ -266,10 +266,12 @@ export async function startNextEpisodePrefetch(
 			};
 		}
 
-		if (resolved.mode === "mediabunny") {
-			const bunny = new MediaBunnyPlayback();
-			mediaBunny = bunny;
-			await bunny.attach(videoElem, src, {
+		if (resolved.mode === "mediabunny" || resolved.mode === "ffmpeg") {
+			const controller = resolved.mode === "ffmpeg"
+				? new FfmpegPlayback()
+				: new MediaBunnyPlayback();
+			playbackController = controller;
+			await controller.attach(videoElem, src, {
 				startTime: 0,
 				signal: abort.signal,
 				meta: resolved.meta,
@@ -278,7 +280,7 @@ export async function startNextEpisodePrefetch(
 			clearReadyTimeout();
 			if (disposed || abort.signal.aborted) {
 				if (readyTimedOut) {
-					throw new Error("Next episode prefetch timed out while preparing MediaBunny");
+					throw new Error("Next episode prefetch timed out while preparing playback");
 				}
 				dispose();
 				return { dispose: null, handoff: null };
@@ -296,9 +298,9 @@ export async function startNextEpisodePrefetch(
 					},
 					src,
 					fileIdx,
-					mode: "mediabunny",
-					meta: bunny.getMeta() ?? resolved.meta,
-						playbackController: bunny,
+					mode: resolved.mode,
+					meta: controller.getMeta() ?? resolved.meta,
+					playbackController: controller,
 					hls: null,
 				},
 			};

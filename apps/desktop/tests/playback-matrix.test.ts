@@ -67,7 +67,7 @@ function serveFixture(honorRanges = true) {
 }
 
 describe("desktop playback compatibility matrix", () => {
-	test("waits for FFmpeg to exit before releasing a playback session", async () => {
+	test("waits for FFmpeg streams to close before releasing a playback session", async () => {
 		const handlers = new Map<string, (...args: any[]) => any>();
 		const child = Object.assign(new EventEmitter(), {
 			stdout: new PassThrough(),
@@ -112,6 +112,9 @@ describe("desktop playback compatibility matrix", () => {
 		expect(child.killSignals).toEqual(["SIGTERM"]);
 		child.exitCode = 0;
 		child.emit("exit", 0, null);
+		await Promise.resolve();
+		expect(stopped).toBe(false);
+		child.emit("close", 0, null);
 		await stopPromise;
 		expect(stopped).toBe(true);
 	});
