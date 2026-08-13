@@ -51,6 +51,13 @@ export function canReuseNextEpisodePrefetch(
 	);
 }
 
+export function getPrefetchAudioIndex(
+	mode: "mediabunny" | "ffmpeg",
+	probedAudioIndex?: number,
+): number | undefined {
+	return mode === "ffmpeg" ? undefined : (probedAudioIndex ?? 0);
+}
+
 const PREFETCH_READY_TIMEOUT_MS = 20_000;
 
 const hasPlayableData = (video: HTMLVideoElement) =>
@@ -275,7 +282,10 @@ export async function startNextEpisodePrefetch(
 				startTime: 0,
 				signal: abort.signal,
 				meta: resolved.meta,
-				audioIndex: resolved.meta?.preferredAudioIndex ?? 0,
+				audioIndex: getPrefetchAudioIndex(
+					resolved.mode,
+					resolved.meta?.preferredAudioIndex,
+				),
 			});
 			clearReadyTimeout();
 			if (disposed || abort.signal.aborted) {

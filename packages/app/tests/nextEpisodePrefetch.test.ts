@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
 	canReuseNextEpisodePrefetch,
+	getPrefetchAudioIndex,
 	type NextEpisodePrefetchHandoff,
 } from "../src/pages/player/nextEpisodePrefetch";
 
@@ -47,5 +48,16 @@ describe("canReuseNextEpisodePrefetch", () => {
 				0,
 			),
 		).toBe(true);
+	});
+});
+
+describe("getPrefetchAudioIndex", () => {
+	test("lets FFmpeg recalculate the preferred track after enabling DTS", () => {
+		expect(getPrefetchAudioIndex("ffmpeg", 9)).toBeUndefined();
+	});
+
+	test("keeps MediaBunny's probed preferred track", () => {
+		expect(getPrefetchAudioIndex("mediabunny", 9)).toBe(9);
+		expect(getPrefetchAudioIndex("mediabunny")).toBe(0);
 	});
 });
