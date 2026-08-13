@@ -11,7 +11,7 @@ const handoff = (mode: NextEpisodePrefetchHandoff["mode"]) =>
 		fileIdx: null,
 		mode,
 		meta: null,
-		mediaBunny: null,
+		playbackController: null,
 		hls: null,
 	}) satisfies NextEpisodePrefetchHandoff;
 
@@ -36,5 +36,16 @@ describe("canReuseNextEpisodePrefetch", () => {
 				120,
 			),
 		).toBe(false);
+	});
+
+	test("hands off a prefetched FFmpeg stream at the episode start", () => {
+		expect(
+			canReuseNextEpisodePrefetch(
+				handoff("ffmpeg"),
+				"https://media.example/episode.mp4",
+				null,
+				0,
+			),
+		).toBe(true);
 	});
 });
