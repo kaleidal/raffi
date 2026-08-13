@@ -1460,6 +1460,16 @@
         stage={$loadingStage}
         details={$loadingDetails}
         progress={$loadingProgress}
+        showError={$showError && !hasStarted && !miniPlayerActive}
+        errorMessage={$errorMessage}
+        errorDetails={$errorDetails}
+        onRetry={modalHandlers.onErrorRetry}
+        onBack={modalHandlers.onErrorBack}
+        onDownloadDesktop={openDesktopDownload}
+        showSeekStyle={$showSeekStyleModal && !hasStarted && !miniPlayerActive}
+        {seekBarStyle}
+        onSeekStyleChange={handleSeekStyleChange}
+        onSeekStyleAcknowledge={handleSeekStyleAcknowledge}
     />
 
     {#if $playbackBuffering && !$loading && !miniPlayerActive && !embedSrc}
@@ -1585,9 +1595,9 @@
     <PlayerModals
         showAudioSelection={$showAudioSelection}
         showSubtitleSelection={$showSubtitleSelection}
-        showError={$showError}
+        showError={$showError && (hasStarted || miniPlayerActive)}
         showWatchPartyModal={$showWatchPartyModal && !$localMode && $cloudSyncStatus.cloudFeaturesAvailable && !embedSrc}
-        showSeekStyleModal={$showSeekStyleModal}
+        showSeekStyleModal={$showSeekStyleModal && (hasStarted || miniPlayerActive)}
         audioTracks={$audioTracks}
         subtitleTracks={$subtitleTracks}
         errorMessage={$errorMessage}

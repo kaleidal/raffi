@@ -30,6 +30,10 @@ import { autoEnableDefaultSubtitles as applyDefaultSubtitles } from "./subtitleA
 import { applyClientAudioTracks, sessionFromProbe } from "./playerSessionMetadata";
 import { attachHlsPlayback } from "./hlsPlayback";
 import {
+    describePlaybackFailure,
+    PlaybackPreparationError,
+} from "./playbackFailure";
+import {
     isPlaying,
     loading,
     loadingStage,
@@ -480,6 +484,11 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                 );
             }
 
+            if (clientPlayback?.mode === "unsupported") {
+                const failure = describePlaybackFailure(clientPlayback);
+                throw new PlaybackPreparationError(failure.title, failure.details);
+            }
+
             const sessionSource = useClientPlayback ? playableSrc : playbackSrc;
 
             const result = await Session.loadVideoSession(
@@ -834,13 +843,6 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                 return;
             }
 
-            if (clientPlayback?.mode === "unsupported") {
-                throw new Error(
-                    clientPlayback.error ||
-                        "This stream needs codecs the browser cannot remux yet. Try another source.",
-                );
-            }
-
             throw new Error(
                 "This stream cannot be played without a remux path. Try another source.",
             );
@@ -861,7 +863,11 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
             loadingProgress.set(null);
             showCanvas.set(false);
             seekGuard.set(false);
-            errorMessage.set("Failed to prepare stream");
+            errorMessage.set(
+                err instanceof PlaybackPreparationError
+                    ? err.userTitle
+                    : "Failed to prepare stream",
+            );
             errorDetails.set(err instanceof Error ? err.message : String(err));
             showError.set(true);
         } finally {
