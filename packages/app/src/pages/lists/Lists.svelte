@@ -43,7 +43,7 @@
 <SettingsModal bind:showSettings={$showSettingsModal} />
 
 <div
-    class="bg-[#090909] h-full min-h-0 w-full flex flex-col overflow-hidden overflow-x-hidden items-center relative"
+    class="bg-[#090909] h-[100dvh] min-h-0 w-full flex flex-col overflow-hidden items-center relative"
 >
     <SearchBar
         absolute={false}
@@ -62,8 +62,8 @@
                 </div>
             </div>
         {:else}
-            <div class="relative z-10 flex-1 min-h-0 w-full px-5 pb-5 pt-8 xl:pt-12.5" in:fade={{ duration: 300 }}>
-                <div class="mx-auto grid h-full min-h-0 w-full max-w-[1680px] gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.92fr)]">
+            <div class="relative z-10 flex-1 min-h-0 w-full px-[clamp(14px,1.3vw,20px)] pb-[clamp(14px,1.3vw,20px)] pt-[clamp(20px,2.6vw,40px)]" in:fade={{ duration: 300 }}>
+                <div class="lists-layout mx-auto grid h-full min-h-0 w-full max-w-[1680px] gap-[clamp(14px,1.3vw,20px)]">
                     <ListSidebar>
                         <div slot="grid" let:listId>
                             <ListItemGrid {listId} />
@@ -128,3 +128,19 @@
         </div>
     {/if}
 </div>
+
+<style>
+    .lists-layout {
+        grid-template-columns: minmax(0, 1fr) minmax(320px, 0.92fr);
+    }
+
+    @media (max-width: 900px), (orientation: portrait) {
+        .lists-layout {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        .lists-layout :global(.list-preview) {
+            display: none;
+        }
+    }
+</style>

@@ -534,7 +534,7 @@
     }
 </script>
 
-<div class="bg-[#090909] h-fit min-h-screen flex flex-col pb-[100px]">
+<div class="bg-[#090909] h-fit min-h-screen flex flex-col pb-[clamp(64px,7vw,100px)]">
     {#if fetchedTitles}
         <div in:fade={{ duration: 300 }}>
             {#if showcasedTitle}
@@ -549,7 +549,7 @@
             />
 
             <div
-                class="w-full z-10 h-fit flex flex-col gap-[100px] p-[100px] pt-[50px]"
+                class="w-full z-10 h-fit flex flex-col gap-[clamp(56px,7vw,100px)] px-[clamp(24px,5.2vw,100px)] pb-[clamp(56px,7vw,100px)] pt-[clamp(28px,3vw,50px)]"
             >
                 <ContinueWatching {continueWatchingMeta} />
                 <PopularSection {popularMeta} />
@@ -568,7 +568,7 @@
                 {#if addonSectionsLoading}
                     {#each Array(2) as _}
                         <div class="w-full h-fit flex flex-col gap-4">
-                            <Skeleton width="460px" height="58px" borderRadius="14px" />
+                            <Skeleton width="min(460px, 42vw)" height="58px" borderRadius="14px" />
                             <div class="flex flex-row gap-[20px] overflow-hidden pb-6 pt-3">
                                 {#each Array(7) as __}
                                     <Skeleton

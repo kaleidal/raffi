@@ -60,7 +60,7 @@
         {/each}
     </div>
 {:else}
-    <div class="text-white/30 text-[16px] font-poppins italic py-4">
+    <div class="text-white/30 text-[1rem] font-poppins italic py-4">
         No items in this list
     </div>
 {/if}

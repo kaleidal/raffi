@@ -9,6 +9,27 @@
 @source "../../apps/web/src";
 @source "../../apps/desktop";
 
+:root {
+  /*
+   * Raffi's original desktop rhythm was designed around a 1920px canvas.
+   * Windows display scaling commonly exposes that same physical window as a
+   * 1536px CSS viewport. Scale rem-based typography and controls with the
+   * available landscape width so users do not need browser zoom to restore
+   * the intended density. Portrait keeps normal touch-sized type and targets.
+   */
+  font-size: 16px;
+  --raffi-page-gutter: clamp(16px, 2.6vw, 50px);
+  --raffi-control: clamp(44px, 3.4vw, 60px);
+  --raffi-icon: clamp(20px, 1.55vw, 28px);
+  --raffi-modal-gutter: clamp(12px, 3vw, 48px);
+}
+
+@media (orientation: landscape) and (min-width: 1024px) {
+  :root {
+    font-size: clamp(12.8px, 0.833333vw, 16px);
+  }
+}
+
 .font-poppins {
   font-family: 'Poppins', sans-serif;
 }
@@ -36,6 +57,28 @@ body {
   margin: 0;
   min-height: 100vh;
   overflow-x: hidden;
+}
+
+.raffi-modal-backdrop {
+  padding: var(--raffi-modal-gutter);
+}
+
+.raffi-modal-surface {
+  max-width: min(100%, 80rem);
+  max-height: calc(100dvh - (2 * var(--raffi-modal-gutter)));
+}
+
+@media (orientation: portrait) {
+  .raffi-modal-backdrop {
+    align-items: flex-end;
+    padding: 12px;
+  }
+
+  .raffi-modal-surface {
+    width: 100%;
+    max-height: min(90dvh, 880px);
+    border-radius: 28px;
+  }
 }
 
 /* Kill Chromium/Windows accent focus rings — they clash with the UI. */

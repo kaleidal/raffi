@@ -14,11 +14,8 @@
         updateStatus,
     } from "./lib/stores/authStore";
     import { initAnalytics, setAnalyticsUser, trackEvent, trackPageView } from "./lib/analytics";
-    import { overlayZoomStyle } from "./lib/overlayZoom";
     import { formatReleaseNotes } from "./lib/updateNotes";
-    import { userZoom } from "./lib/stores/settingsStore";
     import { warmTraktClientAuth } from "./lib/db/db";
-    import ZoomModal from "./components/common/ZoomModal.svelte";
     import { syncTorrentingPreference } from "./lib/stores/torrenting";
 
     type PageComponent = typeof Home | any;
@@ -94,7 +91,6 @@
     $: if ($router.page === "meta") prefetchPage("player");
 
     let showTitleBar = false;
-    let displayZoom = 1;
     let showUpdatePrompt = false;
     let updateLaterTimeout: ReturnType<typeof setTimeout> | null = null;
     let updateTestArmed = false;
@@ -128,25 +124,6 @@
     };
 
     const handleUpdateTestKey = (event: KeyboardEvent) => {
-        if (event.ctrlKey) {
-            const key = event.key.toLowerCase();
-            if (key === "=" || key === "+" || (event.shiftKey && (key === "=" || key === "+"))) {
-                event.preventDefault();
-                userZoom.update(z => Math.min(z + 0.1, 2.0));
-                return;
-            }
-            if (key === "-" || key === "_" || (event.shiftKey && (key === "-" || key === "_"))) {
-                event.preventDefault();
-                userZoom.update(z => Math.max(z - 0.1, 0.5));
-                return;
-            }
-            if (key === "0" || (event.shiftKey && key === "0")) {
-                event.preventDefault();
-                userZoom.set(1.0);
-                return;
-            }
-        }
-
         if (!event.ctrlKey || !event.shiftKey) return;
         const key = event.key.toLowerCase();
         if (key === "t") {
@@ -206,21 +183,6 @@
         }
     };
 
-    $: if (typeof document !== "undefined") {
-        document.documentElement.style.setProperty(
-            "--raffi-display-zoom",
-            String(displayZoom),
-        );
-        document.documentElement.style.setProperty(
-            "--raffi-user-zoom",
-            String($userZoom),
-        );
-        document.documentElement.style.setProperty(
-            "--raffi-effective-zoom",
-            String(displayZoom * $userZoom),
-        );
-    }
-
     onMount(() => {
         let disposed = false;
 
@@ -258,15 +220,6 @@
         window.addEventListener("pointerup", handlePointerButtons);
         window.addEventListener("keydown", handleUpdateTestKey);
 
-        void (window as any).electronAPI?.windowControls?.getDisplayZoom?.()
-            ?.then((value: number) => {
-                if (disposed) return;
-                if (typeof value === "number" && Number.isFinite(value)) {
-                    displayZoom = value;
-                }
-            })
-            ?.catch?.(() => {});
-
         // Listen for file open events
         if ((window as any).electronAPI?.onOpenFile) {
             (window as any).electronAPI.onOpenFile((filePath: string) => {
@@ -280,13 +233,6 @@
                 });
             });
         }
-
-        const removeZoomListener =
-            (window as any).electronAPI?.onDisplayZoom?.((value: number) => {
-                if (typeof value === "number" && Number.isFinite(value)) {
-                    displayZoom = value;
-                }
-            }) ?? null;
 
         const handleUpdateTestEvent = () => {
             triggerUpdateTest();
@@ -340,9 +286,6 @@
         return () => {
             disposed = true;
             window.removeEventListener("pointerup", handlePointerButtons);
-            if (typeof removeZoomListener === "function") {
-                removeZoomListener();
-            }
             if (typeof removeUpdateAvailable === "function") {
                 removeUpdateAvailable();
             }
@@ -386,10 +329,7 @@
     {/if}
 
     <div bind:this={scrollContainerElem} class="relative flex-1 min-h-0 overflow-x-hidden overflow-y-auto" data-scroll-container>
-        <div
-            class="w-full h-full"
-            style={`transform: scale(${displayZoom * $userZoom}); transform-origin: top left; width: calc(100% / ${displayZoom * $userZoom}); height: calc(100% / ${displayZoom * $userZoom});`}
-        >
+        <div class="w-full min-h-full">
             <svelte:component this={activePage} {...$router.params as any} />
 
             {#if routeLoading}
@@ -404,19 +344,16 @@
         </div>
     </div>
 
-    <ZoomModal />
-
     {#if showUpdatePrompt}
         <div
-            class="fixed inset-0 z-[500] bg-black/80 backdrop-blur-sm flex items-center justify-center"
-            style={overlayZoomStyle}
+            class="raffi-modal-backdrop fixed inset-0 z-[500] bg-black/80 backdrop-blur-sm flex items-center justify-center"
             on:click|self={handleUpdateLater}
             on:keydown={(e) => e.key === "Escape" && handleUpdateLater()}
             role="button"
             tabindex="0"
         >
             <div
-                class="bg-[#121212] w-full max-w-lg max-h-[80vh] rounded-[32px] p-6 md:p-8 flex flex-col gap-5 shadow-[0_40px_160px_rgba(0,0,0,0.55)]"
+                class="raffi-modal-surface bg-[#121212] w-full max-w-lg rounded-[32px] p-6 md:p-8 flex flex-col gap-5 shadow-[0_40px_160px_rgba(0,0,0,0.55)]"
                 on:click|stopPropagation
                 on:keydown|stopPropagation
                 role="dialog"

@@ -124,12 +124,6 @@ function registerMainIpcHandlers({
     return Boolean(mainWindow.__raffiMiniPlayer?.isActive?.());
   });
 
-  ipcMain.handle("WINDOW_GET_DISPLAY_ZOOM", async () => {
-    const mainWindow = getMainWindow();
-    if (!mainWindow || mainWindow.isDestroyed()) return 1;
-    return Number(mainWindow.__raffiGetDisplayZoom?.() ?? 1) || 1;
-  });
-
   ipcMain.handle("LIMBO_API_DISCOVERY_READ", async () => {
     const { readLimboApiDiscovery } = require("./limboDiscovery.cjs");
     return readLimboApiDiscovery(fs);

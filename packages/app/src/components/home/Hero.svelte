@@ -146,21 +146,21 @@
 </script>
 
 <div
-    class="w-full relative overflow-hidden aspect-21/9 bg-[#090909] isolate"
+    class="hero-shell w-full relative overflow-hidden bg-[#090909] isolate"
     bind:this={container}
 >
     <div
-        class="absolute bottom-[100px] left-[100px] z-10 flex flex-col gap-[50px]"
+        class="absolute bottom-[clamp(48px,6vw,100px)] left-[clamp(24px,5.2vw,100px)] z-10 flex max-w-[min(760px,72vw)] flex-col gap-[clamp(28px,3vw,50px)]"
     >
         {#if showcasedTitle.logo}
             <img
                 src={showcasedTitle.logo}
                 alt="Logo"
-                class="w-[600px] h-auto max-h-[220px] object-contain"
+                class="w-[clamp(300px,38vw,600px)] h-auto max-h-[clamp(130px,14vw,220px)] object-contain object-left"
                 on:error={onLogoError}
             />
         {:else}
-            <h1 class="text-white text-6xl font-poppins font-bold max-w-[700px] leading-[1.05]">
+            <h1 class="text-white text-[clamp(40px,4vw,64px)] font-poppins font-bold max-w-[700px] leading-[1.05]">
                 {showcasedTitle.name}
             </h1>
         {/if}
@@ -168,7 +168,7 @@
 
         <div class="flex flex-row gap-[10px] items-center">
             <button
-                class="bg-[#FFFFFF]/80 hover:bg-[#D3D3D3]/80 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-[20px] text-black text-[36px] font-poppins font-medium px-[100px] py-[20px] w-fit rounded-full transition-colors duration-200"
+                class="details-button bg-[#FFFFFF]/80 hover:bg-[#D3D3D3]/80 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-[clamp(10px,1vw,16px)] text-black text-[clamp(20px,1.8vw,32px)] font-poppins font-medium px-[clamp(36px,4.4vw,84px)] py-[clamp(12px,1vw,18px)] w-fit rounded-full transition-colors duration-200"
                 on:click={() =>
                     navigateToMeta(showcasedTitle.imdb_id, showcasedTitle.type)}
             >
@@ -201,16 +201,14 @@
         </div>
     </div>
 
-    <div
-        class="absolute -left-[2px] -right-[2px] top-0 -bottom-[8px] w-[calc(100%+4px)] h-[calc(100%+8px)] overflow-hidden scale-[1.35] pointer-events-none will-change-transform"
-    >
+    <div class="hero-media absolute inset-0 overflow-hidden pointer-events-none">
         {#if trailerSrc}
             <iframe
                 bind:this={playerIframe}
                 frameborder="0"
                 referrerpolicy="strict-origin-when-cross-origin"
                 src={trailerSrc}
-                class="w-full h-[calc(100%+8px)] -translate-y-[2px] object-cover"
+                class="hero-frame"
                 title="Trailer"
                 on:load={handleTrailerLoad}
             ></iframe>
@@ -224,3 +222,38 @@
     ></div>
     <div class="absolute bottom-0 left-0 right-0 h-[14px] z-[2] bg-[#090909]"></div>
 </div>
+
+<style>
+    .hero-shell {
+        height: clamp(440px, min(58vw, 76dvh), 760px);
+        min-height: 440px;
+    }
+
+    .hero-frame {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: max(100%, 177.778dvh);
+        height: max(100%, 56.25vw);
+        border: 0;
+        transform: translate(-50%, -50%) scale(1.08);
+    }
+
+    .details-button :global(svg) {
+        width: clamp(26px, 2vw, 38px);
+        height: clamp(26px, 2vw, 38px);
+    }
+
+    @media (orientation: portrait) {
+        .hero-shell {
+            height: clamp(560px, 74dvh, 780px);
+            min-height: min(560px, 74dvh);
+        }
+
+        .hero-frame {
+            width: max(100%, 177.778dvh);
+            height: max(100%, 56.25vw);
+            transform: translate(-50%, -50%) scale(1.04);
+        }
+    }
+</style>

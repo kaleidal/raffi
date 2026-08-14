@@ -47,7 +47,6 @@ declare global {
                 error: string | null;
             }>;
             windowControls?: {
-                getDisplayZoom?: () => Promise<number>;
                 syncMiniPlayerState?: (state: { enabled: boolean; canEnter: boolean }) => void;
                 exitMiniPlayer?: () => void;
                 isMiniPlayer?: () => Promise<boolean>;

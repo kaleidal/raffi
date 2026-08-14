@@ -1,7 +1,6 @@
 <script lang="ts">
     import { fade, scale } from "svelte/transition";
     import { onMount } from "svelte";
-    import { overlayZoomStyle } from "../../lib/overlayZoom";
 
     import * as Subtitles from "../../pages/player/subtitles";
 
@@ -140,8 +139,7 @@
 
 <div
     use:portal
-    class="fixed inset-0 z-[100] flex items-center justify-center bg-[#0f0f0f]/58 backdrop-blur-xl cursor-default"
-    style={overlayZoomStyle}
+    class="raffi-modal-backdrop fixed inset-0 z-[100] flex items-center justify-center bg-[#0f0f0f]/58 backdrop-blur-xl cursor-default"
     transition:fade={{ duration: 200 }}
     on:click={close}
     on:keydown={(e) => e.key === "Escape" && close()}
@@ -150,9 +148,9 @@
     aria-label="Close modal"
 >
     <div
-        class="rounded-[32px] bg-[#2a2a2a]/56 backdrop-blur-[40px] p-8 overflow-y-auto flex flex-col gap-6 shadow-[0_40px_160px_rgba(0,0,0,0.45)] {kind === 'subtitles'
-            ? 'w-[680px] max-h-[92vh]'
-            : 'w-[400px] max-h-[80vh]'}"
+        class="raffi-modal-surface w-full rounded-[clamp(24px,2vw,32px)] bg-[#2a2a2a]/56 backdrop-blur-[40px] p-[clamp(18px,2vw,32px)] overflow-y-auto flex flex-col gap-[clamp(16px,1.5vw,24px)] shadow-[0_40px_160px_rgba(0,0,0,0.45)] {kind === 'subtitles'
+            ? 'max-w-[680px]'
+            : 'max-w-[400px]'}"
         transition:scale={{ duration: 200, start: 0.9 }}
         on:click|stopPropagation
         on:keydown|stopPropagation

@@ -70,11 +70,6 @@
         {/if}
 
         {#if addonFilteredStreams.length}
-            <div class="flex items-center justify-between">
-                <span class="text-white/60 text-sm font-medium">
-                    Online sources · {addonFilteredStreams.length}
-                </span>
-            </div>
             {#each addonFilteredStreams as item (item.key)}
                 <StreamCard
                     {item}

@@ -84,7 +84,7 @@
                             <input
                                 type="text"
                                 bind:value={$editingState.name}
-                                class="bg-transparent text-[#FFFFFF] text-[32px] font-poppins font-semibold border-b border-white/20 focus:border-white outline-none w-full"
+                                class="bg-transparent text-[#FFFFFF] text-[2rem] font-poppins font-semibold border-b border-white/20 focus:border-white outline-none w-full"
                                 on:blur={saveListName}
                             />
                         </form>
@@ -107,7 +107,7 @@
                             <h3 class="min-w-0">
                                 <button
                                     type="button"
-                                    class="block min-w-0 max-w-full truncate text-left text-[#FFFFFF] text-[28px] xl:text-[32px] font-poppins font-semibold cursor-pointer hover:text-white/80 transition-colors"
+                                    class="block min-w-0 max-w-full truncate text-left text-[#FFFFFF] text-[1.75rem] xl:text-[2rem] font-poppins font-semibold cursor-pointer hover:text-white/80 transition-colors"
                                     on:click={() => selectFirstItem(list.list_id)}
                                     on:dblclick={() => startEditing(list)}
                                 >

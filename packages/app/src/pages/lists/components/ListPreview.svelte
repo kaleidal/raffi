@@ -15,19 +15,19 @@
 </script>
 
 <div
-    class="w-full min-w-0 min-h-0 relative overflow-y-auto overflow-x-hidden no-scrollbar rounded-[32px]"
+    class="list-preview h-full w-full min-w-0 min-h-0 relative overflow-hidden rounded-[clamp(22px,2vw,32px)]"
 >
     {#if $selectedItem}
         <!-- Trailer Video Background -->
-        <div class="absolute top-0 left-0 right-0 h-auto z-0 overflow-hidden">
+        <div class="absolute inset-0 z-0 overflow-hidden">
             {#if $selectedItem.trailerStreams && $selectedItem.trailerStreams.length > 0}
-                <div class="relative w-full aspect-[16/9] overflow-hidden">
+                <div class="preview-media absolute inset-0 overflow-hidden">
                     <iframe
                         bind:this={playerIframe}
                         frameborder="0"
                         referrerpolicy="strict-origin-when-cross-origin"
                         src={`https://www.youtube-nocookie.com/embed/${$selectedItem.trailerStreams.at(-1).ytId}?controls=0&modestbranding=1&rel=0&autoplay=1&mute=1&loop=1&playlist=${$selectedItem.trailerStreams.at(-1).ytId}&showinfo=0&iv_load_policy=3&disablekb=1&enablejsapi=1&origin=${window.location.origin}`}
-                        class="w-full h-full object-cover scale-[1.35]"
+                        class="preview-frame"
                         title="Trailer"
                     ></iframe>
                     <div
@@ -49,7 +49,7 @@
 
         <!-- Content Overlay -->
         <div
-            class="relative z-10 flex min-h-full flex-col justify-between overflow-x-hidden p-6 pb-12 sm:p-8 sm:pb-16 xl:p-[50px] xl:pb-[100px]"
+            class="preview-overlay relative z-10 grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden p-[clamp(20px,2.2vw,42px)]"
         >
             <!-- Top Controls -->
             <div class="flex flex-row gap-[10px] items-start justify-end">
@@ -147,24 +147,24 @@
             </div>
 
             <!-- Bottom Content -->
-            <div class="flex flex-col gap-6 xl:gap-[30px]">
-                <div class="flex w-full flex-col gap-4 xl:flex-row xl:items-center xl:gap-[20px]">
+            <div class="preview-details self-end flex min-h-0 flex-col items-center gap-[clamp(10px,1vw,18px)] text-center">
+                <div class="flex w-full flex-col items-center justify-center gap-4 lg:flex-row lg:gap-[20px]">
                     {#if $selectedItem.logo}
                         <img
                             src={$selectedItem.logo}
                             alt={$selectedItem.name}
-                            class="w-full max-w-[350px] object-contain max-h-[180px] self-start"
+                            class="w-full max-w-[clamp(180px,16vw,280px)] object-contain max-h-[clamp(72px,7vw,112px)] object-center"
                         />
                     {:else}
                         <h1
-                            class="text-white text-[42px] xl:text-[56px] font-bold font-poppins leading-tight"
+                            class="text-center text-white text-[clamp(26px,2.3vw,42px)] font-bold font-poppins leading-tight"
                         >
                             {$selectedItem.name}
                         </h1>
                     {/if}
 
                     <button
-                        class="bg-white text-black px-8 py-4 h-fit rounded-full font-poppins font-bold text-[18px] xl:text-[20px] xl:px-[50px] xl:py-[20px] hover:bg-white/90 transition-colors flex items-center gap-3 cursor-pointer z-10 self-start shrink-0"
+                        class="bg-white text-black px-[clamp(24px,2vw,38px)] py-[clamp(10px,0.8vw,14px)] h-fit rounded-full font-poppins font-bold text-[clamp(15px,1vw,18px)] hover:bg-white/90 transition-colors flex items-center gap-3 cursor-pointer z-10 shrink-0"
                         on:click={() => {
                             trackEvent("list_item_watch_clicked", {
                                 content_type: $selectedItem?.type ?? null,
@@ -195,7 +195,7 @@
                 </div>
 
                 <p
-                    class="text-white/80 font-poppins text-[16px] xl:text-[18px] leading-relaxed self-start xl:self-center line-clamp-3 max-w-full xl:max-w-[90%]"
+                    class="mx-auto max-w-[92%] text-center text-white/80 font-poppins text-[clamp(13px,0.9vw,16px)] leading-relaxed line-clamp-2"
                 >
                     {$selectedItem.description || "No description available."}
                 </p>
@@ -203,13 +203,13 @@
                 <div class="flex flex-col gap-[10px]">
                     <div class="flex flex-col lg:flex-row gap-[10px] w-full">
                         <div
-                            class="px-8 py-6 xl:px-[50px] xl:py-[30px] w-full bg-[#FFFFFF]/10 backdrop-blur-[16px] rounded-[36px] xl:rounded-[50px] flex flex-col gap-4 xl:gap-[20px]"
+                            class="px-[clamp(22px,1.8vw,34px)] py-[clamp(14px,1.1vw,20px)] w-full bg-[#FFFFFF]/10 backdrop-blur-[16px] rounded-[clamp(22px,2vw,36px)] flex flex-col gap-3"
                         >
                             <div
                                 class="flex flex-col gap-3 sm:flex-row sm:gap-[10px] sm:items-center sm:justify-between"
                             >
                                 <span
-                                    class="text-[#E8E8E8] text-[20px] xl:text-[24px] font-poppins font-medium"
+                                    class="text-[#E8E8E8] text-[clamp(15px,1vw,19px)] font-poppins font-medium"
                                 >
                                     {$selectedItem.year || "N/A"} • {$selectedItem.runtime ||
                                         $selectedItem.videos?.length ||
@@ -221,7 +221,7 @@
                                 >
                                     {#if $selectedItem.imdbRating}
                                         <span
-                                            class="text-[#E8E8E8] text-[20px] xl:text-[24px] font-poppins font-medium"
+                                            class="text-[#E8E8E8] text-[clamp(15px,1vw,19px)] font-poppins font-medium"
                                         >
                                             {$selectedItem.imdbRating}
                                         </span>
@@ -236,7 +236,7 @@
                         </div>
 
                         <button
-                            class="bg-[#FF4444]/20 hover:bg-[#FF4444]/30 p-5 lg:p-[30px] aspect-square justify-center text-[#FF6666] rounded-[28px] lg:rounded-full font-poppins font-medium text-[16px] transition-colors flex items-center gap-2 cursor-pointer self-start lg:self-auto"
+                            class="bg-[#FF4444]/20 hover:bg-[#FF4444]/30 p-[clamp(16px,1.25vw,22px)] aspect-square justify-center text-[#FF6666] rounded-full font-poppins font-medium text-[1rem] transition-colors flex items-center gap-2 cursor-pointer self-start lg:self-auto"
                             on:click={handleRemoveFromList}
                             aria-label="Remove from list"
                         >
@@ -261,11 +261,23 @@
 </div>
 
 <style>
-    .no-scrollbar::-webkit-scrollbar {
-        display: none;
+    .preview-frame {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: max(100%, 177.778dvh);
+        height: max(100%, 56.25vw);
+        border: 0;
+        transform: translate(-50%, -50%) scale(1.08);
     }
-    .no-scrollbar {
-        -ms-overflow-style: none;
-        scrollbar-width: none;
+
+    @media (max-height: 720px) and (orientation: landscape) {
+        .preview-details {
+            gap: 8px;
+        }
+
+        .preview-details p {
+            display: none;
+        }
     }
 </style>

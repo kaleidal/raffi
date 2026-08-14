@@ -10,7 +10,6 @@
     } from "../../../lib/db/db";
     import LoadingSpinner from "../../common/LoadingSpinner.svelte";
     import { trackEvent } from "../../../lib/analytics";
-    import { overlayZoomStyle } from "../../../lib/overlayZoom";
 
     const portal = (node: HTMLElement) => {
         if (typeof document === "undefined") {
@@ -115,8 +114,7 @@
 {#if visible}
     <div
         use:portal
-        class="fixed inset-0 z-50 bg-[#101010]/58 backdrop-blur-xl flex items-center justify-center p-20"
-        style={overlayZoomStyle}
+        class="raffi-modal-backdrop fixed inset-0 z-50 bg-[#101010]/58 backdrop-blur-xl flex items-center justify-center"
         on:click|self={close}
         on:keydown={(e) => e.key === "Escape" && close()}
         role="button"
