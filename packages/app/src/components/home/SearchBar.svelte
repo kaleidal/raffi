@@ -20,7 +20,6 @@
 		authInitializing,
 		updateStatus,
 	} from "../../lib/stores/authStore";
-    import { userZoom } from "../../lib/stores/settingsStore";
 	import LoadingSpinner from "../common/LoadingSpinner.svelte";
     import {
         HOME_SEARCH_BAR_POSITION_AUTO,
@@ -49,6 +48,7 @@
         HOME_SEARCH_BAR_POSITION_AUTO;
     let autoDockToBottom = false;
     let searchDockBottom = false;
+    let portraitLayout = false;
 
 
     export let absolute: boolean = true;
@@ -66,7 +66,6 @@
     let scrollContainer: HTMLElement | null = null;
     let portalSearchDock = false;
     let homeOverlayMode = false;
-    let searchDockStyle = "";
     const HEADER_SCROLL_ENTER_THRESHOLD = 140;
     const HEADER_SCROLL_LEAVE_THRESHOLD = 96;
 
@@ -110,6 +109,8 @@
     };
 
     function updateAutoDockPosition() {
+        portraitLayout = window.matchMedia("(orientation: portrait)").matches;
+
         if (searchBarPositionPreference !== HOME_SEARCH_BAR_POSITION_AUTO) {
             autoDockToBottom = false;
             return;
@@ -365,21 +366,13 @@
 
 	$: totalSearchResults = searchResults.movies.length + searchResults.series.length;
     $: searchDockBottom =
+        portraitLayout ||
         searchBarPositionPreference === HOME_SEARCH_BAR_POSITION_BOTTOM ||
         (searchBarPositionPreference === HOME_SEARCH_BAR_POSITION_AUTO &&
             $router.page === "home" &&
             autoDockToBottom);
     $: homeOverlayMode = absolute && $router.page === "home";
-    $: portalSearchDock = homeOverlayMode;
-    $: searchDockStyle = homeOverlayMode
-        ? `top: ${searchDockBottom
-            ? "calc(100vh - (24px + 86px) * var(--raffi-effective-zoom, 1))"
-            : "calc(50px * var(--raffi-effective-zoom, 1))"};`
-        : "";
-    $: searchDockScaleStyle = portalSearchDock
-        ? "transform: scale(var(--raffi-effective-zoom, 1)); transform-origin: top center;"
-        : "";
-
+    $: portalSearchDock = homeOverlayMode || portraitLayout;
     $: if (searchBarPositionPreference === HOME_SEARCH_BAR_POSITION_AUTO) {
         $router.page;
         updateAutoDockPosition();
@@ -390,6 +383,7 @@
         scrollContainer = document.querySelector(
             "[data-scroll-container]",
         ) as HTMLElement | null;
+        updateAutoDockPosition();
         (scrollContainer ?? window).addEventListener(
             "scroll",
             handleScrollOrResize,
@@ -480,7 +474,7 @@
 <div
     class="{absolute
         ? 'absolute'
-        : 'relative'} top-0 left-0 w-full p-[50px] flex flex-row justify-between items-center z-50"
+        : 'relative'} top-0 left-0 w-full p-[clamp(24px,2.7vw,50px)] flex flex-row justify-between items-center z-50"
 >
     <button
         class="cursor-pointer hover:opacity-80 transition-opacity"
@@ -489,39 +483,51 @@
             onLogoClick();
         }}
     >
-        <img src="raffi.svg" alt="Raffi Logo" class="h-[80px]" />
+        <img
+            src="raffi.svg"
+            alt="Raffi Logo"
+            class="header-logo h-[clamp(56px,4vw,80px)]"
+        />
     </button>
 
     <div
         use:portalToBody={portalSearchDock}
-        style={searchDockStyle}
+        style={homeOverlayMode || portraitLayout
+            ? `top: ${portraitLayout || searchDockBottom
+                ? "calc(100dvh - clamp(20px, 3vh, 32px) - clamp(56px, 4vw, 80px))"
+                : "clamp(24px, 2.7vw, 50px)"};`
+            : ""}
         class={`flex flex-col left-1/2 -translate-x-1/2 ${
-            homeOverlayMode
-                ? "fixed z-[140] transition-[top,filter] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]"
+            homeOverlayMode || portraitLayout
+                ? "fixed z-[140] will-change-[top] transition-[top,filter] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]"
                 : "absolute"
         }`}
     >
-        <div style={searchDockScaleStyle}>
-            {#if searchDockBottom}
+        <div>
+            {#if portraitLayout || searchDockBottom}
                 <div
                     class="pointer-events-none absolute -inset-x-6 -inset-y-4 -z-10 rounded-[48px] bg-white/[0.09] blur-2xl opacity-35"
                 ></div>
             {/if}
             <div
-                class={`flex flex-row gap-0 rounded-full overflow-clip w-[680px] max-w-[62vw] backdrop-blur-md z-20 transition-shadow duration-300 ${
-                    searchDockBottom
+                class={`search-shell flex h-[clamp(56px,4vw,80px)] flex-row gap-0 rounded-full overflow-clip backdrop-blur-md z-20 transition-[width,height,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                    portraitLayout
+                        ? "w-[calc(100vw-clamp(32px,8vw,72px))] max-w-[720px]"
+                        : "w-[clamp(340px,36vw,680px)] max-w-[48vw]"
+                } ${
+                    portraitLayout || searchDockBottom
                         ? "shadow-[0_18px_54px_rgba(0,0,0,0.6)] ring-1 ring-white/12"
                         : ""
                 }`}
             >
-                <div class="p-[20px] bg-[#181818]/50">
+                <div class="search-icon flex w-[clamp(56px,4vw,80px)] shrink-0 items-center justify-center bg-[#181818]/50">
                     <Search size={40} strokeWidth={2} color="#C3C3C3" />
                 </div>
 
                 <input
                     type="text"
                     placeholder="search for anything"
-                    class="bg-[#000000]/50 text-[#D4D4D4] text-center py-[20px] px-[40px] w-full text-[28px] font-poppins font-normal outline-none focus:outline-none focus:ring-0"
+                    class="bg-[#000000]/50 text-[#D4D4D4] text-center px-[clamp(20px,2vw,40px)] w-full min-w-0 text-[clamp(18px,1.5vw,28px)] font-poppins font-normal outline-none focus:outline-none focus:ring-0 transition-[font-size,padding] duration-300"
                     oninput={handleSearch}
                     onkeydown={handleSearchKeydown}
                     onfocus={() => {
@@ -536,7 +542,7 @@
             {#if commandHint}
                 <div
                     class={`absolute left-0 w-full bg-[#181818]/90 backdrop-blur-xl rounded-[24px] p-4 text-white/70 text-sm z-100 ${
-                        searchDockBottom ? "bottom-[90px]" : "top-[90px]"
+                        portraitLayout || searchDockBottom ? "bottom-[90px]" : "top-[90px]"
                     }`}
                     transition:fade={{ duration: 200 }}
                 >
@@ -544,8 +550,8 @@
                 </div>
             {:else if showSearchResults && (totalSearchResults > 0 || loading)}
                 <div
-                    class={`absolute left-1/2 -translate-x-1/2 w-[780px] max-w-[72vw] bg-[#181818]/90 backdrop-blur-xl rounded-[24px] p-4 z-100 ${
-                        searchDockBottom ? "bottom-[90px]" : "top-[90px]"
+                    class={`absolute left-1/2 -translate-x-1/2 w-[min(780px,76vw)] bg-[#181818]/90 backdrop-blur-xl rounded-[24px] p-4 z-100 ${
+                        portraitLayout || searchDockBottom ? "bottom-[90px]" : "top-[90px]"
                     }`}
                     transition:fade={{ duration: 200 }}
                 >
@@ -710,7 +716,7 @@
 
     <div class="flex flex-row items-start gap-[10px]">
         <button
-            class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
+            class="header-action bg-[#2C2C2C]/80 rounded-[clamp(18px,1.3vw,24px)] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-[width,height,border-radius,background-color] duration-300 cursor-pointer"
             aria-label="addons"
             onclick={openPlayModal}
         >
@@ -718,7 +724,7 @@
         </button>
 
         <button
-            class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
+            class="header-action bg-[#2C2C2C]/80 rounded-[clamp(18px,1.3vw,24px)] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-[width,height,border-radius,background-color] duration-300 cursor-pointer"
             aria-label="addons"
             onclick={openAddons}
         >
@@ -726,7 +732,7 @@
         </button>
 
         <button
-            class="bg-[#2C2C2C]/80 p-[20px] rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 cursor-pointer"
+            class="header-action bg-[#2C2C2C]/80 rounded-[clamp(18px,1.3vw,24px)] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-[width,height,border-radius,background-color] duration-300 cursor-pointer"
             aria-label="lists"
             onclick={openLists}
         >
@@ -735,11 +741,11 @@
 
         <div class="flex flex-col items-center">
             <button
-                class={`group relative bg-[#2C2C2C]/80 rounded-[24px] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-colors duration-300 ${$authInitializing
-                    ? "cursor-wait pointer-events-none p-0 overflow-hidden w-[80px] h-[80px]"
+                class={`header-action group relative bg-[#2C2C2C]/80 rounded-[clamp(18px,1.3vw,24px)] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-[width,height,border-radius,background-color] duration-300 ${$authInitializing
+                    ? "cursor-wait pointer-events-none overflow-hidden"
                     : $currentUser
-                        ? "cursor-pointer p-0 overflow-hidden w-[80px] h-[80px]"
-                        : "cursor-pointer p-[20px]"}`
+                        ? "cursor-pointer overflow-hidden"
+                        : "cursor-pointer"}`
                 }
                 aria-label="settings"
                 onclick={openSettings}
@@ -780,3 +786,23 @@
         </div>
     </div>
 </div>
+
+<style>
+    .header-logo {
+        transition: height 300ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .header-action {
+        display: flex;
+        width: clamp(56px, 4vw, 80px);
+        height: clamp(56px, 4vw, 80px);
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: center;
+    }
+    .header-action :global(svg),
+    .search-icon :global(svg) {
+        width: clamp(24px, 1.7vw, 32px);
+        height: clamp(24px, 1.7vw, 32px);
+        transition: width 300ms cubic-bezier(0.22, 1, 0.36, 1), height 300ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+</style>

@@ -1,6 +1,5 @@
 <script lang="ts">
     import { fade, scale } from "svelte/transition";
-    import { overlayZoomStyle } from "../../../lib/overlayZoom";
     import { isDesktopPlatform } from "../../../lib/platform";
     import { MonitorDown } from "@lucide/svelte";
 
@@ -42,8 +41,7 @@
 
 <div
     use:portal
-    class="fixed inset-0 z-[300] flex items-center justify-center bg-[#101010]/56 backdrop-blur-xl"
-    style={overlayZoomStyle}
+    class="raffi-modal-backdrop fixed inset-0 z-[300] flex items-center justify-center bg-[#101010]/56 backdrop-blur-xl"
     transition:fade={{ duration: 200 }}
 >
     <div

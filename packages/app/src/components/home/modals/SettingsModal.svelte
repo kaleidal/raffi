@@ -23,7 +23,6 @@
 	import {
 		trackEvent,
 	} from "../../../lib/analytics";
-	import { withOverlayZoomStyle } from "../../../lib/overlayZoom";
 	import ActivitySection from "./settings/ActivitySection.svelte";
     import FeedbackSection from "./settings/FeedbackSection.svelte";
     import LoadingSpinner from "../../common/LoadingSpinner.svelte";
@@ -315,7 +314,7 @@
 
 		role="button"
 		tabindex="0"
-		style={withOverlayZoomStyle("padding: clamp(20px, 5vw, 150px);")}
+		style="padding: clamp(20px, 5vw, 150px);"
 	>
 		<div
 			class="w-full h-full rounded-4xl bg-[#2b2b2b]/56 backdrop-blur-[40px] p-6 md:p-8 flex flex-col gap-6 relative overflow-hidden shadow-[0_40px_160px_rgba(0,0,0,0.45)]"

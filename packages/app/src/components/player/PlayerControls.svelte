@@ -147,16 +147,16 @@
 </script>
 
 <div
-    class="relative z-10 items-center rounded-4xl w-250 flex flex-col gap-2 px-7.5 py-5 text-white overflow-hidden"
+    class="player-controls relative z-10 items-center flex flex-col text-white overflow-hidden"
 >
     <div class="absolute inset-0 rounded-4xl bg-[#000000]/10 backdrop-blur-xl pointer-events-none"></div>
 
     <div class="relative z-10 flex flex-col gap-2 w-full">
-        <div class="flex flex-row gap-5 items-center w-full">
+        <div class="player-seek-row flex flex-row items-center w-full">
             {#if !isWatchPartyMember}
                 <button
                     on:click={togglePlay}
-                    class="w-15 h-15 cursor-pointer hover:opacity-80 transition-opacity duration-200"
+                    class="player-play-button cursor-pointer hover:opacity-80 transition-opacity duration-200"
                 >
                     {#if isPlaying}
                         <svg
@@ -189,7 +189,7 @@
             {/if}
 
             <span
-                class="inline-block tabular-nums text-[22px] font-roboto font-medium text-[#D3D3D3] text-center"
+                class="inline-block tabular-nums text-[clamp(14px,1.15vw,22px)] font-roboto font-medium text-[#D3D3D3] text-center"
                 >{formatTime(
                     seekBarStyle === "normal" ? displayedTime : remainingTime,
                 )}</span
@@ -234,13 +234,13 @@
             </div>
             {#if seekBarStyle === "normal"}
                 <span
-                    class="inline-block tabular-nums text-[22px] font-roboto font-medium text-[#D3D3D3] text-center"
+                    class="inline-block tabular-nums text-[clamp(14px,1.15vw,22px)] font-roboto font-medium text-[#D3D3D3] text-center"
                     >{formatTime(duration)}</span
                 >
             {/if}
         </div>
 
-        <div class="flex items-center w-full justify-center gap-4">
+        <div class="player-actions flex items-center w-full justify-center">
             <ExpandingButton
                 label={"Fullscreen"}
                 onClick={() => {
@@ -306,7 +306,7 @@
                 </ExpandingButton>
             {/if}
 
-            <div class="w-45">
+            <div class="player-volume">
                 <Slider
                     widthProgress={volume * 100}
                     widthGrey={100}
@@ -331,3 +331,53 @@
         />
     </div>
 </div>
+
+<style>
+    .player-controls {
+        width: min(1000px, calc(100vw - 32px));
+        gap: clamp(6px, 0.55vw, 10px);
+        border-radius: clamp(22px, 2vw, 32px);
+        padding: clamp(12px, 1vw, 20px) clamp(14px, 1.55vw, 30px);
+    }
+
+    .player-seek-row {
+        gap: clamp(10px, 1vw, 20px);
+    }
+
+    .player-play-button,
+    .player-play-button :global(svg) {
+        width: clamp(40px, 3.125vw, 60px);
+        height: clamp(40px, 3.125vw, 60px);
+        flex: 0 0 auto;
+    }
+
+    .player-actions {
+        gap: clamp(7px, 0.83vw, 16px);
+    }
+
+    .player-volume {
+        width: clamp(110px, 9.375vw, 180px);
+    }
+
+    @media (max-width: 760px), (orientation: portrait) {
+        .player-controls {
+            width: calc(100vw - 20px);
+            padding: 12px;
+        }
+
+        .player-actions {
+            justify-content: flex-start;
+            overflow-x: auto;
+            padding-bottom: 2px;
+            scrollbar-width: none;
+        }
+
+        .player-actions::-webkit-scrollbar {
+            display: none;
+        }
+
+        .player-volume {
+            min-width: 110px;
+        }
+    }
+</style>

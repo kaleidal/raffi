@@ -47,7 +47,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
         toggleMaximize: () => ipcRenderer.send('WINDOW_TOGGLE_MAXIMIZE'),
         close: () => ipcRenderer.send('WINDOW_CLOSE'),
         isMaximized: () => ipcRenderer.invoke('WINDOW_IS_MAXIMIZED'),
-        getDisplayZoom: () => ipcRenderer.invoke('WINDOW_GET_DISPLAY_ZOOM'),
         syncMiniPlayerState: (state) => ipcRenderer.send('WINDOW_SYNC_MINI_PLAYER_STATE', state),
         exitMiniPlayer: () => ipcRenderer.send('WINDOW_EXIT_MINI_PLAYER'),
         isMiniPlayer: () => ipcRenderer.invoke('WINDOW_IS_MINI_PLAYER'),
@@ -65,11 +64,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     readLimboApiDiscovery: () => ipcRenderer.invoke('LIMBO_API_DISCOVERY_READ'),
     getDefenderExclusionStatus: () => ipcRenderer.invoke('DEFENDER_EXCLUSION_STATUS'),
     applyDefenderExclusions: () => ipcRenderer.invoke('DEFENDER_APPLY_EXCLUSIONS'),
-    onDisplayZoom: (callback) => {
-        const handler = (_event, value) => callback(value);
-        ipcRenderer.on('DISPLAY_ZOOM', handler);
-        return () => ipcRenderer.removeListener('DISPLAY_ZOOM', handler);
-    },
     onUpdateAvailable: (callback) => {
         const handler = (_event, value) => callback(value);
         ipcRenderer.on('UPDATE_AVAILABLE', handler);

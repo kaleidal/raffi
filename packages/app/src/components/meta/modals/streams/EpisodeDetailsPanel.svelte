@@ -32,6 +32,11 @@
         metaData?.meta?.poster ||
         null;
 
+    $: ambientArtwork =
+        metaData?.meta?.poster ||
+        metaData?.meta?.background ||
+        detailsThumbnail;
+
     $: episodeDescription =
         selectedEpisode?.description ||
         selectedEpisode?.overview ||
@@ -77,10 +82,22 @@
 </script>
 
 <aside
-    class="w-full h-full min-h-0 rounded-[28px] bg-white/10 backdrop-blur-3xl p-5 lg:p-6 flex flex-col gap-4 overflow-hidden"
+    class="relative isolate w-full h-full min-h-0 rounded-[28px] bg-white/8 backdrop-blur-3xl p-5 lg:p-6 flex flex-col gap-4 overflow-hidden"
 >
+    {#if ambientArtwork}
+        <img
+            src={ambientArtwork}
+            alt=""
+            aria-hidden="true"
+            class="pointer-events-none absolute inset-0 -z-20 h-full w-full scale-110 object-cover opacity-[0.16] blur-[18px] saturate-75"
+        />
+        <div
+            class="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-[#444]/70 via-[#383838]/88 to-[#2b2b2b]"
+        ></div>
+    {/if}
+
     {#if selectedEpisode}
-        <div class="flex flex-1 min-h-0 flex-col gap-4 min-w-0 overflow-hidden">
+        <div class="relative z-10 flex flex-1 min-h-0 flex-col gap-4 min-w-0 overflow-hidden">
             <div
                 class="relative w-full aspect-video rounded-2xl overflow-hidden bg-white/6"
             >
@@ -152,7 +169,7 @@
             </div>
         </div>
     {:else}
-        <div class="flex flex-col items-center justify-center text-center text-white/60 text-sm h-full">
+        <div class="relative z-10 flex flex-col items-center justify-center text-center text-white/60 text-sm h-full">
             Select an episode to view details.
         </div>
     {/if}

@@ -78,9 +78,6 @@ const handleProtocolUrl = createProtocolUrlHandler({
 });
 
 
-const MIN_ZOOM = 0.65;
-const MAX_ZOOM = 1.0;
-const WIDTH_THRESHOLD = 1600;
 
 const DEFAULT_WINDOW_WIDTH = 1778;
 const DEFAULT_WINDOW_HEIGHT = 1000;
@@ -190,9 +187,6 @@ function createWindow() {
     isAllowedExternalUrl,
     defaultWindowWidth: DEFAULT_WINDOW_WIDTH,
     defaultWindowHeight: DEFAULT_WINDOW_HEIGHT,
-    minZoom: MIN_ZOOM,
-    maxZoom: MAX_ZOOM,
-    widthThreshold: WIDTH_THRESHOLD,
     fileToOpen,
     pendingAveAuthPayload,
     pendingTraktAuthPayload,

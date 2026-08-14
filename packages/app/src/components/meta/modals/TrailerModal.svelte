@@ -1,6 +1,5 @@
 <script lang="ts">
     import { fade, scale } from "svelte/transition";
-    import { overlayZoomStyle } from "../../../lib/overlayZoom";
 
     const portal = (node: HTMLElement) => {
         if (typeof document === "undefined") {
@@ -33,13 +32,12 @@
     <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div
         use:portal
-        class="fixed inset-0 z-[220] flex items-center justify-center bg-black/80 backdrop-blur-sm"
-        style={overlayZoomStyle}
+        class="raffi-modal-backdrop fixed inset-0 z-[220] flex items-center justify-center bg-black/80 backdrop-blur-sm"
         transition:fade={{ duration: 200 }}
         on:click|self={close}
     >
         <div
-            class="relative w-[80%] h-[80%] max-w-[1200px] bg-black rounded-2xl overflow-hidden shadow-2xl"
+            class="raffi-modal-surface relative w-full h-[min(80dvh,760px)] max-w-[1200px] bg-black rounded-2xl overflow-hidden shadow-2xl"
             transition:scale={{ duration: 200, start: 0.95 }}
         >
             <button

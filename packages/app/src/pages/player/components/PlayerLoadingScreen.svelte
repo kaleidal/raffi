@@ -2,7 +2,6 @@
     import { fade } from "svelte/transition";
     import type { ShowResponse } from "../../../lib/library/types/meta_types";
     import { ChevronLeft, MonitorDown } from "@lucide/svelte";
-    import { overlayZoomStyle } from "../../../lib/overlayZoom";
     import { isDesktopPlatform } from "../../../lib/platform";
     import LoadingSpinner from "../../../components/common/LoadingSpinner.svelte";
     import { onDestroy } from "svelte";
@@ -148,8 +147,7 @@
 {#if loading || blockingState}
     <div
         use:portal
-        class="fixed inset-0 z-50 overflow-hidden bg-[#090909]"
-        style={overlayZoomStyle}
+        class="fixed inset-0 z-[200] overflow-hidden bg-[#090909]"
         role={showError ? "alert" : showSeekStyle ? "dialog" : "status"}
         aria-busy={!blockingState}
         aria-label={showError

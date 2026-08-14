@@ -142,14 +142,14 @@
 {/if}
 
 <div class="home-section w-full h-fit flex flex-col gap-4 relative group overflow-visible">
-    <h2 class="text-[#E0E0E6] text-[48px] font-poppins font-semibold">
+    <h2 class="section-title text-[#E0E0E6] text-[clamp(30px,2.5vw,48px)] font-poppins font-semibold">
         {genre}
     </h2>
 
     <div class="relative">
         {#if showLeftButton}
             <button
-                class="absolute h-full left-[-25px] top-1/2 -translate-y-1/2 z-20 bg-black/50 hover:bg-black/80 backdrop-blur-md text-white p-3 transition-all duration-200 cursor-pointer"
+                class="rail-button absolute inset-y-3 left-0 z-20 flex items-center justify-center rounded-r-2xl bg-gradient-to-r from-black/90 to-black/35 text-white backdrop-blur-sm transition-opacity duration-200 cursor-pointer"
                 on:click={scrollLeft}
                 aria-label="Scroll left"
                 transition:fade={{ duration: 200 }}
@@ -165,7 +165,7 @@
     >
             {#each renderedTitles as title (`${title.type}:${title.imdb_id}`)}
                 <button
-                    class="group/poster w-[200px] aspect-[2/3] h-fit rounded-[16px] hover:opacity-90 transition-[transform,opacity,box-shadow] duration-200 ease-out cursor-pointer overflow-clip relative flex-shrink-0 hover:-translate-y-1.5 hover:shadow-[0_14px_30px_rgba(0,0,0,0.35)] focus-visible:-translate-y-1.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white/70"
+                    class="group/poster w-[clamp(150px,13vw,200px)] aspect-[2/3] h-fit rounded-[16px] hover:opacity-90 transition-[width,transform,opacity,box-shadow] duration-300 ease-out cursor-pointer overflow-clip relative flex-shrink-0 hover:-translate-y-1.5 hover:shadow-[0_14px_30px_rgba(0,0,0,0.35)] focus-visible:-translate-y-1.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white/70"
                     aria-label={`Open ${title.name}`}
 
                     on:click={() => {
@@ -194,7 +194,7 @@
 
         {#if showRightButton}
             <button
-                class="absolute h-full right-[-25px] top-1/2 -translate-y-1/2 z-20 bg-black/50 hover:bg-black/80 backdrop-blur-md text-white p-3 transition-all duration-200 cursor-pointer"
+                class="rail-button absolute inset-y-3 right-0 z-20 flex items-center justify-center rounded-l-2xl bg-gradient-to-l from-black/90 to-black/35 text-white backdrop-blur-sm transition-opacity duration-200 cursor-pointer"
                 on:click={scrollRight}
                 aria-label="Scroll right"
                 transition:fade={{ duration: 200 }}
@@ -216,5 +216,11 @@
     .home-section {
         content-visibility: auto;
         contain-intrinsic-size: auto 390px;
+    }
+    .section-title {
+        transition: font-size 300ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .rail-button {
+        width: clamp(42px, 3vw, 56px);
     }
 </style>

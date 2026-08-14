@@ -28,7 +28,7 @@
     }
 </script>
 
-<div class="grid grid-cols-4 gap-[30px]">
+<div class="episode-grid">
     {#each metaData.meta.videos.filter((video) => video.season === currentSeason) as episode}
         {@const epKey = `${episode.season}:${episode.episode}`}
         {@const epProgress = progressMap[epKey]}
@@ -86,14 +86,29 @@
                 class="p-5 flex flex-col justify-end gap-[10px] z-10 absolute w-full h-full top-0 left-0"
             >
                 <span
-                    class="text-[#E1E1E1] text-[18px] font-poppins font-semibold"
+                    class="text-[#E1E1E1] text-[clamp(14px,0.94vw,18px)] font-poppins font-semibold leading-snug"
                     >S{episode.season}E{episode.episode} - {episode.name}</span
                 >
                 <span
-                    class="text-[#A3A3A3] text-[14px] font-poppins font-medium"
+                    class="text-[#A3A3A3] text-[clamp(11px,0.73vw,14px)] font-poppins font-medium leading-snug"
                     >{truncateWords(episode.description ?? "", 10)}</span
                 >
             </div>
         </button>
     {/each}
 </div>
+
+<style>
+    .episode-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(clamp(210px, 18vw, 300px), 1fr));
+        gap: clamp(16px, 1.55vw, 30px);
+    }
+
+    @media (orientation: portrait) {
+        .episode-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+    }
+</style>

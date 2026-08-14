@@ -7,7 +7,6 @@
         getWatchPartyInfo,
     } from "../../../lib/stores/watchPartyStore";
     import { fade, scale } from "svelte/transition";
-    import { overlayZoomStyle } from "../../../lib/overlayZoom";
 
     const portal = (node: HTMLElement) => {
         if (typeof document === "undefined") {
@@ -294,8 +293,7 @@
 
 <div
     use:portal
-    class="fixed inset-0 z-[300] flex items-center justify-center bg-[#101010]/56 backdrop-blur-xl"
-    style={overlayZoomStyle}
+    class="raffi-modal-backdrop fixed inset-0 z-[300] flex items-center justify-center bg-[#101010]/56 backdrop-blur-xl"
     transition:fade={{ duration: 200 }}
     on:click|self={onClose}
     on:keydown={(e) => e.key === "Escape" && onClose()}
@@ -304,7 +302,7 @@
     tabindex="0"
 >
         <div
-            class="w-full max-w-2xl max-h-[90vh] rounded-4xl overflow-hidden bg-[#2b2b2b]/56 backdrop-blur-[40px] shadow-[0_40px_160px_rgba(0,0,0,0.45)]"
+            class="raffi-modal-surface w-full max-w-2xl rounded-4xl overflow-hidden bg-[#2b2b2b]/56 backdrop-blur-[40px] shadow-[0_40px_160px_rgba(0,0,0,0.45)]"
             on:wheel|stopPropagation
         >
             <!-- Header -->

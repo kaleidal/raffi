@@ -13,7 +13,6 @@
         defaultSelectedLibraryIds,
     } from "../../../lib/import/stremioImportPreview";
     import { trackEvent } from "../../../lib/analytics";
-    import { withOverlayZoomStyle } from "../../../lib/overlayZoom";
     import LoadingSpinner from "../../common/LoadingSpinner.svelte";
 
     const portal = (node: HTMLElement) => {
@@ -405,14 +404,14 @@
 {#if open}
     <div
         use:portal
-        class="fixed inset-0 z-200 bg-[#101010]/56 backdrop-blur-xl flex items-center justify-center"
+        class="raffi-modal-backdrop fixed inset-0 z-200 bg-[#101010]/56 backdrop-blur-xl flex items-center justify-center"
         transition:fade={{ duration: 200 }}
         on:click|self={close}
         on:keydown={(e) => e.key === "Escape" && close()}
         on:wheel|preventDefault|stopPropagation
         role="button"
         tabindex="0"
-        style={withOverlayZoomStyle("padding: clamp(20px, 4vw, 80px);")}
+        style="padding: clamp(20px, 4vw, 80px);"
     >
         <div
             class="w-full max-w-xl max-h-full rounded-[32px] bg-[#2b2b2b]/62 backdrop-blur-[40px] p-6 md:p-8 flex flex-col gap-6 relative overflow-hidden shadow-[0_40px_160px_rgba(0,0,0,0.45)]"

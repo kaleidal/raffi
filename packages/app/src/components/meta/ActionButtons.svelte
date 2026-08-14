@@ -26,9 +26,9 @@
 
 </script>
 
-<div class="flex flex-row gap-[20px] justify-between w-full">
+<div class="flex flex-row gap-[clamp(12px,1vw,18px)] justify-between w-full">
     <button
-        class="px-[40px] py-[20px] flex flex-1 min-w-0 flex-row gap-[16px] items-center cursor-pointer hover:bg-[#D3D3D3]/10 transition-all duration-200 bg-[#FFFFFF]/10 backdrop-blur-[16px] rounded-[64px] justify-center"
+        class="action-button px-[clamp(22px,2vw,36px)] py-[clamp(14px,1.1vw,18px)] flex flex-1 min-w-0 flex-row gap-[clamp(10px,0.8vw,14px)] items-center cursor-pointer hover:bg-[#D3D3D3]/10 transition-all duration-200 bg-[#FFFFFF]/10 backdrop-blur-[16px] rounded-full justify-center"
         on:click={openLists}
     >
 
@@ -39,7 +39,7 @@
             class="shrink-0 min-w-[30px] min-h-[30px]"
         />
 
-        <span class="text-[#E1E1E1] text-[24px] font-poppins font-medium whitespace-nowrap"
+        <span class="text-[#E1E1E1] text-[clamp(17px,1.2vw,22px)] font-poppins font-medium whitespace-nowrap"
             >Add to list</span
         >
     </button>
@@ -51,13 +51,13 @@
     />
 
     <button
-        class="px-[40px] py-[20px] flex flex-1 min-w-0 flex-row gap-[16px] items-center cursor-pointer hover:bg-[#D3D3D3]/10 transition-all duration-200 bg-[#FFFFFF]/10 backdrop-blur-[16px] rounded-[64px] justify-center"
+        class="action-button px-[clamp(22px,2vw,36px)] py-[clamp(14px,1.1vw,18px)] flex flex-1 min-w-0 flex-row gap-[clamp(10px,0.8vw,14px)] items-center cursor-pointer hover:bg-[#D3D3D3]/10 transition-all duration-200 bg-[#FFFFFF]/10 backdrop-blur-[16px] rounded-full justify-center"
         on:click={openTrailer}
     >
 
         <Film size={30} strokeWidth={2} color="white" />
 
-        <span class="text-[#E1E1E1] text-[24px] font-poppins font-medium whitespace-nowrap"
+        <span class="text-[#E1E1E1] text-[clamp(17px,1.2vw,22px)] font-poppins font-medium whitespace-nowrap"
             >Trailer</span
         >
     </button>
@@ -69,3 +69,12 @@
         />
     {/if}
 </div>
+
+<style>
+    .action-button :global(svg) {
+        width: clamp(22px, 1.5vw, 28px);
+        height: clamp(22px, 1.5vw, 28px);
+        min-width: 0;
+        min-height: 0;
+    }
+</style>

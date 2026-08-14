@@ -14,9 +14,6 @@ function createMainWindow({
   isAllowedExternalUrl,
   defaultWindowWidth,
   defaultWindowHeight,
-  minZoom,
-  maxZoom,
-  widthThreshold,
   fileToOpen,
   pendingAveAuthPayload,
   pendingTraktAuthPayload,
@@ -127,11 +124,6 @@ function createMainWindow({
     handleExternalNavigation(url, "navigation");
   });
 
-  let currentDisplayZoom = 1;
-  let lastSentDisplayZoom = null;
-  let displayZoomDebounceTimer = null;
-  const DISPLAY_ZOOM_DEBOUNCE_MS = 120;
-  const DISPLAY_ZOOM_DELTA = 0.001;
   const miniPlayerState = {
     enabled: true,
     canEnter: false,
@@ -146,37 +138,6 @@ function createMainWindow({
     try {
       mainWindow.webContents.send("WINDOW_MINI_PLAYER_CHANGED", active);
     } catch {}
-  };
-
-  const scheduleDisplayZoomRefresh = () => {
-    const run = () => {
-      if (!mainWindow || mainWindow.isDestroyed()) return;
-      applyDisplayZoom();
-    };
-
-    run();
-    setImmediate(run);
-    setTimeout(run, 80);
-    setTimeout(run, 180);
-  };
-
-  const sendDisplayZoom = (zoom) => {
-    if (
-      lastSentDisplayZoom != null &&
-      Math.abs(zoom - lastSentDisplayZoom) <= DISPLAY_ZOOM_DELTA
-    ) {
-      return;
-    }
-    lastSentDisplayZoom = zoom;
-    try {
-      mainWindow.webContents.send("DISPLAY_ZOOM", zoom);
-    } catch {}
-  };
-
-  const applyMiniPlayerDisplayZoom = () => {
-    if (!mainWindow || mainWindow.isDestroyed()) return;
-    currentDisplayZoom = 1;
-    sendDisplayZoom(currentDisplayZoom);
   };
 
   const getMiniPlayerBounds = () => {
@@ -276,7 +237,6 @@ function createMainWindow({
       mainWindow.webContents.focus();
     }
 
-    scheduleDisplayZoomRefresh();
   };
 
   const enterMiniPlayer = () => {
@@ -318,7 +278,6 @@ function createMainWindow({
       mainWindow.setAlwaysOnTop(true, "floating");
       miniPlayerState.active = true;
       emitMiniPlayerChanged(true);
-      applyMiniPlayerDisplayZoom();
       if (typeof mainWindow.showInactive === "function") {
         mainWindow.showInactive();
       } else {
@@ -358,7 +317,6 @@ function createMainWindow({
     exit: exitMiniPlayer,
     isActive: () => miniPlayerState.active,
   };
-  mainWindow.__raffiGetDisplayZoom = () => currentDisplayZoom;
 
   mainWindow.on("minimize", (event) => {
     if (miniPlayerState.restoring) return;
@@ -471,84 +429,7 @@ function createMainWindow({
 
   mainWindow.setMenuBarVisibility(false);
 
-  const applyDisplayZoom = () => {
-    if (!mainWindow || mainWindow.isDestroyed()) return;
-
-    if (miniPlayerState.active) {
-      applyMiniPlayerDisplayZoom();
-      return;
-    }
-
-    const { width, height } = mainWindow.getBounds();
-
-    if (height < 1000) {
-      mainWindow.setAspectRatio(16 / 9);
-    } else {
-      mainWindow.setAspectRatio(0);
-    }
-
-    const primary = screen.getPrimaryDisplay();
-    const scaleFactor = primary?.scaleFactor || 1;
-    const dpiZoom = 1 / scaleFactor;
-    const effectiveWidth = width / dpiZoom;
-
-    if (effectiveWidth >= widthThreshold) {
-      currentDisplayZoom = dpiZoom;
-      sendDisplayZoom(currentDisplayZoom);
-      return;
-    }
-
-    const posterWidth = 200;
-    const posterGap = 20;
-    let bestZoom = dpiZoom;
-    let bestWaste = Infinity;
-
-    for (let i = 0; i <= 100; i++) {
-      const testZoom = minZoom + (maxZoom - minZoom) * (i / 100);
-      const scaledWidth = effectiveWidth / testZoom;
-      const postersPerRow = Math.floor((scaledWidth + posterGap) / (posterWidth + posterGap));
-      if (postersPerRow < 3) continue;
-
-      const usedWidth = postersPerRow * posterWidth + (postersPerRow - 1) * posterGap;
-      const wastedSpace = scaledWidth - usedWidth;
-      const wasteRatio = wastedSpace / scaledWidth;
-
-      if (wasteRatio < bestWaste) {
-        bestWaste = wasteRatio;
-        bestZoom = testZoom * dpiZoom;
-      }
-
-      if (wasteRatio < 0.05) break;
-    }
-
-    const widthZoom = effectiveWidth < widthThreshold ? effectiveWidth / widthThreshold : 1;
-    const finalZoom = Math.min(maxZoom, Math.max(minZoom, bestZoom * widthZoom));
-    currentDisplayZoom = finalZoom;
-
-    mainWindow.webContents.setZoomFactor(1);
-    try {
-      sendDisplayZoom(currentDisplayZoom);
-    } catch (e) {
-      console.warn("Failed to send display zoom", e);
-    }
-  };
-
-  const scheduleDebouncedDisplayZoom = () => {
-    if (displayZoomDebounceTimer) {
-      clearTimeout(displayZoomDebounceTimer);
-    }
-    displayZoomDebounceTimer = setTimeout(() => {
-      displayZoomDebounceTimer = null;
-      applyDisplayZoom();
-    }, DISPLAY_ZOOM_DEBOUNCE_MS);
-  };
-
   mainWindow.webContents.on("did-finish-load", () => {
-    if (displayZoomDebounceTimer) {
-      clearTimeout(displayZoomDebounceTimer);
-      displayZoomDebounceTimer = null;
-    }
-    applyDisplayZoom();
     if (fileToOpen) {
       mainWindow.webContents.send("open-file", fileToOpen);
       setFileToOpen(null);
@@ -562,9 +443,6 @@ function createMainWindow({
       setPendingTraktAuthPayload(null);
     }
   });
-
-  mainWindow.on("resize", scheduleDebouncedDisplayZoom);
-  screen.on("display-metrics-changed", scheduleDebouncedDisplayZoom);
 
   mainWindow.on("ready-to-show", () => {
     logToFile("Main window ready-to-show");

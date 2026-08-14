@@ -39,9 +39,6 @@
     let previousItems = continueWatchingMeta;
     let scrollFrame: number | null = null;
 
-    const BASE_CARD_WIDTH = 200;
-    const MAX_CARD_WIDTH_DELTA = 50;
-    const CARD_GAP_PX = 20;
     const BATCH_SIZE = 24;
     const LOAD_AHEAD_PX = 1200;
 
@@ -52,53 +49,6 @@
         previousItems = continueWatchingMeta;
         visibleCount = Math.min(BATCH_SIZE, continueWatchingMeta.length);
         scheduleLayoutUpdate();
-    }
-
-    function recomputeCardWidth() {
-        if (!scrollContainer) return;
-
-        const containerWidth = scrollContainer.clientWidth;
-        if (!containerWidth || containerWidth < 1) return;
-
-        const minW = BASE_CARD_WIDTH - MAX_CARD_WIDTH_DELTA;
-        const maxW = BASE_CARD_WIDTH + MAX_CARD_WIDTH_DELTA;
-
-        const preferredMinW = Math.max(minW, BASE_CARD_WIDTH - 20);
-
-        const maxVisibleCount = Math.max(
-            1,
-            Math.floor((containerWidth + CARD_GAP_PX) / (minW + CARD_GAP_PX)),
-        );
-        const maxCount = Math.max(
-            1,
-            Math.min(maxVisibleCount, continueWatchingMeta.length || 1),
-        );
-
-        let bestWidth: number | null = null;
-        let bestScore = Number.POSITIVE_INFINITY;
-
-        for (let count = 1; count <= maxCount; count++) {
-            const w = (containerWidth - CARD_GAP_PX * (count - 1)) / count;
-            if (w < minW || w > maxW) continue;
-
-            const penaltyTooSmall = w < preferredMinW ? (preferredMinW - w) * 3 : 0;
-            const score = Math.abs(w - BASE_CARD_WIDTH) + penaltyTooSmall;
-
-            if (score < bestScore) {
-                bestScore = score;
-                bestWidth = w;
-            }
-        }
-
-        // Fallback: if no count produces an in-range width (rare), clamp.
-        const finalW =
-            bestWidth ?? Math.max(minW, Math.min(maxW, BASE_CARD_WIDTH));
-
-        // Use sub-pixel precision to avoid visible right-side gaps.
-        scrollContainer.style.setProperty(
-            "--cw-card-w",
-            `${finalW.toFixed(2)}px`,
-        );
     }
 
     function handleContextMenu(e: MouseEvent, imdbId: string, type: string, trailerId: string | null) {
@@ -205,10 +155,7 @@
         if (!scrollContainer) return;
         if (resizeObserver) return;
 
-        resizeObserver = new ResizeObserver(() => {
-            scheduleLayoutUpdate();
-            recomputeCardWidth();
-        });
+        resizeObserver = new ResizeObserver(scheduleLayoutUpdate);
         resizeObserver.observe(scrollContainer);
     }
 
@@ -217,7 +164,6 @@
         requestAnimationFrame(() => {
             attachResizeObserver();
             updateScrollButtons();
-            recomputeCardWidth();
         });
     }
 
@@ -272,9 +218,9 @@
 {#if continueWatchingMeta.length > 0}
     <div class="home-section w-full h-fit flex flex-col gap-4 relative group overflow-visible">
         <div class="flex flex-row gap-[10px] items-center w-full">
-            <Play size={50} strokeWidth={3} color="#E0E0E6" />
+            <span class="section-icon"><Play size={50} strokeWidth={3} color="#E0E0E6" /></span>
 
-            <h1 class="font-poppins text-[#E0E0E6] font-medium text-[48px]">
+            <h1 class="section-title font-poppins text-[#E0E0E6] font-medium text-[clamp(30px,2.5vw,48px)]">
                 Jump back into it
             </h1>
 
@@ -284,7 +230,7 @@
                 aria-label={isExpanded ? "Collapse" : "Expand"}
             >
                 <div class="transition-transform duration-300 {isExpanded ? 'rotate-180' : ''}">
-                    <ChevronDown size={32} strokeWidth={2} color="#E0E0E6" />
+                    <span class="expand-icon"><ChevronDown size={32} strokeWidth={2} color="#E0E0E6" /></span>
                 </div>
             </button>
         </div>
@@ -292,7 +238,7 @@
         <div class="relative">
             {#if showLeftButton && !isExpanded}
                 <button
-                    class="absolute h-full left-[-25px] top-1/2 -translate-y-1/2 z-20 bg-black/50 hover:bg-black/80 backdrop-blur-md text-white p-3 transition-all duration-200 cursor-pointer"
+                    class="rail-button absolute inset-y-3 left-0 z-20 flex items-center justify-center rounded-r-2xl bg-gradient-to-r from-black/90 to-black/35 text-white backdrop-blur-sm transition-[background-color,opacity] duration-200 cursor-pointer"
                     on:click={scrollLeft}
                     aria-label="Scroll left"
                     transition:fade={{ duration: 200 }}
@@ -320,7 +266,7 @@
                             movieProgress.time > 0}
 
                         <button
-                            class="group/poster w-[var(--cw-card-w)] aspect-[2/3] h-fit rounded-[16px] hover:opacity-90 transition-[transform,opacity,box-shadow] duration-200 ease-out cursor-pointer overflow-clip relative flex-shrink-0 hover:-translate-y-1.5 hover:shadow-[0_14px_30px_rgba(0,0,0,0.35)] focus-visible:-translate-y-1.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white/70"
+                            class="group/poster w-[clamp(150px,13vw,200px)] aspect-[2/3] h-fit rounded-[16px] hover:opacity-90 transition-[width,transform,opacity,box-shadow] duration-300 ease-out cursor-pointer overflow-clip relative flex-shrink-0 hover:-translate-y-1.5 hover:shadow-[0_14px_30px_rgba(0,0,0,0.35)] focus-visible:-translate-y-1.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white/70"
                             aria-label={`Open ${title.meta.name || "continue watching title"}`}
 
                             on:click={() =>
@@ -358,7 +304,7 @@
 
             {#if showRightButton && !isExpanded}
                 <button
-                    class="absolute h-full right-[-25px] top-1/2 -translate-y-1/2 z-20 bg-black/50 hover:bg-black/80 backdrop-blur-md text-white p-3 transition-all duration-200 cursor-pointer"
+                    class="rail-button absolute inset-y-3 right-0 z-20 flex items-center justify-center rounded-l-2xl bg-gradient-to-l from-black/90 to-black/35 text-white backdrop-blur-sm transition-[background-color,opacity] duration-200 cursor-pointer"
                     on:click={scrollRight}
                     aria-label="Scroll right"
                     transition:fade={{ duration: 200 }}
@@ -374,5 +320,20 @@
     .home-section {
         content-visibility: auto;
         contain-intrinsic-size: auto 390px;
+    }
+    .section-title {
+        transition: font-size 300ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .section-icon :global(svg) {
+        width: clamp(32px, 2.6vw, 50px);
+        height: clamp(32px, 2.6vw, 50px);
+        transition: width 300ms cubic-bezier(0.22, 1, 0.36, 1), height 300ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .expand-icon :global(svg) {
+        width: clamp(24px, 1.7vw, 32px);
+        height: clamp(24px, 1.7vw, 32px);
+    }
+    .rail-button {
+        width: clamp(42px, 3vw, 56px);
     }
 </style>

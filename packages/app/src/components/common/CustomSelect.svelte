@@ -98,35 +98,30 @@
         if (!buttonEl || !menuEl || typeof window === "undefined") return;
 
         const buttonRect = buttonEl.getBoundingClientRect();
-        const zoom = Number.parseFloat(
-            getComputedStyle(document.documentElement).getPropertyValue("--raffi-effective-zoom") || "1",
-        ) || 1;
-        const naturalMenuWidth = Math.max(menuEl.offsetWidth, buttonRect.width / zoom);
-        const naturalMenuHeight = menuEl.offsetHeight;
-        const visualMenuWidth = naturalMenuWidth * zoom;
-        const visualMenuHeight = naturalMenuHeight * zoom;
+        const menuWidth = Math.max(menuEl.offsetWidth, buttonRect.width);
+        const menuHeight = menuEl.offsetHeight;
         const viewportPadding = 12;
         const gap = 8;
 
         const spaceBelow = window.innerHeight - buttonRect.bottom - viewportPadding;
         const spaceAbove = buttonRect.top - viewportPadding;
-        const shouldOpenUp = spaceBelow < visualMenuHeight && spaceAbove > spaceBelow;
+        const shouldOpenUp = spaceBelow < menuHeight && spaceAbove > spaceBelow;
 
         let top = shouldOpenUp
-            ? buttonRect.top - visualMenuHeight - gap
+            ? buttonRect.top - menuHeight - gap
             : buttonRect.bottom + gap;
         top = Math.max(
             viewportPadding,
-            Math.min(top, window.innerHeight - visualMenuHeight - viewportPadding),
+            Math.min(top, window.innerHeight - menuHeight - viewportPadding),
         );
 
-        let left = align === "right" ? buttonRect.right - visualMenuWidth : buttonRect.left;
+        let left = align === "right" ? buttonRect.right - menuWidth : buttonRect.left;
         left = Math.max(
             viewportPadding,
-            Math.min(left, window.innerWidth - visualMenuWidth - viewportPadding),
+            Math.min(left, window.innerWidth - menuWidth - viewportPadding),
         );
 
-        menuStyle = `position: fixed; top: ${top}px; left: ${left}px; min-width: ${naturalMenuWidth}px; transform: scale(${zoom}); transform-origin: top left;`;
+        menuStyle = `position: fixed; top: ${top}px; left: ${left}px; min-width: ${menuWidth}px;`;
         menuReady = true;
     }
 

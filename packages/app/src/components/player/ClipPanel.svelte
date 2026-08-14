@@ -363,28 +363,28 @@
         <div class="rounded-[24px] bg-[#000000]/10 backdrop-blur-[24px] px-5 py-4">
             <div class="flex items-center justify-between gap-4">
                 <div class="flex items-center gap-3">
-                    <span class="text-[16px] font-poppins font-[500] text-[#D3D3D3]">Start</span>
+                    <span class="text-[1rem] font-poppins font-[500] text-[#D3D3D3]">Start</span>
                     <span
-                        class="text-[16px] font-poppins font-[500] text-white"
+                        class="text-[1rem] font-poppins font-[500] text-white"
                         style="font-variant-numeric: tabular-nums; font-feature-settings:'tnum';"
                     >{formatClipTimeLabel(clipStart)}</span>
-                    <span class="text-[16px] font-poppins font-[500] text-[#D3D3D3]">End</span>
+                    <span class="text-[1rem] font-poppins font-[500] text-[#D3D3D3]">End</span>
                     <span
-                        class="text-[16px] font-poppins font-[500] text-white"
+                        class="text-[1rem] font-poppins font-[500] text-white"
                         style="font-variant-numeric: tabular-nums; font-feature-settings:'tnum';"
                     >{formatClipTimeLabel(clipEnd)}</span>
                 </div>
 
                 <div class="flex items-center gap-3">
                     <button
-                        class="text-[14px] font-poppins font-[500] text-[#D3D3D3] hover:opacity-80 transition-opacity duration-200"
+                        class="text-[0.875rem] font-poppins font-[500] text-[#D3D3D3] hover:opacity-80 transition-opacity duration-200"
                         on:click={close}
                         disabled={clipBusy}
                     >
                         Cancel
                     </button>
                     <button
-                        class="text-[14px] font-poppins font-[600] text-white hover:opacity-80 transition-opacity duration-200"
+                        class="text-[0.875rem] font-poppins font-[600] text-white hover:opacity-80 transition-opacity duration-200"
                         on:click={confirmClip}
                         disabled={clipBusy}
                     >
@@ -462,13 +462,13 @@
             </div>
 
             {#if clipError}
-                <div class="mt-3 text-[14px] font-poppins text-[#D3D3D3]">
+                <div class="mt-3 text-[0.875rem] font-poppins text-[#D3D3D3]">
                     {clipError}
                 </div>
             {/if}
 
             {#if clipOutputPath}
-                <div class="mt-3 text-[14px] font-poppins text-[#D3D3D3] break-all">
+                <div class="mt-3 text-[0.875rem] font-poppins text-[#D3D3D3] break-all">
                     Saved: {clipOutputPath}
                 </div>
             {/if}

@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount } from "svelte";
-	import UiScaleControl from "./UiScaleControl.svelte";
 	import SearchBarPositionCard from "./SearchBarPositionCard.svelte";
 	import HeroSourceCard from "./HeroSourceCard.svelte";
 	import DirectSourceSection from "./DirectSourceSection.svelte";
@@ -487,7 +486,6 @@
 
 	<DirectSourceSection />
 
-	<UiScaleControl />
 
 	<div class="grid items-stretch gap-4 xl:grid-cols-2">
 		<SearchBarPositionCard {searchBarPosition} onChange={setSearchBarPosition} />

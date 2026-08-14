@@ -3,7 +3,6 @@
     import { X } from "@lucide/svelte";
     import { failedStreamKeys, streamFailureMessage } from "../../../pages/meta/metaState";
     import { trackEvent } from "../../../lib/analytics";
-    import { overlayZoomStyle } from "../../../lib/overlayZoom";
     import type { Addon } from "../../../lib/db/db";
     import type { ShowResponse } from "../../../lib/library/types/meta_types";
     import type { ProgressItem, ProgressMap } from "../../../pages/meta/types";
@@ -330,8 +329,7 @@
 {#if streamsPopupVisible}
     <div
         use:portal
-        class="fixed inset-0 z-50 bg-[#0f0f0f]/58 backdrop-blur-xl flex items-center justify-center p-6 sm:p-10 lg:p-20"
-        style={overlayZoomStyle}
+        class="raffi-modal-backdrop fixed inset-0 z-50 bg-[#0f0f0f]/58 backdrop-blur-xl flex items-center justify-center"
         transition:fade={{ duration: 200 }}
         on:click|self={close}
         on:keydown={(e) => e.key === "Escape" && close()}
@@ -340,7 +338,7 @@
         tabindex="0"
     >
         <div
-            class="w-full max-w-7xl max-h-full rounded-4xl bg-[#2a2a2a]/56 backdrop-blur-[40px] p-6 sm:p-8 lg:p-10 xl:p-12 flex flex-col gap-6 overflow-hidden relative isolate shadow-[0_40px_160px_rgba(0,0,0,0.45)]"
+            class="raffi-modal-surface streams-surface w-full max-w-[1180px] rounded-4xl bg-[#2a2a2a]/56 backdrop-blur-[40px] p-[clamp(18px,2vw,32px)] flex flex-col gap-6 overflow-hidden relative isolate shadow-[0_40px_160px_rgba(0,0,0,0.45)]"
             on:wheel|stopPropagation
         >
             <button
@@ -351,50 +349,18 @@
                 <X size={24} color="currentColor" strokeWidth={2} />
             </button>
 
-            <div class="relative z-10 grid flex-1 min-h-0 gap-8 lg:grid-cols-[460px_minmax(0,1fr)] xl:grid-cols-[520px_minmax(0,1fr)]">
-                <section class="flex min-h-0 flex-col gap-4 overflow-hidden lg:gap-5">
-                    <div class="flex-1 min-h-0">
-                        <EpisodeDetailsPanel
-                            {selectedEpisode}
-                            {metaData}
-                            {releaseInfo}
-                            {progressDetails}
-                        />
-                    </div>
-
-                    <div class="shrink-0">
-                        <StreamsFiltersPanel
-                            {filtersCollapsed}
-                            filteredCount={filteredStreams.length}
-                            totalCount={streams.length}
-                            {resolutionFilter}
-                            {providerFilter}
-                            {audioFilter}
-                            {audioLanguageFilter}
-                            {sourceFilter}
-                            {sortOption}
-                            {excludeDubbed}
-                            {excludeHDR}
-                            {providerFilterOptions}
-                            {audioLanguageFilterOptions}
-                            resolutionFilters={RESOLUTION_FILTERS}
-                            sourceFilters={SOURCE_FILTERS}
-                            sortOptions={STREAM_SORT_OPTIONS}
-                            onToggleFiltersCollapsed={() => (filtersCollapsed = !filtersCollapsed)}
-                            onSetResolutionFilter={setResolutionFilter}
-                            onSetProviderFilter={setProviderFilter}
-                            onSetAudioFilter={setAudioFilter}
-                            onSetAudioLanguageFilter={setAudioLanguageFilter}
-                            onSetSourceFilter={setSourceFilter}
-                            onSetSortOption={setSortOption}
-                            onToggleExcludeDubbed={toggleExcludeDubbed}
-                            onToggleExcludeHDR={toggleExcludeHDR}
-                        />
-                    </div>
+            <div class="streams-layout relative z-10 grid flex-1 min-h-0 gap-[clamp(18px,2vw,30px)]">
+                <section class="flex min-h-0 flex-col overflow-hidden">
+                    <EpisodeDetailsPanel
+                        {selectedEpisode}
+                        {metaData}
+                        {releaseInfo}
+                        {progressDetails}
+                    />
                 </section>
 
-                <section class="flex min-h-0 flex-col gap-5">
-                    <div class="flex flex-col gap-2">
+                <section class="flex min-h-0 flex-col gap-4">
+                    <div class="flex flex-col gap-2 pr-10">
                         <h2 class="text-white text-2xl font-poppins font-bold">
                             Select Stream
                         </h2>
@@ -409,12 +375,11 @@
                     </div>
 
                     {#if filteredAddons.length > 1 && !hasDirectStream}
-                        <div class="flex flex-wrap gap-2.5 pb-1">
+                        <div class="flex flex-wrap gap-2.5">
                             {#each filteredAddons as addon}
                                 <button
                                     type="button"
-                                    class="px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 cursor-pointer whitespace-nowrap backdrop-blur-xl {selectedAddon ===
-                                    addon.transport_url
+                                    class="px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 cursor-pointer whitespace-nowrap backdrop-blur-xl {selectedAddon === addon.transport_url
                                         ? 'bg-white text-black shadow-lg shadow-white/10'
                                         : 'bg-white/10 text-white/70 hover:bg-white/18'}"
                                     on:click={() => selectAddon(addon)}
@@ -423,6 +388,37 @@
                                 </button>
                             {/each}
                         </div>
+                    {/if}
+
+                    {#if !loadingStreams && streams.length > 0}
+                    <StreamsFiltersPanel
+                        {filtersCollapsed}
+                        filteredCount={filteredStreams.length}
+                        totalCount={streams.length}
+                        {resolutionFilter}
+                        {providerFilter}
+                        {audioFilter}
+                        {audioLanguageFilter}
+                        {sourceFilter}
+                        {sortOption}
+                        {excludeDubbed}
+                        {excludeHDR}
+                        {providerFilterOptions}
+                        {audioLanguageFilterOptions}
+                        resolutionFilters={RESOLUTION_FILTERS}
+                        sourceFilters={SOURCE_FILTERS}
+                        sortOptions={STREAM_SORT_OPTIONS}
+                        onToggleFiltersCollapsed={() => (filtersCollapsed = !filtersCollapsed)}
+                        onSetResolutionFilter={setResolutionFilter}
+                        onSetProviderFilter={setProviderFilter}
+                        onSetAudioFilter={setAudioFilter}
+                        onSetAudioLanguageFilter={setAudioLanguageFilter}
+                        onSetSourceFilter={setSourceFilter}
+                        onSetSortOption={setSortOption}
+                        onToggleExcludeDubbed={toggleExcludeDubbed}
+                        onToggleExcludeHDR={toggleExcludeHDR}
+                        onResetFilters={resetFilters}
+                    />
                     {/if}
 
                     <StreamsList
@@ -440,3 +436,24 @@
         </div>
     </div>
 {/if}
+
+<style>
+    .streams-layout {
+        grid-template-columns: minmax(340px, 410px) minmax(0, 1fr);
+    }
+
+    @media (max-width: 900px), (orientation: portrait) {
+        .streams-surface {
+            overflow-y: auto;
+        }
+
+        .streams-layout {
+            grid-template-columns: minmax(0, 1fr);
+            overflow: visible;
+        }
+
+        .streams-layout > section {
+            overflow: visible;
+        }
+    }
+</style>

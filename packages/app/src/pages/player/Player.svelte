@@ -1519,7 +1519,7 @@
                     : '-translate-y-10 opacity-0'} will-change-transform will-change-opacity"
             >
                 <span
-                    class="inline-flex min-h-[62px] max-w-full items-center truncate rounded-full bg-[#000000]/20 p-4 text-[16px] leading-6 font-medium text-white backdrop-blur-md transition-colors duration-200 sm:max-w-[640px] sm:px-8 sm:text-[18px] {$controlsVisible
+                    class="inline-flex min-h-[clamp(48px,3.23vw,62px)] max-w-full items-center truncate rounded-full bg-[#000000]/20 p-4 text-[1rem] leading-6 font-medium text-white backdrop-blur-md transition-colors duration-200 sm:max-w-[40rem] sm:px-8 sm:text-[1.125rem] {$controlsVisible
                         ? 'pointer-events-auto'
                         : 'pointer-events-none'}"
                     title={nowPlayingLabel}
@@ -1531,7 +1531,7 @@
 
         {#if !embedSrc}
             <div
-                class="absolute left-1/2 -translate-x-1/2 bottom-12.5 z-50 flex flex-col gap-2.5"
+            class="player-controls-dock absolute left-1/2 -translate-x-1/2 z-50 flex max-w-full flex-col gap-2.5"
             >
                 <PlayerOverlays
                     showSkipIntro={$showSkipIntro}
@@ -1634,3 +1634,15 @@
         }}
     />
 </div>
+
+<style>
+    .player-controls-dock {
+        bottom: clamp(14px, 4.5vh, 50px);
+    }
+
+    @media (orientation: portrait), (max-height: 620px) {
+        .player-controls-dock {
+            bottom: 10px;
+        }
+    }
+</style>

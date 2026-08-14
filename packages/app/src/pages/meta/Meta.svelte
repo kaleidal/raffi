@@ -75,8 +75,6 @@
     let lastBackgroundSrc = "";
     let showAddonsModal = false;
     let addonsModalResourceFilter: "all" | "stream" | "subtitles" | "catalog" | "meta" = "all";
-    const metaPanelOffsetStyle =
-        "transform: translateY(max(0px, calc((1 - var(--raffi-effective-zoom, 1)) * 16rem))); will-change: transform;";
 
     const updateViewportAspect = () => {
         if (typeof window === "undefined") return;
@@ -257,7 +255,7 @@
             </div>
 
             <button
-                class="absolute top-12.5 left-12.5 z-50 bg-[#FFFFFF]/10 hover:bg-[#FFFFFF]/20 backdrop-blur-md p-4 rounded-full transition-colors duration-200 cursor-pointer"
+                class="absolute top-[clamp(24px,3vw,50px)] left-[clamp(24px,3vw,50px)] z-50 bg-[#FFFFFF]/10 hover:bg-[#FFFFFF]/20 backdrop-blur-md p-[clamp(12px,1vw,16px)] rounded-full transition-colors duration-200 cursor-pointer"
                 on:click={() => {
                     router.navigate("home");
                 }}
@@ -267,12 +265,10 @@
             </button>
 
             <div
-                class="p-40 relative z-10 w-full flex gap-12.5 flex-row justify-between items-stretch"
-                style="min-height: max(640px, calc(100vh - 20rem));"
+                class="relative z-10 flex min-h-screen w-full flex-col items-stretch justify-between gap-[clamp(28px,3vw,50px)] px-[clamp(32px,6vw,72px)] py-[clamp(72px,10vh,120px)] xl:h-screen xl:min-h-[720px] xl:flex-row xl:px-[9.2vw] xl:pt-[14.8vw] xl:pb-[9.2vw]"
             >
                 <div
-                    class="w-[40vw] flex gap-12.5 flex-col justify-between items-start"
-                    style={`min-height: max(640px, calc(100vh - 20rem)); ${metaPanelOffsetStyle}`}
+                    class="flex min-h-[clamp(460px,58vh,620px)] w-full flex-col items-start justify-between gap-[clamp(28px,2.6vw,44px)] xl:min-h-0 xl:w-[40vw]"
                 >
 
             <style>
@@ -282,9 +278,9 @@
                 }
 
                 .resume-button {
-                    min-height: 80px;
-                    padding: clamp(14px, 2vw, 25px) clamp(40px, 6vw, 130px);
-                    font-size: clamp(24px, 2.4vw, 48px);
+                    min-height: clamp(68px, 5vw, 92px);
+                    padding: clamp(13px, 1.5vw, 20px) clamp(36px, 4.2vw, 76px);
+                    font-size: clamp(22px, 1.7vw, 30px);
                 }
 
                 .resume-button__label {
@@ -292,8 +288,13 @@
                 }
 
                 .resume-button__icon {
-                    width: clamp(32px, 4vw, 70px);
-                    height: clamp(32px, 4vw, 70px);
+                    width: clamp(28px, 2.4vw, 42px);
+                    height: clamp(28px, 2.4vw, 42px);
+                }
+
+                .resume-button__icon :global(svg) {
+                    width: 100%;
+                    height: 100%;
                 }
             </style>
                     <div
@@ -303,12 +304,12 @@
                             <img
                                 src={$metaData.meta.logo}
                                 alt="Logo"
-                                class="h-62.5 w-auto object-contain"
+                                class="h-[clamp(140px,12.5vw,250px)] max-w-full w-auto object-contain object-left"
                                 on:error={() => logoFailed.set(true)}
                             />
                         {:else}
                             <h1
-                                class="text-[#E1E1E1] text-[64px] font-poppins font-bold leading-tight max-w-200"
+                                class="text-[#E1E1E1] text-[clamp(38px,3.5vw,58px)] font-poppins font-bold leading-tight max-w-200"
                             >
                                 {$metaData.meta.name}
                             </h1>
@@ -405,8 +406,7 @@
                 </div>
 
                 <div
-                    class="flex flex-col gap-5 justify-end items-end self-stretch"
-                    style={`min-height: max(640px, calc(100vh - 20rem)); ${metaPanelOffsetStyle}`}
+                    class="flex w-full flex-col items-end justify-end gap-[clamp(14px,1.2vw,20px)] self-stretch xl:w-[30.7vw] xl:max-w-[590px]"
                 >
                     {#if $metaData.meta.type === "series"}
                         {@const watchedCount = Object.values(
@@ -417,10 +417,10 @@
                                 ? (watchedCount / $episodes) * 100
                                 : 0}
                         <div
-                            class="px-15 py-10 w-full bg-[#FFFFFF]/10 backdrop-blur-lg rounded-[64px] flex flex-col gap-5"
+                            class="px-[clamp(26px,2.4vw,44px)] py-[clamp(20px,1.6vw,30px)] w-full bg-[#FFFFFF]/10 backdrop-blur-lg rounded-[clamp(30px,2.8vw,52px)] flex flex-col gap-4"
                         >
                             <span
-                                class="text-[#E1E1E1] text-[32px] font-poppins font-bold"
+                                class="text-[#E1E1E1] text-[clamp(21px,1.5vw,28px)] font-poppins font-bold"
                                 >{watchedCount}/{$episodes} episodes watched</span
                             >
                             <div
@@ -435,11 +435,11 @@
                     {/if}
 
                     <div
-                        class="px-15 py-10 w-full bg-[#FFFFFF]/10 backdrop-blur-lg rounded-[64px] flex flex-col gap-5 justify-center"
+                        class="px-[clamp(26px,2.4vw,44px)] py-[clamp(20px,1.6vw,30px)] w-full bg-[#FFFFFF]/10 backdrop-blur-lg rounded-[clamp(30px,2.8vw,52px)] flex flex-col gap-4 justify-center"
                     >
                         {#if $metaData.meta.type === "series"}
                             <span
-                                class="text-[#E1E1E1] text-[32px] font-poppins font-bold"
+                                class="text-[#E1E1E1] text-[clamp(21px,1.5vw,28px)] font-poppins font-bold"
                                 >{$episodes} episodes • {$seasons} seasons</span
                             >
                         {/if}
@@ -448,13 +448,13 @@
                             class="flex flex-row gap-2.5 items-center justify-between"
                         >
                             <span
-                                class="text-[#E8E8E8]/80 text-[24px] font-poppins font-medium"
+                                class="text-[#E8E8E8]/80 text-[clamp(17px,1.15vw,22px)] font-poppins font-medium"
                                 >{$metaData.meta.year}</span
                             >
 
                             <div class="flex flex-row gap-2.5 items-center">
                                 <span
-                                    class="text-[#E8E8E8]/80 text-[24px] font-poppins font-medium"
+                                    class="text-[#E8E8E8]/80 text-[clamp(17px,1.15vw,22px)] font-poppins font-medium"
                                     >{$metaData.meta.imdbRating}</span
                                 >
 
@@ -484,7 +484,7 @@
                 ></div>
                 {#if useOverlayScrollHint}
                     <span
-                        class="absolute left-1/2 -translate-x-1/2 text-[#E1E1E1]/60 text-[16px] font-poppins font-medium pointer-events-none"
+                        class="absolute left-1/2 -translate-x-1/2 text-[#E1E1E1]/60 text-[1rem] font-poppins font-medium pointer-events-none"
                         style="bottom: clamp(20px, 5vh, 72px);"
                         >scroll down to view episodes</span
                     >
@@ -495,13 +495,13 @@
         {#if $metaData.meta.type === "series"}
             {#if !useOverlayScrollHint}
                 <div
-                    class="w-full flex justify-center text-[#E1E1E1]/60 text-[16px] font-poppins font-medium"
+                    class="w-full flex justify-center text-[#E1E1E1]/60 text-[1rem] font-poppins font-medium"
                     style="margin-top: clamp(8px, 2vh, 16px); margin-bottom: clamp(12px, 3vh, 24px);"
                 >
                     scroll down to view episodes
                 </div>
             {/if}
-            <div class="w-full p-40">
+            <div class="w-full p-[clamp(32px,8.3vw,160px)]">
                 <SeasonSelector
                     seasonsArray={$seasonsArray}
                     bind:currentSeason={$currentSeason}

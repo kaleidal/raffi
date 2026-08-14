@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { ChevronDown, ChevronUp } from "@lucide/svelte";
+    import { ChevronDown, ChevronUp, SlidersHorizontal, X } from "@lucide/svelte";
     import CustomSelect from "../../../common/CustomSelect.svelte";
     import type { AudioFilter, ResolutionFilter, SourceFilter, StreamSortOption } from "./types";
 
@@ -29,23 +29,37 @@
     export let onSetSortOption: (value: StreamSortOption) => void = () => {};
     export let onToggleExcludeDubbed: () => void = () => {};
     export let onToggleExcludeHDR: () => void = () => {};
+    export let onResetFilters: () => void = () => {};
 
     $: sortSelectOptions = sortOptions.map((option) => ({ label: option.label, value: option.value }));
     $: resolutionSelectOptions = resolutionFilters.map((option) => ({ label: option.label, value: option.value }));
     $: sourceSelectOptions = sourceFilters.map((option) => ({ label: option.label, value: option.value }));
     $: providerSelectOptions = providerFilterOptions.map((option) => ({ label: option === "all" ? "Any provider" : option, value: option }));
     $: audioLanguageSelectOptions = audioLanguageFilterOptions.map((option) => ({ label: option === "all" ? "Any language" : option, value: option }));
+    $: activeFilterCount = [
+        resolutionFilter !== "all",
+        providerFilter !== "all",
+        audioFilter !== "all",
+        audioLanguageFilter !== "all",
+        sourceFilter !== "all",
+        excludeDubbed,
+        excludeHDR,
+    ].filter(Boolean).length;
 </script>
 
-<div class="bg-white/5 rounded-[28px] p-4 sm:p-5 flex flex-col gap-4">
-    <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div class="flex flex-col gap-1">
-            <span class="text-white text-sm font-semibold">Browse streams</span>
-            <span class="text-white/55 text-sm">{filteredCount} of {totalCount} visible</span>
+<div class="flex shrink-0 flex-col gap-3 rounded-[22px] bg-white/5 p-3.5">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-2 text-sm">
+            <span class="font-semibold text-white">
+                {filteredCount} {filteredCount === 1 ? "source" : "sources"}
+            </span>
+            {#if activeFilterCount > 0 && filteredCount !== totalCount}
+                <span class="text-white/45">of {totalCount}</span>
+            {/if}
         </div>
 
-        <div class="flex flex-wrap items-center gap-2">
-            <div class="w-[158px] shrink-0">
+        <div class="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
+            <div class="w-[clamp(145px,12vw,178px)] shrink-0">
                 <CustomSelect
                     value={sortOption}
                     options={sortSelectOptions}
@@ -57,69 +71,68 @@
 
             <button
                 type="button"
-                class="flex items-center gap-1.5 rounded-full px-3 py-2 text-sm transition-colors duration-200 cursor-pointer {filtersCollapsed
+                class="flex items-center gap-2 rounded-full px-3.5 py-2 text-sm transition-colors duration-200 cursor-pointer {filtersCollapsed
                     ? 'bg-white/10 text-white/80 hover:bg-white/16'
                     : 'bg-white text-black'}"
                 on:click={onToggleFiltersCollapsed}
             >
-                Advanced
+                <SlidersHorizontal size={15} strokeWidth={2} />
+                Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
                 {#if filtersCollapsed}
-                    <ChevronDown size={16} strokeWidth={2} />
+                    <ChevronDown size={15} strokeWidth={2} />
                 {:else}
-                    <ChevronUp size={16} strokeWidth={2} />
+                    <ChevronUp size={15} strokeWidth={2} />
                 {/if}
             </button>
         </div>
     </div>
 
-    <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_132px_86px] md:items-end">
-        <div class="flex min-w-0 flex-col gap-2">
-            <span class="text-xs text-white/45">Audio</span>
-            <div class="flex min-w-0 flex-wrap gap-1.5">
-                {#each [
-                    { label: 'Any', value: 'all' },
-                    { label: 'Original', value: 'original' },
-                    { label: 'Dubbed', value: 'dubbed' },
-                ] as option}
-                    <button
-                        type="button"
-                        class="min-w-0 rounded-full px-2.5 py-2 text-[13px] transition-colors duration-200 cursor-pointer {audioFilter === option.value
-                            ? 'bg-white text-black'
-                            : 'bg-white/8 text-white/72 hover:bg-white/14'}"
-                        on:click={() => onSetAudioFilter(option.value as AudioFilter)}
-                    >
-                        {option.label}
-                    </button>
-                {/each}
-            </div>
-        </div>
-
-        <label class="flex min-w-0 flex-col gap-2">
-            <span class="text-xs text-white/45">Language</span>
-            <CustomSelect
-                value={audioLanguageFilter}
-                options={audioLanguageSelectOptions}
-                buttonClass="w-full rounded-full bg-white/8 px-4 py-2 text-sm text-white hover:bg-white/12"
-                menuClass="min-w-[164px]"
-                on:change={(event) => onSetAudioLanguageFilter(event.detail.value)}
-            />
-        </label>
-
-        <label class="flex min-w-0 flex-col gap-2">
-            <span class="text-xs text-white/45">Quality</span>
-            <CustomSelect
-                value={resolutionFilter}
-                options={resolutionSelectOptions}
-                buttonClass="w-full rounded-full bg-white/8 px-3 py-2 text-sm text-white hover:bg-white/12"
-                menuClass="min-w-[120px]"
-                on:change={(event) => onSetResolutionFilter(event.detail.value as ResolutionFilter)}
-            />
-        </label>
-    </div>
-
     {#if !filtersCollapsed}
-        <div class="flex flex-col gap-3 border-t border-white/6 pt-4 lg:flex-row lg:items-end">
-            <div class="grid flex-1 gap-3 lg:grid-cols-2">
+        <div class="flex flex-col gap-4 border-t border-white/8 pt-4">
+            <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                <div class="flex min-w-0 flex-col gap-2">
+                    <span class="text-xs text-white/45">Audio</span>
+                    <div class="flex min-w-0 flex-wrap gap-1.5">
+                        {#each [
+                            { label: "Any", value: "all" },
+                            { label: "Original", value: "original" },
+                            { label: "Dubbed", value: "dubbed" },
+                        ] as option}
+                            <button
+                                type="button"
+                                class="min-w-0 rounded-full px-2.5 py-2 text-[13px] transition-colors duration-200 cursor-pointer {audioFilter === option.value
+                                    ? 'bg-white text-black'
+                                    : 'bg-white/8 text-white/72 hover:bg-white/14'}"
+                                on:click={() => onSetAudioFilter(option.value as AudioFilter)}
+                            >
+                                {option.label}
+                            </button>
+                        {/each}
+                    </div>
+                </div>
+
+                <label class="flex min-w-0 flex-col gap-2">
+                    <span class="text-xs text-white/45">Language</span>
+                    <CustomSelect
+                        value={audioLanguageFilter}
+                        options={audioLanguageSelectOptions}
+                        buttonClass="w-full rounded-full bg-white/8 px-4 py-2 text-sm text-white hover:bg-white/12"
+                        menuClass="min-w-[164px]"
+                        on:change={(event) => onSetAudioLanguageFilter(event.detail.value)}
+                    />
+                </label>
+
+                <label class="flex min-w-0 flex-col gap-2">
+                    <span class="text-xs text-white/45">Quality</span>
+                    <CustomSelect
+                        value={resolutionFilter}
+                        options={resolutionSelectOptions}
+                        buttonClass="w-full rounded-full bg-white/8 px-3 py-2 text-sm text-white hover:bg-white/12"
+                        menuClass="min-w-[120px]"
+                        on:change={(event) => onSetResolutionFilter(event.detail.value as ResolutionFilter)}
+                    />
+                </label>
+
                 <label class="flex min-w-0 flex-col gap-2">
                     <span class="text-xs text-white/45">Source</span>
                     <CustomSelect
@@ -131,7 +144,7 @@
                     />
                 </label>
 
-                <label class="flex min-w-0 flex-col gap-2">
+                <label class="flex min-w-0 flex-col gap-2 sm:col-span-2 xl:col-span-2">
                     <span class="text-xs text-white/45">Provider</span>
                     <CustomSelect
                         value={providerFilter}
@@ -143,7 +156,7 @@
                 </label>
             </div>
 
-            <div class="flex gap-2 lg:pb-0.5">
+            <div class="flex flex-wrap items-center gap-2">
                 <button
                     type="button"
                     class="whitespace-nowrap rounded-full px-3 py-2.5 text-sm transition-colors duration-200 cursor-pointer {excludeDubbed
@@ -151,7 +164,7 @@
                         : 'bg-white/8 text-white/72 hover:bg-white/14'}"
                     on:click={onToggleExcludeDubbed}
                 >
-                    {excludeDubbed ? 'Hiding dubbed' : 'Hide dubbed'}
+                    {excludeDubbed ? "Hiding dubbed" : "Hide dubbed"}
                 </button>
 
                 <button
@@ -161,8 +174,19 @@
                         : 'bg-white/8 text-white/72 hover:bg-white/14'}"
                     on:click={onToggleExcludeHDR}
                 >
-                    {excludeHDR ? 'Skipping HDR' : 'Skip HDR'}
+                    {excludeHDR ? "Skipping HDR" : "Skip HDR"}
                 </button>
+
+                {#if activeFilterCount > 0}
+                    <button
+                        type="button"
+                        class="ml-auto flex items-center gap-1.5 rounded-full px-3 py-2.5 text-sm text-white/55 transition-colors hover:bg-white/8 hover:text-white cursor-pointer"
+                        on:click={onResetFilters}
+                    >
+                        <X size={14} strokeWidth={2} />
+                        Clear filters
+                    </button>
+                {/if}
             </div>
         </div>
     {/if}

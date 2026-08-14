@@ -5,7 +5,6 @@
     import { router } from "../../../lib/stores/router";
     import { getCachedMetaData } from "../../../lib/library/metaCache";
     import { cloudSyncStatus, getWatchPartyInfo } from "../../../lib/db/db";
-    import { overlayZoomStyle } from "../../../lib/overlayZoom";
     import { localMode } from "../../../lib/stores/authStore";
     import { get } from "svelte/store";
     import TorrentWarningModal from "../../meta/modals/TorrentWarningModal.svelte";
@@ -254,8 +253,7 @@
 
     <div
         use:portal
-        class="fixed inset-0 z-[200] bg-[#101010]/58 backdrop-blur-xl flex items-center justify-center"
-        style={overlayZoomStyle}
+        class="raffi-modal-backdrop fixed inset-0 z-[200] bg-[#101010]/58 backdrop-blur-xl flex items-center justify-center"
         transition:fade={{ duration: 200 }}
         on:click|self={closeModal}
         on:keydown={(e) => e.key === "Escape" && closeModal()}
@@ -274,7 +272,7 @@
     />
 
     <div
-        class="w-full max-w-lg rounded-[32px] bg-[#2f2f2f]/58 backdrop-blur-[40px] p-6 md:p-8 flex flex-col gap-6 relative overflow-hidden shadow-[0_40px_160px_rgba(0,0,0,0.45)] cursor-default"
+        class="raffi-modal-surface w-full max-w-lg rounded-[32px] bg-[#2f2f2f]/58 backdrop-blur-[40px] p-6 md:p-8 flex flex-col gap-6 relative overflow-y-auto shadow-[0_40px_160px_rgba(0,0,0,0.45)] cursor-default"
         transition:scale={{ start: 0.95, duration: 200 }}
         on:click|stopPropagation
         on:keydown|stopPropagation
