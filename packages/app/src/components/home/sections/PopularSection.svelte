@@ -2,7 +2,7 @@
     import type { PopularTitleMeta } from "../../../lib/library/types/popular_types";
     import { router } from "../../../lib/stores/router";
 
-    import { onMount } from "svelte";
+    import { onDestroy, onMount, tick } from "svelte";
     import { fade } from "svelte/transition";
     import { Flame, ChevronLeft, ChevronRight } from "@lucide/svelte";
     import TitleContextMenu from "../context_menus/TitleContextMenu.svelte";
@@ -27,13 +27,47 @@
     let selectedTrailerId = "";
     let showListsPopup = false;
     let showTrailerModal = false;
+    let visibleCount = 24;
+    let previousTitles = popularMeta;
+    let scrollFrame: number | null = null;
+    let resizeObserver: ResizeObserver | null = null;
+
+    const BATCH_SIZE = 24;
+    const LOAD_AHEAD_PX = 1200;
+
+    $: renderedTitles = popularMeta.slice(0, visibleCount);
+    $: if (popularMeta !== previousTitles) {
+        previousTitles = popularMeta;
+        visibleCount = Math.min(BATCH_SIZE, popularMeta.length);
+        scheduleScrollCheck();
+    }
 
     function updateScrollButtons() {
         if (scrollContainer) {
             const { scrollLeft, scrollWidth, clientWidth } = scrollContainer;
             showLeftButton = scrollLeft > 0;
-            showRightButton = scrollLeft + clientWidth < scrollWidth - 1;
+            showRightButton =
+                visibleCount < popularMeta.length ||
+                scrollLeft + clientWidth < scrollWidth - 1;
+
+            if (scrollWidth - scrollLeft - clientWidth < LOAD_AHEAD_PX) {
+                revealMore();
+            }
         }
+    }
+
+    function scheduleScrollCheck() {
+        if (typeof requestAnimationFrame === "undefined" || scrollFrame !== null) return;
+        scrollFrame = requestAnimationFrame(() => {
+            scrollFrame = null;
+            updateScrollButtons();
+        });
+    }
+
+    function revealMore() {
+        if (visibleCount >= popularMeta.length) return;
+        visibleCount = Math.min(visibleCount + BATCH_SIZE, popularMeta.length);
+        void tick().then(scheduleScrollCheck);
     }
 
     function scrollLeft() {
@@ -42,8 +76,16 @@
         }
     }
 
-    function scrollRight() {
+    async function scrollRight() {
         if (scrollContainer) {
+            if (
+                visibleCount < popularMeta.length &&
+                scrollContainer.scrollLeft + scrollContainer.clientWidth + 600 >=
+                    scrollContainer.scrollWidth
+            ) {
+                revealMore();
+                await tick();
+            }
             scrollContainer.scrollBy({ left: 500, behavior: "smooth" });
         }
     }
@@ -70,9 +112,14 @@
     }
 
     onMount(() => {
-        updateScrollButtons();
-        window.addEventListener("resize", updateScrollButtons);
-        return () => window.removeEventListener("resize", updateScrollButtons);
+        resizeObserver = new ResizeObserver(scheduleScrollCheck);
+        resizeObserver.observe(scrollContainer);
+        scheduleScrollCheck();
+    });
+
+    onDestroy(() => {
+        resizeObserver?.disconnect();
+        if (scrollFrame !== null) cancelAnimationFrame(scrollFrame);
     });
 </script>
 
@@ -101,7 +148,7 @@
 {/if}
 
 {#if popularMeta.length > 0}
-    <div class="w-full h-fit flex flex-col gap-4 relative group overflow-visible">
+    <div class="home-section w-full h-fit flex flex-col gap-4 relative group overflow-visible">
         <div class="flex flex-row gap-[10px] items-center">
             <Flame size={50} strokeWidth={3} color="#FF8F3C" />
 
@@ -125,11 +172,12 @@
             <div
                 class="flex flex-row gap-[20px] overflow-x-auto overflow-y-visible w-full pb-6 pt-3 no-scrollbar scroll-smooth"
                 bind:this={scrollContainer}
-                on:scroll={updateScrollButtons}
+                on:scroll={scheduleScrollCheck}
             >
-                {#each popularMeta as title}
+                {#each renderedTitles as title (`${title.type}:${title.imdb_id}`)}
                     <button
-                        class="w-[200px] h-fit rounded-[16px] hover:opacity-90 transition-all duration-200 ease-out cursor-pointer overflow-clip relative flex-shrink-0 hover:-translate-y-1.5 hover:shadow-[0_14px_30px_rgba(0,0,0,0.35)]"
+                        class="group/poster w-[200px] aspect-[2/3] h-fit rounded-[16px] hover:opacity-90 transition-[transform,opacity,box-shadow] duration-200 ease-out cursor-pointer overflow-clip relative flex-shrink-0 hover:-translate-y-1.5 hover:shadow-[0_14px_30px_rgba(0,0,0,0.35)] focus-visible:-translate-y-1.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white/70"
+                        aria-label={`Open ${title.name}`}
 
                         on:click={() =>
                             navigateToMeta(title.imdb_id, title.type)}
@@ -144,6 +192,7 @@
                         <PosterImage
                             src={title.poster}
                             title={title.name}
+                            year={title.year || title.releaseInfo}
                             alt={title.name || "Popular title poster"}
                         />
                     </button>
@@ -163,3 +212,10 @@
         </div>
     </div>
 {/if}
+
+<style>
+    .home-section {
+        content-visibility: auto;
+        contain-intrinsic-size: auto 390px;
+    }
+</style>

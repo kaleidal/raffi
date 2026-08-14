@@ -5,7 +5,7 @@
     import TitleContextMenu from "../context_menus/TitleContextMenu.svelte";
     import ListsPopup from "../../meta/modals/ListsPopup.svelte";
     import TrailerModal from "../../meta/modals/TrailerModal.svelte";
-    import { onMount } from "svelte";
+    import { onDestroy, onMount, tick } from "svelte";
     import { ChevronLeft, ChevronRight } from "@lucide/svelte";
     import PosterImage from "./PosterImage.svelte";
     import { getPrimaryTrailerId } from "../../../lib/trailers";
@@ -24,23 +24,64 @@
     let selectedTrailerId = "";
     let showListsPopup = false;
     let showTrailerModal = false;
+    let visibleCount = 24;
+    let previousTitles = titles;
+    let scrollFrame: number | null = null;
+    let resizeObserver: ResizeObserver | null = null;
+
+    const BATCH_SIZE = 24;
+    const LOAD_AHEAD_PX = 1200;
+
+    $: renderedTitles = titles.slice(0, visibleCount);
+    $: if (titles !== previousTitles) {
+        previousTitles = titles;
+        visibleCount = Math.min(BATCH_SIZE, titles.length);
+        scheduleScrollCheck();
+    }
 
     function checkScroll() {
         if (!scrollContainer) return;
         showLeftButton = scrollContainer.scrollLeft > 0;
         showRightButton =
+            visibleCount < titles.length ||
             scrollContainer.scrollLeft + scrollContainer.clientWidth <
             scrollContainer.scrollWidth - 10;
+
+        const remaining =
+            scrollContainer.scrollWidth -
+            scrollContainer.scrollLeft -
+            scrollContainer.clientWidth;
+        if (remaining < LOAD_AHEAD_PX) revealMore();
+    }
+
+    function scheduleScrollCheck() {
+        if (typeof requestAnimationFrame === "undefined" || scrollFrame !== null) return;
+        scrollFrame = requestAnimationFrame(() => {
+            scrollFrame = null;
+            checkScroll();
+        });
+    }
+
+    function revealMore() {
+        if (visibleCount >= titles.length) return;
+        visibleCount = Math.min(visibleCount + BATCH_SIZE, titles.length);
+        void tick().then(scheduleScrollCheck);
     }
 
     function scrollLeft() {
         scrollContainer.scrollBy({ left: -800, behavior: "smooth" });
-        setTimeout(checkScroll, 300);
     }
 
-    function scrollRight() {
+    async function scrollRight() {
+        if (
+            visibleCount < titles.length &&
+            scrollContainer.scrollLeft + scrollContainer.clientWidth + 900 >=
+                scrollContainer.scrollWidth
+        ) {
+            revealMore();
+            await tick();
+        }
         scrollContainer.scrollBy({ left: 800, behavior: "smooth" });
-        setTimeout(checkScroll, 300);
     }
 
     function handleContextMenu(e: MouseEvent, imdbId: string, type: string, trailerId: string | null) {
@@ -65,7 +106,14 @@
     }
 
     onMount(() => {
-        setTimeout(checkScroll, 100);
+        resizeObserver = new ResizeObserver(scheduleScrollCheck);
+        resizeObserver.observe(scrollContainer);
+        scheduleScrollCheck();
+    });
+
+    onDestroy(() => {
+        resizeObserver?.disconnect();
+        if (scrollFrame !== null) cancelAnimationFrame(scrollFrame);
     });
 </script>
 
@@ -93,7 +141,7 @@
     />
 {/if}
 
-<div class="w-full h-fit flex flex-col gap-4 relative group overflow-visible">
+<div class="home-section w-full h-fit flex flex-col gap-4 relative group overflow-visible">
     <h2 class="text-[#E0E0E6] text-[48px] font-poppins font-semibold">
         {genre}
     </h2>
@@ -112,12 +160,13 @@
 
     <div
         bind:this={scrollContainer}
-        on:scroll={checkScroll}
+        on:scroll={scheduleScrollCheck}
         class="flex flex-row gap-[20px] overflow-x-scroll overflow-y-visible pt-3 pb-6 no-scrollbar scroll-smooth"
     >
-            {#each titles as title}
+            {#each renderedTitles as title (`${title.type}:${title.imdb_id}`)}
                 <button
-                    class="w-[200px] aspect-[2/3] h-fit rounded-[16px] hover:opacity-90 transition-all duration-200 ease-out cursor-pointer overflow-clip relative flex-shrink-0 hover:-translate-y-1.5 hover:shadow-[0_14px_30px_rgba(0,0,0,0.35)]"
+                    class="group/poster w-[200px] aspect-[2/3] h-fit rounded-[16px] hover:opacity-90 transition-[transform,opacity,box-shadow] duration-200 ease-out cursor-pointer overflow-clip relative flex-shrink-0 hover:-translate-y-1.5 hover:shadow-[0_14px_30px_rgba(0,0,0,0.35)] focus-visible:-translate-y-1.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white/70"
+                    aria-label={`Open ${title.name}`}
 
                     on:click={() => {
                         router.navigate("meta", {
@@ -136,6 +185,7 @@
                     <PosterImage
                         src={title.poster}
                         title={title.name}
+                        year={title.year || title.releaseInfo}
                         alt={title.name || `${genre} title poster`}
                     />
                 </button>
@@ -162,5 +212,9 @@
     .no-scrollbar {
         -ms-overflow-style: none;
         scrollbar-width: none;
+    }
+    .home-section {
+        content-visibility: auto;
+        contain-intrinsic-size: auto 390px;
     }
 </style>
