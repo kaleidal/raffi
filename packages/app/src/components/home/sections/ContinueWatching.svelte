@@ -35,10 +35,24 @@
     let showTrailerModal = false;
     let isExpanded = false;
     let resizeObserver: ResizeObserver | null = null;
+    let visibleCount = 24;
+    let previousItems = continueWatchingMeta;
+    let scrollFrame: number | null = null;
 
     const BASE_CARD_WIDTH = 200;
     const MAX_CARD_WIDTH_DELTA = 50;
     const CARD_GAP_PX = 20;
+    const BATCH_SIZE = 24;
+    const LOAD_AHEAD_PX = 1200;
+
+    $: renderedItems = isExpanded
+        ? continueWatchingMeta
+        : continueWatchingMeta.slice(0, visibleCount);
+    $: if (continueWatchingMeta !== previousItems) {
+        previousItems = continueWatchingMeta;
+        visibleCount = Math.min(BATCH_SIZE, continueWatchingMeta.length);
+        scheduleLayoutUpdate();
+    }
 
     function recomputeCardWidth() {
         if (!scrollContainer) return;
@@ -136,8 +150,34 @@
         if (scrollContainer) {
             const { scrollLeft, scrollWidth, clientWidth } = scrollContainer;
             showLeftButton = scrollLeft > 0;
-            showRightButton = scrollLeft + clientWidth < scrollWidth - 1;
+            showRightButton =
+                visibleCount < continueWatchingMeta.length ||
+                scrollLeft + clientWidth < scrollWidth - 1;
+
+            if (
+                !isExpanded &&
+                scrollWidth - scrollLeft - clientWidth < LOAD_AHEAD_PX
+            ) {
+                revealMore();
+            }
         }
+    }
+
+    function scheduleLayoutUpdate() {
+        if (typeof requestAnimationFrame === "undefined" || scrollFrame !== null) return;
+        scrollFrame = requestAnimationFrame(() => {
+            scrollFrame = null;
+            updateScrollButtons();
+        });
+    }
+
+    function revealMore() {
+        if (visibleCount >= continueWatchingMeta.length) return;
+        visibleCount = Math.min(
+            visibleCount + BATCH_SIZE,
+            continueWatchingMeta.length,
+        );
+        void tick().then(scheduleLayoutUpdate);
     }
 
     function scrollLeft() {
@@ -146,8 +186,16 @@
         }
     }
 
-    function scrollRight() {
+    async function scrollRight() {
         if (scrollContainer) {
+            if (
+                visibleCount < continueWatchingMeta.length &&
+                scrollContainer.scrollLeft + scrollContainer.clientWidth + 600 >=
+                    scrollContainer.scrollWidth
+            ) {
+                revealMore();
+                await tick();
+            }
             scrollContainer.scrollBy({ left: 500, behavior: "smooth" });
         }
     }
@@ -158,7 +206,7 @@
         if (resizeObserver) return;
 
         resizeObserver = new ResizeObserver(() => {
-            updateScrollButtons();
+            scheduleLayoutUpdate();
             recomputeCardWidth();
         });
         resizeObserver.observe(scrollContainer);
@@ -176,13 +224,14 @@
     onMount(() => {
         void recomputeAfterRender();
 
-        window.addEventListener("resize", updateScrollButtons);
+        window.addEventListener("resize", scheduleLayoutUpdate);
     });
 
     onDestroy(() => {
-        window.removeEventListener("resize", updateScrollButtons);
+        window.removeEventListener("resize", scheduleLayoutUpdate);
         resizeObserver?.disconnect();
         resizeObserver = null;
+        if (scrollFrame !== null) cancelAnimationFrame(scrollFrame);
     });
 
     $: if (continueWatchingMeta.length) {
@@ -221,7 +270,7 @@
 {/if}
 
 {#if continueWatchingMeta.length > 0}
-    <div class="w-full h-fit flex flex-col gap-4 relative group overflow-visible">
+    <div class="home-section w-full h-fit flex flex-col gap-4 relative group overflow-visible">
         <div class="flex flex-row gap-[10px] items-center w-full">
             <Play size={50} strokeWidth={3} color="#E0E0E6" />
 
@@ -257,9 +306,9 @@
                     ? 'flex-wrap'
                     : 'flex-row overflow-x-auto overflow-y-visible no-scrollbar scroll-smooth'}"
                 bind:this={scrollContainer}
-                on:scroll={updateScrollButtons}
+                on:scroll={scheduleLayoutUpdate}
             >
-                {#each continueWatchingMeta as title (title.meta.imdb_id)}
+                {#each renderedItems as title (`${title.meta.type}:${title.meta.imdb_id}`)}
                     {#if title.meta}
                         {@const progress = title.libraryItem.progress}
                         {@const isMovie = title.meta.type === "movie"}
@@ -271,7 +320,8 @@
                             movieProgress.time > 0}
 
                         <button
-                            class="w-[var(--cw-card-w)] aspect-[2/3] h-fit rounded-[16px] hover:opacity-90 transition-all duration-200 ease-out cursor-pointer overflow-clip relative flex-shrink-0 hover:-translate-y-1.5 hover:shadow-[0_14px_30px_rgba(0,0,0,0.35)]"
+                            class="group/poster w-[var(--cw-card-w)] aspect-[2/3] h-fit rounded-[16px] hover:opacity-90 transition-[transform,opacity,box-shadow] duration-200 ease-out cursor-pointer overflow-clip relative flex-shrink-0 hover:-translate-y-1.5 hover:shadow-[0_14px_30px_rgba(0,0,0,0.35)] focus-visible:-translate-y-1.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white/70"
+                            aria-label={`Open ${title.meta.name || "continue watching title"}`}
 
                             on:click={() =>
                                 navigateToMeta(
@@ -290,6 +340,7 @@
                                 src={title.libraryItem.poster ||
                                     title.meta.poster}
                                 title={title.meta.name}
+                                year={title.meta.year || title.meta.releaseInfo}
                                 alt={title.meta.name || "Continue Watching poster"}
                             />
                             {#if isMovieResumable}
@@ -318,3 +369,10 @@
         </div>
     </div>
 {/if}
+
+<style>
+    .home-section {
+        content-visibility: auto;
+        contain-intrinsic-size: auto 390px;
+    }
+</style>

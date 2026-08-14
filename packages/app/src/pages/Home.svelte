@@ -3,6 +3,7 @@
     import { fade } from "svelte/transition";
     import { getCachedMetaData } from "../lib/library/metaCache";
     import { getPopularTitles } from "../lib/library/library";
+    import { sanitizeCatalogTitles } from "../lib/library/catalogQuality";
     import {
         fetchAddonHomeSections,
         fetchHeroTitlesFromCatalogSource,
@@ -172,7 +173,9 @@
                 }
             }
 
-            traktRecommendations = Array.from(deduped.values()).slice(0, 20);
+            traktRecommendations = sanitizeCatalogTitles(
+                Array.from(deduped.values()),
+            ).slice(0, 20);
         } catch (error) {
             console.error("Failed to load Trakt recommendations", error);
             traktRecommendations = [];
@@ -269,7 +272,7 @@
     }
 
     async function loadContinueWatching() {
-        const nextContinueWatchingMeta: (ShowResponse & { libraryItem: any })[] = [];
+        let nextContinueWatchingMeta: (ShowResponse & { libraryItem: any })[] = [];
         try {
             const library = await getLibrary();
             library.sort(
@@ -281,28 +284,8 @@
             const recent = library.filter(
                 (item) => item.shown !== false && !item.completed_at,
             );
-            for (const item of recent) {
+            const loadedItems = await Promise.all(recent.map(async (item) => {
                 try {
-                    if (item.poster) {
-                        nextContinueWatchingMeta.push({
-                            meta: {
-                                poster: item.poster,
-                                imdb_id: item.imdb_id,
-                                type: item.type,
-                                name: "",
-                                id: item.imdb_id,
-                                genres: [],
-                                releaseInfo: "",
-                                description: "",
-                                cast: [],
-                                videos: [],
-                                popularities: {} as any,
-                            } as any,
-                            libraryItem: item,
-                        });
-                        continue;
-                    }
-
                     let meta: ShowResponse;
                     if (item.type) {
                         meta = await getCachedMetaData(item.imdb_id, item.type);
@@ -333,17 +316,46 @@
                             }
                         }
 
-                        nextContinueWatchingMeta.push({
+                        return {
                             ...meta,
+                            meta: {
+                                ...meta.meta,
+                                poster: item.poster || meta.meta.poster,
+                            },
                             libraryItem: item,
-                        });
+                        };
                     } else {
                         console.warn("No meta found for:", item.imdb_id);
                     }
                 } catch (e) {
                     console.error(`Failed to load meta for ${item.imdb_id}`, e);
+
+                    // Keep cached-poster entries usable when metadata is temporarily
+                    // unavailable. A later refresh can still enrich the title/year.
+                    if (item.poster) {
+                        return {
+                            meta: {
+                                poster: item.poster,
+                                imdb_id: item.imdb_id,
+                                type: item.type,
+                                name: "",
+                                id: item.imdb_id,
+                                genres: [],
+                                releaseInfo: "",
+                                description: "",
+                                cast: [],
+                                videos: [],
+                                popularities: {} as any,
+                            } as any,
+                            libraryItem: item,
+                        };
+                    }
                 }
-            }
+                return null;
+            }));
+            nextContinueWatchingMeta = loadedItems.filter(
+                (item): item is ShowResponse & { libraryItem: any } => item !== null,
+            );
         } catch (e) {
             console.error("Failed to load library", e);
         }
@@ -354,7 +366,12 @@
         addonSectionsLoading = true;
         try {
             const addons = installedAddons ?? (await getAddons());
-            addonSections = await fetchAddonHomeSections(addons);
+            addonSections = (await fetchAddonHomeSections(addons))
+                .map((section) => ({
+                    ...section,
+                    titles: sanitizeCatalogTitles(section.titles),
+                }))
+                .filter((section) => section.titles.length > 0);
         } catch (e) {
             console.error("Failed to refresh addon sections", e);
             addonSections = [];
@@ -392,8 +409,9 @@
                     const addonHeroTitles = await fetchHeroTitlesFromCatalogSource(
                         selectedOption,
                     );
-                    if (addonHeroTitles.length > 0) {
-                        heroPoolTitles = addonHeroTitles;
+                    const sanitizedHeroTitles = sanitizeCatalogTitles(addonHeroTitles);
+                    if (sanitizedHeroTitles.length > 0) {
+                        heroPoolTitles = sanitizedHeroTitles;
                         setFeaturedFromPool(options);
                         return;
                     }
@@ -413,7 +431,12 @@
         mostPopularMovies: PopularTitleMeta[],
         mostPopularSeries: PopularTitleMeta[],
     ) {
-        absolutePopularTitles = [...mostPopularMovies, ...mostPopularSeries];
+        const sanitizedMovies = sanitizeCatalogTitles(mostPopularMovies);
+        const sanitizedSeries = sanitizeCatalogTitles(mostPopularSeries);
+        absolutePopularTitles = sanitizeCatalogTitles([
+            ...sanitizedMovies,
+            ...sanitizedSeries,
+        ]);
 
         if (absolutePopularTitles.length > 0) {
             absolutePopularTitles.sort(
@@ -428,7 +451,7 @@
             setFeaturedFromPool();
         }
 
-        const allTitlesForGenres = [...mostPopularMovies, ...mostPopularSeries];
+        const allTitlesForGenres = [...sanitizedMovies, ...sanitizedSeries];
         const nextGenreMap: Record<string, PopularTitleMeta[]> = {};
         const genreCount: Record<string, number> = {};
 

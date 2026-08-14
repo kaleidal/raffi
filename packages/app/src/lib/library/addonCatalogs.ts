@@ -1,4 +1,5 @@
 import type { Addon } from "../db/db";
+import { sanitizeCatalogTitles } from "./catalogQuality";
 import type { PopularTitleMeta } from "./types/popular_types";
 
 const DEFAULT_SECTION_LIMIT = 12;
@@ -232,12 +233,7 @@ async function fetchCatalog(
             .map((meta: any) => toPopularMeta(meta, type))
             .filter((meta: PopularTitleMeta | null): meta is PopularTitleMeta => meta !== null);
 
-        const deduped = new Map<string, PopularTitleMeta>();
-        for (const meta of mapped) {
-            if (!deduped.has(meta.imdb_id)) deduped.set(meta.imdb_id, meta);
-        }
-
-        return Array.from(deduped.values());
+        return sanitizeCatalogTitles(mapped);
     } catch {
         return [];
     } finally {
