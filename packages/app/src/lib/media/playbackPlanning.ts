@@ -15,6 +15,36 @@ export type ResolvedHttpPlayback = {
 };
 
 const BROWSER_SAFE_AUDIO = new Set<AudioCodec | null>(["aac", "mp3", "opus"]);
+const REMOTE_PROBE_TIMEOUT_MS = 30_000;
+
+async function probeWithTimeout(
+	src: string,
+	externalSignal?: AbortSignal,
+): Promise<ProbedStream> {
+	const probeAbort = new AbortController();
+	let timedOut = false;
+	const handleExternalAbort = () => probeAbort.abort();
+	externalSignal?.addEventListener("abort", handleExternalAbort, { once: true });
+	const timeout = setTimeout(() => {
+		timedOut = true;
+		probeAbort.abort();
+	}, REMOTE_PROBE_TIMEOUT_MS);
+
+	try {
+		return await probeRemoteStream(src, probeAbort.signal);
+	} catch (error) {
+		if (externalSignal?.aborted) {
+			throw new DOMException("Playback probe aborted", "AbortError");
+		}
+		if (timedOut) {
+			throw new Error("Timed out while probing the stream", { cause: error });
+		}
+		throw error;
+	} finally {
+		clearTimeout(timeout);
+		externalSignal?.removeEventListener("abort", handleExternalAbort);
+	}
+}
 
 function canUseMediaBunnyRemux(meta: ProbedStream): boolean {
 	if (!meta.video) return false;
@@ -41,7 +71,11 @@ export async function resolveHttpPlayback(
 	const supportsEac3 = supportsEac3Playback(videoElem);
 	const directSupport = getDirectMediaSupport(playable, videoElem);
 	try {
-		const meta = ensureAudioTracks(await probeRemoteStream(playable, signal));
+		const meta = ensureAudioTracks(
+			await (/^https?:\/\//i.test(playable)
+				? probeWithTimeout(playable, signal)
+				: probeRemoteStream(playable, signal)),
+		);
 		if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
 		if (canUseFfmpegPlayback(meta)) return { mode: "ffmpeg", meta, reason: "unsupported-audio-transcode" };
 		if (localSource) {
@@ -78,7 +112,12 @@ export async function resolveHttpPlayback(
 		}
 		return { mode: "unsupported", meta, reason: "no-browser-path" };
 	} catch (error) {
-		if (error instanceof DOMException && error.name === "AbortError") throw error;
+		if (
+			signal?.aborted ||
+			(error instanceof DOMException && error.name === "AbortError")
+		) {
+			throw new DOMException("Playback probe aborted", "AbortError");
+		}
 		console.warn("MediaBunny probe failed", error);
 		if (directSupport.supported && ["probably", "maybe"].includes(directSupport.confidence)) {
 			return { mode: "direct", meta: null, reason: "probe-failed-direct" };

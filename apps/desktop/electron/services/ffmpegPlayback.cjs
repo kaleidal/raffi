@@ -241,6 +241,11 @@ function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, r
       }, STARTUP_TIMEOUT_MS);
       session.finishStartup = finish;
     });
+    child.stdout.once("error", (error) => {
+      session.finishStartup(error);
+      output.destroy(error);
+      void stop(sessionId);
+    });
     child.once("error", (error) => {
       session.stopped = true;
       clearTimeout(session.killTimer);
