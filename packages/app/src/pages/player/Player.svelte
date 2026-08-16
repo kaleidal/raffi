@@ -449,6 +449,7 @@
     let bufferingStartedAt = 0;
     let bufferingEligibleForHealthPrompt = false;
     let bufferingHealthTimer: ReturnType<typeof setTimeout> | null = null;
+    let playbackHealthRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
     let recentPlaybackStalls: PlaybackStall[] = [];
     let playbackHealthPromptVisible = false;
     let playbackHealthPromptDismissed = false;
@@ -871,6 +872,7 @@
         if (playPauseFeedbackTimeout) clearTimeout(playPauseFeedbackTimeout);
         if (torrentFailureExitTimeout) clearTimeout(torrentFailureExitTimeout);
         if (bufferingHealthTimer) clearTimeout(bufferingHealthTimer);
+        if (playbackHealthRecoveryTimer) clearTimeout(playbackHealthRecoveryTimer);
         clearEmbedLoadFallback();
         clearBrowserAudioCheck();
         playerSessionLoader.cancelCurrentLoad();
@@ -976,7 +978,6 @@
                             nextEpisodePrefetchRetryAt = Date.now() + 10_000;
                             return;
                         }
-                        nextEpisodePrefetchResolved = resolved;
                         const playable = streamToPlayableUrl(resolved.stream);
                         if (!playable) {
                             nextEpisodePrefetchRetryAt = Date.now() + 10_000;
@@ -999,7 +1000,12 @@
                         }
                         nextEpisodePrefetchDispose = dispose;
                         nextEpisodePrefetchHandoff = handoff;
+                        nextEpisodePrefetchResolved = resolved;
                     } catch (error) {
+                        if (runId === nextEpisodePrefetchRunId) {
+                            nextEpisodePrefetchResolved = null;
+                            nextEpisodePrefetchHandoff = null;
+                        }
                         if (!(error instanceof DOMException && error.name === "AbortError")) {
                             console.warn("Next episode prefetch attempt failed", error);
                             nextEpisodePrefetchRetryAt = Date.now() + 10_000;
@@ -1087,6 +1093,10 @@
         if (bufferingActive) return;
         bufferingActive = true;
         bufferingStartedAt = Date.now();
+        if (playbackHealthRecoveryTimer) {
+            clearTimeout(playbackHealthRecoveryTimer);
+            playbackHealthRecoveryTimer = null;
+        }
         bufferingEligibleForHealthPrompt =
             hasStarted && !get(seekGuard) && get(pendingSeek) == null;
         if (
@@ -1147,6 +1157,14 @@
             }
         }
         bufferingEligibleForHealthPrompt = false;
+        if (playbackHealthPromptVisible) {
+            playbackHealthRecoveryTimer = setTimeout(() => {
+                playbackHealthRecoveryTimer = null;
+                if (bufferingActive || !playbackHealthPromptVisible) return;
+                playbackHealthPromptVisible = false;
+                recentPlaybackStalls = [];
+            }, 15_000);
+        }
         trackEvent("playback_buffering_ended", {
             buffer_duration_ms: durationMs,
             ...getPlaybackAnalyticsProps(),
@@ -1154,12 +1172,20 @@
     };
 
     const dismissPlaybackHealthPrompt = () => {
+        if (playbackHealthRecoveryTimer) {
+            clearTimeout(playbackHealthRecoveryTimer);
+            playbackHealthRecoveryTimer = null;
+        }
         playbackHealthPromptVisible = false;
         playbackHealthPromptDismissed = true;
         trackEvent("playback_health_prompt_dismissed", getPlaybackAnalyticsProps());
     };
 
     const chooseAnotherStreamForPlaybackHealth = () => {
+        if (playbackHealthRecoveryTimer) {
+            clearTimeout(playbackHealthRecoveryTimer);
+            playbackHealthRecoveryTimer = null;
+        }
         playbackHealthPromptVisible = false;
         playbackHealthPromptDismissed = true;
         trackEvent("playback_health_prompt_action", getPlaybackAnalyticsProps());
@@ -1331,6 +1357,10 @@
         if (bufferingHealthTimer) {
             clearTimeout(bufferingHealthTimer);
             bufferingHealthTimer = null;
+        }
+        if (playbackHealthRecoveryTimer) {
+            clearTimeout(playbackHealthRecoveryTimer);
+            playbackHealthRecoveryTimer = null;
         }
 
         const handoff = nextEpisodePrefetchHandoff;

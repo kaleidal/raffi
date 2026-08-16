@@ -119,6 +119,49 @@ describe("desktop playback compatibility matrix", () => {
 		expect(stopped).toBe(true);
 	});
 
+	test("stops FFmpeg playback when its stdout stream fails", async () => {
+		const handlers = new Map<string, (...args: any[]) => any>();
+		const child = Object.assign(new EventEmitter(), {
+			stdout: new PassThrough(),
+			stderr: new PassThrough(),
+			exitCode: null as number | null,
+			killSignals: [] as string[],
+			kill(signal: string) {
+				this.killSignals.push(signal);
+				return true;
+			},
+		});
+		createFfmpegPlaybackService({
+			app: { isPackaged: false },
+			protocol: { handle() {} },
+			ipcMain: {
+				handle(name: string, handler: (...args: any[]) => any) {
+					handlers.set(name, handler);
+				},
+			},
+			spawn: () => child,
+			baseDir: join(desktopDir, "electron"),
+			resourcesPath: "",
+		});
+
+		const startPromise = handlers.get("FFMPEG_PLAYBACK_START")!({}, {
+			source: localSource,
+			startTime: 0,
+			audioIndex: 1,
+			audioChannels: 6,
+			copyAudio: false,
+		});
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		child.stdout.write(Buffer.from("mp4"));
+		await startPromise;
+		child.stdout.emit("error", new Error("stdout failed"));
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(child.killSignals).toEqual(["SIGTERM"]);
+		child.exitCode = 1;
+		child.emit("exit", 1, null);
+		child.emit("close", 1, null);
+	});
+
 	test("Chromium MSE accepts the emitted AAC and Opus MP4 codecs", async () => {
 		const environment = { ...process.env };
 		delete environment.ELECTRON_RUN_AS_NODE;
