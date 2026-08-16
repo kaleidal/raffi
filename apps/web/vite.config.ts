@@ -17,6 +17,8 @@ export default defineConfig({
 		exclude: ['@raffi/app']
 	},
 	server: {
+		port: 43174,
+		strictPort: true,
 		fs: {
 			allow: ['../..']
 		}

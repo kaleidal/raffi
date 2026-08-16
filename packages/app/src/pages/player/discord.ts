@@ -55,6 +55,7 @@ export function buildDiscordActivity(
 
     return {
         type: 3,
+        statusDisplayType: 2,
         details: meta.name,
         state,
         startTimestamp: hasTimeline

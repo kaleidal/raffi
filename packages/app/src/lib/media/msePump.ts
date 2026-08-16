@@ -1,7 +1,7 @@
 /** How far ahead of the playhead to remux before pausing the conversion. */
-export const TARGET_BUFFER_AHEAD_SECONDS = 60;
+export const TARGET_BUFFER_AHEAD_SECONDS = 30;
 /** Resume remux once buffered ahead drops to this. */
-export const RESUME_BUFFER_AHEAD_SECONDS = 18;
+export const RESUME_BUFFER_AHEAD_SECONDS = 10;
 
 export function waitForSourceBufferIdle(sourceBuffer: SourceBuffer): Promise<void> {
 	if (!sourceBuffer.updating) return Promise.resolve();
@@ -26,6 +26,8 @@ export function waitForSourceBufferIdle(sourceBuffer: SourceBuffer): Promise<voi
 const BATCH_BYTES = 256 * 1024;
 const RETAIN_BUFFER_BEHIND_SECONDS = 30;
 const BUFFER_TRIM_HYSTERESIS_SECONDS = 5;
+const QUOTA_RETAIN_BEHIND_SECONDS = 2;
+const MAX_APPEND_ATTEMPTS = 3;
 
 function concatChunks(chunks: Uint8Array[], total: number): Uint8Array {
 	if (chunks.length === 1) return chunks[0]!;
@@ -53,16 +55,97 @@ async function appendBytes(
 		bytes.byteOffset,
 		bytes.byteOffset + bytes.byteLength,
 	) as ArrayBuffer;
-	try {
-		sourceBuffer.appendBuffer(buffer);
-	} catch (error) {
-		if (!(error instanceof DOMException) || error.name !== "QuotaExceededError") {
-			throw error;
+	for (let attempt = 0; attempt < MAX_APPEND_ATTEMPTS; attempt += 1) {
+		try {
+			sourceBuffer.appendBuffer(buffer);
+			await waitForSourceBufferIdle(sourceBuffer);
+			return;
+		} catch (error) {
+			if (!isQuotaExceededError(error) || attempt === MAX_APPEND_ATTEMPTS - 1) {
+				throw error;
+			}
+			const recovered = await waitForQuotaEviction(sourceBuffer, video, signal);
+			if (!recovered) throw error;
 		}
-		await trimOldBuffer(sourceBuffer, video, signal, 5);
-		sourceBuffer.appendBuffer(buffer);
 	}
+}
+
+function isQuotaExceededError(error: unknown): boolean {
+	return error instanceof DOMException
+		? error.name === "QuotaExceededError"
+		: typeof error === "object" &&
+			error !== null &&
+			"name" in error &&
+			(error as { name?: unknown }).name === "QuotaExceededError";
+}
+
+async function removeBufferedRange(
+	sourceBuffer: SourceBuffer,
+	start: number,
+	end: number,
+	signal?: AbortSignal,
+): Promise<boolean> {
+	if (end - start < 0.25) return false;
+	if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+	sourceBuffer.remove(start, end);
 	await waitForSourceBufferIdle(sourceBuffer);
+	return true;
+}
+
+async function evictConsumedBufferForQuota(
+	sourceBuffer: SourceBuffer,
+	video: HTMLVideoElement | null | undefined,
+	signal?: AbortSignal,
+): Promise<boolean> {
+	if (!video || sourceBuffer.buffered.length === 0) return false;
+	await waitForSourceBufferIdle(sourceBuffer);
+
+	const currentTime = Math.max(0, video.currentTime || 0);
+	const firstStart = sourceBuffer.buffered.start(0);
+	const behindEnd = Math.min(currentTime - QUOTA_RETAIN_BEHIND_SECONDS, currentTime);
+	return removeBufferedRange(sourceBuffer, firstStart, behindEnd, signal);
+}
+
+async function waitForQuotaEviction(
+	sourceBuffer: SourceBuffer,
+	video: HTMLVideoElement | null | undefined,
+	signal?: AbortSignal,
+): Promise<boolean> {
+	if (!video) return false;
+	if (await evictConsumedBufferForQuota(sourceBuffer, video, signal)) return true;
+
+	return new Promise<boolean>((resolve, reject) => {
+		let checking = false;
+		const cleanup = () => {
+			video.removeEventListener("timeupdate", check);
+			signal?.removeEventListener("abort", handleAbort);
+		};
+		const finish = (removed: boolean) => {
+			cleanup();
+			resolve(removed);
+		};
+		const check = async () => {
+			if (checking) return;
+			checking = true;
+			try {
+				if (await evictConsumedBufferForQuota(sourceBuffer, video, signal)) {
+					finish(true);
+				}
+			} catch (error) {
+				cleanup();
+				reject(error);
+			} finally {
+				checking = false;
+			}
+		};
+		const handleAbort = () => {
+			cleanup();
+			reject(new DOMException("Aborted", "AbortError"));
+		};
+		video.addEventListener("timeupdate", check);
+		signal?.addEventListener("abort", handleAbort, { once: true });
+		if (signal?.aborted) handleAbort();
+	});
 }
 
 async function trimOldBuffer(
@@ -121,7 +204,9 @@ export async function pumpStreamToSourceBuffer(
 
 	const flush = async (force = false) => {
 		if (pendingSize === 0) return;
-		if (!force && pendingSize < BATCH_BYTES) return;
+		if (!force && sourceBuffer.buffered.length > 0 && pendingSize < BATCH_BYTES) {
+			return;
+		}
 		const bytes = concatChunks(pending, pendingSize);
 		pending.length = 0;
 		pendingSize = 0;

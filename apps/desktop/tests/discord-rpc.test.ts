@@ -100,6 +100,7 @@ describe("Discord IPC", () => {
     test("normalizes rich presence fields and rejects unsafe links", () => {
         expect(normalizeActivity({
             type: 3,
+            statusDisplayType: 2,
             details: "The 100",
             state: "S1 E1 · 42%",
             startTimestamp: 100,
@@ -113,6 +114,7 @@ describe("Discord IPC", () => {
             ],
         })).toEqual({
             type: 3,
+            status_display_type: 2,
             details: "The 100",
             state: "S1 E1 · 42%",
             instance: false,

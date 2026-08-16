@@ -45,6 +45,9 @@ function normalizeActivity(value) {
   const end = unixTimestamp(value?.endTimestamp);
   const activity = {
     type: [0, 2, 3, 5].includes(value?.type) ? value.type : 3,
+    status_display_type: [0, 1, 2].includes(value?.statusDisplayType)
+      ? value.statusDisplayType
+      : undefined,
     details,
     state,
     instance: false,

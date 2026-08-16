@@ -334,14 +334,14 @@
 
 <style>
     .player-controls {
-        width: min(1000px, calc(100vw - 32px));
-        gap: clamp(6px, 0.55vw, 10px);
-        border-radius: clamp(22px, 2vw, 32px);
-        padding: clamp(12px, 1vw, 20px) clamp(14px, 1.55vw, 30px);
+        width: min(680px, calc(100vw - 24px));
+        gap: 8px;
+        border-radius: clamp(20px, 1.6vw, 26px);
+        padding: 12px 16px;
     }
 
     .player-seek-row {
-        gap: clamp(10px, 1vw, 20px);
+        gap: 12px;
     }
 
     .player-play-button,
@@ -352,11 +352,11 @@
     }
 
     .player-actions {
-        gap: clamp(7px, 0.83vw, 16px);
+        gap: 8px;
     }
 
     .player-volume {
-        width: clamp(110px, 9.375vw, 180px);
+        width: clamp(96px, 7vw, 116px);
     }
 
     @media (max-width: 760px), (orientation: portrait) {

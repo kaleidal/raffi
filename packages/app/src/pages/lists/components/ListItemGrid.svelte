@@ -19,7 +19,7 @@
 </script>
 
 {#if items.length > 0}
-    <div class="grid gap-4 xl:gap-[20px] [grid-template-columns:repeat(auto-fill,minmax(120px,1fr))]">
+    <div class="list-item-grid grid gap-[clamp(12px,1vw,16px)]">
         {#each items as item (item.imdb_id)}
             <button
                 class="flex flex-col gap-[10px] w-full aspect-[2/3] transition-opacity duration-300 group cursor-pointer relative
@@ -64,3 +64,27 @@
         No items in this list
     </div>
 {/if}
+
+<style>
+    .list-item-grid {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+
+    @media (max-width: 1500px) {
+        .list-item-grid {
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 1050px) {
+        .list-item-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 700px) {
+        .list-item-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+    }
+</style>

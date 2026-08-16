@@ -297,6 +297,7 @@ registerMainIpcHandlers({
   getDefenderExclusionStatus: () => defenderService.getExclusionStatus(),
   applyDefenderExclusions: () => defenderService.applyExclusions(),
   scanLibraryRoots,
+  net,
 });
 
 app.on("before-quit", cleanup);

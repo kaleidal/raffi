@@ -13,7 +13,7 @@
   "desktopName": "raffi.desktop",
   "scripts": {
     "dev": "vite --strictPort",
-    "electron:dev": "bun run prepare:ffmpeg && cross-env NODE_ENV=development concurrently -k \"bun run dev\" \"wait-on http://localhost:5173 && cross-env ELECTRON_DISABLE_SANDBOX=1 electron .\"",
+    "electron:dev": "bun run prepare:ffmpeg && cross-env NODE_ENV=development concurrently -k \"bun run dev\" \"wait-on http://localhost:43173 && cross-env ELECTRON_DISABLE_SANDBOX=1 electron .\"",
     "electron:dev:only": "bun run prepare:ffmpeg && cross-env ELECTRON_DISABLE_SANDBOX=1 electron .",
     "build": "bun scripts/build-electron.mjs && vite build",
     "prepare:ffmpeg": "bun scripts/prepare-ffmpeg.mjs",

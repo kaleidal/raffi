@@ -1,6 +1,6 @@
 import { getListsWithItems, getListItems, updateListItemPoster } from "../../lib/db/db";
 import { getCachedMetaData } from "../../lib/library/metaCache";
-import { lists, listItemsMap, selectedItem, selectedListId, loadingItem, playerState } from "./listsState";
+import { lists, listItemsMap, selectedItem, selectedListId, loadingItem } from "./listsState";
 import { get } from "svelte/store";
 import type { List, ExtendedListItem } from "./types";
 import { trackEvent } from "../../lib/analytics";
@@ -120,8 +120,6 @@ export async function selectItem(item: ExtendedListItem, listId: string) {
     if (currentLoadingItem === item.imdb_id) return;
 
     selectedListId.set(listId);
-
-    playerState.update(s => ({ ...s, isPaused: false, isMuted: true }));
 
     trackEvent("list_item_selected", {
         content_type: item.type,

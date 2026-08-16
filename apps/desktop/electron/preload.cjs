@@ -26,6 +26,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     persistClipFile: (sourcePath, targetPath) =>
         ipcRenderer.invoke('PERSIST_CLIP_FILE', { sourcePath, targetPath }),
     fetchCommunityAddons: () => ipcRenderer.invoke('FETCH_COMMUNITY_ADDONS'),
+    preflightStream: (url, timeoutMs) =>
+        ipcRenderer.invoke('PREFLIGHT_STREAM', { url, timeoutMs }),
     showConfirmDialog: (message, title) =>
         ipcRenderer.invoke('SHOW_CONFIRM_DIALOG', { message, title }),
     showAlertDialog: (message, title) =>

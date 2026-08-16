@@ -114,20 +114,26 @@ export function waitForFirstBuffer(
 	if (sourceBuffer.buffered.length > 0) return Promise.resolve();
 
 	return new Promise((resolve, reject) => {
+		let timeout = 0;
+		const armTimeout = () => {
+			window.clearTimeout(timeout);
+			timeout = window.setTimeout(() => {
+				cleanup();
+				reject(new Error("Timed out waiting for playable remux output"));
+			}, 20_000);
+		};
 		const onUpdate = () => {
 			if (sourceBuffer.buffered.length > 0) {
 				cleanup();
 				resolve();
+				return;
 			}
+			armTimeout();
 		};
 		const onAbort = () => {
 			cleanup();
 			reject(new DOMException("Aborted", "AbortError"));
 		};
-		const timeout = window.setTimeout(() => {
-			cleanup();
-			reject(new Error("Timed out waiting for the first remuxed segment"));
-		}, 20_000);
 		const cleanup = () => {
 			window.clearTimeout(timeout);
 			sourceBuffer.removeEventListener("updateend", onUpdate);
@@ -135,6 +141,7 @@ export function waitForFirstBuffer(
 		};
 		sourceBuffer.addEventListener("updateend", onUpdate);
 		signal.addEventListener("abort", onAbort, { once: true });
+		armTimeout();
 	});
 }
 

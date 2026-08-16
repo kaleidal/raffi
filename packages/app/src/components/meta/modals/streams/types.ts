@@ -12,6 +12,12 @@ export interface ParsedStreamMetadata {
     resolutionRank: number;
     isHDR: boolean;
     isDubbed: boolean;
+    videoCodec: "h264" | "hevc" | "av1" | "other" | null;
+    releaseTypeLabel: string | null;
+    audioFormatLabel: string | null;
+    isCached: boolean | null;
+    debridServiceLabel: string | null;
+    debridDashboardUrl: string | null;
     audioLanguageCodes: string[];
     audioLanguageLabel: string | null;
     featureBadges: StreamBadge[];
@@ -40,21 +46,21 @@ export type ResolutionFilter =
     | "480p"
     | "other";
 
-export type AudioFilter = "all" | "original" | "dubbed";
+export type StreamSortOption = "recommended" | "quality" | "sizeAsc" | "peers";
 
-export type SourceFilter = "all" | "local" | "direct" | "torrent";
-
-export type StreamSortOption = "recommended" | "quality" | "sizeAsc" | "sizeDesc" | "peers";
+export type VideoCodecFilter = "all" | "h264" | "hevc" | "av1" | "other";
+export type DynamicRangeFilter = "all" | "sdr" | "hdr";
+export type AvailabilityFilter = "all" | "cached";
+export type SizeFilter = "all" | "2gb" | "5gb" | "10gb" | "20gb";
 
 export interface StreamFilterState {
     resolutionFilter: ResolutionFilter;
-    providerFilter: string;
-    audioFilter: AudioFilter;
     audioLanguageFilter: string;
-    sourceFilter: SourceFilter;
     sortOption: StreamSortOption;
-    excludeDubbed: boolean;
-    excludeHDR: boolean;
+    videoCodecFilter: VideoCodecFilter;
+    dynamicRangeFilter: DynamicRangeFilter;
+    availabilityFilter: AvailabilityFilter;
+    sizeFilter: SizeFilter;
 }
 
 export interface ReleaseInfo {

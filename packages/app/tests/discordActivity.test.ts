@@ -22,6 +22,7 @@ describe("Discord activity", () => {
     test("shows title art, progress, timestamps, and useful links", () => {
         expect(buildDiscordActivity(show, 1, 2, 2_000, 500, true, 10_000)).toEqual({
             type: 3,
+            statusDisplayType: 2,
             details: "The 100",
             state: "S1 E2 · Earth Skills · 25%",
             startTimestamp: 9_500,

@@ -34,4 +34,29 @@ export function toggleMute() {
 
 export function setPlayerIframe(iframe: HTMLIFrameElement) {
     playerState.update(s => ({ ...s, playerIframe: iframe }));
+
+    const applyPreferredState = () => {
+        const state = get(playerState);
+        if (state.playerIframe !== iframe) return;
+        iframe.contentWindow?.postMessage(
+            JSON.stringify({
+                event: "command",
+                func: state.isMuted ? "mute" : "unMute",
+                args: [],
+            }),
+            "*",
+        );
+        iframe.contentWindow?.postMessage(
+            JSON.stringify({
+                event: "command",
+                func: state.isPaused ? "pauseVideo" : "playVideo",
+                args: [],
+            }),
+            "*",
+        );
+    };
+
+    applyPreferredState();
+    setTimeout(applyPreferredState, 250);
+    setTimeout(applyPreferredState, 750);
 }

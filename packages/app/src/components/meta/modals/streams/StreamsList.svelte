@@ -10,11 +10,11 @@
     export let addonFilteredStreams: EnrichedStream[] = [];
     export let showAddonSetupGuide = false;
 
-    export let onStreamClick: (stream: any) => void = () => {};
+    export let onStreamClick: (item: EnrichedStream) => void = () => {};
     export let onOpenAddons: () => void = () => {};
 
-    const handleStreamClick = (stream: any) => {
-        onStreamClick(stream);
+    const handleStreamClick = (item: EnrichedStream) => {
+        onStreamClick(item);
     };
 </script>
 
@@ -60,7 +60,7 @@
                 <StreamCard
                     {item}
                     disabled={item.isFailed}
-                    onClick={() => handleStreamClick(item.stream)}
+                    onClick={() => handleStreamClick(item)}
                 />
             {/each}
 
@@ -75,7 +75,7 @@
                     {item}
                     showPeers
                     disabled={item.isFailed}
-                    onClick={() => handleStreamClick(item.stream)}
+                    onClick={() => handleStreamClick(item)}
                 />
             {/each}
         {/if}
