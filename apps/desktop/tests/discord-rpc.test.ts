@@ -65,6 +65,7 @@ describe("Discord IPC", () => {
         });
         const client = new DiscordIpcClient({
             clientId: "test-client",
+            getSocketCandidates: () => [socketPath],
             onDisconnect() {},
             onError(error) {
                 throw error;

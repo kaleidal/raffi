@@ -29,11 +29,11 @@ function discordSocketCandidates(platform = process.platform, env = process.env)
   const candidates = [];
   for (const root of roots) {
     for (let index = 0; index < 10; index += 1) {
-      candidates.push(path.join(root, `discord-ipc-${index}`));
+      candidates.push(path.posix.join(root, `discord-ipc-${index}`));
       candidates.push(
-        path.join(root, "app", "com.discordapp.Discord", `discord-ipc-${index}`),
+        path.posix.join(root, "app", "com.discordapp.Discord", `discord-ipc-${index}`),
       );
-      candidates.push(path.join(root, "snap.discord", `discord-ipc-${index}`));
+      candidates.push(path.posix.join(root, "snap.discord", `discord-ipc-${index}`));
     }
   }
   return [...new Set(candidates)];
@@ -67,7 +67,12 @@ function openSocket(socketPath, timeoutMs) {
 }
 
 class DiscordIpcClient {
-  constructor({ clientId, onDisconnect, onError }) {
+  constructor({
+    clientId,
+    onDisconnect,
+    onError,
+    getSocketCandidates = discordSocketCandidates,
+  }) {
     this.clientId = clientId;
     this.onDisconnect = onDisconnect;
     this.onError = onError;
@@ -78,6 +83,7 @@ class DiscordIpcClient {
     this.readyResolve = null;
     this.readyReject = null;
     this.destroyed = false;
+    this.getSocketCandidates = getSocketCandidates;
   }
 
   connect() {
@@ -92,7 +98,7 @@ class DiscordIpcClient {
 
   async connectToDiscord() {
     let lastError = new Error("Discord IPC is unavailable");
-    for (const socketPath of discordSocketCandidates()) {
+    for (const socketPath of this.getSocketCandidates()) {
       if (this.destroyed) throw new Error("Discord IPC client was closed");
       let socket;
       try {
