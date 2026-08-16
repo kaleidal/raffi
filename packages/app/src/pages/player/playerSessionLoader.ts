@@ -92,6 +92,10 @@ export type PlayerSessionLoaderDeps = {
     awaitTorrentReady: (torrentId: string) => Promise<void>;
     stopTorrentStatusPolling: () => void;
     awaitDomUpdate: () => Promise<void>;
+    handleProviderStatusMedia?: (context: {
+        source: string;
+        meta: ProbedStream;
+    }) => boolean;
 };
 
 export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
@@ -327,15 +331,6 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                     // ignore
                 }
 
-                Discord.updateDiscordActivity(
-                    metaData,
-                    season,
-                    episode,
-                    get(duration),
-                    0,
-                    false,
-                );
-
                 loading.set(false);
                 loadingStage.set("");
                 loadingDetails.set("");
@@ -456,6 +451,21 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
             }
 
             if (isStale()) return;
+
+            if (
+                clientPlayback?.meta &&
+                deps.handleProviderStatusMedia?.({
+                    source: playbackSrc,
+                    meta: clientPlayback.meta,
+                })
+            ) {
+                loading.set(false);
+                loadingStage.set("");
+                loadingDetails.set("");
+                loadingProgress.set(null);
+                showCanvas.set(false);
+                return;
+            }
 
             const useClientPlayback =
                 clientPlayback?.mode === "direct" ||
@@ -593,15 +603,6 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
             } catch {
                 // ignore
             }
-
-            Discord.updateDiscordActivity(
-                metaData,
-                season,
-                episode,
-                get(duration),
-                0,
-                false,
-            );
 
             const needsSeekStyleModal =
                 !!deps.autoPlay && deps.shouldShowSeekStyleInfoModal();

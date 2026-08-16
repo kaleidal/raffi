@@ -28,6 +28,12 @@
     import { progressMap as metaProgressMap, streamsPopupVisible, selectedStream } from "../meta/metaState";
     import { markCurrentStreamAsFailed } from "../meta/streamLogic";
     import { isDesktopPlatform } from "../../lib/platform";
+    import {
+        isLikelyProviderStatusMedia,
+        isStreamPreparationPending,
+        preflightStreamUrl,
+    } from "../../lib/streams/streamAvailability";
+    import type { StreamAvailabilityHint } from "../meta/types";
 
     import {
         isPlaying,
@@ -99,6 +105,12 @@
         type NextEpisodePrefetchHandoff,
     } from "./nextEpisodePrefetch";
     import type { Chapter } from "./types";
+    import {
+        LONG_PLAYBACK_STALL_MS,
+        recordPlaybackStall,
+        shouldSuggestAnotherStream,
+        type PlaybackStall,
+    } from "./playbackHealth";
 
     // Props
     export let videoSrc: string | null = null;
@@ -115,6 +127,7 @@
     export let joinPartyId: string | null = null;
     export let autoJoin: boolean = false;
     export let autoSkipFromNextEpisode: boolean = false;
+    export let streamAvailability: StreamAvailabilityHint | null = null;
 
     const imdbID = metaData?.meta?.imdb_id || null;
     const NEXT_EPISODE_PREFETCH_CLICK_GRACE_MS = 750;
@@ -180,6 +193,19 @@
     let isPlayerRoute = true;
     let loadingBackdropSrc: string | null = null;
     let loadingBackdropMode: "art" | "frame" = "art";
+    let availabilityNoticeVisible = false;
+    let availabilityBlockedSource: string | null = null;
+    let availabilityCheckSource: string | null = null;
+    let availabilityCheckRun = 0;
+
+    const getEpisodeLoadingBackdrop = () => {
+        if (metaData?.meta?.type !== "series") return null;
+        return metaData.meta.videos?.find(
+            (video) =>
+                video.season === season &&
+                (video.episode === episode || video.number === episode),
+        )?.thumbnail ?? null;
+    };
 
     const getWindowControls = () =>
         (typeof window !== "undefined" ? (window as any).electronAPI?.windowControls : undefined) as
@@ -421,6 +447,11 @@
     let playbackClosedTracked = false;
     let bufferingActive = false;
     let bufferingStartedAt = 0;
+    let bufferingEligibleForHealthPrompt = false;
+    let bufferingHealthTimer: ReturnType<typeof setTimeout> | null = null;
+    let recentPlaybackStalls: PlaybackStall[] = [];
+    let playbackHealthPromptVisible = false;
+    let playbackHealthPromptDismissed = false;
     let errorModalOpen = false;
     let reprobeAttempted = false;
     let torrentFailureExitTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -570,6 +601,22 @@
         setIntroDbChapters: (chapters) => {
             introDbChapters = chapters;
         },
+        handleProviderStatusMedia: ({ source, meta }) => {
+            if (
+                !streamAvailability ||
+                !isLikelyProviderStatusMedia({
+                    expectedSizeBytes: streamAvailability.expectedSizeBytes,
+                    durationSeconds: meta.durationSeconds,
+                })
+            ) {
+                return false;
+            }
+
+            availabilityBlockedSource = videoSrc || source;
+            availabilityNoticeVisible = true;
+            showError.set(false);
+            return true;
+        },
         resolvePlaybackStart: async ({ sessionData, startTime, metaData, season, episode }) => {
             let nextIntroDbChapters: Chapter[] = [];
 
@@ -620,7 +667,8 @@
             playbackOffset: $playbackOffset,
             videoElem,
             captureFrame: () => Session.captureFrame(videoElem, canvasElem),
-            onAfterSeek: () =>
+            onAfterSeek: () => {
+                if (!hasStarted) return;
                 Discord.updateDiscordActivity(
                     metaData,
                     season,
@@ -628,7 +676,8 @@
                     $duration,
                     $currentTime,
                     $isPlaying,
-                ),
+                );
+            },
             isWatchPartyHost: $watchParty.isHost,
             isPlaying: $isPlaying,
             updatePlaybackState: WatchParty.updatePlaybackState,
@@ -678,7 +727,7 @@
 
     const captureLoadingBackdrop = () => {
         if (!hasStarted) {
-            loadingBackdropSrc = null;
+            loadingBackdropSrc = getEpisodeLoadingBackdrop();
             loadingBackdropMode = "art";
             return;
         }
@@ -803,6 +852,7 @@
     });
 
     onDestroy(() => {
+        availabilityCheckRun += 1;
         getWindowControls()?.syncMiniPlayerState?.({
             enabled: false,
             canEnter: false,
@@ -820,6 +870,7 @@
         torrentStatusPoller.stop();
         if (playPauseFeedbackTimeout) clearTimeout(playPauseFeedbackTimeout);
         if (torrentFailureExitTimeout) clearTimeout(torrentFailureExitTimeout);
+        if (bufferingHealthTimer) clearTimeout(bufferingHealthTimer);
         clearEmbedLoadFallback();
         clearBrowserAudioCheck();
         playerSessionLoader.cancelCurrentLoad();
@@ -968,6 +1019,11 @@
     const handlePlay = () => {
         torrentStatusPoller.stop();
         isPlaying.set(true);
+    };
+
+    const handlePlaying = () => {
+        torrentStatusPoller.stop();
+        isPlaying.set(true);
         hasStarted = true;
         void traktScrobbler.send("start");
         if (!playbackStartTracked) {
@@ -985,12 +1041,23 @@
         if ($watchParty.isHost) {
             WatchParty.updatePlaybackState($currentTime, true);
         }
+        playbackBuffering.set(false);
+        loading.set(false);
+        loadingStage.set("");
+        loadingDetails.set("");
+        loadingProgress.set(null);
+        handleBufferEnd();
+        scheduleBrowserAudioCheck();
     };
 
     const handlePause = () => {
         // Hard seeks pause the element on purpose while remux/HLS rebuilds —
         // don't treat that as a user pause (Trakt / Discord / watch party).
         if (get(seekGuard) || get(pendingSeek) != null) {
+            return;
+        }
+        if (!hasStarted) {
+            Discord.clearDiscordActivity();
             return;
         }
         isPlaying.set(false);
@@ -1020,17 +1087,83 @@
         if (bufferingActive) return;
         bufferingActive = true;
         bufferingStartedAt = Date.now();
+        bufferingEligibleForHealthPrompt =
+            hasStarted && !get(seekGuard) && get(pendingSeek) == null;
+        if (
+            bufferingEligibleForHealthPrompt &&
+            !playbackHealthPromptVisible &&
+            !playbackHealthPromptDismissed
+        ) {
+            if (bufferingHealthTimer) clearTimeout(bufferingHealthTimer);
+            bufferingHealthTimer = setTimeout(() => {
+                if (
+                    bufferingActive &&
+                    bufferingEligibleForHealthPrompt &&
+                    !playbackHealthPromptDismissed
+                ) {
+                    playbackHealthPromptVisible = true;
+                    trackEvent("playback_health_prompt_shown", {
+                        trigger: "long_stall",
+                        ...getPlaybackAnalyticsProps(),
+                    });
+                }
+            }, LONG_PLAYBACK_STALL_MS);
+        }
         trackEvent("playback_buffering_started", getPlaybackAnalyticsProps());
     };
 
     const handleBufferEnd = () => {
         if (!bufferingActive) return;
         bufferingActive = false;
+        if (bufferingHealthTimer) {
+            clearTimeout(bufferingHealthTimer);
+            bufferingHealthTimer = null;
+        }
         const durationMs = Date.now() - bufferingStartedAt;
+        if (
+            bufferingEligibleForHealthPrompt &&
+            !get(seekGuard) &&
+            get(pendingSeek) == null
+        ) {
+            recentPlaybackStalls = recordPlaybackStall(
+                recentPlaybackStalls,
+                durationMs,
+            );
+            if (
+                !playbackHealthPromptDismissed &&
+                !playbackHealthPromptVisible &&
+                shouldSuggestAnotherStream(recentPlaybackStalls)
+            ) {
+                playbackHealthPromptVisible = true;
+                trackEvent("playback_health_prompt_shown", {
+                    trigger: "repeated_stalls",
+                    stall_count: recentPlaybackStalls.length,
+                    stall_duration_ms: recentPlaybackStalls.reduce(
+                        (total, stall) => total + stall.durationMs,
+                        0,
+                    ),
+                    ...getPlaybackAnalyticsProps(),
+                });
+            }
+        }
+        bufferingEligibleForHealthPrompt = false;
         trackEvent("playback_buffering_ended", {
             buffer_duration_ms: durationMs,
             ...getPlaybackAnalyticsProps(),
         });
+    };
+
+    const dismissPlaybackHealthPrompt = () => {
+        playbackHealthPromptVisible = false;
+        playbackHealthPromptDismissed = true;
+        trackEvent("playback_health_prompt_dismissed", getPlaybackAnalyticsProps());
+    };
+
+    const chooseAnotherStreamForPlaybackHealth = () => {
+        playbackHealthPromptVisible = false;
+        playbackHealthPromptDismissed = true;
+        trackEvent("playback_health_prompt_action", getPlaybackAnalyticsProps());
+        returnToStreams();
     };
 
     const reloadSession = () => {
@@ -1048,6 +1181,7 @@
     };
 
     $: if ($showError && !errorModalOpen) {
+        Discord.clearDiscordActivity();
         loading.set(false);
         loadingStage.set("");
         loadingDetails.set("");
@@ -1062,6 +1196,10 @@
 
     $: if (!$showError && errorModalOpen) {
         errorModalOpen = false;
+    }
+
+    $: if (availabilityNoticeVisible) {
+        Discord.clearDiscordActivity();
     }
 
     const showActionLoading = (actionLabel: string, err: unknown) => {
@@ -1186,6 +1324,14 @@
         playbackStartTracked = false;
         playbackClosedTracked = false;
         bingeAutoAdvancing = false;
+        recentPlaybackStalls = [];
+        playbackHealthPromptVisible = false;
+        playbackHealthPromptDismissed = false;
+        bufferingEligibleForHealthPrompt = false;
+        if (bufferingHealthTimer) {
+            clearTimeout(bufferingHealthTimer);
+            bufferingHealthTimer = null;
+        }
 
         const handoff = nextEpisodePrefetchHandoff;
         const canReuseHandoff = canReuseNextEpisodePrefetch(
@@ -1259,8 +1405,116 @@
         loadVideo(nextVideoSrc, reuseSession ? { reuseSession } : undefined);
     };
 
-    $: if (videoSrc && videoSrc !== currentVideoSrc) {
-        transitionToVideoSource(videoSrc);
+    const shouldPreflightSource = (source: string) =>
+        Boolean(
+            streamAvailability &&
+            /^https?:\/\//i.test(source) &&
+            $selectedStream?.raffiSource !== "local" &&
+            $selectedStream?.raffiSource !== "direct" &&
+            $selectedStream?.directPlaybackMode !== "iframe",
+        );
+
+    const prepareVideoSource = async (nextVideoSrc: string) => {
+        if (
+            nextVideoSrc === currentVideoSrc ||
+            nextVideoSrc === availabilityCheckSource ||
+            nextVideoSrc === availabilityBlockedSource
+        ) return;
+
+        if (!shouldPreflightSource(nextVideoSrc)) {
+            transitionToVideoSource(nextVideoSrc);
+            return;
+        }
+
+        const run = ++availabilityCheckRun;
+        availabilityCheckSource = nextVideoSrc;
+        availabilityNoticeVisible = false;
+        showError.set(false);
+        errorMessage.set("");
+        errorDetails.set("");
+        loadingBackdropSrc = getEpisodeLoadingBackdrop();
+        loadingBackdropMode = "art";
+        loading.set(true);
+        loadingStage.set("Checking availability");
+        loadingDetails.set("Verifying that this source can start immediately.");
+        loadingProgress.set(null);
+
+        const result = await preflightStreamUrl(nextVideoSrc);
+        if (run !== availabilityCheckRun || videoSrc !== nextVideoSrc) return;
+        availabilityCheckSource = null;
+
+        if (result.state === "network-error") {
+            availabilityBlockedSource = nextVideoSrc;
+            errorMessage.set("Stream connection failed");
+            errorDetails.set(
+                "Raffi couldn't reach this stream. It may be blocked by your network, carrier, ISP, or DNS provider. Try changing DNS, switching networks, or using a VPN.",
+            );
+            showError.set(true);
+            loading.set(false);
+            return;
+        }
+
+        const looksLikeStatusMedia =
+            result.state === "ready" &&
+            isLikelyProviderStatusMedia({
+                expectedSizeBytes: streamAvailability?.expectedSizeBytes ?? null,
+                actualSizeBytes: result.totalBytes,
+            });
+
+        if (
+            looksLikeStatusMedia ||
+            isStreamPreparationPending(result, streamAvailability?.cacheHint ?? null)
+        ) {
+            availabilityBlockedSource = nextVideoSrc;
+            availabilityNoticeVisible = true;
+            loading.set(false);
+            return;
+        }
+
+        transitionToVideoSource(nextVideoSrc);
+    };
+
+    const retryInitialSource = () => {
+        if (
+            videoSrc &&
+            availabilityBlockedSource === videoSrc &&
+            currentVideoSrc !== videoSrc
+        ) {
+            availabilityBlockedSource = null;
+            showError.set(false);
+            void prepareVideoSource(videoSrc);
+            return;
+        }
+        modalHandlers.onErrorRetry();
+    };
+
+    const returnToStreams = () => {
+        streamsPopupVisible.set(true);
+        void handleClose();
+    };
+
+    const openAvailabilityDashboard = () => {
+        const url = streamAvailability?.dashboardUrl;
+        if (!url || typeof window === "undefined") return;
+        const electronApi = (window as any).electronAPI as
+            | { openExternal?: (target: string) => Promise<void> }
+            | undefined;
+        if (electronApi?.openExternal) {
+            void electronApi.openExternal(url).catch(() => {
+                window.open(url, "_blank", "noopener,noreferrer");
+            });
+            return;
+        }
+        window.open(url, "_blank", "noopener,noreferrer");
+    };
+
+    $: if (
+        videoSrc &&
+        videoSrc !== currentVideoSrc &&
+        videoSrc !== availabilityCheckSource &&
+        videoSrc !== availabilityBlockedSource
+    ) {
+        void prepareVideoSource(videoSrc);
     }
 
     $: effectiveChapterMarkers = Chapters.getEffectiveChapterSegments($sessionData, introDbChapters);
@@ -1270,7 +1524,7 @@
     }
 
     $: if ($loading && !hasStarted) {
-        loadingBackdropSrc = null;
+        loadingBackdropSrc = getEpisodeLoadingBackdrop();
         loadingBackdropMode = "art";
     }
 
@@ -1402,18 +1656,11 @@
                     }
                     handleBufferStart();
                 }}
-                on:playing={() => {
-                    playbackBuffering.set(false);
-                    loading.set(false);
-                    loadingStage.set("");
-                    loadingDetails.set("");
-                    loadingProgress.set(null);
-                    handleBufferEnd();
-                    scheduleBrowserAudioCheck();
-                }}
+                on:playing={handlePlaying}
                 on:canplay={() => {
                     playbackBuffering.set(false);
                     loading.set(false);
+                    handleBufferEnd();
                 }}
                 on:error={handleVideoError}
             />
@@ -1463,9 +1710,16 @@
         showError={$showError && !hasStarted && !miniPlayerActive}
         errorMessage={$errorMessage}
         errorDetails={$errorDetails}
-        onRetry={modalHandlers.onErrorRetry}
+        onRetry={retryInitialSource}
         onBack={modalHandlers.onErrorBack}
         onDownloadDesktop={openDesktopDownload}
+        showNotice={availabilityNoticeVisible && !miniPlayerActive}
+        noticeTitle="Not available on demand"
+        noticeDetails={`This stream is not ready yet. ${streamAvailability?.providerLabel || "Your debrid provider"} has started preparing it, which can take a while and sometimes days. Check your provider dashboard for progress, then try this source again once it is cached.`}
+        noticePrimaryLabel="Back to Streams"
+        noticeSecondaryLabel={streamAvailability?.dashboardUrl ? "Open Dashboard" : ""}
+        onNoticePrimary={returnToStreams}
+        onNoticeSecondary={openAvailabilityDashboard}
         showSeekStyle={$showSeekStyleModal && !hasStarted && !miniPlayerActive}
         {seekBarStyle}
         onSeekStyleChange={handleSeekStyleChange}
@@ -1485,11 +1739,11 @@
                 : '-translate-y-10 opacity-0 pointer-events-none'} will-change-transform will-change-opacity"
         >
             <button
-                class="bg-[#000000]/20 backdrop-blur-md hover:bg-[#FFFFFF]/20 transition-colors duration-200 rounded-full p-4 cursor-pointer"
+                class="player-nav-button bg-[#000000]/20 backdrop-blur-md hover:bg-[#FFFFFF]/20 transition-colors duration-200 rounded-full cursor-pointer"
                 on:click={handleClose}
                 aria-label="Close player"
             >
-                <ChevronLeft size={30} color="white" strokeWidth={2} />
+                <ChevronLeft size={26} color="white" strokeWidth={2} />
             </button>
         </div>
 
@@ -1500,14 +1754,14 @@
                     : '-translate-y-10 opacity-0 pointer-events-none'} will-change-transform will-change-opacity"
             >
                 <button
-                    class="backdrop-blur-md transition-all duration-200 rounded-full p-4 cursor-pointer {nextEpisodeHighlighted
+                    class="player-nav-button backdrop-blur-md transition-all duration-200 rounded-full cursor-pointer {nextEpisodeHighlighted
                         ? 'bg-white shadow-[0_0_0_4px_rgba(255,255,255,0.22),0_0_32px_rgba(255,255,255,0.5)] scale-105'
                         : 'bg-[#000000]/20 hover:bg-[#FFFFFF]/20'}"
                     on:click={handleNextEpisodeClick}
                     aria-label="Next episode"
                     title={nextEpisodeHighlighted ? "Next Episode — Outro" : "Next Episode"}
                 >
-                    <SkipForward size={30} color={nextEpisodeHighlighted ? "black" : "white"} strokeWidth={2} />
+                    <SkipForward size={26} color={nextEpisodeHighlighted ? "black" : "white"} strokeWidth={2} />
                 </button>
             </div>
         {/if}
@@ -1538,6 +1792,9 @@
                     isWatchPartyMember={!$localMode && $watchParty.isActive && !$watchParty.isHost}
                     skipLabel={skipButtonLabel}
                     skipChapter={handleSkipIntro}
+                    showPlaybackHealthPrompt={playbackHealthPromptVisible}
+                    chooseAnotherStream={chooseAnotherStreamForPlaybackHealth}
+                    keepWatching={dismissPlaybackHealthPrompt}
                 />
 
                 <div
@@ -1638,6 +1895,18 @@
 <style>
     .player-controls-dock {
         bottom: clamp(14px, 4.5vh, 50px);
+    }
+
+    .player-nav-button {
+        display: grid;
+        width: clamp(44px, 3.2vw, 54px);
+        height: clamp(44px, 3.2vw, 54px);
+        place-items: center;
+    }
+
+    .player-nav-button :global(svg) {
+        width: clamp(21px, 1.55vw, 26px);
+        height: clamp(21px, 1.55vw, 26px);
     }
 
     @media (orientation: portrait), (max-height: 620px) {

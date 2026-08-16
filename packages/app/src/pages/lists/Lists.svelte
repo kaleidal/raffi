@@ -131,7 +131,7 @@
 
 <style>
     .lists-layout {
-        grid-template-columns: minmax(0, 1fr) minmax(320px, 0.92fr);
+        grid-template-columns: minmax(0, 1.12fr) minmax(380px, 0.88fr);
     }
 
     @media (max-width: 900px), (orientation: portrait) {

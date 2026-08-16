@@ -5,17 +5,20 @@
     import { trackEvent } from "../../../lib/analytics";
     import type { Addon } from "../../../lib/db/db";
     import type { ShowResponse } from "../../../lib/library/types/meta_types";
-    import type { ProgressItem, ProgressMap } from "../../../pages/meta/types";
+    import type { ProgressItem, ProgressMap, Stream } from "../../../pages/meta/types";
     import EpisodeDetailsPanel from "./streams/EpisodeDetailsPanel.svelte";
     import StreamsFiltersPanel from "./streams/StreamsFiltersPanel.svelte";
     import StreamsList from "./streams/StreamsList.svelte";
     import {
         getAudioLanguageFilterOptions,
+        getAvailableStreamFilterOptions,
         getFilteredAddons,
-        getProviderFilterOptions,
         getStreamCounts,
         RESOLUTION_FILTERS,
-        SOURCE_FILTERS,
+        VIDEO_CODEC_FILTERS,
+        DYNAMIC_RANGE_FILTERS,
+        AVAILABILITY_FILTERS,
+        SIZE_FILTERS,
         splitStreamsBySource,
         STREAM_SORT_OPTIONS,
         applyStreamFilters,
@@ -24,11 +27,14 @@
     } from "./streams/streamFilters";
     import { computeProgressDetails, getProgressEntry, getReleaseInfo } from "./streams/episodeDetails";
     import type {
-        AudioFilter,
         EpisodeProgressDetails,
+        EnrichedStream,
         ResolutionFilter,
-        SourceFilter,
         StreamSortOption,
+        VideoCodecFilter,
+        DynamicRangeFilter,
+        AvailabilityFilter,
+        SizeFilter,
     } from "./streams/types";
 
     export let streamsPopupVisible = false;
@@ -60,24 +66,17 @@
     };
 
     let resolutionFilter: ResolutionFilter = "all";
-    let providerFilter = "all";
-    let audioFilter: AudioFilter = "all";
     let audioLanguageFilter = "all";
-    let sourceFilter: SourceFilter = "all";
     let sortOption: StreamSortOption = "recommended";
-    let excludeDubbed = false;
     let filtersCollapsed = true;
-    let excludeHDR = false;
+    let videoCodecFilter: VideoCodecFilter = "all";
+    let dynamicRangeFilter: DynamicRangeFilter = "all";
+    let availabilityFilter: AvailabilityFilter = "all";
+    let sizeFilter: SizeFilter = "all";
     let hasTrackedOpen = false;
 
     let episodeProgressEntry: ProgressItem | null = null;
     let progressDetails: EpisodeProgressDetails | null = null;
-
-    $: popupBackdropSrc =
-        selectedEpisode?.thumbnail ||
-        metaData?.meta?.background ||
-        metaData?.meta?.poster ||
-        null;
 
     function getStreamCountsNow() {
         return getStreamCounts(streams);
@@ -85,13 +84,12 @@
 
     function resetFilters() {
         resolutionFilter = "all";
-        providerFilter = "all";
-        audioFilter = "all";
         audioLanguageFilter = "all";
-        sourceFilter = "all";
         sortOption = "recommended";
-        excludeDubbed = false;
-        excludeHDR = false;
+        videoCodecFilter = "all";
+        dynamicRangeFilter = "all";
+        availabilityFilter = "all";
+        sizeFilter = "all";
         trackEvent("stream_filters_reset", getStreamCountsNow());
     }
 
@@ -101,41 +99,7 @@
         trackEvent("stream_filter_resolution", {
             value,
             audio_language_filter: audioLanguageFilter,
-            source_filter: sourceFilter,
             sort_option: sortOption,
-            exclude_hdr: excludeHDR,
-            ...getStreamCountsNow(),
-        });
-    }
-
-    function setProviderFilter(value: string) {
-        if (providerFilter === value) return;
-        providerFilter = value;
-        trackEvent("stream_filter_provider", {
-            value,
-            resolution_filter: resolutionFilter,
-            audio_filter: audioFilter,
-            audio_language_filter: audioLanguageFilter,
-            source_filter: sourceFilter,
-            sort_option: sortOption,
-            exclude_dubbed: excludeDubbed,
-            exclude_hdr: excludeHDR,
-            ...getStreamCountsNow(),
-        });
-    }
-
-    function setAudioFilter(value: AudioFilter) {
-        if (audioFilter === value) return;
-        audioFilter = value;
-        trackEvent("stream_filter_audio", {
-            value,
-            resolution_filter: resolutionFilter,
-            provider_filter: providerFilter,
-            audio_language_filter: audioLanguageFilter,
-            source_filter: sourceFilter,
-            sort_option: sortOption,
-            exclude_dubbed: excludeDubbed,
-            exclude_hdr: excludeHDR,
             ...getStreamCountsNow(),
         });
     }
@@ -146,28 +110,7 @@
         trackEvent("stream_filter_audio_language", {
             value,
             resolution_filter: resolutionFilter,
-            provider_filter: providerFilter,
-            audio_filter: audioFilter,
-            source_filter: sourceFilter,
             sort_option: sortOption,
-            exclude_dubbed: excludeDubbed,
-            exclude_hdr: excludeHDR,
-            ...getStreamCountsNow(),
-        });
-    }
-
-    function setSourceFilter(value: SourceFilter) {
-        if (sourceFilter === value) return;
-        sourceFilter = value;
-        trackEvent("stream_filter_source", {
-            value,
-            resolution_filter: resolutionFilter,
-            provider_filter: providerFilter,
-            audio_filter: audioFilter,
-            audio_language_filter: audioLanguageFilter,
-            sort_option: sortOption,
-            exclude_dubbed: excludeDubbed,
-            exclude_hdr: excludeHDR,
             ...getStreamCountsNow(),
         });
     }
@@ -178,44 +121,33 @@
         trackEvent("stream_sort_changed", {
             value,
             resolution_filter: resolutionFilter,
-            provider_filter: providerFilter,
-            audio_filter: audioFilter,
             audio_language_filter: audioLanguageFilter,
-            source_filter: sourceFilter,
-            exclude_dubbed: excludeDubbed,
-            exclude_hdr: excludeHDR,
             ...getStreamCountsNow(),
         });
     }
 
-    function toggleExcludeDubbed() {
-        excludeDubbed = !excludeDubbed;
-        trackEvent("stream_filter_exclude_dubbed", {
-            excluded: excludeDubbed,
-            resolution_filter: resolutionFilter,
-            provider_filter: providerFilter,
-            audio_filter: audioFilter,
-            audio_language_filter: audioLanguageFilter,
-            source_filter: sourceFilter,
-            sort_option: sortOption,
-            exclude_hdr: excludeHDR,
-            ...getStreamCountsNow(),
-        });
+    function setVideoCodecFilter(value: VideoCodecFilter) {
+        if (videoCodecFilter === value) return;
+        videoCodecFilter = value;
+        trackEvent("stream_filter_video_codec", { value, ...getStreamCountsNow() });
     }
 
-    function toggleExcludeHDR() {
-        excludeHDR = !excludeHDR;
-        trackEvent("stream_filter_hdr", {
-            excluded: excludeHDR,
-            resolution_filter: resolutionFilter,
-            provider_filter: providerFilter,
-            audio_filter: audioFilter,
-            audio_language_filter: audioLanguageFilter,
-            source_filter: sourceFilter,
-            sort_option: sortOption,
-            exclude_dubbed: excludeDubbed,
-            ...getStreamCountsNow(),
-        });
+    function setDynamicRangeFilter(value: DynamicRangeFilter) {
+        if (dynamicRangeFilter === value) return;
+        dynamicRangeFilter = value;
+        trackEvent("stream_filter_dynamic_range", { value, ...getStreamCountsNow() });
+    }
+
+    function setAvailabilityFilter(value: AvailabilityFilter) {
+        if (availabilityFilter === value) return;
+        availabilityFilter = value;
+        trackEvent("stream_filter_availability", { value, ...getStreamCountsNow() });
+    }
+
+    function setSizeFilter(value: SizeFilter) {
+        if (sizeFilter === value) return;
+        sizeFilter = value;
+        trackEvent("stream_filter_size", { value, ...getStreamCountsNow() });
     }
 
     function selectAddon(addon: Addon) {
@@ -232,19 +164,29 @@
         trackEvent("stream_list_closed", {
             filters_active: filtersActive,
             resolution_filter: resolutionFilter,
-            provider_filter: providerFilter,
-            audio_filter: audioFilter,
             audio_language_filter: audioLanguageFilter,
-            source_filter: sourceFilter,
             sort_option: sortOption,
-            exclude_dubbed: excludeDubbed,
-            exclude_hdr: excludeHDR,
+            video_codec_filter: videoCodecFilter,
+            dynamic_range_filter: dynamicRangeFilter,
+            availability_filter: availabilityFilter,
+            size_filter: sizeFilter,
             ...getStreamCountsNow(),
         });
         onClose();
     }
 
-    function handleStreamClick(stream: any) {
+    function handleStreamClick(item: EnrichedStream) {
+        const stream: Stream = {
+            ...item.stream,
+            raffiAvailability: {
+                cacheHint: item.meta.isCached,
+                providerLabel: item.meta.debridServiceLabel,
+                dashboardUrl: item.meta.debridDashboardUrl,
+                expectedSizeBytes: item.meta.sizeInMb == null
+                    ? null
+                    : item.meta.sizeInMb * 1024 * 1024,
+            },
+        };
         onStreamClick(stream);
     }
 
@@ -259,25 +201,35 @@
 
     $: filterState = {
         resolutionFilter,
-        providerFilter,
-        audioFilter,
         audioLanguageFilter,
-        sourceFilter,
         sortOption,
-        excludeDubbed,
-        excludeHDR,
+        videoCodecFilter,
+        dynamicRangeFilter,
+        availabilityFilter,
+        sizeFilter,
     };
 
     $: filteredAddons = getFilteredAddons(addons);
     $: enrichedStreams = buildEnrichedStreams(streams, $failedStreamKeys);
-    $: providerFilterOptions = getProviderFilterOptions(enrichedStreams);
     $: audioLanguageFilterOptions = getAudioLanguageFilterOptions(enrichedStreams);
-    $: if (providerFilter !== "all" && !providerFilterOptions.includes(providerFilter)) {
-        providerFilter = "all";
-    }
-
+    $: availableFilterOptions = getAvailableStreamFilterOptions(enrichedStreams);
     $: if (audioLanguageFilter !== "all" && !audioLanguageFilterOptions.includes(audioLanguageFilter)) {
         audioLanguageFilter = "all";
+    }
+    $: if (!availableFilterOptions.resolutions.some((option) => option.value === resolutionFilter)) {
+        resolutionFilter = "all";
+    }
+    $: if (!availableFilterOptions.codecs.some((option) => option.value === videoCodecFilter)) {
+        videoCodecFilter = "all";
+    }
+    $: if (!availableFilterOptions.dynamicRanges.some((option) => option.value === dynamicRangeFilter)) {
+        dynamicRangeFilter = "all";
+    }
+    $: if (!availableFilterOptions.availability.some((option) => option.value === availabilityFilter)) {
+        availabilityFilter = "all";
+    }
+    $: if (!availableFilterOptions.sizes.some((option) => option.value === sizeFilter)) {
+        sizeFilter = "all";
     }
 
     $: filteredStreams = applyStreamFilters(enrichedStreams, filterState);
@@ -311,19 +263,19 @@
         trackEvent("stream_list_opened", {
             ...getStreamCountsNow(),
             resolution_filter: resolutionFilter,
-            provider_filter: providerFilter,
-            audio_filter: audioFilter,
             audio_language_filter: audioLanguageFilter,
-            source_filter: sourceFilter,
             sort_option: sortOption,
-            exclude_dubbed: excludeDubbed,
-            exclude_hdr: excludeHDR,
+            video_codec_filter: videoCodecFilter,
+            dynamic_range_filter: dynamicRangeFilter,
+            availability_filter: availabilityFilter,
+            size_filter: sizeFilter,
         });
     }
 
     $: if (!streamsPopupVisible && hasTrackedOpen) {
         hasTrackedOpen = false;
     }
+
 </script>
 
 {#if streamsPopupVisible}
@@ -338,7 +290,7 @@
         tabindex="0"
     >
         <div
-            class="raffi-modal-surface streams-surface w-full max-w-[1180px] rounded-4xl bg-[#2a2a2a]/56 backdrop-blur-[40px] p-[clamp(18px,2vw,32px)] flex flex-col gap-6 overflow-hidden relative isolate shadow-[0_40px_160px_rgba(0,0,0,0.45)]"
+            class="raffi-modal-surface streams-surface rounded-4xl bg-[#2a2a2a]/56 backdrop-blur-[40px] p-[clamp(18px,2vw,32px)] flex flex-col gap-6 overflow-hidden relative isolate shadow-[0_40px_160px_rgba(0,0,0,0.45)]"
             on:wheel|stopPropagation
         >
             <button
@@ -391,34 +343,34 @@
                     {/if}
 
                     {#if !loadingStreams && streams.length > 0}
-                    <StreamsFiltersPanel
-                        {filtersCollapsed}
-                        filteredCount={filteredStreams.length}
-                        totalCount={streams.length}
-                        {resolutionFilter}
-                        {providerFilter}
-                        {audioFilter}
-                        {audioLanguageFilter}
-                        {sourceFilter}
-                        {sortOption}
-                        {excludeDubbed}
-                        {excludeHDR}
-                        {providerFilterOptions}
-                        {audioLanguageFilterOptions}
-                        resolutionFilters={RESOLUTION_FILTERS}
-                        sourceFilters={SOURCE_FILTERS}
-                        sortOptions={STREAM_SORT_OPTIONS}
-                        onToggleFiltersCollapsed={() => (filtersCollapsed = !filtersCollapsed)}
-                        onSetResolutionFilter={setResolutionFilter}
-                        onSetProviderFilter={setProviderFilter}
-                        onSetAudioFilter={setAudioFilter}
-                        onSetAudioLanguageFilter={setAudioLanguageFilter}
-                        onSetSourceFilter={setSourceFilter}
-                        onSetSortOption={setSortOption}
-                        onToggleExcludeDubbed={toggleExcludeDubbed}
-                        onToggleExcludeHDR={toggleExcludeHDR}
-                        onResetFilters={resetFilters}
-                    />
+                        <StreamsFiltersPanel
+                            {filtersCollapsed}
+                            filteredCount={filteredStreams.length}
+                            totalCount={streams.length}
+                            {resolutionFilter}
+                            {audioLanguageFilter}
+                            {videoCodecFilter}
+                            {dynamicRangeFilter}
+                            {availabilityFilter}
+                            {sizeFilter}
+                            {sortOption}
+                            {audioLanguageFilterOptions}
+                            resolutionFilters={availableFilterOptions.resolutions}
+                            videoCodecFilters={availableFilterOptions.codecs}
+                            dynamicRangeFilters={availableFilterOptions.dynamicRanges}
+                            availabilityFilters={availableFilterOptions.availability}
+                            sizeFilters={availableFilterOptions.sizes}
+                            sortOptions={STREAM_SORT_OPTIONS}
+                            onToggleFiltersCollapsed={() => (filtersCollapsed = !filtersCollapsed)}
+                            onSetResolutionFilter={setResolutionFilter}
+                            onSetAudioLanguageFilter={setAudioLanguageFilter}
+                            onSetVideoCodecFilter={setVideoCodecFilter}
+                            onSetDynamicRangeFilter={setDynamicRangeFilter}
+                            onSetAvailabilityFilter={setAvailabilityFilter}
+                            onSetSizeFilter={setSizeFilter}
+                            onSetSortOption={setSortOption}
+                            onResetFilters={resetFilters}
+                        />
                     {/if}
 
                     <StreamsList
@@ -438,12 +390,18 @@
 {/if}
 
 <style>
+    .streams-surface {
+        width: min(1024px, calc(100vw - (2 * var(--raffi-modal-gutter))));
+        max-width: 1024px;
+    }
+
     .streams-layout {
         grid-template-columns: minmax(340px, 410px) minmax(0, 1fr);
     }
 
     @media (max-width: 900px), (orientation: portrait) {
         .streams-surface {
+            width: 100%;
             overflow-y: auto;
         }
 

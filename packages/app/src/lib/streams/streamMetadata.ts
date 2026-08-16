@@ -28,6 +28,38 @@ export const AVAILABILITY_MAP: Record<string, string> = {
     PM: "Premiumize",
 };
 
+export interface DebridAvailability {
+    serviceLabel: string | null;
+    dashboardUrl: string | null;
+    isCached: boolean | null;
+}
+
+const DEBRID_SERVICES: Record<string, { label: string; dashboardUrl: string }> = {
+    TB: { label: "TorBox", dashboardUrl: "https://www.torbox.app/dashboard" },
+    RD: { label: "Real-Debrid", dashboardUrl: "https://real-debrid.com/torrents" },
+    AD: { label: "AllDebrid", dashboardUrl: "https://alldebrid.com/magnets/" },
+    PM: { label: "Premiumize", dashboardUrl: "https://www.premiumize.me/transfers" },
+};
+
+export function parseDebridAvailability(token: string | null | undefined): DebridAvailability {
+    const normalized = String(token ?? "").toUpperCase();
+    const serviceCode = normalized.match(/\b(TB|RD|AD|PM)\+?\b/)?.[1] ?? null;
+    const service = serviceCode ? DEBRID_SERVICES[serviceCode] : null;
+    const isCached = !token
+        ? null
+        : /\u26a1|\+|CACHED/i.test(token)
+            ? true
+            : /\u2b07|UNCACHED/i.test(token)
+                ? false
+                : null;
+
+    return {
+        serviceLabel: service?.label ?? null,
+        dashboardUrl: service?.dashboardUrl ?? null,
+        isCached,
+    };
+}
+
 type LanguageTag = {
     code: string;
     flag?: string;
@@ -205,6 +237,39 @@ const flagEmojiToLanguageCode = (flag: string): string | null => {
     return COUNTRY_TO_LANG[countryCode] || countryCode;
 };
 
+export const extractAudioLanguageCodes = (
+    description: string | null | undefined,
+    filename: string | null | undefined = null,
+): string[] => {
+    const codes: string[] = [];
+    const seen = new Set<string>();
+    const add = (code: string | null | undefined) => {
+        if (!code || seen.has(code)) return;
+        seen.add(code);
+        codes.push(code);
+    };
+
+    for (const flag of String(description ?? "").match(FLAG_EMOJI_REGEX) || []) {
+        add(flagEmojiToLanguageCode(flag));
+    }
+
+    const filenameTokens = String(filename ?? "")
+        .toUpperCase()
+        .split(/[^A-Z]+/)
+        .filter(Boolean);
+    const mappedTokens = filenameTokens.map((token) => LANGUAGE_ALIAS_TO_TAG[token]?.code ?? null);
+
+    mappedTokens.forEach((code, index) => {
+        if (!code) return;
+        const token = filenameTokens[index];
+        const isLongCode = token.length >= 3;
+        const isPartOfLanguageRun = Boolean(mappedTokens[index - 1] || mappedTokens[index + 1]);
+        if (isLongCode || isPartOfLanguageRun) add(code);
+    });
+
+    return codes;
+};
+
 // Precompile regex patterns for better performance
 const PROVIDER_PATTERNS = PROVIDER_KEYWORDS.map(keyword => ({
     keyword,
@@ -230,7 +295,11 @@ export const detectProvider = (text: string | null): string | null => {
             if (!/^[A-Za-z][A-Za-z0-9.+-]{2,}$/.test(token)) return false;
             if (/(GB|MB|TB)$/i.test(token)) return false;
             if (/\d+p$/i.test(token)) return false;
-            if (/HDR|SDR|HEVC|H\.?(?:26[45])|AV1|ATMOS|DDP/i.test(token))
+            if (/HDR|SDR|HEVC|H\.?(?:26[45])|AV1|ATMOS|DDP|DTS|TRUEHD|AAC|FLAC/i.test(token))
+                return false;
+            if (/BLU-?RAY|BDRIP|WEB-?DL|WEBRIP|WEBMUX|REMUX|HDTV|DVD-?RIP|HDCAM/i.test(token))
+                return false;
+            if (LANGUAGE_ALIAS_TO_TAG[token.toUpperCase()])
                 return false;
             return true;
         }) || null

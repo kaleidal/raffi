@@ -1,5 +1,8 @@
 const { registerContentBlocker } = require("./contentBlocker.cjs");
 
+const DEV_SERVER_URL = "http://localhost:43173";
+const DEV_SERVER_ORIGIN = new URL(DEV_SERVER_URL).origin;
+
 function createMainWindow({
   BrowserWindow,
   screen,
@@ -92,9 +95,8 @@ function createMainWindow({
       const parsed = new URL(value);
       if (parsed.protocol === "about:" || parsed.protocol === "file:") return true;
       if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
-      const host = parsed.hostname.toLowerCase();
       if (isDev) {
-        return (host === "localhost" || host === "127.0.0.1") && parsed.port === "5173";
+        return parsed.origin === DEV_SERVER_ORIGIN;
       }
       return false;
     } catch {
@@ -351,7 +353,7 @@ function createMainWindow({
   }
 
   if (isDev) {
-    mainWindow.loadURL("http://localhost:5173");
+    mainWindow.loadURL(DEV_SERVER_URL);
   } else {
     const serializeUpdateInfo = (info) => {
       if (!info) return null;

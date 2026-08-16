@@ -1,5 +1,6 @@
 export interface ActivityDetails {
     type?: 0 | 2 | 3 | 5;
+    statusDisplayType?: 0 | 1 | 2;
     details?: string;
     state?: string;
     startTimestamp?: number;

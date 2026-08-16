@@ -12,6 +12,14 @@ const ALLOWED_EXTERNAL_HOSTS = new Set([
   "www.trakt.tv",
   "limbo.al",
   "www.limbo.al",
+  "torbox.app",
+  "www.torbox.app",
+  "real-debrid.com",
+  "www.real-debrid.com",
+  "alldebrid.com",
+  "www.alldebrid.com",
+  "premiumize.me",
+  "www.premiumize.me",
 ]);
 
 function isAllowedAddonConfigureUrl(value) {

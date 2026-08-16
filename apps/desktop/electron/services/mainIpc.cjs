@@ -11,6 +11,7 @@ function registerMainIpcHandlers({
   getDefenderExclusionStatus,
   applyDefenderExclusions,
   scanLibraryRoots,
+  net,
 }) {
   const pathModule = require("path");
   const os = require("os");
@@ -178,6 +179,47 @@ function registerMainIpcHandlers({
       status: response.status,
       data: await response.json(),
     };
+  });
+
+  ipcMain.handle("PREFLIGHT_STREAM", async (_event, payload) => {
+    const rawUrl = typeof payload?.url === "string" ? payload.url.trim() : "";
+    const parsed = new URL(rawUrl);
+    if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password) {
+      throw new Error("Invalid stream URL");
+    }
+
+    const timeoutMs = Math.max(1000, Math.min(Number(payload?.timeoutMs) || 3500, 8000));
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await net.fetch(parsed.toString(), {
+        method: "GET",
+        headers: { Range: "bytes=0-1", "Cache-Control": "no-cache" },
+        signal: controller.signal,
+      });
+      await response.body?.cancel();
+      const contentRange = response.headers.get("content-range") || "";
+      const rangeTotal = contentRange.match(/\/\s*(\d+)\s*$/)?.[1];
+      const contentLength = response.headers.get("content-length");
+      const totalBytes = rangeTotal
+        ? Number(rangeTotal)
+        : response.status === 200 && contentLength
+          ? Number(contentLength)
+          : null;
+      return {
+        ok: response.ok,
+        status: response.status,
+        contentType: response.headers.get("content-type") || "",
+        totalBytes: Number.isSafeInteger(totalBytes) && totalBytes > 0 ? totalBytes : null,
+      };
+    } catch (error) {
+      if (controller.signal.aborted) {
+        return { ok: false, status: 0, contentType: "", timedOut: true };
+      }
+      return { ok: false, status: 0, contentType: "", networkError: true };
+    } finally {
+      clearTimeout(timer);
+    }
   });
 
   ipcMain.handle("OPEN_EXTERNAL_URL", async (_event, targetUrl) => {

@@ -1,13 +1,49 @@
 <script lang="ts">
+    import { fade, fly } from "svelte/transition";
+
     export let showSkipIntro = false;
     export let isWatchPartyMember = false;
     export let skipLabel = "Skip Intro";
     export let skipChapter: () => void;
+    export let showPlaybackHealthPrompt = false;
+    export let chooseAnotherStream: () => void = () => {};
+    export let keepWatching: () => void = () => {};
 </script>
 
 <div
     class="flex flex-col gap-2 w-full items-center justify-end transition-all duration-300"
 >
+    {#if showPlaybackHealthPrompt}
+        <div
+            class="w-[min(600px,calc(100vw-24px))] rounded-[24px] bg-[#252525]/88 p-5 text-white shadow-[0_20px_70px_rgba(0,0,0,0.4)] backdrop-blur-2xl sm:p-6"
+            in:fly={{ y: 16, duration: 220 }}
+            out:fade={{ duration: 160 }}
+        >
+            <div class="flex flex-col gap-5 sm:flex-row sm:items-center">
+                <div class="min-w-0 flex-1">
+                    <h2 class="text-lg font-semibold">Playback keeps buffering</h2>
+                    <p class="mt-1 text-sm leading-6 text-white/65">
+                        Your connection or this source may not be fast enough for this stream. A smaller resolution or file size may play more smoothly.
+                    </p>
+                </div>
+                <div class="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:flex-row">
+                    <button
+                        class="w-full rounded-full bg-white px-5 py-3 text-sm font-semibold whitespace-nowrap text-black transition-colors hover:bg-white/85 cursor-pointer sm:w-auto"
+                        on:click={chooseAnotherStream}
+                    >
+                        Choose another stream
+                    </button>
+                    <button
+                        class="w-full rounded-full bg-white/10 px-5 py-3 text-sm font-semibold whitespace-nowrap text-white transition-colors hover:bg-white/16 cursor-pointer sm:w-auto"
+                        on:click={keepWatching}
+                    >
+                        Keep watching
+                    </button>
+                </div>
+            </div>
+        </div>
+    {/if}
+
     {#if showSkipIntro && !isWatchPartyMember}
         <button
             class="bg-white text-black px-6 py-2 rounded-full font-bold hover:bg-[#FFFFFF]/70 cursor-pointer transition-colors flex items-center gap-2"

@@ -317,6 +317,7 @@ export const playStream = (
             joinPartyId: routeJoinPartyId,
             autoJoin: routeJoinPartyId ? routeAutoJoin : false,
             autoSkipFromNextEpisode: Boolean(options?.autoSkipFromNextEpisode),
+            streamAvailability: stream.raffiAvailability ?? null,
         }, { replace: options?.replace });
     } else {
         console.warn("Stream has no URL", stream);

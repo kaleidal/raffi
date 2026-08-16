@@ -64,7 +64,6 @@ body {
 }
 
 .raffi-modal-surface {
-  max-width: min(100%, 80rem);
   max-height: calc(100dvh - (2 * var(--raffi-modal-gutter)));
 }
 

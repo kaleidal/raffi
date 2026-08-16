@@ -46,6 +46,8 @@ export default defineConfig(({ command }) => ({
     },
   },
   server: {
+    port: 43173,
+    strictPort: true,
     fs: {
       // Allow serving files from the monorepo root
       allow: ['../..'],

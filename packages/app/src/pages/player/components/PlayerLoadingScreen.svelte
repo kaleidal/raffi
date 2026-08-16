@@ -1,7 +1,7 @@
 <script lang="ts">
     import { fade } from "svelte/transition";
     import type { ShowResponse } from "../../../lib/library/types/meta_types";
-    import { ChevronLeft, MonitorDown } from "@lucide/svelte";
+    import { ChevronLeft, ExternalLink, MonitorDown } from "@lucide/svelte";
     import { isDesktopPlatform } from "../../../lib/platform";
     import LoadingSpinner from "../../../components/common/LoadingSpinner.svelte";
     import { onDestroy } from "svelte";
@@ -36,9 +36,16 @@
     export let onRetry: () => void = () => {};
     export let onBack: () => void = () => {};
     export let onDownloadDesktop: () => void = () => {};
+    export let showNotice: boolean = false;
+    export let noticeTitle: string = "";
+    export let noticeDetails: string = "";
+    export let noticePrimaryLabel: string = "Back to Streams";
+    export let noticeSecondaryLabel: string = "";
+    export let onNoticePrimary: () => void = () => {};
+    export let onNoticeSecondary: () => void = () => {};
     export let showSeekStyle: boolean = false;
     export let seekBarStyle: "raffi" | "normal" = "raffi";
-    export let onSeekStyleChange: (detail: { style: "raffi" | "normal" }) => void = () => {};
+    export let onSeekStyleChange: (style: "raffi" | "normal") => void = () => {};
     export let onSeekStyleAcknowledge: () => void = () => {};
 
     let tileElements: Array<HTMLElement | undefined> = [];
@@ -65,6 +72,9 @@
     });
 
     $: effectiveBackdropSrc = backdropSrc ?? metaData?.meta?.background ?? metaData?.meta?.poster ?? "";
+    $: fallbackBackdropSrc = backdropSrc
+        ? metaData?.meta?.background ?? metaData?.meta?.poster ?? ""
+        : "";
     $: revealFraction = progress === null ? null : Math.max(0, Math.min(1, progress));
     $: revealCount = revealFraction === null ? 0 : Math.round(revealFraction * MOSAIC_TILE_COUNT);
     $: void backdropMode;
@@ -128,7 +138,7 @@
         }
     }
 
-    $: blockingState = showError ? "error" : showSeekStyle ? "seek-style" : "";
+    $: blockingState = showError ? "error" : showNotice ? "notice" : showSeekStyle ? "seek-style" : "";
     $: if (blockingState !== lastBlockingState) {
         lastBlockingState = blockingState;
         if (blockingState) settleTilesForBlockingState();
@@ -138,7 +148,7 @@
 
     function toggleSeekStyle() {
         localSeekBarStyle = localSeekBarStyle === "raffi" ? "normal" : "raffi";
-        onSeekStyleChange({ style: localSeekBarStyle });
+        onSeekStyleChange(localSeekBarStyle);
     }
 
     onDestroy(clearSettleWork);
@@ -148,10 +158,12 @@
     <div
         use:portal
         class="fixed inset-0 z-[200] overflow-hidden bg-[#090909]"
-        role={showError ? "alert" : showSeekStyle ? "dialog" : "status"}
+        role={showError ? "alert" : showNotice || showSeekStyle ? "dialog" : "status"}
         aria-busy={!blockingState}
         aria-label={showError
             ? errorMessage || "Playback error"
+            : showNotice
+              ? noticeTitle || "Stream status"
             : showSeekStyle
               ? "Choose seek bar style"
               : stage || "Loading video"}
@@ -174,7 +186,7 @@
                         <div
                             class="mosaic-face mosaic-face-front"
                             style={effectiveBackdropSrc
-                                ? `background-image:url('${effectiveBackdropSrc}'); background-size:${MOSAIC_COLS * 100}% ${MOSAIC_ROWS * 100}%; background-position:${tile.bgPosX}% ${tile.bgPosY}%;`
+                                ? `background-image:url('${effectiveBackdropSrc}')${fallbackBackdropSrc ? `,url('${fallbackBackdropSrc}')` : ""}; background-size:${MOSAIC_COLS * 100}% ${MOSAIC_ROWS * 100}%${fallbackBackdropSrc ? `,${MOSAIC_COLS * 100}% ${MOSAIC_ROWS * 100}%` : ""}; background-position:${tile.bgPosX}% ${tile.bgPosY}%${fallbackBackdropSrc ? `,${tile.bgPosX}% ${tile.bgPosY}%` : ""};`
                                 : ""}
                         ></div>
                         <div class="mosaic-face mosaic-face-back"></div>
@@ -191,34 +203,37 @@
             </div>
         {/if}
 
-        {#if showError && errorContentVisible}
+        {#if (showError || showNotice) && errorContentVisible}
             <div class="error-state absolute inset-0 z-20 flex items-center justify-center px-6 py-24">
-                <div class="flex w-full max-w-lg flex-col items-center text-center">
+                <div class="flex w-full flex-col items-center text-center {showNotice ? 'max-w-3xl' : 'max-w-lg'}">
                     <h1 class="text-balance text-3xl font-semibold tracking-[-0.025em] text-white sm:text-4xl">
-                        {errorMessage || "Playback stopped"}
+                        {showNotice ? noticeTitle || "Stream unavailable" : errorMessage || "Playback stopped"}
                     </h1>
-                    {#if errorDetails}
-                        <p class="mt-4 max-w-md text-pretty text-[15px] leading-6 text-white/62 sm:text-base">
-                            {errorDetails}
+                    {#if showNotice ? noticeDetails : errorDetails}
+                        <p class="mt-4 text-pretty text-[15px] leading-6 text-white/62 sm:text-base {showNotice ? 'max-w-2xl' : 'max-w-md'}">
+                            {showNotice ? noticeDetails : errorDetails}
                         </p>
                     {/if}
 
-                    <div class="mt-8 flex w-full max-w-sm flex-col gap-3 sm:flex-row sm:justify-center">
+                    <div class="mt-8 flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:justify-center">
                         <button
-                            class="cursor-pointer rounded-xl bg-white px-5 py-3 text-[15px] font-semibold text-black transition-colors hover:bg-white/88 sm:min-w-32"
-                            on:click={onRetry}
+                            class="cursor-pointer whitespace-nowrap rounded-xl bg-white px-7 py-3 text-[15px] font-semibold text-black transition-colors hover:bg-white/88 sm:min-w-48"
+                            on:click={showNotice ? onNoticePrimary : onRetry}
                         >
-                            Try Again
+                            {showNotice ? noticePrimaryLabel : "Try Again"}
                         </button>
-                        <button
-                            class="cursor-pointer rounded-xl bg-white/10 px-5 py-3 text-[15px] font-semibold text-white transition-colors hover:bg-white/16 sm:min-w-36"
-                            on:click={onBack}
-                        >
-                            Back to Streams
-                        </button>
+                        {#if !showNotice || noticeSecondaryLabel}
+                            <button
+                                class="flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-white/10 px-7 py-3 text-[15px] font-semibold text-white transition-colors hover:bg-white/16 sm:min-w-52"
+                                on:click={showNotice ? onNoticeSecondary : onBack}
+                            >
+                                {showNotice ? noticeSecondaryLabel : "Back to Streams"}
+                                {#if showNotice}<ExternalLink size={16} strokeWidth={2} />{/if}
+                            </button>
+                        {/if}
                     </div>
 
-                    {#if !isDesktopPlatform}
+                    {#if showError && !isDesktopPlatform}
                         <button
                             class="mt-4 flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-white/58 transition-colors hover:text-white"
                             on:click={onDownloadDesktop}
@@ -273,11 +288,11 @@
 
         <div class="absolute left-0 top-0 p-4 sm:p-10 z-50">
             <button
-                class="bg-[#000000]/28 backdrop-blur-md hover:bg-[#FFFFFF]/20 transition-colors duration-200 rounded-full p-4 cursor-pointer"
+                class="player-loading-nav bg-[#000000]/28 backdrop-blur-md hover:bg-[#FFFFFF]/20 transition-colors duration-200 rounded-full cursor-pointer"
                 on:click={onClose}
                 aria-label="Close player"
             >
-                <ChevronLeft size={30} color="white" strokeWidth={2} />
+                <ChevronLeft size={26} color="white" strokeWidth={2} />
             </button>
         </div>
     </div>
@@ -344,6 +359,18 @@
 
     .error-state {
         animation: error-content-in 0.38s ease-out both;
+    }
+
+    .player-loading-nav {
+        display: grid;
+        width: clamp(44px, 3.2vw, 54px);
+        height: clamp(44px, 3.2vw, 54px);
+        place-items: center;
+    }
+
+    .player-loading-nav :global(svg) {
+        width: clamp(21px, 1.55vw, 26px);
+        height: clamp(21px, 1.55vw, 26px);
     }
 
     @keyframes error-content-in {
