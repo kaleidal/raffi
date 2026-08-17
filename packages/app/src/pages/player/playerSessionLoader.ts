@@ -1,8 +1,7 @@
 import { get } from "svelte/store";
 import type { ShowResponse } from "../../lib/library/types/meta_types";
 import {
-    MediaBunnyPlayback,
-    FfmpegPlayback,
+    AdaptivePlayback,
     enrichProbedStreamAudio,
     resolveHttpPlayback,
     type ProbedStream,
@@ -699,26 +698,23 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                     clientPlayback.mode === "mediabunny" ||
                     clientPlayback.mode === "ffmpeg"
                 ) {
-                    const controller = clientPlayback.mode === "ffmpeg"
-                        ? new FfmpegPlayback()
-                        : new MediaBunnyPlayback();
+                    const controller = new AdaptivePlayback();
                     controller.onWindowStartChange = (globalStart) => {
                         playbackOffset.set(globalStart);
                     };
                     deps.setPlaybackController(controller);
                     const attached = await controller.attach(
                         videoElem,
-                        clientPlayback.mode === "ffmpeg" ? playbackSrc : sessionSource,
+                        sessionSource,
                         {
                             startTime: effectiveStartTime,
                             signal: abortController.signal,
                             meta: clientPlayback.meta,
                             audioIndex:
-                                clientPlayback.mode === "ffmpeg"
-                                    ? undefined
-                                    : result.sessionData?.audioIndex ??
-                                      clientPlayback.meta?.preferredAudioIndex ??
-                                      0,
+                                result.sessionData?.audioIndex ??
+                                clientPlayback.meta?.preferredAudioIndex ??
+                                0,
+                            ffmpegSource: playbackSrc,
                         },
                     );
                     if (isStale()) {

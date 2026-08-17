@@ -28,5 +28,7 @@ export { ensureMediaCodersRegistered } from "./registerCoders";
 export {
 	FfmpegPlayback,
 	canUseFfmpegPlayback,
+	needsFfmpegAudio,
 	type ClientPlaybackController,
 } from "./ffmpegPlayback";
+export { AdaptivePlayback } from "./adaptivePlayback";

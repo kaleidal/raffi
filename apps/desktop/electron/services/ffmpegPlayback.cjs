@@ -94,16 +94,12 @@ function buildArguments({
   startTime,
   audioIndex,
   audioChannels,
-  copyAudio,
   caFile,
   httpSeekable = true,
 }) {
   const surroundArguments = audioChannels === 6
     ? ["-af", "aformat=channel_layouts=5.1", "-mapping_family", "1"]
     : [];
-  const audioArguments = copyAudio
-    ? ["-c:a", "copy"]
-    : ["-c:a", "libopus", "-b:a", "320k", ...surroundArguments];
   const protocolWhitelist = /^https?:\/\//i.test(source)
     ? "http,https,tcp,tls,httpproxy"
     : "file,crypto,data";
@@ -122,7 +118,7 @@ function buildArguments({
     ...(caFile ? ["-ca_file", caFile] : []), ...sequentialHttpArguments, "-i", source,
     ...outputSeekArguments,
     "-map", "0:v:0", "-map", `0:a:${audioIndex}`,
-    "-c:v", "copy", ...audioArguments,
+    "-c:v", "copy", "-c:a", "libopus", "-b:a", "320k", ...surroundArguments,
     "-movflags", "frag_keyframe+empty_moov+default_base_moof",
     "-frag_duration", "500000", "-avoid_negative_ts", "make_zero",
     "-max_muxing_queue_size", "4096", "-f", "mp4", "pipe:1",
@@ -180,7 +176,6 @@ function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, r
     const startTime = validateStartTime(payload?.startTime);
     const audioIndex = validateAudioIndex(payload?.audioIndex);
     const audioChannels = validateAudioChannels(payload?.audioChannels);
-    const copyAudio = payload?.copyAudio === true;
     const caFile = resolveCaFile(source);
     while (sessions.size >= MAX_SESSIONS) {
       await stop(sessions.keys().next().value);
@@ -193,7 +188,6 @@ function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, r
       startTime,
       audioIndex,
       audioChannels,
-      copyAudio,
       caFile,
       httpSeekable,
     }), {

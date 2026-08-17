@@ -77,7 +77,16 @@ export async function resolveHttpPlayback(
 				: probeRemoteStream(playable, signal)),
 		);
 		if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
-		if (canUseFfmpegPlayback(meta)) return { mode: "ffmpeg", meta, reason: "unsupported-audio-transcode" };
+		if (canUseFfmpegPlayback(meta, meta.preferredAudioIndex)) {
+			return { mode: "ffmpeg", meta, reason: "selected-audio-transcode" };
+		}
+		if (
+			meta.audioTracks.some((track) => track.playable) &&
+			meta.audioTracks.some((track) => !track.playable) &&
+			meta.audioTracks.some((track) => canUseFfmpegPlayback(meta, track.index))
+		) {
+			return { mode: "mediabunny", meta, reason: "adaptive-audio-playback" };
+		}
 		if (localSource) {
 			return canUseMediaBunnyRemux(meta)
 				? { mode: "mediabunny", meta, reason: "local-remux" }

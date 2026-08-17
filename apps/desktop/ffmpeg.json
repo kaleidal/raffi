@@ -1,20 +1,20 @@
 {
   "repository": "kaleidal/ffmpeg-builds",
-  "tag": "v9.0.1-raffi.1",
+  "tag": "v9.0.1-raffi.2",
   "targets": {
     "linux-x64": {
       "asset": "raffi-ffmpeg-linux-x64.tar.gz",
-      "sha256": "8ee0d6756c6b3e3545adb420b6a890475b08674c088862f87325523a5f03d50b",
+      "sha256": "b6c90a6c97263d8d9427e00f862cc1d8cc5959f0b687fe60e07150c81e5d6842",
       "metadata": ["BUILD-INFO.txt", "LICENSE.FFMPEG", "LICENSE.OPENSSL", "LICENSE.OPUS"]
     },
     "win32-x64": {
       "asset": "raffi-ffmpeg-windows-x64.zip",
-      "sha256": "2467b9bc60a3342d8c323318a6d2ac7d6427ce9d51b3af0bc82343714ebfacbe",
+      "sha256": "4145381542d6ec164f677dce55813022305612af4d30c3a106c59df324b8465e",
       "metadata": ["BUILD-INFO.txt", "LICENSE.FFMPEG", "LICENSE.OPUS"]
     },
     "darwin-universal": {
       "asset": "raffi-ffmpeg-macos-universal.tar.gz",
-      "sha256": "811ec7185a5e8446280bca9da46dc0db3672b25b65882eba81d68b91c58b69bb",
+      "sha256": "1b779b0add7da5796c8913067f1302bb1cb188e0e7418863600e1c5843be5193",
       "metadata": ["BUILD-INFO.arm64.txt", "BUILD-INFO.x64.txt", "LICENSE.FFMPEG", "LICENSE.OPUS"]
     }
   }
