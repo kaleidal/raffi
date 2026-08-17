@@ -9,7 +9,10 @@ import {
 	type VideoCodec,
 } from "mediabunny";
 import { createRemoteUrlSource } from "./probe";
-import { ensureMediaCodersRegistered } from "./registerCoders";
+import {
+	ensureAudioDecoderRegistered,
+	ensureMediaCodersRegistered,
+} from "./registerCoders";
 import { toClientPlayableUrl } from "./localSource";
 
 const MAX_CLIP_SECONDS = 15 * 60;
@@ -95,6 +98,7 @@ export async function exportClipWithMediaBunny(
 				if (codec === "aac" || codec === "mp3" || codec === "opus") {
 					return { codec: "aac" as AudioCodec };
 				}
+				await ensureAudioDecoderRegistered(codec);
 				if (await track.canDecode()) {
 					return {
 						codec: "aac" as AudioCodec,
