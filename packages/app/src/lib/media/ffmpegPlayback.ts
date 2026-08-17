@@ -19,6 +19,7 @@ export type ClientPlaybackController = {
 			signal?: AbortSignal;
 			meta?: ProbedStream | null;
 			audioIndex?: number;
+			ffmpegSource?: string;
 		},
 	) => Promise<{
 		durationSeconds: number;
@@ -92,12 +93,16 @@ function enableFfmpegAudio(meta: ProbedStream): ProbedStream {
 	};
 }
 
-export function canUseFfmpegPlayback(meta: ProbedStream): boolean {
+export function needsFfmpegAudio(meta: ProbedStream, audioIndex?: number): boolean {
+	const selectedIndex = audioIndex ?? meta.preferredAudioIndex;
+	const selected = meta.audioTracks.find((track) => track.index === selectedIndex);
+	return Boolean(selected && !selected.playable);
+}
+
+export function canUseFfmpegPlayback(meta: ProbedStream, audioIndex?: number): boolean {
 	if (typeof MediaSource === "undefined") return false;
 	if (!window.electronAPI?.ffmpegPlayback || !meta.video?.codecString) return false;
-	if (meta.audioTracks.length === 0 || meta.audioTracks.every((track) => track.playable)) {
-		return false;
-	}
+	if (!needsFfmpegAudio(meta, audioIndex)) return false;
 	return pickMseMimeType(meta.video.codecString, "opus") !== null;
 }
 
@@ -224,17 +229,11 @@ export class FfmpegPlayback implements ClientPlaybackController {
 			const selectedAudio = this.meta.audioTracks.find(
 				(track) => track.index === this.audioIndex,
 			);
-			const copyAudio =
-				selectedAudio?.codec === "aac" &&
-				selectedAudio.channels !== null &&
-				selectedAudio.channels <= 2;
-			const audioCodecString = copyAudio ? "mp4a.40.2" : "opus";
 			const started = await getBridge().start({
 				source: this.source,
 				startTime: snappedStart,
 				audioIndex: this.audioIndex,
 				audioChannels: selectedAudio?.channels ?? null,
-				copyAudio,
 			});
 			if (generation !== this.generation || abort.signal.aborted) {
 				await getBridge().stop(started.sessionId);
@@ -250,7 +249,7 @@ export class FfmpegPlayback implements ClientPlaybackController {
 			this.objectUrl = URL.createObjectURL(mediaSource);
 			this.video.src = this.objectUrl;
 			await waitForSourceOpen(mediaSource, abort.signal);
-			const mime = pickMseMimeType(this.meta.video.codecString, audioCodecString);
+			const mime = pickMseMimeType(this.meta.video.codecString, "opus");
 			if (!mime) throw new Error("This video codec cannot be copied into an MP4 stream");
 			const sourceBuffer = mediaSource.addSourceBuffer(mime);
 			sourceBuffer.mode = "segments";

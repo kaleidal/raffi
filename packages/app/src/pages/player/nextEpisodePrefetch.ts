@@ -4,8 +4,7 @@ import {
 	isMagnetUrl,
 } from "../../lib/media/localSource";
 import {
-	MediaBunnyPlayback,
-	FfmpegPlayback,
+	AdaptivePlayback,
 	resolveHttpPlayback,
 	type HttpPlaybackMode,
 	type ProbedStream,
@@ -49,13 +48,6 @@ export function canReuseNextEpisodePrefetch(
 		handoff.mode === "direct" ||
 		handoff.mode === "addon-hls"
 	);
-}
-
-export function getPrefetchAudioIndex(
-	mode: "mediabunny" | "ffmpeg",
-	probedAudioIndex?: number,
-): number | undefined {
-	return mode === "ffmpeg" ? undefined : (probedAudioIndex ?? 0);
 }
 
 const PREFETCH_READY_TIMEOUT_MS = 20_000;
@@ -274,18 +266,13 @@ export async function startNextEpisodePrefetch(
 		}
 
 		if (resolved.mode === "mediabunny" || resolved.mode === "ffmpeg") {
-			const controller = resolved.mode === "ffmpeg"
-				? new FfmpegPlayback()
-				: new MediaBunnyPlayback();
+			const controller = new AdaptivePlayback();
 			playbackController = controller;
 			await controller.attach(videoElem, src, {
 				startTime: 0,
 				signal: abort.signal,
 				meta: resolved.meta,
-				audioIndex: getPrefetchAudioIndex(
-					resolved.mode,
-					resolved.meta?.preferredAudioIndex,
-				),
+				audioIndex: resolved.meta?.preferredAudioIndex ?? 0,
 			});
 			clearReadyTimeout();
 			if (disposed || abort.signal.aborted) {

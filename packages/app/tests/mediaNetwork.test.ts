@@ -11,6 +11,7 @@ import {
 	ensureAudioDecoderRegistered,
 	ensureMediaCodersRegistered,
 } from "../src/lib/media/registerCoders";
+import { needsFfmpegAudio } from "../src/lib/media/ffmpegPlayback";
 
 describe("MediaBunny network lifecycle", () => {
 	test("aborts active UrlSource fetches with the owning pipeline", async () => {
@@ -123,5 +124,41 @@ describe("MediaBunny audio planning", () => {
 		]);
 
 		expect(selected).toBe(4);
+	});
+
+	test("uses FFmpeg only when the selected audio track needs it", () => {
+		const audioTracks = [
+			{
+				index: 0,
+				codec: "aac" as const,
+				codecName: "AAC",
+				language: "eng",
+				title: null,
+				channels: 2,
+				playable: true,
+				bunnyIndex: 0,
+			},
+			{
+				index: 1,
+				codec: null,
+				codecName: "TRUEHD",
+				language: "eng",
+				title: null,
+				channels: 8,
+				playable: false,
+				bunnyIndex: null,
+			},
+		];
+		const meta = {
+			durationSeconds: 3600,
+			video: null,
+			audio: null,
+			audioTracks,
+			preferredAudioIndex: 0,
+		};
+
+		expect(needsFfmpegAudio(meta)).toBe(false);
+		expect(needsFfmpegAudio(meta, 0)).toBe(false);
+		expect(needsFfmpegAudio(meta, 1)).toBe(true);
 	});
 });

@@ -21,6 +21,7 @@ const electron = join(
 	process.platform === "win32" ? "electron.exe" : "electron",
 );
 const localSource = join(import.meta.dir, "fixtures", "h264-aac-dts.mkv");
+const trueHdSource = join(import.meta.dir, "fixtures", "h264-truehd.mkv");
 const outputDir = mkdtempSync(join(tmpdir(), "raffi-playback-matrix-"));
 
 afterAll(() => rmSync(outputDir, { recursive: true, force: true }));
@@ -36,11 +37,19 @@ async function run(arguments_: string[]) {
 }
 
 async function describeOutput(output: string) {
-	return run(["-hide_banner", "-i", output, "-map", "0", "-f", "null", "-"]);
+	const child = Bun.spawn([ffmpeg, "-hide_banner", "-i", output], {
+		stdout: "ignore",
+		stderr: "pipe",
+	});
+	const [, stderr] = await Promise.all([
+		child.exited,
+		new Response(child.stderr).text(),
+	]);
+	return stderr;
 }
 
-function serveFixture(honorRanges = true) {
-	const fixture = Bun.file(localSource);
+function serveFixture(source = localSource, honorRanges = true) {
+	const fixture = Bun.file(source);
 	return Bun.serve({
 		port: 0,
 		async fetch(request) {
@@ -97,7 +106,6 @@ describe("desktop playback compatibility matrix", () => {
 			startTime: 0,
 			audioIndex: 1,
 			audioChannels: 6,
-			copyAudio: false,
 		});
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		child.stdout.write(Buffer.from("mp4"));
@@ -149,7 +157,6 @@ describe("desktop playback compatibility matrix", () => {
 			startTime: 0,
 			audioIndex: 1,
 			audioChannels: 6,
-			copyAudio: false,
 		});
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		child.stdout.write(Buffer.from("mp4"));
@@ -181,40 +188,15 @@ describe("desktop playback compatibility matrix", () => {
 		expect(support).toEqual({ aac: true, opus: true });
 	}, 20_000);
 
-	test("copies stereo AAC from an HTTP range source without needless transcoding", async () => {
-		const server = serveFixture();
-		try {
-			const output = join(outputDir, "russian-aac.mp4");
-			const args = buildArguments({
-				source: `http://127.0.0.1:${server.port}/fixture.mkv`,
-				startTime: 0,
-				audioIndex: 0,
-				audioChannels: 2,
-				copyAudio: true,
-				caFile: null,
-			});
-			expect(args).toContain("copy");
-			expect(args).not.toContain("libopus");
-			args[args.length - 1] = output;
-			await run(["-y", ...args]);
-			const description = await describeOutput(output);
-			expect(description).toContain("Video: h264");
-			expect(description).toMatch(/Audio: aac \(LC\).*48000 Hz, stereo/);
-		} finally {
-			server.stop(true);
-		}
-	});
-
 	test("streams from an HTTP origin that ignores byte ranges", async () => {
-		const server = serveFixture(false);
+		const server = serveFixture(trueHdSource, false);
 		try {
 			const output = join(outputDir, "sequential-http.mp4");
 			const args = buildArguments({
 				source: `http://127.0.0.1:${server.port}/fixture.mkv`,
-				startTime: 4,
-				audioIndex: 1,
+				startTime: 1,
+				audioIndex: 0,
 				audioChannels: 6,
-				copyAudio: false,
 				caFile: null,
 				httpSeekable: false,
 			});
@@ -232,9 +214,9 @@ describe("desktop playback compatibility matrix", () => {
 		}
 	});
 
-	test("selects English DTS, preserves seek preroll, and emits browser-safe surround Opus", async () => {
-		const output = join(outputDir, "english-dts.mp4");
-		const args = buildArguments({ source: localSource, startTime: 4, audioIndex: 1, audioChannels: 6, copyAudio: false, caFile: null });
+	test("converts TrueHD while preserving seek preroll and copying H.264 video", async () => {
+		const output = join(outputDir, "truehd-opus.mp4");
+		const args = buildArguments({ source: trueHdSource, startTime: 1, audioIndex: 0, audioChannels: 6, caFile: null });
 		expect(args).toContain("-noaccurate_seek");
 		expect(args).toContain("aformat=channel_layouts=5.1");
 		expect(args).toContain("1");
