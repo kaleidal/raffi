@@ -26,7 +26,7 @@ export function createBrowserPlaybackGuard(options: BrowserPlaybackGuardOptions)
             : null;
         const alternative = options.isDesktop
             ? "Try an MP4, WebM, or HLS stream. MKV and some audio codecs can be remuxed in-app with MediaBunny."
-            : "Try an MP4, WebM, or HLS stream, or use the desktop app for MKV/E-AC-3/DTS streams.";
+            : "Try an MP4, WebM, or HLS stream, or use the desktop app for formats this browser cannot decode.";
         return support && !support.supported
             ? `This browser does not report support for ${support.container}. ${alternative}`
             : `The browser rejected this stream. ${alternative}`;

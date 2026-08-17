@@ -26,6 +26,7 @@ export function mapContainerCodec(codecId: string | null): AudioCodec | null {
 	if (id.includes("FLAC")) return "flac";
 	if (id === "A_AC3" || id === "AC-3") return "ac3";
 	if (id === "A_EAC3" || id === "EC-3") return "eac3";
+	if (id.startsWith("A_DTS") || id === "DTS") return "dts";
 	return null;
 }
 

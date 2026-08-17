@@ -1,10 +1,16 @@
 import { describe, expect, test } from "bun:test";
+import { ALL_FORMATS, BufferSource, Input } from "mediabunny";
 import { listMatroskaAudioTracks } from "../src/lib/media/containerTracks";
+import { mapContainerCodec } from "../src/lib/media/codecSupport";
 import {
 	canRemuxOrTranscodeAudio,
 	createRemoteUrlSource,
 	preferredAudioIndex,
 } from "../src/lib/media/probe";
+import {
+	ensureAudioDecoderRegistered,
+	ensureMediaCodersRegistered,
+} from "../src/lib/media/registerCoders";
 
 describe("MediaBunny network lifecycle", () => {
 	test("aborts active UrlSource fetches with the owning pipeline", async () => {
@@ -64,20 +70,44 @@ describe("MediaBunny network lifecycle", () => {
 });
 
 describe("MediaBunny audio planning", () => {
-	test("rejects unknown DTS tracks and selects a playable fallback", () => {
+	test("recognizes and decodes DTS from the playback fixture", async () => {
+		ensureMediaCodersRegistered();
+		const fixture = await Bun.file(
+			new URL("../../../apps/desktop/tests/fixtures/h264-aac-dts.mkv", import.meta.url),
+		).bytes();
+		const input = new Input({
+			source: new BufferSource(fixture),
+			formats: ALL_FORMATS,
+		});
+
+		try {
+			const tracks = await input.getAudioTracks();
+			const codecs = await Promise.all(tracks.map((track) => track.getCodec()));
+			const dtsTrack = tracks[codecs.indexOf("dts")];
+			expect(dtsTrack).toBeDefined();
+			await ensureAudioDecoderRegistered("dts");
+			expect(await dtsTrack!.canDecode()).toBe(true);
+			expect(mapContainerCodec("A_DTS")).toBe("dts");
+		} finally {
+			input.dispose();
+		}
+	});
+
+	test("accepts DTS when its decoder is available and selects it by language", () => {
 		expect(canRemuxOrTranscodeAudio(null, false)).toBe(false);
 		expect(canRemuxOrTranscodeAudio("aac", false)).toBe(true);
 		expect(canRemuxOrTranscodeAudio("ac3", true)).toBe(true);
+		expect(canRemuxOrTranscodeAudio("dts", true)).toBe(true);
 
 		const selected = preferredAudioIndex([
 			{
 				index: 4,
-				codec: null,
+				codec: "dts",
 				codecName: "A_DTS",
 				language: "eng",
 				title: null,
 				channels: 6,
-				playable: false,
+				playable: true,
 				bunnyIndex: 0,
 			},
 			{
@@ -92,6 +122,6 @@ describe("MediaBunny audio planning", () => {
 			},
 		]);
 
-		expect(selected).toBe(9);
+		expect(selected).toBe(4);
 	});
 });

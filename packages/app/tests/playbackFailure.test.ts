@@ -19,11 +19,11 @@ describe("describePlaybackFailure", () => {
 		expect(
 			describePlaybackFailure({
 				reason: "unsupported-audio-codec",
-				error: "MediaBunny does not support DTS audio.",
+				error: "MediaBunny cannot decode TrueHD audio on this platform.",
 			}),
 		).toEqual({
 			title: "Stream is not playable",
-			details: "MediaBunny does not support DTS audio.",
+			details: "MediaBunny cannot decode TrueHD audio on this platform.",
 		});
 	});
 

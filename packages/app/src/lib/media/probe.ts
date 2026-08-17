@@ -11,7 +11,10 @@ import {
 	listContainerAudioTracks,
 	type ContainerAudioTrack,
 } from "./containerTracks";
-import { ensureMediaCodersRegistered } from "./registerCoders";
+import {
+	ensureAudioDecoderRegistered,
+	ensureMediaCodersRegistered,
+} from "./registerCoders";
 import { codecsCompatible, friendlyCodecName, isMseFriendlyVideo, mapContainerCodec, NATIVE_AUDIO, normalizeCodecId } from "./codecSupport";
 export { isMseFriendlyVideo, isNativeFriendlyAudio } from "./codecSupport";
 
@@ -199,6 +202,11 @@ export function canRemuxOrTranscodeAudio(
 async function canPrepareAudioTrack(track: InputAudioTrack, codec: AudioCodec | null) {
 	if (codec === "aac") return true;
 	if (!codec) return false;
+	try {
+		await ensureAudioDecoderRegistered(codec);
+	} catch {
+		return false;
+	}
 	return canRemuxOrTranscodeAudio(codec, await track.canDecode());
 }
 

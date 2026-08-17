@@ -77,10 +77,11 @@
         "@fontsource/poppins": "5.3.0",
         "@fontsource/roboto": "5.3.0",
         "@lucide/svelte": "^1.31.0",
-        "@mediabunny/aac-encoder": "^1.53.0",
-        "@mediabunny/ac3": "^1.53.0",
+        "@mediabunny/aac-encoder": "^1.55.1",
+        "@mediabunny/ac3": "^1.55.1",
+        "@mediabunny/dts": "^1.55.1",
         "hls.js": "^1.6.18",
-        "mediabunny": "^1.53.0",
+        "mediabunny": "^1.55.1",
         "posthog-js": "1.415.7",
       },
       "devDependencies": {
@@ -307,9 +308,11 @@
 
     "@malept/flatpak-bundler": ["@malept/flatpak-bundler@0.4.0", "", { "dependencies": { "debug": "^4.1.1", "fs-extra": "^9.0.0", "lodash": "^4.17.15", "tmp-promise": "^3.0.2" } }, "sha512-9QOtNffcOF/c1seMCDnjckb3R9WHcG34tky+FHpNKKCW0wc/scYLwMtO+ptyGUfMW0/b/n4qRiALlaFHc9Oj7Q=="],
 
-    "@mediabunny/aac-encoder": ["@mediabunny/aac-encoder@1.53.0", "", { "peerDependencies": { "mediabunny": "^1.0.0" } }, "sha512-y32WtF8RwCT3fdBAV9NaW2FqeZmKVZqt7uP9MxHQWLafleT4JRHdZ1qa3AbWROoy55a4STlT3M44YbsVzhe45w=="],
+    "@mediabunny/aac-encoder": ["@mediabunny/aac-encoder@1.55.1", "", { "peerDependencies": { "mediabunny": "^1.0.0" } }, "sha512-NkLRZzfZoCmMZpMosj+O9gpl1tgHgKR85G8QrtUSUGJO1HaI/NqZznwSEdGWZKT4rSiRRaYtYXecLCAIdKWDFQ=="],
 
-    "@mediabunny/ac3": ["@mediabunny/ac3@1.53.0", "", { "peerDependencies": { "mediabunny": "^1.0.0" } }, "sha512-dPT4TwCNJYKA1kORU62LwMgetskpRoC0SJdnJeFEr2e5vbFOSKaPSvKqLXq8Y4q90poV4tna6jhDty+8+955XA=="],
+    "@mediabunny/ac3": ["@mediabunny/ac3@1.55.1", "", { "peerDependencies": { "mediabunny": "^1.0.0" } }, "sha512-6gNlm1qffxQLnK94iYsDIK+SM2LEW5vFUmLFFm3Xgz4c+o3oJ0ZNVeWaZiVMj3/Gw5BrJ4GwOTpPLsjzi+uZHA=="],
+
+    "@mediabunny/dts": ["@mediabunny/dts@1.55.1", "", { "peerDependencies": { "mediabunny": "^1.0.0" } }, "sha512-JQlgcf3d6l1/CIfTreZeTGB+dnwRr/cOdJEkGmNLXEsZPx8TQ+F/TmDQkWBjr4sJqYZd/l36uF6T5ymgWRYa5A=="],
 
     "@noble/hashes": ["@noble/hashes@2.2.0", "", {}, "sha512-IYqDGiTXab6FniAgnSdZwgWbomxpy9FtYvLKs7wCUs2a8RkITG+DFGO1DM9cr+E3/RgADRpFjrKVaJ1z6sjtEg=="],
 
@@ -833,7 +836,7 @@
 
     "math-intrinsics": ["math-intrinsics@1.1.0", "", {}, "sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g=="],
 
-    "mediabunny": ["mediabunny@1.53.0", "", { "dependencies": { "@types/dom-mediacapture-transform": "^0.1.11", "@types/dom-webcodecs": "0.1.13" } }, "sha512-RjWe9yJr9MPvb6kX4gSu54fZD2w1yf6RyCS0Jmgaml+fFSqEr7+XuASXoRxSqJxgc+wIe+7TujXWcyj3evJ3Bg=="],
+    "mediabunny": ["mediabunny@1.55.1", "", { "dependencies": { "@types/dom-mediacapture-transform": "^0.1.11", "@types/dom-webcodecs": "0.1.13" } }, "sha512-JDdTEUOw9g6Ey8eWc2Ei63GmRGtGTJoE56SE7CHikwzS8i9xpsWcve4bEiUw47d4j49L3r7MXDFsH/5oZIhjBw=="],
 
     "mime": ["mime@2.6.0", "", { "bin": { "mime": "cli.js" } }, "sha512-USPkMeET31rOMiarsBNIHZKLGgvKc/LrjofAnBlOttf5ajRvqiRA8QsenbcooctK6d6Ts6aqZXBA+XbkKthiQg=="],
 

@@ -52,7 +52,7 @@ describe("canReuseNextEpisodePrefetch", () => {
 });
 
 describe("getPrefetchAudioIndex", () => {
-	test("lets FFmpeg recalculate the preferred track after enabling DTS", () => {
+	test("lets FFmpeg recalculate the preferred track for unsupported audio", () => {
 		expect(getPrefetchAudioIndex("ffmpeg", 9)).toBeUndefined();
 	});
 

@@ -105,9 +105,7 @@ export async function resolveHttpPlayback(
 				mode: "unsupported",
 				meta,
 				reason: "unsupported-audio-codec",
-				error: codecs.some((codec) => /DTS/i.test(codec))
-					? "MediaBunny does not support DTS audio. Choose another audio track or stream."
-					: `MediaBunny cannot decode ${label} audio on this platform. Choose another audio track or stream.`,
+				error: `MediaBunny cannot decode ${label} audio on this platform. Choose another audio track or stream.`,
 			};
 		}
 		return { mode: "unsupported", meta, reason: "no-browser-path" };

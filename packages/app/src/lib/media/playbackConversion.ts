@@ -7,6 +7,7 @@ import {
 	type Output,
 	type VideoCodec,
 } from "mediabunny";
+import { ensureAudioDecoderRegistered } from "./registerCoders";
 
 const MSE_COPYABLE_AUDIO = new Set<AudioCodec | null>(["aac"]);
 
@@ -97,6 +98,7 @@ export function isBenignConversionError(error: unknown): boolean {
 export async function audioConversionOptions(track: InputAudioTrack) {
 	const codec = await track.getCodec();
 	if (MSE_COPYABLE_AUDIO.has(codec)) return { codec: "aac" as AudioCodec };
+	await ensureAudioDecoderRegistered(codec);
 
 	const channels = await track.getNumberOfChannels();
 	return {
