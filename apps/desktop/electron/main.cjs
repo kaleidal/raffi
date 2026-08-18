@@ -13,6 +13,7 @@ const {
   registerPrivilegedSchemes,
   createLocalMediaProtocolHandler,
 } = require("./services/localMediaProtocol.cjs");
+const { createLocalMediaAccess } = require("./services/localMediaAccess.cjs");
 const { registerMainIpcHandlers } = require("./services/mainIpc.cjs");
 const { registerDiscordRpcHandlers } = require("./services/rpc.cjs");
 const { createMainWindow } = require("./services/window.cjs");
@@ -66,6 +67,7 @@ let pendingAveAuthPayload = null;
 let pendingTraktAuthPayload = null;
 let pendingUpdateInfo = null;
 let ffmpegPlaybackService = null;
+const localMediaAccess = createLocalMediaAccess({ logToFile });
 const handleProtocolUrl = createProtocolUrlHandler({
   logToFile,
   getMainWindow: () => mainWindow,
@@ -125,12 +127,23 @@ if (process.platform === "linux" && !isDev) {
 const gotTheLock = app.requestSingleInstanceLock();
 logToFile(`Single instance lock: ${gotTheLock ? "acquired" : "denied"}`);
 
+async function sendOpenFile(filePath) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  try {
+    const playableUrl = await localMediaAccess.authorizeTrustedFile(filePath);
+    mainWindow.webContents.send("open-file", playableUrl);
+  } catch (error) {
+    logToFile("Failed to authorize opened media file", error);
+  }
+}
+
 app.on("open-file", (event, path) => {
   event.preventDefault();
   fileToOpen = path;
   if (mainWindow && mainWindow.webContents) {
     mainWindow.__raffiMiniPlayer?.exit?.({ focus: false });
-    mainWindow.webContents.send("open-file", fileToOpen);
+    void sendOpenFile(fileToOpen);
+    fileToOpen = null;
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.focus();
   }
@@ -159,7 +172,7 @@ if (!gotTheLock) {
 
       const filePath = commandLine[commandLine.length - 1];
       if (filePath && !filePath.startsWith("-") && filePath !== ".") {
-        mainWindow.webContents.send("open-file", filePath);
+        void sendOpenFile(filePath);
       }
     }
   });
@@ -188,6 +201,7 @@ function createWindow() {
     defaultWindowWidth: DEFAULT_WINDOW_WIDTH,
     defaultWindowHeight: DEFAULT_WINDOW_HEIGHT,
     fileToOpen,
+    authorizeLocalMediaPath: (filePath) => localMediaAccess.authorizeTrustedFile(filePath),
     pendingAveAuthPayload,
     pendingTraktAuthPayload,
     setFileToOpen: (value) => {
@@ -207,8 +221,9 @@ function createWindow() {
 
 app.whenReady().then(async () => {
   logToFile("App whenReady start");
+  await localMediaAccess.loadRoots(path.join(app.getPath("userData"), "local-library-roots.json"));
   try {
-    createLocalMediaProtocolHandler({ protocol, net, logToFile });
+    createLocalMediaProtocolHandler({ protocol, net, logToFile, localMediaAccess });
   } catch (error) {
     logToFile("Failed to register raffi-media protocol", error);
   }
@@ -221,6 +236,8 @@ app.whenReady().then(async () => {
       baseDir: __dirname,
       resourcesPath: process.resourcesPath,
       logToFile,
+      localMediaAccess,
+      getMainWindow: () => mainWindow,
     });
   } catch (error) {
     logToFile("Failed to register FFmpeg playback", error);
@@ -297,6 +314,7 @@ registerMainIpcHandlers({
   getDefenderExclusionStatus: () => defenderService.getExclusionStatus(),
   applyDefenderExclusions: () => defenderService.applyExclusions(),
   scanLibraryRoots,
+  localMediaAccess,
   net,
 });
 

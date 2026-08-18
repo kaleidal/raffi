@@ -59,41 +59,13 @@ function parseRange(rangeHeader, size) {
   return { start, end };
 }
 
-function resolveLocalPathFromRequest(requestUrl) {
-  let parsed;
-  try {
-    parsed = new URL(requestUrl);
-  } catch {
-    return null;
-  }
-  if (parsed.protocol !== `${SCHEME}:`) return null;
-
-  const fromQuery = parsed.searchParams.get("path");
-  if (fromQuery && typeof fromQuery === "string" && fromQuery.trim()) {
-    return path.resolve(fromQuery);
-  }
-
-  // raffi-media://local/<urlencoded-absolute-path>
-  if (parsed.hostname === "local") {
-    const encoded = decodeURIComponent(parsed.pathname.replace(/^\/+/, ""));
-    if (!encoded) return null;
-    return path.resolve(encoded);
-  }
-
-  return null;
-}
-
-function createLocalMediaProtocolHandler({ protocol, net, logToFile }) {
+function createLocalMediaProtocolHandler({ protocol, net, logToFile, localMediaAccess }) {
   protocol.handle(SCHEME, async (request) => {
     try {
-      const filePath = resolveLocalPathFromRequest(request.url);
+      const filePath = localMediaAccess.resolveRequestUrl(request.url);
       if (!filePath) {
         return new Response("Invalid local media URL", { status: 400 });
       }
-      if (filePath.includes("\0") || filePath.includes("://")) {
-        return new Response("Forbidden", { status: 403 });
-      }
-
       let stats;
       try {
         stats = await fs.promises.stat(filePath);

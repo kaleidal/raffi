@@ -11,6 +11,7 @@ const {
 	buildArguments,
 	createFfmpegPlaybackService,
 } = require("../electron/services/ffmpegPlayback.cjs");
+const { createLocalMediaAccess } = require("../electron/services/localMediaAccess.cjs");
 const desktopDir = join(import.meta.dir, "..");
 const ffmpeg = join(desktopDir, "vendor", "ffmpeg", process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg");
 const electron = join(
@@ -78,6 +79,7 @@ function serveFixture(source = localSource, honorRanges = true) {
 describe("desktop playback compatibility matrix", () => {
 	test("waits for FFmpeg streams to close before releasing a playback session", async () => {
 		const handlers = new Map<string, (...args: any[]) => any>();
+		const localMediaAccess = createLocalMediaAccess();
 		const child = Object.assign(new EventEmitter(), {
 			stdout: new PassThrough(),
 			stderr: new PassThrough(),
@@ -99,10 +101,11 @@ describe("desktop playback compatibility matrix", () => {
 			spawn: () => child,
 			baseDir: join(desktopDir, "electron"),
 			resourcesPath: "",
+			localMediaAccess,
 		});
 
 		const startPromise = handlers.get("FFMPEG_PLAYBACK_START")!({}, {
-			source: localSource,
+			source: await localMediaAccess.authorizeTrustedFile(localSource),
 			startTime: 0,
 			audioIndex: 1,
 			audioChannels: 6,
@@ -129,6 +132,7 @@ describe("desktop playback compatibility matrix", () => {
 
 	test("stops FFmpeg playback when its stdout stream fails", async () => {
 		const handlers = new Map<string, (...args: any[]) => any>();
+		const localMediaAccess = createLocalMediaAccess();
 		const child = Object.assign(new EventEmitter(), {
 			stdout: new PassThrough(),
 			stderr: new PassThrough(),
@@ -150,10 +154,11 @@ describe("desktop playback compatibility matrix", () => {
 			spawn: () => child,
 			baseDir: join(desktopDir, "electron"),
 			resourcesPath: "",
+			localMediaAccess,
 		});
 
 		const startPromise = handlers.get("FFMPEG_PLAYBACK_START")!({}, {
-			source: localSource,
+			source: await localMediaAccess.authorizeTrustedFile(localSource),
 			startTime: 0,
 			audioIndex: 1,
 			audioChannels: 6,

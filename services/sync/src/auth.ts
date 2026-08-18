@@ -4,6 +4,7 @@ import type { AuthedUser } from "./types";
 import { getSyncDatabase } from "./d1Session";
 
 const PROFILE_UPSERT_TTL_MS = 60 * 60 * 1000;
+const PROFILE_UPSERT_CACHE_MAX_ENTRIES = 1000;
 const lastProfileUpsert = new Map<string, { hash: string; at: number }>();
 
 const profileHash = (user: AuthedUser): string =>
@@ -17,6 +18,16 @@ const shouldUpsertProfile = (user: AuthedUser): boolean => {
     return false;
   }
   lastProfileUpsert.set(user.id, { hash, at: now });
+  if (lastProfileUpsert.size > PROFILE_UPSERT_CACHE_MAX_ENTRIES) {
+    for (const [id, entry] of lastProfileUpsert) {
+      if (now - entry.at >= PROFILE_UPSERT_TTL_MS) lastProfileUpsert.delete(id);
+    }
+    while (lastProfileUpsert.size > PROFILE_UPSERT_CACHE_MAX_ENTRIES) {
+      const oldestId = lastProfileUpsert.keys().next().value;
+      if (oldestId === undefined) break;
+      lastProfileUpsert.delete(oldestId);
+    }
+  }
   return true;
 };
 

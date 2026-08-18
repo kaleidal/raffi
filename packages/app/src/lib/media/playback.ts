@@ -14,9 +14,6 @@ import {
 	probeRemoteStream,
 	type ProbedStream,
 } from "./probe";
-import {
-	toClientPlayableUrl,
-} from "./localSource";
 import { pickMseMimeType, pumpStreamToSourceBuffer, RESUME_BUFFER_AHEAD_SECONDS, TARGET_BUFFER_AHEAD_SECONDS, getBufferedAheadSeconds } from "./msePump";
 import { ensureMediaCodersRegistered } from "./registerCoders";
 import {
@@ -111,7 +108,7 @@ export class MediaBunnyPlayback {
 		},
 	): Promise<MediaBunnyAttachResult> {
 		await this.destroy();
-		ensureMediaCodersRegistered();
+		await ensureMediaCodersRegistered();
 
 		this.video = video;
 		this.src = src;

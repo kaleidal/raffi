@@ -268,7 +268,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                 const videoElem = deps.getVideoElem();
                 if (!videoElem) return;
 
-                const sessionSource = toClientPlayableUrl(src);
+                const sessionSource = await toClientPlayableUrl(src);
                 let nextSession =
                     reused.sessionData && typeof reused.sessionData === "object"
                         ? { ...reused.sessionData }
@@ -412,7 +412,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                 limboStatus = limbo.status;
             }
 
-            const playableSrc = toClientPlayableUrl(playbackSrc);
+            const playableSrc = await toClientPlayableUrl(playbackSrc);
             const canTryClient =
                 !opts?.reuseSession && canTryClientPlayback(playableSrc);
 

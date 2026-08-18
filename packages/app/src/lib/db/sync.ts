@@ -219,24 +219,12 @@ const areRecordsEqual = (left: unknown, right: unknown) =>
 
 const buildMismatchSyncPayload = (local: RemoteState, remote: RemoteState) => {
     const remoteAddons = new Map(remote.addons.map((item) => [item.transport_url, item]));
-    for (const item of remote.addons) {
-        remoteAddons.set(item.transport_url, item);
-    }
 
     const remoteLibrary = new Map(remote.library.map((item) => [item.imdb_id, item]));
-    for (const item of remote.library) {
-        remoteLibrary.set(item.imdb_id, item);
-    }
 
     const remoteLists = new Map(remote.lists.map((item) => [item.list_id, item]));
-    for (const item of remote.lists) {
-        remoteLists.set(item.list_id, item);
-    }
 
     const remoteListItems = new Map(remote.listItems.map((item) => [`${item.list_id}::${item.imdb_id}`, item]));
-    for (const item of remote.listItems) {
-        remoteListItems.set(`${item.list_id}::${item.imdb_id}`, item);
-    }
 
     const remoteAddonMismatch: RemoteState["addons"] = [];
     const remoteLibraryMismatch: RemoteState["library"] = [];

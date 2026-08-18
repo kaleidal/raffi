@@ -26,6 +26,7 @@
         HOME_HERO_SOURCE_CINEMETA,
         HOME_HERO_SOURCE_TRAKT_RECOMMENDATIONS,
     } from "../lib/home/heroSettings";
+    import { mapWithConcurrency } from "../lib/async/mapWithConcurrency";
 
     import Hero from "../components/home/Hero.svelte";
     import SearchBar from "../components/home/SearchBar.svelte";
@@ -284,7 +285,9 @@
             const recent = library.filter(
                 (item) => item.shown !== false && !item.completed_at,
             );
-            const loadedItems = await Promise.all(recent.map(async (item) => {
+            const loadedItems: Array<(ShowResponse & { libraryItem: any }) | null> = [];
+            for (let offset = 0; offset < recent.length; offset += 24) {
+                const batch = await mapWithConcurrency(recent.slice(offset, offset + 24), 6, async (item) => {
                 try {
                     let meta: ShowResponse;
                     if (item.type) {
@@ -330,8 +333,6 @@
                 } catch (e) {
                     console.error(`Failed to load meta for ${item.imdb_id}`, e);
 
-                    // Keep cached-poster entries usable when metadata is temporarily
-                    // unavailable. A later refresh can still enrich the title/year.
                     if (item.poster) {
                         return {
                             meta: {
@@ -352,7 +353,14 @@
                     }
                 }
                 return null;
-            }));
+                });
+                loadedItems.push(...batch);
+                if (offset === 0) {
+                    continueWatchingMeta = loadedItems.filter(
+                        (item): item is ShowResponse & { libraryItem: any } => item !== null,
+                    );
+                }
+            }
             nextContinueWatchingMeta = loadedItems.filter(
                 (item): item is ShowResponse & { libraryItem: any } => item !== null,
             );

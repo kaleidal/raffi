@@ -25,6 +25,7 @@ const SEARCH_LIMIT = 20;
 const ADDON_SEARCH_TIMEOUT_MS = 1800;
 const ADDON_SEARCH_MAX_CATALOGS_PER_TYPE = 8;
 const ADDON_SEARCH_CACHE_TTL_MS = 60 * 1000;
+const ADDON_SEARCH_CACHE_MAX_ENTRIES = 50;
 const POPULAR_CACHE_TTL_MS = 60 * 60 * 1000;
 
 function normalizeType(type: string): CatalogType {
@@ -347,6 +348,16 @@ type CachedAddonSearch = {
 
 const addonSearchCache = new Map<string, CachedAddonSearch>();
 
+function setAddonSearchCache(key: string, value: CachedAddonSearch) {
+    addonSearchCache.delete(key);
+    addonSearchCache.set(key, value);
+    while (addonSearchCache.size > ADDON_SEARCH_CACHE_MAX_ENTRIES) {
+        const oldestKey = addonSearchCache.keys().next().value;
+        if (oldestKey === undefined) break;
+        addonSearchCache.delete(oldestKey);
+    }
+}
+
 function getCatalogExtraProps(catalog: ManifestCatalog): ManifestExtraProp[] {
     if (Array.isArray(catalog.extra)) {
         return catalog.extra.filter((item) => Boolean(item?.name));
@@ -571,6 +582,8 @@ export const searchAddonTitlesSplit = async (
     const cacheKey = trimmed.toLowerCase();
     const cached = addonSearchCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < ADDON_SEARCH_CACHE_TTL_MS) {
+        addonSearchCache.delete(cacheKey);
+        addonSearchCache.set(cacheKey, cached);
         if (cached.data.movies.length > 0 || cached.data.series.length > 0) {
             return cached.data;
         }
@@ -584,14 +597,14 @@ export const searchAddonTitlesSplit = async (
             searchAddonCatalogsByType("series", trimmed, addons),
         ]);
         const result = { movies, series };
-        addonSearchCache.set(cacheKey, {
+        setAddonSearchCache(cacheKey, {
             timestamp: Date.now(),
             data: result,
         });
         return result;
     })();
 
-    addonSearchCache.set(cacheKey, {
+    setAddonSearchCache(cacheKey, {
         timestamp: Date.now(),
         data: { movies: [], series: [] },
         promise,

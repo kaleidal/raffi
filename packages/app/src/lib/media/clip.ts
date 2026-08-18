@@ -36,7 +36,7 @@ export type ClientClipResult = {
 export async function exportClipWithMediaBunny(
 	req: ClientClipRequest,
 ): Promise<ClientClipResult> {
-	ensureMediaCodersRegistered();
+	await ensureMediaCodersRegistered();
 
 	const start = Math.max(0, req.start);
 	const end = Math.max(start + 0.1, req.end);
@@ -44,7 +44,7 @@ export async function exportClipWithMediaBunny(
 		throw new Error(`Clip too long (max ${MAX_CLIP_SECONDS / 60} minutes)`);
 	}
 
-	const playable = toClientPlayableUrl(req.source);
+	const playable = await toClientPlayableUrl(req.source);
 	if (!/^https?:\/\//i.test(playable) && !/^raffi-media:/i.test(playable)) {
 		throw new Error("This source cannot be clipped in-app yet");
 	}

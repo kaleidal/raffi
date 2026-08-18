@@ -46,9 +46,6 @@ export const setTorrentingAllowed = async (enabled: boolean) => {
 	allowTorrenting.set(enabled);
 };
 
-/** Kept for App.svelte mount hooks; Limbo needs no preference sync. */
-export const syncTorrentingPreference = async () => {};
-
 export const ensureTorrentingAllowed = async () => {
 	if (!get(allowTorrenting)) {
 		throw new Error(

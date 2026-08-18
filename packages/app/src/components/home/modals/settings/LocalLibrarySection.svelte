@@ -2,7 +2,7 @@
 	import { onMount } from "svelte";
 	import {
 		getRoots as getLocalRoots,
-		setRoots as setLocalRoots,
+		removeRoot,
 		scanAndIndex,
 	} from "../../../../lib/localLibrary/localLibrary";
 	import { trackEvent } from "../../../../lib/analytics";
@@ -12,12 +12,12 @@
 	let scanningLocal = false;
 	let localScanMessage = "";
 
-	onMount(() => {
+	onMount(async () => {
 		localLibrarySupported =
 			typeof window !== "undefined" &&
 			!!(window as any).electronAPI?.localLibrary;
 		if (localLibrarySupported) {
-			localRoots = getLocalRoots();
+			localRoots = await getLocalRoots();
 		}
 	});
 
@@ -27,8 +27,7 @@
 		try {
 			const picked = await (window as any).electronAPI.localLibrary.pickFolder();
 			if (!picked) return;
-			localRoots = Array.from(new Set([...(localRoots || []), picked]));
-			setLocalRoots(localRoots);
+			localRoots = await getLocalRoots();
 			trackEvent("local_library_root_added", {
 				root_count: localRoots.length,
 			});
@@ -41,9 +40,9 @@
 		}
 	}
 
-	function removeLocalFolder(folder: string) {
-		localRoots = (localRoots || []).filter((p) => p !== folder);
-		setLocalRoots(localRoots);
+	async function removeLocalFolder(folder: string) {
+		await removeRoot(folder);
+		localRoots = await getLocalRoots();
 		trackEvent("local_library_root_removed", {
 			root_count: localRoots.length,
 		});

@@ -27,7 +27,6 @@ export type LocalIndexEntry = {
     addedAt: number;
 };
 
-const ROOTS_KEY = "localLibrary:roots";
 const INDEX_KEY = "localLibrary:index:v1";
 const MAPPING_KEY = "localLibrary:titleMapping:v1";
 
@@ -75,13 +74,14 @@ function saveJson(key: string, value: any) {
     }
 }
 
-export function getRoots(): string[] {
-    return loadJson<string[]>(ROOTS_KEY, []);
+export async function getRoots(): Promise<string[]> {
+    if (!isElectron()) return [];
+    return (window as any).electronAPI.localLibrary.getRoots();
 }
 
-export function setRoots(roots: string[]) {
-    const unique = Array.from(new Set((roots || []).filter(Boolean)));
-    saveJson(ROOTS_KEY, unique);
+export async function removeRoot(root: string): Promise<boolean> {
+    if (!isElectron()) return false;
+    return (window as any).electronAPI.localLibrary.removeRoot(root);
 }
 
 export function getIndex(): LocalIndexEntry[] {
@@ -141,15 +141,13 @@ async function resolveImdbId(
 export async function scanAndIndex(): Promise<{ entries: number } | null> {
     if (!isElectron()) return null;
 
-    const roots = getRoots();
+    const roots = await getRoots();
     if (roots.length === 0) {
         setIndex([]);
         return { entries: 0 };
     }
 
-    const scanned: ScannedLocalFile[] = await (window as any).electronAPI.localLibrary.scan(
-        roots,
-    );
+    const scanned: ScannedLocalFile[] = await (window as any).electronAPI.localLibrary.scan();
 
     const entries: LocalIndexEntry[] = [];
 

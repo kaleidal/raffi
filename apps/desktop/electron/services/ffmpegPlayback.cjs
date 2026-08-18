@@ -29,16 +29,14 @@ function resolveFfmpegPath({ app, baseDir, resourcesPath }) {
     : path.join(baseDir, "..", "vendor", "ffmpeg", executable);
 }
 
-function validateSource(source) {
+function validateSource(source, localMediaAccess) {
   if (typeof source !== "string" || !source.trim() || source.includes("\0")) {
     throw new Error("Invalid FFmpeg media source");
   }
   const value = source.trim();
   if (/^https?:\/\//i.test(value)) return value;
-  if (!path.isAbsolute(value)) {
-    throw new Error("FFmpeg only accepts HTTP(S) URLs or absolute local paths");
-  }
-  const resolved = path.resolve(value);
+  const resolved = localMediaAccess?.resolveRequestUrl(value);
+  if (!resolved) throw new Error("FFmpeg only accepts HTTP(S) URLs or authorized local media");
   const stats = fs.statSync(resolved);
   if (!stats.isFile()) throw new Error("FFmpeg media source is not a file");
   return resolved;
@@ -142,7 +140,7 @@ async function waitForSessionClose(session) {
   clearTimeout(releaseTimer);
 }
 
-function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, resourcesPath, logToFile }) {
+function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, resourcesPath, logToFile, localMediaAccess, getMainWindow }) {
   const sessions = new Map();
   const ffmpegPath = resolveFfmpegPath({ app, baseDir, resourcesPath });
 
@@ -172,7 +170,7 @@ function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, r
 
   async function startAttempt(payload, httpSeekable) {
     await fs.promises.access(ffmpegPath, fs.constants.X_OK);
-    const source = validateSource(payload?.source);
+    const source = validateSource(payload?.source, localMediaAccess);
     const startTime = validateStartTime(payload?.startTime);
     const audioIndex = validateAudioIndex(payload?.audioIndex);
     const audioChannels = validateAudioChannels(payload?.audioChannels);
@@ -297,8 +295,22 @@ function createFfmpegPlaybackService({ app, protocol, ipcMain, spawn, baseDir, r
     }
   }
 
-  ipcMain.handle("FFMPEG_PLAYBACK_START", (_event, payload) => start(payload));
-  ipcMain.handle("FFMPEG_PLAYBACK_STOP", (_event, sessionId) => stop(sessionId));
+  function requireMainFrame(event) {
+    const mainWindow = getMainWindow?.();
+    if (!mainWindow) return;
+    if (event.sender !== mainWindow.webContents || event.senderFrame !== mainWindow.webContents.mainFrame) {
+      throw new Error("FFmpeg request must originate from the main application frame");
+    }
+  }
+
+  ipcMain.handle("FFMPEG_PLAYBACK_START", (event, payload) => {
+    requireMainFrame(event);
+    return start(payload);
+  });
+  ipcMain.handle("FFMPEG_PLAYBACK_STOP", (event, sessionId) => {
+    requireMainFrame(event);
+    return stop(sessionId);
+  });
 
   protocol.handle(SCHEME, (request) => {
     const parsed = new URL(request.url);
@@ -329,4 +341,5 @@ module.exports = {
   ffmpegPrivilegedScheme,
   buildArguments,
   createFfmpegPlaybackService,
+  validateSource,
 };

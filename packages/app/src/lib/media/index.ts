@@ -22,7 +22,6 @@ export {
 	canTryClientPlayback,
 	toClientPlayableUrl,
 	isLocalFilesystemPath,
-	encodeLocalPathAsMediaUrl,
 } from "./localSource";
 export { ensureMediaCodersRegistered } from "./registerCoders";
 export {

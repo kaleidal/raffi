@@ -19,7 +19,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.on('TRAKT_AUTH_CALLBACK', handler);
         return () => ipcRenderer.removeListener('TRAKT_AUTH_CALLBACK', handler);
     },
-    getFilePath: (file) => webUtils.getPathForFile(file),
+    getPlayableFileUrl: (file) =>
+        ipcRenderer.invoke('LOCAL_MEDIA_AUTHORIZE_SELECTED', webUtils.getPathForFile(file)),
     saveClipPath: (suggestedName) => ipcRenderer.invoke('SAVE_CLIP_DIALOG', suggestedName),
     writeClipFile: (targetPath, data) =>
         ipcRenderer.invoke('WRITE_CLIP_FILE', { targetPath, data }),
@@ -38,7 +39,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.invoke('INTRODB_FETCH_SEGMENTS', { imdbId, season, episode }),
     localLibrary: {
         pickFolder: () => ipcRenderer.invoke('LOCAL_LIBRARY_PICK_FOLDER'),
-        scan: (roots) => ipcRenderer.invoke('LOCAL_LIBRARY_SCAN', roots),
+        getRoots: () => ipcRenderer.invoke('LOCAL_LIBRARY_GET_ROOTS'),
+        removeRoot: (root) => ipcRenderer.invoke('LOCAL_LIBRARY_REMOVE_ROOT', root),
+        resolve: (filePath) => ipcRenderer.invoke('LOCAL_LIBRARY_RESOLVE', filePath),
+        scan: () => ipcRenderer.invoke('LOCAL_LIBRARY_SCAN'),
     },
     ffmpegPlayback: {
         start: (request) => ipcRenderer.invoke('FFMPEG_PLAYBACK_START', request),
