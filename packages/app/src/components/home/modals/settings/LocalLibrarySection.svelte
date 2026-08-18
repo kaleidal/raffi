@@ -5,7 +5,6 @@
 		removeRoot,
 		scanAndIndex,
 	} from "../../../../lib/localLibrary/localLibrary";
-	import { trackEvent } from "../../../../lib/analytics";
 
 	let localLibrarySupported = false;
 	let localRoots: string[] = [];
@@ -28,46 +27,27 @@
 			const picked = await (window as any).electronAPI.localLibrary.pickFolder();
 			if (!picked) return;
 			localRoots = await getLocalRoots();
-			trackEvent("local_library_root_added", {
-				root_count: localRoots.length,
-			});
 		} catch (e) {
 			console.error("Failed to pick folder", e);
 			localScanMessage = "Failed to pick folder";
-			trackEvent("local_library_root_add_failed", {
-				error_name: e instanceof Error ? e.name : "unknown",
-			});
 		}
 	}
 
 	async function removeLocalFolder(folder: string) {
 		await removeRoot(folder);
 		localRoots = await getLocalRoots();
-		trackEvent("local_library_root_removed", {
-			root_count: localRoots.length,
-		});
 	}
 
 	async function rescanLocalLibrary() {
 		if (!localLibrarySupported) return;
 		scanningLocal = true;
 		localScanMessage = "Scanning…";
-		trackEvent("local_library_scan_started", {
-			root_count: localRoots.length,
-		});
 		try {
 			const res = await scanAndIndex();
 			localScanMessage = res ? `Indexed ${res.entries} files` : "Not available";
-			trackEvent("local_library_scan_completed", {
-				entries: res?.entries ?? 0,
-				success: Boolean(res),
-			});
 		} catch (e) {
 			console.error("Local library scan failed", e);
 			localScanMessage = "Scan failed";
-			trackEvent("local_library_scan_failed", {
-				error_name: e instanceof Error ? e.name : "unknown",
-			});
 		} finally {
 			scanningLocal = false;
 		}

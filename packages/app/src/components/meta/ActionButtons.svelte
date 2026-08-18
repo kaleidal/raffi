@@ -2,7 +2,6 @@
     import ListsPopup from "./modals/ListsPopup.svelte";
     import TrailerModal from "./modals/TrailerModal.svelte";
     import { Archive, Film } from "@lucide/svelte";
-    import { trackEvent } from "../../lib/analytics";
 
 
     export let metaData: any;
@@ -12,16 +11,10 @@
 
     const openLists = () => {
         listsPopupVisible = true;
-        trackEvent("list_modal_opened", {
-            content_type: metaData?.meta?.type ?? null,
-        });
     };
 
     const openTrailer = () => {
         trailerVisible = true;
-        trackEvent("trailer_opened", {
-            has_trailer: Boolean(metaData?.meta?.trailers?.length),
-        });
     };
 
 </script>

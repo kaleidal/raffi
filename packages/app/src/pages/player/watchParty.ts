@@ -5,7 +5,6 @@ import {
     leaveWatchParty,
     setPartyEndCallback,
 } from "../../lib/stores/watchPartyStore";
-import { trackEvent } from "../../lib/analytics";
 
 
 export function setupWatchPartySync(
@@ -41,7 +40,6 @@ export function setupPartyEndCallback(
     setReason: (reason: "host_left" | "party_deleted") => void
 ) {
     setPartyEndCallback((reason) => {
-        trackEvent("watch_party_ended", { reason });
         setReason(reason);
         setShowModal(true);
     });

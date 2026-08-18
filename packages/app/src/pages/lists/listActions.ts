@@ -3,13 +3,11 @@ import { loadLists, loadListItems, selectItem } from "./dataLoader";
 import { lists, selectedListId, selectedItem, editingState, listItemsMap } from "./listsState";
 import { get } from "svelte/store";
 import type { List } from "./types";
-import { trackEvent } from "../../lib/analytics";
 import { confirmDialog } from "../../lib/systemDialogs";
 
 
 export async function handleDeleteList(listId: string) {
     if (!(await confirmDialog("Are you sure you want to delete this list?", "Delete list"))) return;
-    const beforeCount = get(lists).length;
     try {
         await deleteList(listId);
         await loadLists();
@@ -19,12 +17,8 @@ export async function handleDeleteList(listId: string) {
             selectedItem.set(null);
             selectedListId.set(null);
         }
-        trackEvent("list_deleted", { list_count_before: beforeCount });
     } catch (e) {
         console.error("Failed to delete list", e);
-        trackEvent("list_delete_failed", {
-            error_name: e instanceof Error ? e.name : "unknown",
-        });
     }
 }
 
@@ -47,12 +41,8 @@ export async function handleRemoveFromList() {
         } else {
             selectedItem.set(null);
         }
-        trackEvent("list_item_removed_from_list", { list_count: get(lists).length });
     } catch (e) {
         console.error("Failed to remove item", e);
-        trackEvent("list_item_remove_failed", {
-            error_name: e instanceof Error ? e.name : "unknown",
-        });
     }
 }
 
@@ -61,7 +51,6 @@ export function startEditing(list: List) {
         listId: list.list_id,
         name: list.name,
     });
-    trackEvent("list_rename_started");
 }
 
 export async function saveListName() {
@@ -71,12 +60,8 @@ export async function saveListName() {
         await updateList(currentEditingState.listId, { name: currentEditingState.name });
         await loadLists();
         editingState.set({ listId: null, name: "" });
-        trackEvent("list_renamed", { list_count: get(lists).length });
     } catch (e) {
         console.error("Failed to rename list", e);
-        trackEvent("list_rename_failed", {
-            error_name: e instanceof Error ? e.name : "unknown",
-        });
     }
 }
 
@@ -98,12 +83,7 @@ export async function moveList(index: number, direction: "up" | "down") {
         await updateList(listA.list_id, { position: posB });
         await updateList(listB.list_id, { position: posA });
         await loadLists();
-        trackEvent("list_reordered", { direction });
     } catch (e) {
         console.error("Failed to move list", e);
-        trackEvent("list_reorder_failed", {
-            error_name: e instanceof Error ? e.name : "unknown",
-        });
     }
 }
-

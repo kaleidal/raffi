@@ -1,5 +1,4 @@
 import { get } from "svelte/store";
-import { trackEvent } from "../../lib/analytics";
 import {
 	audioTracks,
 	currentAudioLabel,
@@ -16,14 +15,12 @@ import {
 	showWatchPartyModal,
 	subtitleTracks,
 } from "./playerState";
-import { getTrackAnalyticsProps } from "./playerAnalytics";
 import * as Session from "./videoSession";
 import * as Subtitles from "./subtitles";
 
 export const createPlayerModalHandlers = ({
 	getVideoElem,
 	getCueLinePercent,
-	getPlaybackAnalyticsProps,
 	getVideoSrc,
 	loadVideo,
 	handleClose,
@@ -31,7 +28,6 @@ export const createPlayerModalHandlers = ({
 }: {
 	getVideoElem: () => HTMLVideoElement | null | undefined;
 	getCueLinePercent: () => number;
-	getPlaybackAnalyticsProps: () => Record<string, unknown>;
 	getVideoSrc: () => string | null;
 	loadVideo: (src: string) => void | Promise<void>;
 	handleClose: () => void | Promise<void>;
@@ -41,10 +37,6 @@ export const createPlayerModalHandlers = ({
 	} | null;
 }) => {
 	const onAudioSelect = (detail: unknown) => {
-		trackEvent("audio_track_selected", {
-			...getPlaybackAnalyticsProps(),
-			...getTrackAnalyticsProps(detail, "audio"),
-		});
 
 		const videoElem = getVideoElem();
 		if (!videoElem) return;
@@ -66,10 +58,6 @@ export const createPlayerModalHandlers = ({
 	};
 
 	const onSubtitleSelect = (detail: unknown) => {
-		trackEvent("subtitle_selected", {
-			...getPlaybackAnalyticsProps(),
-			...getTrackAnalyticsProps(detail, "subtitles"),
-		});
 
 		const videoElem = getVideoElem();
 		if (!videoElem) return;
@@ -91,11 +79,7 @@ export const createPlayerModalHandlers = ({
 		);
 	};
 
-	const onSubtitleDelayChange = ({ seconds }: { seconds: number }) => {
-		trackEvent("subtitle_delay_changed", {
-			...getPlaybackAnalyticsProps(),
-			delay_seconds: seconds,
-		});
+	const onSubtitleDelayChange = () => {
 
 		const selected = get(subtitleTracks).find((track) => track.selected);
 		if (!selected || selected.id === "off") return;
@@ -113,7 +97,6 @@ export const createPlayerModalHandlers = ({
 	};
 
 	const onErrorRetry = () => {
-		trackEvent("player_error_retry", getPlaybackAnalyticsProps());
 		showError.set(false);
 		errorMessage.set("");
 		errorDetails.set("");
@@ -124,7 +107,6 @@ export const createPlayerModalHandlers = ({
 	};
 
 	const onErrorBack = () => {
-		trackEvent("player_error_back", getPlaybackAnalyticsProps());
 		showError.set(false);
 		void handleClose();
 	};

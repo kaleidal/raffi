@@ -5,8 +5,6 @@ type BrowserPlaybackGuardOptions = {
     getSource: () => string;
     hasEmbed: () => boolean;
     isDesktop: boolean;
-    getAnalytics: () => Record<string, unknown>;
-    track: (event: string, properties: Record<string, unknown>) => void;
     showError: (reason: string, details: string) => void;
 };
 
@@ -39,10 +37,6 @@ export function createBrowserPlaybackGuard(options: BrowserPlaybackGuardOptions)
         } catch {
         }
         options.showError(reason, playbackDetails());
-        options.track("browser_direct_stream_failed", {
-            reason,
-            ...options.getAnalytics(),
-        });
     };
 
     const handleVideoError = () => {

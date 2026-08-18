@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { onDestroy, onMount } from "svelte";
 	import { addAddon, getAddons } from "../../../../lib/db/db";
-	import { trackEvent } from "../../../../lib/analytics";
 	import { alertDialog } from "../../../../lib/systemDialogs";
 	import LoadingSpinner from "../../../common/LoadingSpinner.svelte";
 	import AddonLogo from "./AddonLogo.svelte";
@@ -30,7 +29,6 @@
 		"catalog",
 		"meta",
 	];
-	let communitySearchTimeout: ReturnType<typeof setTimeout> | undefined;
 	let installedTransportUrls = new Set<string>();
 
 	onMount(() => {
@@ -41,7 +39,6 @@
 
 	onDestroy(() => {
 		window.removeEventListener(ADDONS_CHANGED_EVENT, handleAddonsChanged as EventListener);
-		if (communitySearchTimeout) clearTimeout(communitySearchTimeout);
 	});
 
 	function handleAddonsChanged() {
@@ -118,15 +115,9 @@
 			communityAddons = Array.from(deduped.values()).filter((addon: any) =>
 				hasSupportedResource(addon?.manifest),
 			);
-			trackEvent("community_addons_loaded", {
-				count: communityAddons.length,
-			});
 		} catch (e) {
 			console.error("Failed to load community addons", e);
 			communityAddons = [];
-			trackEvent("community_addons_load_failed", {
-				error_name: e instanceof Error ? e.name : "unknown",
-			});
 		} finally {
 			loadingCommunity = false;
 		}
@@ -143,41 +134,23 @@
 			});
 			emitAddonsChanged();
 			await loadInstalledAddons();
-			trackEvent("addon_community_installed", {
-				has_stream: supportsResource(addon?.manifest, "stream"),
-				has_subtitles: supportsResource(addon?.manifest, "subtitles"),
-				has_catalog: supportsResource(addon?.manifest, "catalog"),
-				has_meta: supportsResource(addon?.manifest, "meta"),
-				configurable: Boolean(addon?.manifest?.behaviorHints?.configurable),
-			});
 		} catch (e) {
 			console.error("Failed to install community addon", e);
 			await alertDialog("Failed to install addon");
-			trackEvent("addon_community_install_failed", {
-				error_name: e instanceof Error ? e.name : "unknown",
-			});
 		}
 	}
 
 	function handleConfigure(url: string | undefined) {
 		if (!openConfigureUrl(url)) return;
-		trackEvent("addon_configure_opened");
 	}
 
 	function handleCommunitySearchInput(event: Event) {
-		const value = (event.target as HTMLInputElement).value;
-		communitySearch = value;
-		if (communitySearchTimeout) clearTimeout(communitySearchTimeout);
-		communitySearchTimeout = setTimeout(() => {
-			const queryLength = value.trim().length;
-			trackEvent("community_addon_search", { query_length: queryLength });
-		}, 500);
+		communitySearch = (event.target as HTMLInputElement).value;
 	}
 
 	function setCommunityFilter(next: ResourceFilter) {
 		if (communityResourceFilter === next) return;
 		communityResourceFilter = next;
-		trackEvent("community_addon_filter_changed", { filter: next });
 	}
 
 	function handleFilterClick(filter: ResourceFilter) {

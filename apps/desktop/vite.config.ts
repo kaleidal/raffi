@@ -36,7 +36,6 @@ export default defineConfig(({ command }) => ({
           includeDependenciesRecursively: false,
           groups: [
             { name: 'hls', test: 'node_modules/hls.js/' },
-            { name: 'posthog', test: 'node_modules/posthog-js/' },
             { name: 'mediabunny-dts', test: 'node_modules/@mediabunny/dts/' },
             { name: 'mediabunny-codecs', test: 'node_modules/@mediabunny/' },
             { name: 'mediabunny', test: 'node_modules/mediabunny/' },

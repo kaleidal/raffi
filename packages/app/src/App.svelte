@@ -13,7 +13,6 @@
         initAuth,
         updateStatus,
     } from "./lib/stores/authStore";
-    import { initAnalytics, setAnalyticsUser, trackEvent, trackPageView } from "./lib/analytics";
     import { formatReleaseNotes } from "./lib/updateNotes";
     import { warmTraktClientAuth } from "./lib/db/db";
 
@@ -187,9 +186,6 @@
 
         showTitleBar = Boolean((window as any)?.electronAPI?.usesTitleBarOverlay);
 
-        initAnalytics();
-        trackEvent("app_started");
-        trackPageView($router.page);
         try {
             const storedRpc = localStorage.getItem("discord_rpc_enabled");
             const rpcEnabled = storedRpc !== null ? storedRpc === "true" : true;
@@ -304,8 +300,6 @@
         };
     });
 
-    $: trackPageView($router.page);
-    $: setAnalyticsUser($currentUser);
     $: {
         const nextRouteKey = `${$router.page}:${JSON.stringify($router.params)}`;
         if (nextRouteKey !== lastRouteKey) {

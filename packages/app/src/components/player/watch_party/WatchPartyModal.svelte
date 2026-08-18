@@ -24,7 +24,6 @@
     };
     import { onDestroy, onMount } from "svelte";
 
-    import { trackEvent } from "../../../lib/analytics";
     import { Users } from "@lucide/svelte";
 
 
@@ -158,18 +157,9 @@
             );
             createdPartyId = partyId;
             onPartyCreated(partyId);
-            trackEvent("watch_party_created", {
-                source_type: sourceType,
-                is_local: sourceType === "local",
-                is_torrent: sourceType === "torrent",
-            });
         } catch (err: any) {
             console.error("Failed to create party:", err);
             error = err.message || "Failed to create watch party";
-            trackEvent("watch_party_create_failed", {
-                source_type: sourceType,
-                error_name: err instanceof Error ? err.name : "unknown",
-            });
         } finally {
             loading = false;
         }
@@ -194,18 +184,10 @@
             const sourceType = data?.is_local_source
                 ? "local"
                 : getStreamSourceType(data?.stream_source || "");
-            trackEvent("watch_party_preview_loaded", {
-                source_type: sourceType,
-                is_local: sourceType === "local",
-                is_torrent: sourceType === "torrent",
-            });
         } catch (err: any) {
             console.error("Failed to preview party:", err);
             error = err.message || "Failed to find watch party";
             joinStep = "input";
-            trackEvent("watch_party_preview_failed", {
-                error_name: err instanceof Error ? err.name : "unknown",
-            });
         } finally {
             loading = false;
         }
@@ -247,18 +229,9 @@
             const sourceType = partyPreview?.is_local_source
                 ? "local"
                 : getStreamSourceType(partyPreview?.stream_source || "");
-            trackEvent("watch_party_joined", {
-                source_type: sourceType,
-                is_local: sourceType === "local",
-                is_torrent: sourceType === "torrent",
-                used_local_file: Boolean(selectedFile),
-            });
         } catch (err: any) {
             console.error("Failed to join party:", err);
             error = err.message || "Failed to join watch party";
-            trackEvent("watch_party_join_failed", {
-                error_name: err instanceof Error ? err.name : "unknown",
-            });
         } finally {
             loading = false;
         }
@@ -266,7 +239,6 @@
 
     async function handleLeaveParty() {
         await leaveWatchParty();
-        trackEvent("watch_party_left");
         onClose();
     }
 
@@ -275,7 +247,6 @@
 
         navigator.clipboard.writeText(id);
         showCopied = true;
-        trackEvent("watch_party_id_copied");
         setTimeout(() => {
             showCopied = false;
         }, 2000);
@@ -285,7 +256,6 @@
         const input = event.target as HTMLInputElement;
         if (input.files && input.files.length > 0) {
             selectedFile = input.files[0];
-            trackEvent("watch_party_local_file_selected");
         }
     }
 

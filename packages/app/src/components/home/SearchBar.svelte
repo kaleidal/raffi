@@ -14,7 +14,6 @@
 	import TitleContextMenu from "./context_menus/TitleContextMenu.svelte";
 	import ListsPopup from "../meta/modals/ListsPopup.svelte";
 	import PlayModal from "./modals/PlayModal.svelte";
-	import { trackEvent } from "../../lib/analytics";
 	import {
 		currentUser,
 		authInitializing,
@@ -39,8 +38,6 @@
 	let searchTimeout: any;
 	let showSearchResults = false;
 	let loading = false;
-	let lastSearchQueryLength = 0;
-	let lastSearchResultsCount = 0;
 	let commandHint = "";
 	let updateProgressPercent = 0;
     let totalSearchResults = 0;
@@ -185,8 +182,6 @@
 		searchResults = { movies: [], series: [] };
 		showSearchResults = false;
 		loading = false;
-		lastSearchQueryLength = 0;
-		lastSearchResultsCount = 0;
 		return handled;
 	};
 
@@ -200,8 +195,6 @@
 			searchResults = { movies: [], series: [] };
 			showSearchResults = false;
 			loading = false;
-			lastSearchQueryLength = 0;
-			lastSearchResultsCount = 0;
 			return;
 		}
 
@@ -216,20 +209,10 @@
 
 		searchTimeout = setTimeout(async () => {
 			const trimmed = query.trim();
-			const queryLength = trimmed.length;
 			try {
 				const nextResults = await searchTitlesSplit(trimmed);
 				if (searchQuery.trim() !== trimmed) return;
 				searchResults = nextResults;
-				const totalResults =
-					nextResults.movies.length + nextResults.series.length;
-				lastSearchQueryLength = queryLength;
-				lastSearchResultsCount = totalResults;
-				trackEvent("search_performed", {
-					query_length: queryLength,
-					results_count: totalResults,
-				});
-
                 // Non-blocking addon search enrichment.
                 void searchAddonTitlesSplit(trimmed)
                     .then((addonResults) => {
@@ -257,8 +240,6 @@
                             return;
                         }
                         searchResults = merged;
-                        lastSearchResultsCount =
-                            merged.movies.length + merged.series.length;
                     })
                     .catch((error) => {
                         console.error("Addon search enrichment failed", error);
@@ -267,12 +248,6 @@
 				console.error("Search failed", e);
 				if (searchQuery.trim() !== trimmed) return;
 				searchResults = { movies: [], series: [] };
-				lastSearchQueryLength = queryLength;
-				lastSearchResultsCount = 0;
-				trackEvent("search_failed", {
-					query_length: queryLength,
-					error_name: e instanceof Error ? e.name : "unknown",
-				});
 			} finally {
 				if (searchQuery.trim() === trimmed) {
 					loading = false;
@@ -305,29 +280,19 @@
 		imdbId: string,
 		type: string,
 		name: string,
-		index: number,
 	) {
-		trackEvent("search_result_opened", {
-			query_length: lastSearchQueryLength,
-			results_count: lastSearchResultsCount,
-			result_index: index,
-			content_type: type,
-		});
 		router.navigate("meta", { imdbId, type, name });
 	}
 
 	function openAddons() {
-		trackEvent("addons_opened", { source: "search_bar" });
         onOpenAddons();
 	}
 
 	function openLists() {
-		trackEvent("lists_opened", { source: "search_bar" });
 		router.navigate("lists");
 	}
 
 	function openSettings() {
-		trackEvent("settings_opened", { source: "search_bar" });
         onOpenSettings();
 	}
 
@@ -341,14 +306,12 @@
 	}
 
 	function openPlayModal() {
-		trackEvent("play_modal_opened", { source: "search_bar" });
 		showPlayModal = true;
 	}
 
 	function handleContextMenu(
 		e: MouseEvent,
 		result: SearchTitleResult,
-		index: number,
 	) {
 		contextMenuX = e.clientX;
 		contextMenuY = e.clientY;
@@ -356,12 +319,6 @@
 		selectedType = result.type;
 		selectedTitle = result.name;
 		showContextMenu = true;
-		trackEvent("search_result_context_menu", {
-			query_length: lastSearchQueryLength,
-			results_count: lastSearchResultsCount,
-			result_index: index,
-			content_type: result.type,
-		});
 	}
 
 	$: totalSearchResults = searchResults.movies.length + searchResults.series.length;
@@ -598,22 +555,20 @@
                                         No movie results.
                                     </p>
                                 {:else}
-                                    {#each searchResults.movies as result, index}
+                                    {#each searchResults.movies as result}
                                         <button
                                             class="w-full flex flex-row gap-4 items-center p-2 hover:bg-white/10 rounded-xl transition-colors cursor-pointer text-left"
                                             onclick={() =>
                                                 navigateToMeta(
                                                     result.imdbId,
                                                     result.type,
-                                                    result.name,
-                                                    index,
+													result.name,
                                                 )}
                                             oncontextmenu={(e) => {
                                                 e.preventDefault();
                                                 handleContextMenu(
                                                     e,
-                                                    result,
-                                                    index,
+													result,
                                                 );
                                             }}
                                         >
@@ -649,22 +604,20 @@
                                         No series results.
                                     </p>
                                 {:else}
-                                    {#each searchResults.series as result, index}
+                                    {#each searchResults.series as result}
                                         <button
                                             class="w-full flex flex-row gap-4 items-center p-2 hover:bg-white/10 rounded-xl transition-colors cursor-pointer text-left"
                                             onclick={() =>
                                                 navigateToMeta(
                                                     result.imdbId,
                                                     result.type,
-                                                    result.name,
-                                                    index + searchResults.movies.length,
+													result.name,
                                                 )}
                                             oncontextmenu={(e) => {
                                                 e.preventDefault();
                                                 handleContextMenu(
                                                     e,
-                                                    result,
-                                                    index + searchResults.movies.length,
+													result,
                                                 );
                                             }}
                                         >

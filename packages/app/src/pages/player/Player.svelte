@@ -16,7 +16,6 @@
     import { watchParty } from "../../lib/stores/watchPartyStore";
     import { localMode } from "../../lib/stores/authStore";
     import { cloudSyncStatus, flushPendingLibraryProgress } from "../../lib/db/db";
-    import { trackEvent } from "../../lib/analytics";
     import {
         autoSkipIntros,
         miniPlayerOnMinimize,
@@ -80,7 +79,6 @@
     import * as IntroDb from "./introdb";
     import * as Discord from "./discord";
     import * as WatchParty from "./watchParty";
-    import { getPlaybackAnalyticsProps as buildPlaybackAnalyticsProps } from "./playerAnalytics";
     import {
         acknowledgeSeekStyleInfo,
         getSeekBarStyleFromStorage,
@@ -238,20 +236,10 @@
     };
 
     const handleToggleFullscreen = () => {
-        const entering = typeof document !== "undefined"
-            ? !(document as any).fullscreenElement
-            : null;
-        trackEvent("player_fullscreen_toggled", {
-            entering,
-            ...getPlaybackAnalyticsProps(),
-        });
         controlsManager?.toggleFullscreen?.();
     };
 
     const handleToggleObjectFit = () => {
-        trackEvent("player_object_fit_toggled", {
-            ...getPlaybackAnalyticsProps(),
-        });
 
         const nextFit: "contain" | "cover" = $objectFit === "contain" ? "cover" : "contain";
         const nextTransform = nextFit === "cover" ? "scale(1.035)" : "none";
@@ -286,12 +274,10 @@
     };
 
     const openAudioSelection = () => {
-        trackEvent("audio_selector_opened", getPlaybackAnalyticsProps());
         showAudioSelection.set(true);
     };
 
     const openSubtitleSelection = () => {
-        trackEvent("subtitle_selector_opened", getPlaybackAnalyticsProps());
         showSubtitleSelection.set(true);
     };
 
@@ -300,7 +286,6 @@
             showWatchPartyModal.set(false);
             return;
         }
-        trackEvent("watch_party_modal_opened", getPlaybackAnalyticsProps());
         showWatchPartyModal.set(true);
     };
 
@@ -318,25 +303,11 @@
         window.open(url, "_blank", "noopener,noreferrer");
     };
 
-    const getPlaybackAnalyticsProps = () =>
-        buildPlaybackAnalyticsProps({
-            currentVideoSrc,
-            sessionData: $sessionData,
-            duration: $duration,
-            currentTime: $currentTime,
-            metaData,
-            season,
-            episode,
-            watchPartyActive: $watchParty.isActive,
-        });
-
     const browserPlaybackGuard = createBrowserPlaybackGuard({
         getVideo: () => videoElem,
         getSource: () => currentVideoSrc || videoSrc || "",
         hasEmbed: () => Boolean(embedSrc),
         isDesktop: isDesktopPlatform,
-        getAnalytics: getPlaybackAnalyticsProps,
-        track: trackEvent,
         showError: (reason, details) => {
             loading.set(false);
             showCanvas.set(false);
@@ -348,13 +319,6 @@
     const clearBrowserAudioCheck = browserPlaybackGuard.clearAudioCheck;
     const handleVideoError = browserPlaybackGuard.handleVideoError;
     const scheduleBrowserAudioCheck = browserPlaybackGuard.scheduleAudioCheck;
-
-    const trackPlaybackClosed = () => {
-        if (playbackClosedTracked) return;
-        if (!currentVideoSrc) return;
-        playbackClosedTracked = true;
-        trackEvent("playback_closed", getPlaybackAnalyticsProps());
-    };
 
     const handleEmbedMessage = (event: MessageEvent) => {
         if (!embedSrc || !imdbID || !metaData) return;
@@ -393,7 +357,6 @@
 
     const handleEmbedLoaded = () => {
         finishEmbedLoad();
-        trackEvent("iframe_player_loaded", getPlaybackAnalyticsProps());
     };
 
     let fullscreenCleanupDone = false;
@@ -428,7 +391,6 @@
         if (hasStarted && !traktScrobbler.isStopSent()) {
             void traktScrobbler.send("stop", true);
         }
-        trackPlaybackClosed();
         await exitFullscreenIfNeeded();
         await playerSessionLoader.cancelCurrentLoad();
         if (!router.back()) {
@@ -443,8 +405,6 @@
     let currentVideoSrc: string | null = null;
     let currentEmbedSrc: string | null = null;
     let metadataCheckInterval: any;
-    let playbackStartTracked = false;
-    let playbackClosedTracked = false;
     let bufferingActive = false;
     let bufferingStartedAt = 0;
     let bufferingEligibleForHealthPrompt = false;
@@ -557,10 +517,6 @@
         errorDetails.set(reason);
         streamsPopupVisible.set(true);
 
-        trackEvent("torrent_stream_failed", {
-            reason: details || null,
-            ...getPlaybackAnalyticsProps(),
-        });
 
         torrentFailureExitTimeout = setTimeout(() => {
             showError.set(false);
@@ -865,7 +821,6 @@
         if (hasStarted && !traktScrobbler.isStopSent()) {
             void traktScrobbler.send("stop", true);
         }
-        trackPlaybackClosed();
         void exitFullscreenIfNeeded();
         clearInterval(metadataCheckInterval);
         torrentStatusPoller.stop();
@@ -1032,10 +987,6 @@
         isPlaying.set(true);
         hasStarted = true;
         void traktScrobbler.send("start");
-        if (!playbackStartTracked) {
-            trackEvent("playback_started", getPlaybackAnalyticsProps());
-            playbackStartTracked = true;
-        }
         Discord.updateDiscordActivity(
             metaData,
             season,
@@ -1112,14 +1063,9 @@
                     !playbackHealthPromptDismissed
                 ) {
                     playbackHealthPromptVisible = true;
-                    trackEvent("playback_health_prompt_shown", {
-                        trigger: "long_stall",
-                        ...getPlaybackAnalyticsProps(),
-                    });
                 }
             }, LONG_PLAYBACK_STALL_MS);
         }
-        trackEvent("playback_buffering_started", getPlaybackAnalyticsProps());
     };
 
     const handleBufferEnd = () => {
@@ -1145,15 +1091,6 @@
                 shouldSuggestAnotherStream(recentPlaybackStalls)
             ) {
                 playbackHealthPromptVisible = true;
-                trackEvent("playback_health_prompt_shown", {
-                    trigger: "repeated_stalls",
-                    stall_count: recentPlaybackStalls.length,
-                    stall_duration_ms: recentPlaybackStalls.reduce(
-                        (total, stall) => total + stall.durationMs,
-                        0,
-                    ),
-                    ...getPlaybackAnalyticsProps(),
-                });
             }
         }
         bufferingEligibleForHealthPrompt = false;
@@ -1165,10 +1102,6 @@
                 recentPlaybackStalls = [];
             }, 15_000);
         }
-        trackEvent("playback_buffering_ended", {
-            buffer_duration_ms: durationMs,
-            ...getPlaybackAnalyticsProps(),
-        });
     };
 
     const dismissPlaybackHealthPrompt = () => {
@@ -1178,7 +1111,6 @@
         }
         playbackHealthPromptVisible = false;
         playbackHealthPromptDismissed = true;
-        trackEvent("playback_health_prompt_dismissed", getPlaybackAnalyticsProps());
     };
 
     const chooseAnotherStreamForPlaybackHealth = () => {
@@ -1188,7 +1120,6 @@
         }
         playbackHealthPromptVisible = false;
         playbackHealthPromptDismissed = true;
-        trackEvent("playback_health_prompt_action", getPlaybackAnalyticsProps());
         returnToStreams();
     };
 
@@ -1214,10 +1145,6 @@
         loadingProgress.set(null);
         playbackBuffering.set(false);
         errorModalOpen = true;
-        trackEvent("player_error_shown", {
-            message: $errorMessage || null,
-            ...getPlaybackAnalyticsProps(),
-        });
     }
 
     $: if (!$showError && errorModalOpen) {
@@ -1237,17 +1164,10 @@
     };
 
     const handleSkipIntro = () => {
-        trackEvent("skip_chapter_clicked", {
-            chapter_kind: $currentChapter?.kind || null,
-            chapter_source: $currentChapter?.source || null,
-            ...getPlaybackAnalyticsProps(),
-        });
         Chapters.skipChapter($currentChapter, seekToTime);
     };
 
     const handleNextEpisodeClick = createNextEpisodeHandler({
-        trackEvent,
-        getPlaybackAnalyticsProps,
         handleProgressInternal,
         getVideoSrc: () => videoSrc,
         setCurrentVideoSrc: (value) => {
@@ -1275,7 +1195,6 @@
         getVideoElem: () =>
             (activeVideoSurface === 0 ? videoSurfaceA : videoSurfaceB) ?? undefined,
         getCueLinePercent: () => cueLinePercent,
-        getPlaybackAnalyticsProps,
         getVideoSrc: () => videoSrc,
         loadVideo: (src) => {
             if (src === currentVideoSrc) {
@@ -1315,8 +1234,6 @@
         effectiveChapterMarkers = [];
         skipButtonLabel = "Skip Intro";
         hasStarted = false;
-        playbackStartTracked = false;
-        playbackClosedTracked = false;
         bingeAutoAdvancing = false;
         lastEmbedProgressAt = 0;
         playerSessionLoader.cancelCurrentLoad();
@@ -1347,8 +1264,6 @@
         skipButtonLabel = "Skip Intro";
         currentVideoSrc = nextVideoSrc;
         hasStarted = false;
-        playbackStartTracked = false;
-        playbackClosedTracked = false;
         bingeAutoAdvancing = false;
         recentPlaybackStalls = [];
         playbackHealthPromptVisible = false;
@@ -1868,10 +1783,6 @@
                         onClipPanelOpenChange={(detail) => {
                             clipPanelOpen = !!detail?.open;
                             controlsManager?.setPinned?.(clipPanelOpen, controlsVisible.set);
-                            trackEvent("clip_panel_toggled", {
-                                open: clipPanelOpen,
-                                ...getPlaybackAnalyticsProps(),
-                            });
                         }}
                     />
                 </div>

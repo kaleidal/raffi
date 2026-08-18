@@ -1,6 +1,5 @@
 import { playerState } from "./listsState";
 import { get } from "svelte/store";
-import { trackEvent } from "../../lib/analytics";
 
 
 export function togglePlay() {
@@ -14,7 +13,6 @@ export function togglePlay() {
     );
 
     playerState.update(s => ({ ...s, isPaused: !s.isPaused }));
-    trackEvent("list_trailer_play_toggled", { paused: !currentState.isPaused });
 }
 
 export function toggleMute() {
@@ -28,7 +26,6 @@ export function toggleMute() {
     );
 
     playerState.update(s => ({ ...s, isMuted: !s.isMuted }));
-    trackEvent("list_trailer_mute_toggled", { muted: !currentState.isMuted });
 }
 
 

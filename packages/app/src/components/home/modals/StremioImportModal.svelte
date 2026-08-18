@@ -12,7 +12,6 @@
         defaultSelectedAddonIds,
         defaultSelectedLibraryIds,
     } from "../../../lib/import/stremioImportPreview";
-    import { trackEvent } from "../../../lib/analytics";
     import LoadingSpinner from "../../common/LoadingSpinner.svelte";
 
     const portal = (node: HTMLElement) => {
@@ -296,7 +295,6 @@
         errorMessage = "";
         phase = "fetching";
         abortController = new AbortController();
-        trackEvent("stremio_import_started", { source: "account_login" });
 
         try {
             const preview = await previewStremioImportFromAccount(email, password);
@@ -312,10 +310,6 @@
         } catch (error: any) {
             errorMessage = error?.message || "Something went wrong while signing in.";
             phase = "error";
-            trackEvent("stremio_import_failed", {
-                stage: "login",
-                error_name: error?.name || "unknown",
-            });
         } finally {
             abortController = null;
         }
@@ -354,14 +348,6 @@
             };
             phase = "done";
             previewData = null;
-            trackEvent("stremio_import_completed", {
-                total: summary.total,
-                added: summary.added,
-                merged: summary.merged,
-                skipped: summary.skipped,
-                addons_added: summary.addonsAdded,
-                keep_connected: keepConnected,
-            });
             dispatch("imported", {
                 total: summary.total,
                 added: summary.added,
@@ -372,10 +358,6 @@
         } catch (error: any) {
             errorMessage = error?.message || "Something went wrong while importing.";
             phase = "error";
-            trackEvent("stremio_import_failed", {
-                stage: "import",
-                error_name: error?.name || "unknown",
-            });
         } finally {
             abortController = null;
         }

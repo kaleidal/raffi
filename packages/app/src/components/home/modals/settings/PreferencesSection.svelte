@@ -5,7 +5,6 @@
 	import DirectSourceSection from "./DirectSourceSection.svelte";
 	import { enableRPC, disableRPC } from "../../../../lib/rpc";
 	import { getAddons, getTraktStatus } from "../../../../lib/db/db";
-	import { trackEvent } from "../../../../lib/analytics";
 	import {
 		autoSkipIntros,
 		miniPlayerOnMinimize,
@@ -110,7 +109,6 @@
 	function toggleAutoSkipIntros() {
 		autoSkipIntros.update((value) => {
 			const nextValue = !value;
-			trackEvent("auto_skip_intros_toggled", { enabled: nextValue });
 			return nextValue;
 		});
 	}
@@ -119,7 +117,6 @@
 		miniPlayerOnMinimize.update((value) => {
 			const nextValue = !value;
 			miniPlayerEnabled = nextValue;
-			trackEvent("mini_player_on_minimize_toggled", { enabled: nextValue });
 			return nextValue;
 		});
 	}
@@ -131,7 +128,6 @@
 		const enabled = !$allowTorrenting;
 		try {
 			await setTorrentingAllowed(enabled);
-			trackEvent("torrenting_toggled", { enabled });
 		} catch (error) {
 			console.error("Failed to update torrenting setting", error);
 			torrentingError =
@@ -169,7 +165,6 @@
 			if (result?.ok) {
 				defenderExcluded = true;
 				defenderError = "";
-				trackEvent("defender_exclusion_applied");
 				// Re-read prefs so the UI matches Defender, but never undo a successful apply.
 				await new Promise((resolve) => setTimeout(resolve, 500));
 				try {
@@ -188,13 +183,11 @@
 				defenderError =
 					result?.error ||
 					"Exclusion failed. You may have cancelled the Administrator prompt.";
-				trackEvent("defender_exclusion_failed");
 			}
 		} catch (error) {
 			defenderExcluded = false;
 			defenderError =
 				error instanceof Error ? error.message : "Could not apply Defender exclusions";
-			trackEvent("defender_exclusion_failed");
 		} finally {
 			defenderBusy = false;
 		}
@@ -256,14 +249,6 @@
 		heroSource = next;
 		setStoredHomeHeroSource(next);
 		emitHomeRefresh();
-		trackEvent("home_hero_source_changed", {
-			source:
-				next === HOME_HERO_SOURCE_CINEMETA
-					? "cinemeta"
-					: next === HOME_HERO_SOURCE_TRAKT_RECOMMENDATIONS
-						? "trakt_recommendations"
-						: "addon_catalog",
-		});
 	}
 
 	function setSearchBarPosition(value: string) {
@@ -282,7 +267,6 @@
 				detail: { position: next },
 			}),
 		);
-		trackEvent("home_search_bar_position_changed", { position: next });
 	}
 </script>
 

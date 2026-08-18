@@ -6,8 +6,6 @@ const NEXT_EPISODE_TIMEOUT_MS = 45_000;
 export type NextEpisodeHandler = (() => void) & { cancel: () => void };
 
 export const createNextEpisodeHandler = ({
-    trackEvent,
-    getPlaybackAnalyticsProps,
     handleProgressInternal,
     getVideoSrc,
     setCurrentVideoSrc,
@@ -16,8 +14,6 @@ export const createNextEpisodeHandler = ({
     suppressInitialLoading,
     onNextEpisodeFailed,
 }: {
-    trackEvent: (event: string, props?: Record<string, any>) => void;
-    getPlaybackAnalyticsProps: () => Record<string, any>;
     handleProgressInternal: (time: number, duration: number) => void;
     getVideoSrc: () => string | null;
     setCurrentVideoSrc: (value: string | null) => void;
@@ -44,7 +40,6 @@ export const createNextEpisodeHandler = ({
     };
 
     const handler = (() => {
-        trackEvent("next_episode_clicked", getPlaybackAnalyticsProps());
 
         nextEpisodeAttemptId += 1;
         const attemptId = nextEpisodeAttemptId;

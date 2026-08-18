@@ -12,7 +12,6 @@
 		type StremioConnectionStatus,
 	} from "../../../../lib/db/db";
 	import { signInWithTraktViaBrowser } from "../../../../lib/auth/traktAuth";
-	import { trackEvent } from "../../../../lib/analytics";
 
 	let traktLoading = false;
 	let traktStatus: TraktStatus | null = null;
@@ -117,13 +116,9 @@
 			traktMessage = traktStatus?.username
 				? `Connected as ${traktStatus.username}`
 				: "Trakt connected.";
-			trackEvent("trakt_connect_success", { source: "settings" });
 		} catch (e: any) {
 			console.error("Failed to connect Trakt", e);
 			traktError = e?.message || "Failed to connect Trakt";
-			trackEvent("trakt_connect_failed", {
-				error_name: e instanceof Error ? e.name : "unknown",
-			});
 		} finally {
 			traktBusy = false;
 		}
@@ -139,13 +134,9 @@
 				? { ...traktStatus, connected: false, username: null, slug: null }
 				: null;
 			traktMessage = "Trakt disconnected.";
-			trackEvent("trakt_disconnect_success", { source: "settings" });
 		} catch (e: any) {
 			console.error("Failed to disconnect Trakt", e);
 			traktError = e?.message || "Failed to disconnect Trakt";
-			trackEvent("trakt_disconnect_failed", {
-				error_name: e instanceof Error ? e.name : "unknown",
-			});
 		} finally {
 			traktBusy = false;
 		}
@@ -158,18 +149,10 @@
 		try {
 			const summary = await syncStremioLibrary();
 			stremioMessage = `Synced ${summary.total} item${summary.total === 1 ? "" : "s"} (${summary.added} new, ${summary.merged} updated)${summary.addonsAdded > 0 ? ` and ${summary.addonsAdded} addon${summary.addonsAdded === 1 ? "" : "s"}` : ""}.`;
-			trackEvent("stremio_sync_success", {
-				total: summary.total,
-				added: summary.added,
-				merged: summary.merged,
-			});
 		} catch (e: any) {
 			console.error("Failed to sync Stremio", e);
 			stremioError = e?.message || "Failed to sync Stremio";
 			stremioStatus = getStremioStatus();
-			trackEvent("stremio_sync_failed", {
-				error_name: e instanceof Error ? e.name : "unknown",
-			});
 		} finally {
 			stremioBusy = false;
 		}
@@ -183,13 +166,9 @@
 			await disconnectStremio();
 			stremioStatus = getStremioStatus();
 			stremioMessage = "Stremio disconnected.";
-			trackEvent("stremio_disconnect_success", { source: "settings" });
 		} catch (e: any) {
 			console.error("Failed to disconnect Stremio", e);
 			stremioError = e?.message || "Failed to disconnect Stremio";
-			trackEvent("stremio_disconnect_failed", {
-				error_name: e instanceof Error ? e.name : "unknown",
-			});
 		} finally {
 			stremioBusy = false;
 		}

@@ -1,7 +1,6 @@
 <script lang="ts">
     import { onDestroy, onMount } from "svelte";
     import CustomSelect from "../../../common/CustomSelect.svelte";
-    import { trackEvent } from "../../../../lib/analytics";
     import {
         DIRECT_SOURCE_DEFAULTS,
         getStreamingSourceSettings,
@@ -145,7 +144,6 @@
         if (settings.mode === mode) return;
         cloneWith({ mode });
         void persistSettings();
-        trackEvent("streaming_source_mode_changed", { mode });
     }
 
     function updateDirect(updates: Partial<StreamingSourceSettings["direct"]>) {
@@ -187,7 +185,6 @@
             seriesUrl: template.seriesUrl,
         });
 
-        trackEvent("direct_source_example_applied", { name: template.name });
     }
 
 </script>

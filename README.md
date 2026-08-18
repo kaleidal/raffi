@@ -217,7 +217,7 @@ bun --filter @raffi/marketing build
 - **Video Player**: native media playback, HLS.js, MediaBunny, and bundled FFmpeg audio conversion
 - **Storage**: Local app data with Raffi Sync cloud backup
 - **Build**: Vite + electron-builder
-- **Key Libraries**: `@lucide/svelte`, `posthog-js`, MediaBunny, and HLS.js
+- **Key Libraries**: `@lucide/svelte`, MediaBunny, and HLS.js
 
 #### Web App
 - **Frontend**: SvelteKit, TypeScript, Tailwind CSS

@@ -10,7 +10,6 @@ import { router } from "../../lib/stores/router";
 
 import type { Stream } from "./types";
 import { getLocalStreamsFor } from "../../lib/localLibrary/localLibrary";
-import { trackEvent } from "../../lib/analytics";
 import * as ProgressLogic from "./progressLogic";
 import { createDirectStream } from "../../lib/streaming/directLinks";
 import { getStreamingSourceSettings } from "../../lib/streaming/sourceSettings";
@@ -29,42 +28,6 @@ import {
 let streamFetchGeneration = 0;
 
 const isStaleStreamFetch = (requestId: number) => requestId !== streamFetchGeneration;
-
-const getStreamAnalyticsProps = (stream: Stream) => {
-    const isTorrent = Boolean(
-        stream.infoHash || (stream.url && stream.url.startsWith("magnet:")),
-    );
-    const isLocal = stream.raffiSource === "local";
-    const isDirect = stream.raffiSource === "direct";
-    const sourceType = isLocal ? "local" : isTorrent ? "torrent" : "direct";
-
-    return {
-        source_type: sourceType,
-        is_torrent: isTorrent,
-        is_local: isLocal,
-        is_direct_source: isDirect,
-        direct_playback_mode: stream.directPlaybackMode || null,
-        has_file_index: stream.fileIdx != null,
-        addon: stream.name || null,
-        has_binge_group: Boolean(stream.behaviorHints?.bingeGroup),
-    };
-};
-
-const getStreamListStats = (items: Stream[]) => {
-    const localCount = items.filter((stream) => stream.raffiSource === "local").length;
-    const torrentCount = items.filter((stream) =>
-        Boolean(stream.infoHash || (stream.url && stream.url.startsWith("magnet:"))),
-    ).length;
-    const directCount = items.filter((stream) => stream.raffiSource === "direct").length;
-
-    return {
-        total: items.length,
-        local: localCount,
-        addon: Math.max(0, items.length - localCount - directCount),
-        torrent: torrentCount,
-        direct: directCount,
-    };
-};
 
 const getStartTimeForCurrentSelection = (progressMap: any, data: any, episode: any) => {
     if (data?.meta?.type === "movie") {
@@ -112,14 +75,8 @@ export const fetchStreams = async (
             const combined = [...(localStreams as any), ...(directStream ? [directStream] : [])];
             if (isStaleStreamFetch(requestId)) return [];
             streams.set(combined);
-            trackEvent("stream_list_loaded", {
-                content_type: type,
-                source_mode: "direct",
-                ...getStreamListStats(combined),
-            });
 
             if (directStream && !silent) {
-                trackEvent("direct_stream_autoplayed", getStreamAnalyticsProps(directStream));
                 playStream(directStream, currentProgressMap);
             } else if (!silent) {
                 streamFailureMessage.set("Direct link is not configured for this title.");
@@ -164,21 +121,11 @@ export const fetchStreams = async (
 
         const combined = [...(localStreams as any), ...remoteStreams];
         streams.set(combined);
-        trackEvent("stream_list_loaded", {
-            content_type: type,
-            source_mode: "addons",
-            ...getStreamListStats(combined),
-        });
         return combined;
 
     } catch (e) {
         if (isStaleStreamFetch(requestId)) return [];
         console.error("Failed to fetch streams", e);
-        const fallbackType = get(metaData)?.meta?.type || "movie";
-        trackEvent("stream_list_failed", {
-            content_type: fallbackType,
-            error_name: e instanceof Error ? e.name : "unknown",
-        });
         try {
             const data = get(metaData);
             const type = data?.meta?.type || "movie";
@@ -326,12 +273,10 @@ export const playStream = (
 
 export const onStreamClick = (stream: Stream, progressMap: any) => {
     if (isStreamFailed(stream)) {
-        trackEvent("stream_blocked_failed", getStreamAnalyticsProps(stream));
         streamFailureMessage.set("This stream failed previously. Please select another stream.");
         return;
     }
 
-    trackEvent("stream_selected", getStreamAnalyticsProps(stream));
 
     const isTorrent = stream.infoHash || (stream.url && stream.url.startsWith("magnet:"));
 
@@ -342,7 +287,6 @@ export const onStreamClick = (stream: Stream, progressMap: any) => {
             return;
         }
         if (!get(allowTorrenting)) {
-            trackEvent("torrent_stream_blocked_disabled", getStreamAnalyticsProps(stream));
             streamFailureMessage.set("Torrenting is disabled. Turn on Allow Torrenting in Settings to play this source.");
             return;
         }
@@ -358,7 +302,6 @@ export const handleTorrentWarningConfirm = async (progressMap: any) => {
         await setTorrentingAllowed(true);
         acknowledgeTorrentWarning();
         showTorrentWarning.set(false);
-        trackEvent("torrent_warning_confirmed", getStreamAnalyticsProps(pending));
         playStream(pending, progressMap);
         pendingTorrentStream.set(null);
     } catch (error) {
@@ -370,10 +313,6 @@ export const handleTorrentWarningConfirm = async (progressMap: any) => {
 };
 
 export const handleTorrentWarningCancel = () => {
-    const pending = get(pendingTorrentStream);
-    if (pending) {
-        trackEvent("torrent_warning_cancelled", getStreamAnalyticsProps(pending));
-    }
     showTorrentWarning.set(false);
     pendingTorrentStream.set(null);
 };

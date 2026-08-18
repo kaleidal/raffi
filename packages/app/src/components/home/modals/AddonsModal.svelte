@@ -3,7 +3,6 @@
     import { onDestroy } from "svelte";
     import { X } from "@lucide/svelte";
 
-    import { trackEvent } from "../../../lib/analytics";
     import CommunityAddonsSection from "./addons/CommunityAddonsSection.svelte";
     import InstalledAddonsSection from "./addons/InstalledAddonsSection.svelte";
 
@@ -26,7 +25,6 @@
     export let initialResourceFilter: "all" | "stream" | "subtitles" | "catalog" | "meta" = "all";
 
     let bodyLocked = false;
-    let hasTrackedOpen = false;
 
     const toggleBodyScroll = (active: boolean) => {
         if (typeof document === "undefined") return;
@@ -95,7 +93,6 @@
     };
 
     function closeModal() {
-        trackEvent("addons_modal_closed");
         showAddonsModal = false;
     }
 
@@ -105,14 +102,6 @@
         updateBodyLock(false);
     });
 
-    $: if (showAddonsModal && !hasTrackedOpen) {
-        hasTrackedOpen = true;
-        trackEvent("addons_modal_opened");
-    }
-
-    $: if (!showAddonsModal && hasTrackedOpen) {
-        hasTrackedOpen = false;
-    }
 </script>
 
 {#if showAddonsModal}

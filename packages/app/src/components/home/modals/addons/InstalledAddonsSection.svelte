@@ -3,7 +3,6 @@
 	import { ArrowDown, ArrowUp, Trash } from "@lucide/svelte";
 	import { addAddon, getAddons, removeAddon, reorderAddons, type Addon } from "../../../../lib/db/db";
 	import { alertDialog, confirmDialog } from "../../../../lib/systemDialogs";
-	import { trackEvent } from "../../../../lib/analytics";
 	import LoadingSpinner from "../../../common/LoadingSpinner.svelte";
 	import AddonLogo from "./AddonLogo.svelte";
 	import {
@@ -50,12 +49,8 @@
 		loadingAddons = true;
 		try {
 			addonsList = await getAddons();
-			trackEvent("addons_loaded", { installed_count: addonsList.length });
 		} catch (e) {
 			console.error("Failed to load addons", e);
-			trackEvent("addons_load_failed", {
-				error_name: e instanceof Error ? e.name : "unknown",
-			});
 		} finally {
 			loadingAddons = false;
 		}
@@ -68,7 +63,6 @@
 				newAddonUrl = newAddonUrl.replace("stremio://", "https://");
 			} else {
 				await alertDialog("Invalid URL");
-				trackEvent("addon_custom_invalid_url");
 				return;
 			}
 		}
@@ -81,7 +75,6 @@
 		const manifest = await response.json();
 		if (!manifest) {
 			await alertDialog("Invalid manifest");
-			trackEvent("addon_custom_invalid_manifest");
 			return;
 		}
 
@@ -95,24 +88,14 @@
 			newAddonUrl = "";
 			await loadAddons();
 			emitAddonsChanged();
-			trackEvent("addon_custom_added", {
-				has_stream: supportsResource(manifest, "stream"),
-				has_subtitles: supportsResource(manifest, "subtitles"),
-				has_catalog: supportsResource(manifest, "catalog"),
-				has_meta: supportsResource(manifest, "meta"),
-			});
 		} catch (e) {
 			console.error("Failed to add addon", e);
 			await alertDialog("Failed to add addon");
-			trackEvent("addon_custom_add_failed", {
-				error_name: e instanceof Error ? e.name : "unknown",
-			});
 		}
 	}
 
 	function handleConfigure(url: string | undefined) {
 		if (!openConfigureUrl(url)) return;
-		trackEvent("addon_configure_opened");
 	}
 
 	async function handleRemoveAddon(url: string) {
@@ -121,12 +104,8 @@
 			await removeAddon(url);
 			await loadAddons();
 			emitAddonsChanged();
-			trackEvent("addon_removed");
 		} catch (e) {
 			console.error("Failed to remove addon", e);
-			trackEvent("addon_remove_failed", {
-				error_name: e instanceof Error ? e.name : "unknown",
-			});
 		}
 	}
 
@@ -144,16 +123,9 @@
 		try {
 			await reorderAddons(addonsList.map((item) => item.transport_url));
 			emitAddonsChanged();
-			trackEvent("addon_reordered", {
-				direction: direction < 0 ? "up" : "down",
-				resource_type: addonSupportsStreams(addon) ? "stream" : "other",
-			});
 		} catch (e) {
 			console.error("Failed to reorder addons", e);
 			await loadAddons();
-			trackEvent("addon_reorder_failed", {
-				error_name: e instanceof Error ? e.name : "unknown",
-			});
 		}
 	}
 </script>

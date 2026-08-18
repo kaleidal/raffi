@@ -1,7 +1,6 @@
 <script lang="ts">
     import { ArchiveX, Info, Pause, Play, Volume2, VolumeX } from "@lucide/svelte";
     import ExpandingButton from "../../../components/common/ExpandingButton.svelte";
-    import { trackEvent } from "../../../lib/analytics";
     import { router } from "../../../lib/stores/router";
     import { handleRemoveFromList } from "../listActions";
     import { playerState, selectedItem } from "../listsState";
@@ -16,9 +15,6 @@
 
     function watchSelectedItem() {
         if (!$selectedItem) return;
-        trackEvent("list_item_watch_clicked", {
-            content_type: $selectedItem.type ?? null,
-        });
         router.navigate("meta", {
             imdbId: $selectedItem.imdb_id,
             type: $selectedItem.type,

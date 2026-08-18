@@ -20,16 +20,12 @@
         updateStatus,
     } from "../../../lib/stores/authStore";
 	import { router } from "../../../lib/stores/router";
-	import {
-		trackEvent,
-	} from "../../../lib/analytics";
 	import ActivitySection from "./settings/ActivitySection.svelte";
     import FeedbackSection from "./settings/FeedbackSection.svelte";
     import LoadingSpinner from "../../common/LoadingSpinner.svelte";
 	import UpdateSection from "./settings/UpdateSection.svelte";
 	import LocalModeSignInSection from "./settings/LocalModeSignInSection.svelte";
 	import PreferencesSection from "./settings/PreferencesSection.svelte";
-	import PrivacySection from "./settings/PrivacySection.svelte";
 	import LocalLibrarySection from "./settings/LocalLibrarySection.svelte";
 	import AccountSection from "./settings/AccountSection.svelte";
 	import AccountStateMismatchSection from "./settings/AccountStateMismatchSection.svelte";
@@ -201,13 +197,9 @@
 			a.click();
 			document.body.removeChild(a);
 			URL.revokeObjectURL(url);
-			trackEvent("data_exported", { success: true });
 		} catch (e) {
 			console.error("Failed to download data", e);
 			error = "Failed to download data";
-			trackEvent("data_export_failed", {
-				error_name: e instanceof Error ? e.name : "unknown",
-			});
 		}
 	}
 
@@ -225,7 +217,6 @@
 			}
 			signOutToLocalMode();
 			await refreshStats();
-			trackEvent("local_mode_switched", { keep_data: keepData });
 			message = keepData
 				? "Switched to local mode. Your device data stays available offline."
 				: "Switched to local mode with a fresh local library.";
@@ -233,9 +224,6 @@
 		} catch (e: any) {
 			console.error("Failed to switch to local mode", e);
 			error = "Failed to switch to local mode";
-			trackEvent("local_mode_switch_failed", {
-				error_name: e instanceof Error ? e.name : "unknown",
-			});
 		}
 	}
 
@@ -253,7 +241,6 @@
 		try {
 			await signInWithAve();
 			await refreshStats();
-			trackEvent("ave_login_success", { source: "settings" });
 			message = "Signed in. Local data will keep working and sync in the background.";
 			setTimeout(() => {
 				close();
@@ -262,9 +249,6 @@
 		} catch (e: any) {
 			console.error(e);
 			error = e?.message || "Failed to sign in";
-			trackEvent("ave_login_failed", {
-				error_name: e instanceof Error ? e.name : "unknown",
-			});
 		} finally {
 			aveLoading = false;
 		}
@@ -364,8 +348,6 @@
 								{:else}
 									<AccountStateMismatchSection onRecoverToLocalMode={recoverToLocalMode} />
 								{/if}
-
-								<PrivacySection />
 
 								<UpdateSection
 									available={$updateStatus.available}

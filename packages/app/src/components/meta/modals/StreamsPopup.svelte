@@ -2,7 +2,6 @@
     import { fade } from "svelte/transition";
     import { X } from "@lucide/svelte";
     import { failedStreamKeys, streamFailureMessage } from "../../../pages/meta/metaState";
-    import { trackEvent } from "../../../lib/analytics";
     import type { Addon } from "../../../lib/db/db";
     import type { ShowResponse } from "../../../lib/library/types/meta_types";
     import type { ProgressItem, ProgressMap, Stream } from "../../../pages/meta/types";
@@ -13,7 +12,6 @@
         getAudioLanguageFilterOptions,
         getAvailableStreamFilterOptions,
         getFilteredAddons,
-        getStreamCounts,
         RESOLUTION_FILTERS,
         VIDEO_CODEC_FILTERS,
         DYNAMIC_RANGE_FILTERS,
@@ -73,14 +71,10 @@
     let dynamicRangeFilter: DynamicRangeFilter = "all";
     let availabilityFilter: AvailabilityFilter = "all";
     let sizeFilter: SizeFilter = "all";
-    let hasTrackedOpen = false;
+    let wasOpen = false;
 
     let episodeProgressEntry: ProgressItem | null = null;
     let progressDetails: EpisodeProgressDetails | null = null;
-
-    function getStreamCountsNow() {
-        return getStreamCounts(streams);
-    }
 
     function resetFilters() {
         resolutionFilter = "all";
@@ -90,88 +84,50 @@
         dynamicRangeFilter = "all";
         availabilityFilter = "all";
         sizeFilter = "all";
-        trackEvent("stream_filters_reset", getStreamCountsNow());
     }
 
     function setResolutionFilter(value: ResolutionFilter) {
         if (resolutionFilter === value) return;
         resolutionFilter = value;
-        trackEvent("stream_filter_resolution", {
-            value,
-            audio_language_filter: audioLanguageFilter,
-            sort_option: sortOption,
-            ...getStreamCountsNow(),
-        });
     }
 
     function setAudioLanguageFilter(value: string) {
         if (audioLanguageFilter === value) return;
         audioLanguageFilter = value;
-        trackEvent("stream_filter_audio_language", {
-            value,
-            resolution_filter: resolutionFilter,
-            sort_option: sortOption,
-            ...getStreamCountsNow(),
-        });
     }
 
     function setSortOption(value: StreamSortOption) {
         if (sortOption === value) return;
         sortOption = value;
-        trackEvent("stream_sort_changed", {
-            value,
-            resolution_filter: resolutionFilter,
-            audio_language_filter: audioLanguageFilter,
-            ...getStreamCountsNow(),
-        });
     }
 
     function setVideoCodecFilter(value: VideoCodecFilter) {
         if (videoCodecFilter === value) return;
         videoCodecFilter = value;
-        trackEvent("stream_filter_video_codec", { value, ...getStreamCountsNow() });
     }
 
     function setDynamicRangeFilter(value: DynamicRangeFilter) {
         if (dynamicRangeFilter === value) return;
         dynamicRangeFilter = value;
-        trackEvent("stream_filter_dynamic_range", { value, ...getStreamCountsNow() });
     }
 
     function setAvailabilityFilter(value: AvailabilityFilter) {
         if (availabilityFilter === value) return;
         availabilityFilter = value;
-        trackEvent("stream_filter_availability", { value, ...getStreamCountsNow() });
     }
 
     function setSizeFilter(value: SizeFilter) {
         if (sizeFilter === value) return;
         sizeFilter = value;
-        trackEvent("stream_filter_size", { value, ...getStreamCountsNow() });
     }
 
     function selectAddon(addon: Addon) {
         if (selectedAddon === addon.transport_url) return;
         selectedAddon = addon.transport_url;
-        trackEvent("stream_addon_selected", {
-            addon_name: addon?.manifest?.name ?? "Unknown",
-            ...getStreamCountsNow(),
-        });
     }
 
     function close() {
         streamsPopupVisible = false;
-        trackEvent("stream_list_closed", {
-            filters_active: filtersActive,
-            resolution_filter: resolutionFilter,
-            audio_language_filter: audioLanguageFilter,
-            sort_option: sortOption,
-            video_codec_filter: videoCodecFilter,
-            dynamic_range_filter: dynamicRangeFilter,
-            availability_filter: availabilityFilter,
-            size_filter: sizeFilter,
-            ...getStreamCountsNow(),
-        });
         onClose();
     }
 
@@ -191,11 +147,6 @@
     }
 
     function handleOpenAddons() {
-        trackEvent("stream_empty_addons_opened", {
-            addon_count: addons.length,
-            stream_addon_count: filteredAddons.length,
-            ...getStreamCountsNow(),
-        });
         onOpenAddons();
     }
 
@@ -257,23 +208,13 @@
     );
     $: progressDetails = computeProgressDetails(episodeProgressEntry);
 
-    $: if (streamsPopupVisible && !hasTrackedOpen) {
+    $: if (streamsPopupVisible && !wasOpen) {
         filtersCollapsed = true;
-        hasTrackedOpen = true;
-        trackEvent("stream_list_opened", {
-            ...getStreamCountsNow(),
-            resolution_filter: resolutionFilter,
-            audio_language_filter: audioLanguageFilter,
-            sort_option: sortOption,
-            video_codec_filter: videoCodecFilter,
-            dynamic_range_filter: dynamicRangeFilter,
-            availability_filter: availabilityFilter,
-            size_filter: sizeFilter,
-        });
+        wasOpen = true;
     }
 
-    $: if (!streamsPopupVisible && hasTrackedOpen) {
-        hasTrackedOpen = false;
+    $: if (!streamsPopupVisible && wasOpen) {
+        wasOpen = false;
     }
 
 </script>
