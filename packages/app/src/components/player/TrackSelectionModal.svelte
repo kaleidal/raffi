@@ -262,7 +262,7 @@
                                 placeholder="Search"
                                 bind:value={languageQuery}
                             />
-                            <div class="min-h-0 overflow-y-auto pr-1 pb-3 flex flex-col gap-2">
+                            <div class="min-h-0 overflow-y-auto pr-1 flex flex-col gap-2">
                                 {#each filteredSubtitleLanguages as lang}
                                     <button
                                         type="button"
