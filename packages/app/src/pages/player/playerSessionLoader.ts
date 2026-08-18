@@ -247,6 +247,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
         const generation = loadGeneration;
         await cleanup;
         if (generation !== loadGeneration) return;
+        Subtitles.releaseUploadedSubtitleUrls();
         const abortController = new AbortController();
         activeAbortController = abortController;
         const isStale = () =>

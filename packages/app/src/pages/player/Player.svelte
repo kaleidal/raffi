@@ -827,6 +827,7 @@
         clearEmbedLoadFallback();
         clearBrowserAudioCheck();
         playerSessionLoader.cancelCurrentLoad();
+        Subtitles.releaseUploadedSubtitleUrls();
         disposeNextEpisodePrefetch();
         if (playbackController) {
             void playbackController.destroy();
@@ -1802,6 +1803,7 @@
         onSeekStyleAcknowledge={handleSeekStyleAcknowledge}
         onAudioSelect={modalHandlers.onAudioSelect}
         onSubtitleSelect={modalHandlers.onSubtitleSelect}
+        onSubtitleUpload={modalHandlers.onSubtitleUpload}
         onSubtitleDelayChange={modalHandlers.onSubtitleDelayChange}
         onErrorRetry={modalHandlers.onErrorRetry}
         onErrorBack={modalHandlers.onErrorBack}

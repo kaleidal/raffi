@@ -26,6 +26,7 @@
 
     export let onAudioSelect: (detail: any) => void;
     export let onSubtitleSelect: (detail: any) => void;
+    export let onSubtitleUpload: (file: File) => void | Promise<void> = () => {};
     export let onSubtitleDelayChange: (detail: { seconds: number }) => void = () => {};
     export let onErrorRetry: () => void;
     export let onErrorBack: () => void;
@@ -53,6 +54,7 @@
         kind="subtitles"
         tracks={subtitleTracks}
         onSelect={onSubtitleSelect}
+        onUpload={onSubtitleUpload}
         onDelayChange={onSubtitleDelayChange}
         onClose={onCloseSubtitle}
     />

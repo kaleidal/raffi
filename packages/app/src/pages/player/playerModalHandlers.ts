@@ -79,6 +79,27 @@ export const createPlayerModalHandlers = ({
 		);
 	};
 
+	const onSubtitleUpload = async (file: File) => {
+		const videoElem = getVideoElem();
+		if (!videoElem) {
+			throw new Error("The player is not ready for subtitles yet.");
+		}
+
+		const track = await Subtitles.createUploadedSubtitleTrack(file);
+		subtitleTracks.update((tracks) => [
+			...tracks.map((entry) => ({ ...entry, selected: false })),
+			{ ...track, selected: true },
+		]);
+		currentSubtitleLabel.set(track.label);
+		await Subtitles.handleSubtitleSelect(
+			track,
+			videoElem,
+			get(currentTime),
+			get(playbackOffset),
+			getCueLinePercent,
+		);
+	};
+
 	const onSubtitleDelayChange = () => {
 
 		const selected = get(subtitleTracks).find((track) => track.selected);
@@ -124,6 +145,7 @@ export const createPlayerModalHandlers = ({
 	return {
 		onAudioSelect,
 		onSubtitleSelect,
+		onSubtitleUpload,
 		onSubtitleDelayChange,
 		onErrorRetry,
 		onErrorBack,

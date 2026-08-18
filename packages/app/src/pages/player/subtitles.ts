@@ -5,6 +5,9 @@ import type { Track, ParsedCue } from "./types";
 
 let currentSubtitleAbort: AbortController | null = null;
 let parsedCues: ParsedCue[] = [];
+const uploadedSubtitleUrls = new Set<string>();
+
+const MAX_UPLOADED_SUBTITLE_BYTES = 10 * 1024 * 1024;
 
 const SUBTITLE_DELAY_STORAGE_KEY = "raffi.subtitleDelaySeconds";
 
@@ -33,6 +36,44 @@ export function setSubtitleDelaySeconds(seconds: number) {
     } catch {
         // ignore
     }
+}
+
+export async function createUploadedSubtitleTrack(file: File): Promise<Track> {
+    const extension = file.name.split(".").pop()?.toLowerCase();
+    if (extension !== "srt" && extension !== "vtt") {
+        throw new Error("Choose an SRT or VTT subtitle file.");
+    }
+    if (file.size > MAX_UPLOADED_SUBTITLE_BYTES) {
+        throw new Error("Subtitle files must be smaller than 10 MB.");
+    }
+
+    const contents = await file.text();
+    if (!contents.trim() || !contents.includes("-->")) {
+        throw new Error("This file does not contain valid subtitle cues.");
+    }
+
+    const url = URL.createObjectURL(file);
+    uploadedSubtitleUrls.add(url);
+
+    return {
+        id: `uploaded:${crypto.randomUUID()}`,
+        label: file.name,
+        selected: false,
+        group: "Local",
+        lang: "und",
+        url,
+        isLocal: true,
+        format: extension,
+    };
+}
+
+export function releaseUploadedSubtitleUrls() {
+    currentSubtitleAbort?.abort();
+    currentSubtitleAbort = null;
+    for (const url of uploadedSubtitleUrls) {
+        URL.revokeObjectURL(url);
+    }
+    uploadedSubtitleUrls.clear();
 }
 
 export function parseVTTTime(timeStr: string): number | null {

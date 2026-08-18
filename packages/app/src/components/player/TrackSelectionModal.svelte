@@ -36,6 +36,7 @@
     }[];
 
     export let onSelect: (track: any) => void = () => {};
+    export let onUpload: (file: File) => void | Promise<void> = () => {};
     export let onClose: () => void = () => {};
     export let onDelayChange: (detail: { seconds: number }) => void = () => {};
 
@@ -68,12 +69,16 @@
         return s ? s.toLowerCase() : "und";
     }
 
+    function subtitleLanguage(track: (typeof tracks)[number]) {
+        return track.isLocal ? "local" : normalizeLang(track.lang);
+    }
+
     $: subtitleOffTrack = tracks.find((t) => String(t.id) === "off") || null;
 
     $: subtitleTracksOnly = tracks.filter((t) => String(t.id) !== "off");
 
     $: subtitleLanguages = Array.from(
-        new Set(subtitleTracksOnly.map((t) => normalizeLang(t.lang))),
+        new Set(subtitleTracksOnly.map(subtitleLanguage)),
     ).sort();
 
     let languageQuery = "";
@@ -84,7 +89,7 @@
 
         // Also match any variant label for that language.
         return subtitleTracksOnly
-            .filter((t) => normalizeLang(t.lang) === lang)
+            .filter((t) => subtitleLanguage(t) === lang)
             .some((t) => (t.label || "").toLowerCase().includes(q));
     });
 
@@ -96,7 +101,7 @@
         // override if the user is browsing other languages.
         const selected = subtitleTracksOnly.find((t) => t.selected);
         const selectedId = selected?.id ?? null;
-        const selectedLang = selected ? normalizeLang(selected.lang) : null;
+        const selectedLang = selected ? subtitleLanguage(selected) : null;
 
         // If selection changed (e.g. user selected a different subtitle), re-sync.
         if (selectedId !== lastSelectedSubtitleId) {
@@ -116,9 +121,33 @@
 
     $: subtitleVariants = selectedSubtitleLanguage
         ? subtitleTracksOnly.filter(
-              (t) => normalizeLang(t.lang) === selectedSubtitleLanguage,
+              (t) => subtitleLanguage(t) === selectedSubtitleLanguage,
           )
         : [];
+
+    let subtitleFileInput: HTMLInputElement;
+    let uploadError = "";
+    let uploadInProgress = false;
+
+    async function uploadSubtitle(event: Event) {
+        const input = event.currentTarget as HTMLInputElement;
+        const file = input.files?.[0];
+        input.value = "";
+        if (!file) return;
+
+        uploadError = "";
+        uploadInProgress = true;
+        try {
+            await onUpload(file);
+            onClose();
+        } catch (error) {
+            uploadError = error instanceof Error
+                ? error.message
+                : "Could not upload this subtitle file.";
+        } finally {
+            uploadInProgress = false;
+        }
+    }
 
     let delaySeconds = 0;
     onMount(() => {
@@ -251,12 +280,43 @@
                                         </span>
                                         <span class="text-xs opacity-70">
                                             {subtitleTracksOnly.filter((t) =>
-                                                normalizeLang(t.lang) === lang,
+                                                subtitleLanguage(t) === lang,
                                             ).length}
                                         </span>
                                     </button>
                                 {/each}
                             </div>
+                            <input
+                                class="hidden"
+                                type="file"
+                                accept=".srt,.vtt,application/x-subrip,text/vtt"
+                                bind:this={subtitleFileInput}
+                                on:change={uploadSubtitle}
+                            />
+                            <button
+                                type="button"
+                                class="flex w-full items-center gap-2 rounded-xl bg-white/8 px-3 py-2.5 text-sm font-poppins font-medium text-white/80 transition-colors hover:bg-white/14 disabled:cursor-wait disabled:opacity-50 cursor-pointer"
+                                disabled={uploadInProgress}
+                                on:click={() => subtitleFileInput?.click()}
+                            >
+                                <svg
+                                    width="18"
+                                    height="18"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                >
+                                    <path d="M12 5v14M5 12h14" />
+                                </svg>
+                                <span>{uploadInProgress ? "Loading…" : "Upload subtitle"}</span>
+                            </button>
+                            {#if uploadError}
+                                <p class="px-1 text-xs leading-5 text-red-300">
+                                    {uploadError}
+                                </p>
+                            {/if}
                         </div>
 
                         <div class="rounded-[24px] bg-white/6 backdrop-blur-2xl p-3 flex min-h-0 flex-col gap-3 min-w-0">
