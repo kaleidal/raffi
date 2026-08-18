@@ -338,6 +338,14 @@
             duration.set(nextDuration);
             void ProgressLogic.handleProgress(progress.time, nextDuration, imdbID, true);
         }
+        Discord.updateDiscordActivity(
+            metaData,
+            season,
+            episode,
+            nextDuration,
+            progress.time,
+            true,
+        );
     };
 
     const clearEmbedLoadFallback = () => {
@@ -356,6 +364,14 @@
 
     const handleEmbedLoaded = () => {
         finishEmbedLoad();
+        Discord.updateDiscordActivity(
+            metaData,
+            season,
+            episode,
+            0,
+            0,
+            true,
+        );
     };
 
     let fullscreenCleanupDone = false;
@@ -1229,6 +1245,8 @@
         hasStarted = false;
         bingeAutoAdvancing = false;
         lastEmbedProgressAt = 0;
+        currentTime.set(0);
+        duration.set(0);
         playerSessionLoader.cancelCurrentLoad();
         disposeNextEpisodePrefetch();
         handleNextEpisodeClick.cancel();

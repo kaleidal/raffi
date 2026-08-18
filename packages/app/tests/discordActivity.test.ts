@@ -49,4 +49,12 @@ describe("Discord activity", () => {
         expect(activity?.endTimestamp).toBeUndefined();
         expect(activity?.smallImageKey).toBe("pause");
     });
+
+    test("shows watching without progress when an embed has no telemetry", () => {
+        const activity = buildDiscordActivity(show, 1, 2, 0, 0, true, 10_000);
+        expect(activity?.state).not.toContain("%");
+        expect(activity?.startTimestamp).toBeUndefined();
+        expect(activity?.endTimestamp).toBeUndefined();
+        expect(activity?.smallImageText).toBe("Watching with Raffi");
+    });
 });
