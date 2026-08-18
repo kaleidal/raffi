@@ -1580,7 +1580,7 @@
                 src={embedSrc}
                 title={metaData?.meta?.name || "Embedded player"}
                 class="h-full w-full bg-black {$controlsVisible ? 'pointer-events-auto' : 'pointer-events-none'}"
-                allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+                allow="autoplay *; fullscreen *; encrypted-media *; picture-in-picture *"
                 allowfullscreen
                 referrerpolicy="no-referrer"
                 on:load={handleEmbedLoaded}
