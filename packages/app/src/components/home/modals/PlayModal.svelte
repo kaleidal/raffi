@@ -6,13 +6,11 @@
     import { getCachedMetaData } from "../../../lib/library/metaCache";
     import { cloudSyncStatus, getWatchPartyInfo } from "../../../lib/db/db";
     import { localMode } from "../../../lib/stores/authStore";
-    import { get } from "svelte/store";
     import TorrentWarningModal from "../../meta/modals/TorrentWarningModal.svelte";
     import {
         acknowledgeTorrentWarning,
         allowTorrenting,
         hasAcknowledgedTorrentWarning,
-        setTorrentingAllowed,
     } from "../../../lib/stores/torrenting";
 
     const portal = (node: HTMLElement) => {
@@ -115,6 +113,13 @@
         updateBodyLock(false);
     });
 
+    $: if (!$allowTorrenting && mode === "magnet") {
+        mode = "select";
+        magnetLink = "";
+        error = "";
+        showTorrentWarning = false;
+    }
+
     const closeModal = () => {
         onClose();
     };
@@ -159,28 +164,26 @@
     function playMagnet() {
         if (!magnetLink.trim()) return;
         error = "";
-        if (!hasAcknowledgedTorrentWarning()) {
-            showTorrentWarning = true;
+        if (!$allowTorrenting) {
+            error = "Torrenting is disabled. Turn on Allow Torrenting in Settings before playing a magnet link.";
             return;
         }
-        if (!get(allowTorrenting)) {
-            error = "Torrenting is disabled. Turn on Allow Torrenting in Settings before playing a magnet link.";
+        if (!hasAcknowledgedTorrentWarning()) {
+            showTorrentWarning = true;
             return;
         }
         openMagnetPlayer();
     }
 
-    async function confirmTorrentWarning() {
-        try {
-            await setTorrentingAllowed(true);
-            acknowledgeTorrentWarning();
+    function confirmTorrentWarning() {
+        if (!$allowTorrenting) {
             showTorrentWarning = false;
-            openMagnetPlayer();
-        } catch (cause) {
-            console.error("Failed to enable torrenting", cause);
-            showTorrentWarning = false;
-            error = "Could not enable torrenting. Please try again from Settings.";
+            error = "Torrenting is disabled. Turn on Allow Torrenting in Settings before playing a magnet link.";
+            return;
         }
+        acknowledgeTorrentWarning();
+        showTorrentWarning = false;
+        openMagnetPlayer();
     }
 
     async function fetchPartyDetails() {
@@ -313,18 +316,20 @@
                         </div>
                     </label>
 
-                    <button
-                        class="bg-white/5 hover:bg-white/10 text-white p-4 rounded-2xl flex items-center gap-4 transition-colors text-left group cursor-pointer"
-                        on:click={() => mode = "magnet"}
-                    >
-                        <div class="bg-white/10 p-3 rounded-full group-hover:bg-white/20 transition-colors">
-                            <Magnet size={24} strokeWidth={2} />
-                        </div>
-                        <div class="flex flex-col gap-1">
-                            <span class="font-bold text-lg">Play Magnet Link</span>
-                            <span class="text-[#878787] text-sm">Stream directly from a magnet URL</span>
-                        </div>
-                    </button>
+                    {#if $allowTorrenting}
+                        <button
+                            class="bg-white/5 hover:bg-white/10 text-white p-4 rounded-2xl flex items-center gap-4 transition-colors text-left group cursor-pointer"
+                            on:click={() => mode = "magnet"}
+                        >
+                            <div class="bg-white/10 p-3 rounded-full group-hover:bg-white/20 transition-colors">
+                                <Magnet size={24} strokeWidth={2} />
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <span class="font-bold text-lg">Play Magnet Link</span>
+                                <span class="text-[#878787] text-sm">Stream directly from a magnet URL</span>
+                            </div>
+                        </button>
+                    {/if}
 
                     {#if !$localMode && $cloudSyncStatus.cloudFeaturesAvailable}
                         <button
@@ -343,7 +348,7 @@
 
                 </div>
 
-            {:else if mode === "magnet"}
+            {:else if mode === "magnet" && $allowTorrenting}
                 <div class="flex flex-col gap-4">
                     <div>
                         <label for="magnet-link" class="block text-sm font-medium text-[#878787] mb-2">Magnet Link</label>

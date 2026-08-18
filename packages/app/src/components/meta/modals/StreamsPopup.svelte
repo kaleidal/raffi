@@ -5,6 +5,7 @@
     import type { Addon } from "../../../lib/db/db";
     import type { ShowResponse } from "../../../lib/library/types/meta_types";
     import type { ProgressItem, ProgressMap, Stream } from "../../../pages/meta/types";
+    import { allowTorrenting, isTorrentSource } from "../../../lib/stores/torrenting";
     import EpisodeDetailsPanel from "./streams/EpisodeDetailsPanel.svelte";
     import StreamsFiltersPanel from "./streams/StreamsFiltersPanel.svelte";
     import StreamsList from "./streams/StreamsList.svelte";
@@ -161,7 +162,10 @@
     };
 
     $: filteredAddons = getFilteredAddons(addons);
-    $: enrichedStreams = buildEnrichedStreams(streams, $failedStreamKeys);
+    $: visibleStreams = $allowTorrenting
+        ? streams
+        : streams.filter((stream) => !isTorrentSource(stream));
+    $: enrichedStreams = buildEnrichedStreams(visibleStreams, $failedStreamKeys);
     $: audioLanguageFilterOptions = getAudioLanguageFilterOptions(enrichedStreams);
     $: availableFilterOptions = getAvailableStreamFilterOptions(enrichedStreams);
     $: if (audioLanguageFilter !== "all" && !audioLanguageFilterOptions.includes(audioLanguageFilter)) {
@@ -186,9 +190,9 @@
     $: filteredStreams = applyStreamFilters(enrichedStreams, filterState);
     $: ({ localFilteredStreams, addonFilteredStreams } = splitStreamsBySource(filteredStreams));
     $: filtersActive = areFiltersActive(filterState);
-    $: hasDirectStream = streams.some((stream) => stream?.raffiSource === "direct");
+    $: hasDirectStream = visibleStreams.some((stream) => stream?.raffiSource === "direct");
     $: showAddonSetupGuide =
-        streams.length === 0 &&
+        visibleStreams.length === 0 &&
         filteredAddons.length === 0 &&
         !$streamFailureMessage?.toLowerCase().includes("direct link");
 

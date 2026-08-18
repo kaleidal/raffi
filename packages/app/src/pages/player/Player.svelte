@@ -124,7 +124,6 @@
     export let episode: number | null = null;
     export let joinPartyId: string | null = null;
     export let autoJoin: boolean = false;
-    export let autoSkipFromNextEpisode: boolean = false;
     export let streamAvailability: StreamAvailabilityHint | null = null;
 
     const imdbID = metaData?.meta?.imdb_id || null;
@@ -593,14 +592,11 @@
                 sessionData,
                 nextIntroDbChapters,
             );
-            const bingeStartup =
-                metaData?.meta?.type === "series" &&
-                Boolean(get(selectedStream)?.behaviorHints?.bingeGroup) &&
-                !get(watchParty).isActive;
-            const effectiveStartTime = Chapters.getStartupSkipTarget(startTime, effectiveChapters, {
-                autoSkipIntros: $autoSkipIntros,
-                autoSkipRecap: autoSkipFromNextEpisode || bingeStartup,
-            });
+            const effectiveStartTime = Chapters.getStartupSkipTarget(
+                startTime,
+                effectiveChapters,
+                $autoSkipIntros,
+            );
 
             return {
                 effectiveStartTime,
@@ -879,11 +875,7 @@
 
             if (bingeNextSupported) {
                 const bingeChapter = result.currentChapter;
-                if (bingeChapter?.kind === "intro" && $autoSkipIntros) {
-                    seekToTime(bingeChapter.endTime + 0.1);
-                    return;
-                }
-                if (bingeChapter?.kind === "recap") {
+                if (Chapters.shouldAutoSkipChapter(bingeChapter, $autoSkipIntros)) {
                     seekToTime(bingeChapter.endTime + 0.1);
                     return;
                 }

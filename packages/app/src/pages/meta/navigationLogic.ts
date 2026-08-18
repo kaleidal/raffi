@@ -7,7 +7,11 @@ import {
 import { router } from "../../lib/stores/router";
 import { fetchStreams, fetchStreamListForEpisodeOnly, playStream } from "./streamLogic";
 import type { Stream } from "./types";
-import { allowTorrenting, hasAcknowledgedTorrentWarning } from "../../lib/stores/torrenting";
+import {
+    allowTorrenting,
+    hasAcknowledgedTorrentWarning,
+    isTorrentSource,
+} from "../../lib/stores/torrenting";
 
 export const resolveNextEpisodeStream = async (
     imdbID: string,
@@ -75,24 +79,21 @@ export const playResolvedNextEpisode = (
         currentSeason.set(nextEpisode.season);
     }
 
-    const isTorrent =
-        stream.infoHash ||
-        (stream.url && stream.url.startsWith("magnet:"));
+    const isTorrent = isTorrentSource(stream);
 
-    if (isTorrent && !hasAcknowledgedTorrentWarning()) {
+    if (isTorrent && !get(allowTorrenting)) {
+        selectedEpisode.set(nextEpisode);
+        router.back();
+    } else if (isTorrent && !hasAcknowledgedTorrentWarning()) {
         pendingTorrentStream.set(stream);
         showTorrentWarning.set(true);
         selectedEpisode.set(nextEpisode);
         router.back();
-    } else if (!isTorrent || get(allowTorrenting)) {
+    } else {
         selectedEpisode.set(nextEpisode);
         playStream(stream, progressMap, {
             replace: true,
-            autoSkipFromNextEpisode: true,
         });
-    } else {
-        selectedEpisode.set(nextEpisode);
-        router.back();
     }
 };
 

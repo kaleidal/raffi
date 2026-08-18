@@ -349,6 +349,11 @@
 									<AccountStateMismatchSection onRecoverToLocalMode={recoverToLocalMode} />
 								{/if}
 
+								<ActivitySection
+									moviesWatched={stats.moviesWatched}
+									showsWatched={stats.showsWatched}
+								/>
+
 								<UpdateSection
 									available={$updateStatus.available}
 									version={$updateStatus.version}
@@ -363,11 +368,6 @@
 
 					<div class="min-h-0 min-w-0 overflow-y-auto pl-0 md:pl-3">
 						<div class="flex flex-col gap-5 pb-1">
-								<ActivitySection
-									moviesWatched={stats.moviesWatched}
-									showsWatched={stats.showsWatched}
-								/>
-
 								<FeedbackSection {openExternalLink} />
 
 								<PreferencesSection />

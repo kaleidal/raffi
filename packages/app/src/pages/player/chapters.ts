@@ -73,14 +73,12 @@ const getRelevantNativeChapters = (sessionData: SessionData | null | undefined) 
 const findChapterAtTime = (chapters: Chapter[], time: number) =>
     chapters.find((chapter) => time >= chapter.startTime && time < chapter.endTime) ?? null;
 
-const shouldAutoSkipChapter = (
+export const shouldAutoSkipChapter = (
     chapter: Chapter | null,
-    options: { autoSkipIntros: boolean; autoSkipRecap: boolean },
-) => {
+    autoSkipIntros: boolean,
+): chapter is Chapter => {
     if (!chapter) return false;
-    if (chapter.kind === "intro") return options.autoSkipIntros;
-    if (chapter.kind === "recap") return options.autoSkipRecap;
-    return false;
+    return autoSkipIntros && (chapter.kind === "intro" || chapter.kind === "recap");
 };
 
 export function getEffectiveChapterSegments(
@@ -116,16 +114,13 @@ export function getSkipButtonLabel(currentChapter: Chapter | null) {
 export function getStartupSkipTarget(
     requestedStartTime: number,
     chapters: Chapter[],
-    options: {
-        autoSkipIntros: boolean;
-        autoSkipRecap: boolean;
-    },
+    autoSkipIntros: boolean,
 ) {
     let targetTime = Math.max(0, requestedStartTime);
 
     for (let attempt = 0; attempt < 4; attempt += 1) {
         const currentChapter = findChapterAtTime(chapters, targetTime);
-        if (!currentChapter || !shouldAutoSkipChapter(currentChapter, options)) {
+        if (!currentChapter || !shouldAutoSkipChapter(currentChapter, autoSkipIntros)) {
             break;
         }
 

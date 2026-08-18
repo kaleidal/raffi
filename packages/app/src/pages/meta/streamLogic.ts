@@ -22,12 +22,15 @@ import {
     acknowledgeTorrentWarning,
     allowTorrenting,
     hasAcknowledgedTorrentWarning,
-    setTorrentingAllowed,
+    isTorrentSource,
 } from "../../lib/stores/torrenting";
 
 let streamFetchGeneration = 0;
 
 const isStaleStreamFetch = (requestId: number) => requestId !== streamFetchGeneration;
+
+const hideDisabledTorrentSources = (items: Stream[]) =>
+    get(allowTorrenting) ? items : items.filter((stream) => !isTorrentSource(stream));
 
 const getStartTimeForCurrentSelection = (progressMap: any, data: any, episode: any) => {
     if (data?.meta?.type === "movie") {
@@ -115,9 +118,9 @@ export const fetchStreams = async (
         const result = await response.json();
         if (isStaleStreamFetch(requestId)) return [];
 
-        const remoteStreams: Stream[] = Array.isArray(result.streams)
+        const remoteStreams = hideDisabledTorrentSources(Array.isArray(result.streams)
             ? result.streams
-            : [];
+            : []);
 
         const combined = [...(localStreams as any), ...remoteStreams];
         streams.set(combined);
@@ -144,6 +147,7 @@ export const fetchStreams = async (
 };
 
 export const streamToPlayableUrl = (stream: Stream): { url: string; fileIdx: number | null } | null => {
+    if (!get(allowTorrenting) && isTorrentSource(stream)) return null;
     if (!stream.url && !stream.infoHash) return null;
     let url = stream.url;
     const fileIdx = stream.infoHash ? (stream.fileIdx ?? null) : null;
@@ -186,9 +190,9 @@ export const fetchStreamListForEpisodeOnly = async (episode: any, imdbID: string
             throw new Error(`Stream addon returned ${response.status}`);
         }
         const result = await response.json();
-        const remoteStreams: Stream[] = Array.isArray(result.streams)
+        const remoteStreams = hideDisabledTorrentSources(Array.isArray(result.streams)
             ? result.streams
-            : [];
+            : []);
         return [...(localStreams as any), ...remoteStreams];
     } catch (e) {
         console.error("fetchStreamListForEpisodeOnly failed", e);
@@ -210,7 +214,7 @@ export const episodeClicked = async (episode: any, imdbID: string) => {
 export const playStream = (
     stream: Stream,
     progressMap: any,
-    options?: { replace?: boolean; autoSkipFromNextEpisode?: boolean },
+    options?: { replace?: boolean },
 ) => {
     let url = stream.url;
     const fileIdx = stream.infoHash ? (stream.fileIdx ?? null) : null;
@@ -219,7 +223,7 @@ export const playStream = (
         url = `magnet:?xt=urn:btih:${stream.infoHash}`;
     }
 
-    if (url?.startsWith("magnet:") && !get(allowTorrenting)) {
+    if (isTorrentSource(stream) && !get(allowTorrenting)) {
         streamFailureMessage.set("Torrenting is disabled. Turn on Allow Torrenting in Settings to play this source.");
         return;
     }
@@ -263,7 +267,6 @@ export const playStream = (
             episode: episode?.episode ?? null,
             joinPartyId: routeJoinPartyId,
             autoJoin: routeJoinPartyId ? routeAutoJoin : false,
-            autoSkipFromNextEpisode: Boolean(options?.autoSkipFromNextEpisode),
             streamAvailability: stream.raffiAvailability ?? null,
         }, { replace: options?.replace });
     } else {
@@ -278,16 +281,16 @@ export const onStreamClick = (stream: Stream, progressMap: any) => {
     }
 
 
-    const isTorrent = stream.infoHash || (stream.url && stream.url.startsWith("magnet:"));
+    const isTorrent = isTorrentSource(stream);
 
     if (isTorrent) {
+        if (!get(allowTorrenting)) {
+            streamFailureMessage.set("Torrenting is disabled. Turn on Allow Torrenting in Settings to play this source.");
+            return;
+        }
         if (!hasAcknowledgedTorrentWarning()) {
             pendingTorrentStream.set(stream);
             showTorrentWarning.set(true);
-            return;
-        }
-        if (!get(allowTorrenting)) {
-            streamFailureMessage.set("Torrenting is disabled. Turn on Allow Torrenting in Settings to play this source.");
             return;
         }
     }
@@ -295,21 +298,19 @@ export const onStreamClick = (stream: Stream, progressMap: any) => {
     playStream(stream, progressMap);
 };
 
-export const handleTorrentWarningConfirm = async (progressMap: any) => {
+export const handleTorrentWarningConfirm = (progressMap: any) => {
     const pending = get(pendingTorrentStream);
     if (!pending) return;
-    try {
-        await setTorrentingAllowed(true);
-        acknowledgeTorrentWarning();
-        showTorrentWarning.set(false);
-        playStream(pending, progressMap);
-        pendingTorrentStream.set(null);
-    } catch (error) {
-        console.error("Failed to enable torrenting", error);
-        streamFailureMessage.set("Could not enable torrenting. Please try again from Settings.");
+    if (!get(allowTorrenting)) {
         showTorrentWarning.set(false);
         pendingTorrentStream.set(null);
+        streamFailureMessage.set("Torrenting is disabled. Turn on Allow Torrenting in Settings to play this source.");
+        return;
     }
+    acknowledgeTorrentWarning();
+    showTorrentWarning.set(false);
+    playStream(pending, progressMap);
+    pendingTorrentStream.set(null);
 };
 
 export const handleTorrentWarningCancel = () => {

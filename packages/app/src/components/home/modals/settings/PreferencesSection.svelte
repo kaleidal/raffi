@@ -441,10 +441,10 @@
 	<div class="rounded-2xl bg-white/8 p-4 flex flex-wrap items-center gap-4 justify-between">
 		<div>
 			<p class="text-white font-medium">
-				Auto-skip Intros
+				Auto-skip Intros & Recaps
 			</p>
 			<p class="text-white/60 text-sm">
-				Skip intro chapters automatically, and chain from next-episode recap skips when applicable.
+				Automatically skip detected intro and recap chapters.
 			</p>
 		</div>
 		<button
@@ -452,7 +452,7 @@
 				$autoSkipIntros ? "bg-white" : "bg-white/10"
 			}`}
 			on:click={toggleAutoSkipIntros}
-			aria-label="Toggle automatic intro skipping"
+			aria-label="Toggle automatic intro and recap skipping"
 			role="switch"
 			aria-checked={$autoSkipIntros}
 		>

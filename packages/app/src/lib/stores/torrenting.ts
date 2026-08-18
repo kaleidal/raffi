@@ -4,6 +4,14 @@ import { checkLimboHealth, LimboUnavailableError } from "../limbo/client";
 const ALLOW_TORRENTING_KEY = "raffi_allow_torrenting";
 const TORRENT_WARNING_SHOWN_KEY = "torrentWarningShown";
 
+type TorrentSource = {
+	infoHash?: unknown;
+	url?: string | null;
+};
+
+export const isTorrentSource = (source: TorrentSource | null | undefined) =>
+	Boolean(source?.infoHash) || /^magnet:/i.test(source?.url ?? "");
+
 const readStoredBoolean = (key: string, fallback = false) => {
 	try {
 		const value = localStorage.getItem(key);
