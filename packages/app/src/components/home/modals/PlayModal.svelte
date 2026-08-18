@@ -119,35 +119,27 @@
         onClose();
     };
 
-    function onFileSelected(e: Event) {
-
+    async function onFileSelected(e: Event) {
         const target = e.target as HTMLInputElement;
         if (target.files && target.files.length > 0) {
-            const file = target.files[0] as any;
-            let filePath = file.path;
-
-            // Try to use webUtils via preload if available (Electron 20+)
-            if ((window as any).electronAPI?.getFilePath) {
-                try {
-                    filePath = (window as any).electronAPI.getFilePath(file);
-                } catch (e) {
-                    console.warn("Failed to get path via webUtils", e);
+            const file = target.files[0];
+            try {
+                const playableUrl = await window.electronAPI?.getPlayableFileUrl?.(file);
+                if (playableUrl) {
+                    router.navigate("player", {
+                        videoSrc: playableUrl,
+                        startTime: 0,
+                        metaData: null,
+                        fileIdx: null,
+                        season: null,
+                        episode: null,
+                    });
+                    onClose();
                 }
-            }
-            
-            if (filePath) {
-                router.navigate("player", {
-                    videoSrc: filePath,
-                    startTime: 0,
-                    metaData: null,
-                    fileIdx: null,
-                    season: null,
-                    episode: null,
-                });
-                onClose();
+            } catch (error) {
+                console.error("Failed to open local file", error);
             }
         }
-        // Reset value so the same file can be selected again if needed
         target.value = "";
     }
 

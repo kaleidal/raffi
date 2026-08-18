@@ -25,22 +25,12 @@ export function isLocalFilesystemPath(src: string): boolean {
 	return false;
 }
 
-export function encodeLocalPathAsMediaUrl(filePath: string): string {
-	const url = new URL("raffi-media://local/");
-	url.searchParams.set("path", filePath);
-	return url.toString();
-}
-
-/**
- * Normalize a player source so MediaBunny / UrlSource can fetch it.
- * Local absolute paths become `raffi-media://` on Electron; elsewhere unchanged.
- */
-export function toClientPlayableUrl(src: string): string {
+export async function toClientPlayableUrl(src: string): Promise<string> {
 	if (!src) return src;
 	if (isHttpUrl(src) || isLocalMediaUrl(src) || isMagnetUrl(src)) return src;
 	if (!isLocalFilesystemPath(src)) return src;
-	if (typeof window !== "undefined" && window.electronAPI) {
-		return encodeLocalPathAsMediaUrl(src);
+	if (typeof window !== "undefined" && window.electronAPI?.localLibrary?.resolve) {
+		return window.electronAPI.localLibrary.resolve(src);
 	}
 	return src;
 }

@@ -300,7 +300,7 @@ export class FfmpegPlayback implements ClientPlaybackController {
 		signal?.addEventListener("abort", handleAbort, { once: true });
 		this.keyframeAbort = keyframeAbort;
 		const input = new Input({
-			source: createRemoteUrlSource(toClientPlayableUrl(this.source), {
+			source: createRemoteUrlSource(await toClientPlayableUrl(this.source), {
 				parallelism: 2,
 				maxCacheSize: 16 * 1024 * 1024,
 				signal: keyframeAbort.signal,

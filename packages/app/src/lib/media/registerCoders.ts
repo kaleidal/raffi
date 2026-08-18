@@ -1,15 +1,22 @@
-import { registerAc3Decoder } from "@mediabunny/ac3";
-import { registerAacEncoder } from "@mediabunny/aac-encoder";
 import type { AudioCodec } from "mediabunny";
 
-let registered = false;
+let commonRegistration: Promise<void> | null = null;
 let dtsRegistration: Promise<void> | null = null;
 
 export function ensureMediaCodersRegistered() {
-	if (registered) return;
-	registerAc3Decoder();
-	registerAacEncoder();
-	registered = true;
+	commonRegistration ??= Promise.all([
+		import("@mediabunny/ac3"),
+		import("@mediabunny/aac-encoder"),
+	])
+		.then(([{ registerAc3Decoder }, { registerAacEncoder }]) => {
+			registerAc3Decoder();
+			registerAacEncoder();
+		})
+		.catch((error) => {
+			commonRegistration = null;
+			throw error;
+		});
+	return commonRegistration;
 }
 
 export function ensureAudioDecoderRegistered(codec: AudioCodec | null) {

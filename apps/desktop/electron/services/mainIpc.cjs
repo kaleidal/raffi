@@ -11,11 +11,25 @@ function registerMainIpcHandlers({
   getDefenderExclusionStatus,
   applyDefenderExclusions,
   scanLibraryRoots,
+  localMediaAccess,
   net,
 }) {
   const pathModule = require("path");
   const os = require("os");
   const allowedClipSaveTargets = new Set();
+
+  function requireMainFrame(event) {
+    const mainWindow = getMainWindow();
+    if (
+      !mainWindow ||
+      mainWindow.isDestroyed() ||
+      event.sender !== mainWindow.webContents ||
+      event.senderFrame !== mainWindow.webContents.mainFrame
+    ) {
+      throw new Error("IPC request must originate from the main application frame");
+    }
+    return mainWindow;
+  }
 
   async function resolveRealPath(candidate) {
     const resolved = pathModule.resolve(candidate);
@@ -539,28 +553,41 @@ function registerMainIpcHandlers({
     }
   });
 
-  ipcMain.handle("LOCAL_LIBRARY_PICK_FOLDER", async () => {
-    const mainWindow = getMainWindow();
-    if (!mainWindow) return null;
+  ipcMain.handle("LOCAL_MEDIA_AUTHORIZE_SELECTED", async (event, filePath) => {
+    requireMainFrame(event);
+    return localMediaAccess.authorizeTrustedFile(filePath);
+  });
+
+  ipcMain.handle("LOCAL_LIBRARY_PICK_FOLDER", async (event) => {
+    const mainWindow = requireMainFrame(event);
     const res = await dialog.showOpenDialog(mainWindow, {
       title: "Select Library Folder",
       properties: ["openDirectory"],
     });
     if (res.canceled) return null;
     const folder = res.filePaths && res.filePaths[0];
-    return folder || null;
+    return folder ? localMediaAccess.approveLibraryRoot(folder) : null;
   });
 
-  ipcMain.handle("LOCAL_LIBRARY_SCAN", async (_event, roots) => {
-    try {
-      if (!Array.isArray(roots)) return [];
-      const sanitized = roots
-        .filter((r) => typeof r === "string")
-        .map((r) => r.trim())
-        .filter(Boolean)
-        .slice(0, 20);
+  ipcMain.handle("LOCAL_LIBRARY_GET_ROOTS", (event) => {
+    requireMainFrame(event);
+    return localMediaAccess.getLibraryRoots();
+  });
 
-      return await scanLibraryRoots(sanitized);
+  ipcMain.handle("LOCAL_LIBRARY_REMOVE_ROOT", async (event, root) => {
+    requireMainFrame(event);
+    return localMediaAccess.removeLibraryRoot(root);
+  });
+
+  ipcMain.handle("LOCAL_LIBRARY_RESOLVE", async (event, filePath) => {
+    requireMainFrame(event);
+    return localMediaAccess.authorizeLibraryFile(filePath);
+  });
+
+  ipcMain.handle("LOCAL_LIBRARY_SCAN", async (event) => {
+    try {
+      requireMainFrame(event);
+      return await scanLibraryRoots(localMediaAccess.getLibraryRoots());
     } catch (e) {
       console.error("LOCAL_LIBRARY_SCAN failed:", e);
       return [];

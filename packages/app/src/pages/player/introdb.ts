@@ -19,6 +19,7 @@ type IntroDbResponse = {
 };
 
 const INTRO_DB_BASE_URL = "https://api.introdb.app";
+const CHAPTER_CACHE_MAX_ENTRIES = 100;
 const chapterCache = new Map<string, Chapter[]>();
 
 const parseTimestamp = (seconds: unknown, milliseconds: unknown): number => {
@@ -68,7 +69,11 @@ export async function fetchIntroDbChapters(
 
     const cacheKey = `${imdbId}:${season}:${episode}`;
     const cached = chapterCache.get(cacheKey);
-    if (cached) return cached;
+    if (cached) {
+        chapterCache.delete(cacheKey);
+        chapterCache.set(cacheKey, cached);
+        return cached;
+    }
 
     const params = new URLSearchParams({
         imdb_id: imdbId,
@@ -110,5 +115,10 @@ export async function fetchIntroDbChapters(
         { imdbId, season, episode, chapters },
     );
     chapterCache.set(cacheKey, chapters);
+    while (chapterCache.size > CHAPTER_CACHE_MAX_ENTRIES) {
+        const oldestKey = chapterCache.keys().next().value;
+        if (oldestKey === undefined) break;
+        chapterCache.delete(oldestKey);
+    }
     return chapters;
 }

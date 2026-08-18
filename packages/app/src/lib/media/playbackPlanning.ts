@@ -61,7 +61,7 @@ export async function resolveHttpPlayback(
 	if (!src) return { mode: "unsupported", meta: null, reason: "empty" };
 	if (/^magnet:/i.test(src)) return { mode: "unsupported", meta: null, reason: "torrent" };
 
-	const playable = toClientPlayableUrl(src);
+	const playable = await toClientPlayableUrl(src);
 	const localSource = isLocalFilesystemPath(src) || isLocalMediaUrl(playable);
 	if (!/^https?:\/\//i.test(playable) && !isLocalMediaUrl(playable)) {
 		return { mode: "unsupported", meta: null, reason: "non-http" };

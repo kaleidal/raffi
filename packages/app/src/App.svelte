@@ -16,7 +16,6 @@
     import { initAnalytics, setAnalyticsUser, trackEvent, trackPageView } from "./lib/analytics";
     import { formatReleaseNotes } from "./lib/updateNotes";
     import { warmTraktClientAuth } from "./lib/db/db";
-    import { syncTorrentingPreference } from "./lib/stores/torrenting";
 
     type PageComponent = typeof Home | any;
 
@@ -191,10 +190,6 @@
         initAnalytics();
         trackEvent("app_started");
         trackPageView($router.page);
-        void syncTorrentingPreference().catch((error) => {
-            console.warn("Failed to sync torrenting preference", error);
-        });
-
         try {
             const storedRpc = localStorage.getItem("discord_rpc_enabled");
             const rpcEnabled = storedRpc !== null ? storedRpc === "true" : true;

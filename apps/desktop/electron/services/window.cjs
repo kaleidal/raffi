@@ -18,6 +18,7 @@ function createMainWindow({
   defaultWindowWidth,
   defaultWindowHeight,
   fileToOpen,
+  authorizeLocalMediaPath,
   pendingAveAuthPayload,
   pendingTraktAuthPayload,
   setFileToOpen,
@@ -431,10 +432,16 @@ function createMainWindow({
 
   mainWindow.setMenuBarVisibility(false);
 
-  mainWindow.webContents.on("did-finish-load", () => {
+  mainWindow.webContents.on("did-finish-load", async () => {
     if (fileToOpen) {
-      mainWindow.webContents.send("open-file", fileToOpen);
+      const pendingFile = fileToOpen;
       setFileToOpen(null);
+      try {
+        const playableUrl = await authorizeLocalMediaPath(pendingFile);
+        mainWindow.webContents.send("open-file", playableUrl);
+      } catch (error) {
+        logToFile("Failed to authorize startup media file", error);
+      }
     }
     if (pendingAveAuthPayload) {
       mainWindow.webContents.send("AVE_AUTH_CALLBACK", pendingAveAuthPayload);

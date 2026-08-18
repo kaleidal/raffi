@@ -22,7 +22,14 @@ declare global {
             enableRPC: () => void;
             disableRPC: () => void;
             usesTitleBarOverlay?: boolean;
-            getFilePath?: (file: any) => string;
+            getPlayableFileUrl?: (file: File) => Promise<string>;
+            localLibrary?: {
+                pickFolder: () => Promise<string | null>;
+                getRoots: () => Promise<string[]>;
+                removeRoot: (root: string) => Promise<boolean>;
+                resolve: (filePath: string) => Promise<string>;
+                scan: () => Promise<unknown[]>;
+            };
             ffmpegPlayback?: {
                 start: (request: {
                     source: string;
