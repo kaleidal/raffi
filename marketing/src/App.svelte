@@ -1,6 +1,7 @@
 <script lang="ts">
   import About from "./components/sections/About.svelte";
   import Download from "./components/sections/Download.svelte";
+  import Privacy from "./pages/Privacy.svelte";
 
   const screenshots = [
     "/screenshots/ss1.png",
@@ -14,8 +15,10 @@
   const links = {
     source: "https://github.com/kaleidal/raffi",
     sponsor: "https://github.com/sponsors/krissedout",
-    privacy: "/privacy/index.html"
+    privacy: "/privacy/"
   } as const;
+
+  const isPrivacyPage = typeof window !== "undefined" && window.location.pathname.startsWith("/privacy");
 
   let activeScreenshot = $state(0);
 
@@ -25,6 +28,9 @@
   }
 </script>
 
+{#if isPrivacyPage}
+  <Privacy />
+{:else}
 <div class="min-h-dvh bg-white text-black selection:bg-black selection:text-white">
   <div class="pointer-events-none fixed inset-0">
     <div
@@ -191,6 +197,7 @@
     </div>
   </footer>
 </div>
+{/if}
 
 <style>
 </style>
