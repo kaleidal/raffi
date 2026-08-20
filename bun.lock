@@ -7,7 +7,7 @@
     },
     "apps/desktop": {
       "name": "@raffi/desktop",
-      "version": "0.12.0",
+      "version": "0.13.0",
       "devDependencies": {
         "@raffi/app": "workspace:*",
         "@sveltejs/vite-plugin-svelte": "^7.3.0",
@@ -71,7 +71,7 @@
     },
     "packages/app": {
       "name": "@raffi/app",
-      "version": "0.12.0",
+      "version": "0.13.0",
       "dependencies": {
         "@ave-id/sdk": "^0.10.1",
         "@fontsource/poppins": "5.3.0",
