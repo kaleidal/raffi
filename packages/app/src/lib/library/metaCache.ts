@@ -6,6 +6,10 @@ interface CachedMeta {
   timestamp: number;
 }
 
+interface MetaCacheOptions {
+  allowStale?: boolean;
+}
+
 const CACHE_TTL = 1000 * 60 * 60;
 const MAX_CACHE_SIZE = 500;
 const IDB_NAME = "raffi-meta-cache";
@@ -81,16 +85,19 @@ function trimMemoryCache() {
 export async function getCachedMetaData(
   imdbId: string,
   type: string,
+  options: MetaCacheOptions = {},
 ): Promise<ShowResponse> {
   const cacheKey = `${type}:${imdbId}`;
+  const canUse = (entry: CachedMeta) =>
+    options.allowStale || Date.now() - entry.timestamp < CACHE_TTL;
 
   const cached = metaCache.get(cacheKey);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+  if (cached && canUse(cached)) {
     return cached.data;
   }
 
   const stored = await readFromIdb(cacheKey);
-  if (stored && Date.now() - stored.timestamp < CACHE_TTL) {
+  if (stored && canUse(stored)) {
     metaCache.set(cacheKey, stored);
     trimMemoryCache();
     return stored.data;

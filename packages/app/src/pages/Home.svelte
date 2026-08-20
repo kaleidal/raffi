@@ -53,6 +53,7 @@
     let traktRecommendations: PopularTitleMeta[] = [];
     let traktRecommendationsConnected = false;
     let addonSectionsLoading = false;
+    let continueWatchingLoadGeneration = 0;
     const HOME_REFRESH_EVENT = "raffi:home-refresh";
 
     function extractYouTubeId(value: unknown): string | null {
@@ -273,7 +274,10 @@
     }
 
     async function loadContinueWatching() {
-        let nextContinueWatchingMeta: (ShowResponse & { libraryItem: any })[] = [];
+        const generation = ++continueWatchingLoadGeneration;
+        const previousById = new Map(
+            continueWatchingMeta.map((item) => [item.meta.imdb_id, item]),
+        );
         try {
             const library = await getLibrary();
             library.sort(
@@ -291,17 +295,21 @@
                 try {
                     let meta: ShowResponse;
                     if (item.type) {
-                        meta = await getCachedMetaData(item.imdb_id, item.type);
+                        meta = await getCachedMetaData(item.imdb_id, item.type, {
+                            allowStale: true,
+                        });
                     } else {
                         try {
                             meta = await getCachedMetaData(
                                 item.imdb_id,
                                 "series",
+                                { allowStale: true },
                             );
                         } catch {
                             meta = await getCachedMetaData(
                                 item.imdb_id,
                                 "movie",
+                                { allowStale: true },
                             );
                         }
                     }
@@ -333,6 +341,18 @@
                 } catch (e) {
                     console.error(`Failed to load meta for ${item.imdb_id}`, e);
 
+                    const previous = previousById.get(item.imdb_id);
+                    if (previous) {
+                        return {
+                            ...previous,
+                            meta: {
+                                ...previous.meta,
+                                poster: item.poster || previous.meta.poster,
+                            },
+                            libraryItem: item,
+                        };
+                    }
+
                     if (item.poster) {
                         return {
                             meta: {
@@ -355,19 +375,24 @@
                 return null;
                 });
                 loadedItems.push(...batch);
-                if (offset === 0) {
+                if (
+                    generation === continueWatchingLoadGeneration &&
+                    offset === 0 &&
+                    continueWatchingMeta.length === 0
+                ) {
                     continueWatchingMeta = loadedItems.filter(
                         (item): item is ShowResponse & { libraryItem: any } => item !== null,
                     );
                 }
             }
-            nextContinueWatchingMeta = loadedItems.filter(
-                (item): item is ShowResponse & { libraryItem: any } => item !== null,
-            );
+            if (generation === continueWatchingLoadGeneration) {
+                continueWatchingMeta = loadedItems.filter(
+                    (item): item is ShowResponse & { libraryItem: any } => item !== null,
+                );
+            }
         } catch (e) {
             console.error("Failed to load library", e);
         }
-        continueWatchingMeta = nextContinueWatchingMeta;
     }
 
     async function refreshAddonSections(installedAddons?: Addon[]) {
@@ -498,6 +523,8 @@
     }
 
     onMount(() => {
+        void loadContinueWatching();
+
         const loadHomeData = async () => {
             try {
                 const [mostPopularMovies, mostPopularSeries, installedAddons] =
