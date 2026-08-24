@@ -15,7 +15,7 @@
 >
     {#if showPlaybackHealthPrompt}
         <div
-            class="w-[min(600px,calc(100vw-24px))] rounded-[24px] bg-[#252525]/88 p-5 text-white shadow-[0_20px_70px_rgba(0,0,0,0.4)] backdrop-blur-2xl sm:p-6"
+            class="playback-health-prompt bg-[#252525]/88 text-white shadow-[0_20px_70px_rgba(0,0,0,0.4)] backdrop-blur-2xl"
             in:fly={{ y: 16, duration: 220 }}
             out:fade={{ duration: 160 }}
         >
@@ -75,3 +75,19 @@
         </button>
     {/if}
 </div>
+
+<style>
+    .playback-health-prompt {
+        width: min(860px, calc(100vw - 32px));
+        border-radius: 28px;
+        padding: 16px 20px;
+    }
+
+    @media (max-width: 760px), (orientation: portrait) {
+        .playback-health-prompt {
+            width: calc(100vw - 20px);
+            border-radius: 22px;
+            padding: 16px;
+        }
+    }
+</style>

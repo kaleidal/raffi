@@ -114,24 +114,12 @@ export function createRemoteUrlSource(
 	const externalSignal = opts?.signal;
 	const baseFetch = opts?.fetchFn ?? globalThis.fetch;
 	const fetchFn = externalSignal
-		? (async (input: RequestInfo | URL, init?: RequestInit) => {
-				const requestAbort = new AbortController();
+		? ((input: RequestInfo | URL, init?: RequestInit) => {
 				const internalSignal = init?.signal;
-				const abortRequest = () => requestAbort.abort();
-				externalSignal.addEventListener("abort", abortRequest, { once: true });
-				internalSignal?.addEventListener("abort", abortRequest, { once: true });
-				if (externalSignal.aborted || internalSignal?.aborted) {
-					requestAbort.abort();
-				}
-				try {
-					return await baseFetch(input, {
-						...init,
-						signal: requestAbort.signal,
-					});
-				} finally {
-					externalSignal.removeEventListener("abort", abortRequest);
-					internalSignal?.removeEventListener("abort", abortRequest);
-				}
+				const signal = internalSignal
+					? AbortSignal.any([externalSignal, internalSignal])
+					: externalSignal;
+				return baseFetch(input, { ...init, signal });
 			}) as typeof fetch
 		: undefined;
 

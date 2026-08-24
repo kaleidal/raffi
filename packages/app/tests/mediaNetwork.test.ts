@@ -44,6 +44,31 @@ describe("MediaBunny network lifecycle", () => {
 		await expect(request).rejects.toMatchObject({ name: "AbortError" });
 	});
 
+	test("keeps MediaBunny cancellation connected after response headers arrive", async () => {
+		const pipelineAbort = new AbortController();
+		const requestAbort = new AbortController();
+		let requestSignal: AbortSignal | null = null;
+		const source = createRemoteUrlSource("https://media.example/video.mkv", {
+			signal: pipelineAbort.signal,
+			fetchFn: (async (_input, init) => {
+				requestSignal = init?.signal ?? null;
+				return new Response(new Uint8Array(64), { status: 206 });
+			}) as typeof fetch,
+		});
+		const sourceFetch = (
+			source as unknown as {
+				_options: { fetchFn: typeof fetch };
+			}
+		)._options.fetchFn;
+
+		await sourceFetch("https://media.example/video.mkv", {
+			signal: requestAbort.signal,
+		});
+		requestAbort.abort();
+
+		expect(requestSignal?.aborted).toBe(true);
+	});
+
 	test("uses the first range response for size instead of issuing HEAD", async () => {
 		const originalFetch = globalThis.fetch;
 		const methods: Array<string | undefined> = [];
