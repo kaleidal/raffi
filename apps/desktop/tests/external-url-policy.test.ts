@@ -21,7 +21,7 @@ describe("desktop external URL policy", () => {
     });
 
     test("allows the current Limbo download site", () => {
-        expect(isAllowedExternalUrl("https://limbo.kaleid.al/#download")).toBe(true);
+        expect(isAllowedExternalUrl("https://limbo.kaleid.al")).toBe(true);
         expect(isAllowedExternalUrl("https://limbo.al")).toBe(false);
     });
 

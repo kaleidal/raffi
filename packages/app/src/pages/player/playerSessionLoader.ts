@@ -189,7 +189,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
         } catch (error) {
             if (error instanceof LimboUnavailableError) {
                 throw new Error(
-                    `${error.message} Get it at https://limbo.kaleid.al/#download`,
+                    `${error.message} Get it at https://limbo.kaleid.al`,
                 );
             }
             throw error;
