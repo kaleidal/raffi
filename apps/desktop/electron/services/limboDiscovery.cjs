@@ -19,10 +19,13 @@ function candidateLimboApiPaths() {
       path.join(home, "Library", "Application Support", "Limbo", "api.json"),
     );
   } else {
-    const xdg = process.env.XDG_CONFIG_HOME || path.join(home, ".config");
+    const dataHome = process.env.XDG_DATA_HOME || path.join(home, ".local", "share");
+    const configHome = process.env.XDG_CONFIG_HOME || path.join(home, ".config");
     candidates.push(
-      path.join(xdg, "limbo", "api.json"),
-      path.join(xdg, "Limbo", "api.json"),
+      path.join(dataHome, "limbo", "api.json"),
+      path.join(dataHome, "Limbo", "api.json"),
+      path.join(configHome, "limbo", "api.json"),
+      path.join(configHome, "Limbo", "api.json"),
     );
   }
 
@@ -52,5 +55,6 @@ async function readLimboApiDiscovery(fs) {
 }
 
 module.exports = {
+  candidateLimboApiPaths,
   readLimboApiDiscovery,
 };
