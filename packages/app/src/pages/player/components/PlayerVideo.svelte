@@ -1,5 +1,6 @@
 <script lang="ts">
     import { createEventDispatcher, onDestroy, onMount } from "svelte";
+    import { attachPlaybackDiagnostics } from "../playbackDiagnostics";
 
     export let videoA: HTMLVideoElement | undefined = undefined;
     export let videoB: HTMLVideoElement | undefined = undefined;
@@ -379,7 +380,7 @@
         scheduleAmbientLoop(true);
     };
 
-    const bindVideoListeners = (element: HTMLVideoElement | undefined) => {
+    const bindVideoListeners = (element: HTMLVideoElement | undefined, surface: 0 | 1) => {
         detachVideoListeners();
 
         if (!element) return;
@@ -401,6 +402,7 @@
         };
 
         const listeners = new Map<string, EventListener>();
+        const detachDiagnostics = attachPlaybackDiagnostics(element, surface === 0 ? "surface-a" : "surface-b");
 
         for (const eventName of events) {
             let listener: EventListener;
@@ -416,13 +418,14 @@
         }
 
         detachVideoListeners = () => {
+            detachDiagnostics();
             for (const [eventName, listener] of listeners) {
                 element.removeEventListener(eventName, listener);
             }
         };
     };
 
-    $: bindVideoListeners(videoElem);
+    $: bindVideoListeners(videoElem, activeSurface);
     $: refreshAmbient();
     $: updateEffectiveVideoFit();
 

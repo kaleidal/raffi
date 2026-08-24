@@ -59,6 +59,7 @@ import {
     showSeekStyleModal,
     currentChapter,
 } from "./playerState";
+import { logPlaybackPlan } from "./playbackDiagnostics";
 
 export type PlayerSessionLoaderDeps = {
     getFileIdx: () => number | null;
@@ -268,6 +269,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
 
                 const videoElem = deps.getVideoElem();
                 if (!videoElem) return;
+                videoElem.dataset.raffiPlaybackMode = reused.mode ?? "unknown";
 
                 const sessionSource = await toClientPlayableUrl(src);
                 let nextSession =
@@ -452,6 +454,10 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
 
             if (isStale()) return;
 
+            if (clientPlayback) {
+                logPlaybackPlan(playableSrc, clientPlayback);
+            }
+
             if (
                 clientPlayback?.meta &&
                 deps.handleProviderStatusMedia?.({
@@ -612,6 +618,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
             }
 
             if (useClientPlayback && clientPlayback) {
+                videoElem.dataset.raffiPlaybackMode = clientPlayback.mode;
                 loadingStage.set(
                     clientPlayback.mode === "mediabunny" || clientPlayback.mode === "ffmpeg"
                         ? clientPlayback.mode === "ffmpeg"
