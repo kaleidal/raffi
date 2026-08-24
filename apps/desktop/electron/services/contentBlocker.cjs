@@ -124,81 +124,6 @@ function shouldBlockRequest(details = {}) {
   return TRACKING_RESOURCE_TYPES.has(resourceType) && TRACKING_PATH_PATTERN.test(requestTarget);
 }
 
-function describeRequestUrl(value) {
-  try {
-    const url = new URL(value);
-    const extension = url.pathname.match(/\.([a-z0-9]{2,5})$/i)?.[1]?.toLowerCase();
-    return `${url.protocol}//${url.host}${extension ? `/*.${extension}` : "/*"}`;
-  } catch {
-    return "invalid-url";
-  }
-}
-
-function readHeader(headers, name) {
-  const match = Object.entries(headers || {}).find(
-    ([key]) => key.toLowerCase() === name.toLowerCase(),
-  );
-  const value = match?.[1];
-  return Array.isArray(value) ? value.join(", ") : value || null;
-}
-
-function registerPlaybackNetworkDiagnostics({ session, logToFile }) {
-  const requests = new Map();
-  const filter = { urls: ["http://*/*", "https://*/*"] };
-  const log = (event, details, extra = {}) => {
-    const payload = {
-      id: details.id,
-      type: details.resourceType,
-      target: describeRequestUrl(details.url),
-      ...extra,
-    };
-    const message = `[Raffi playback network] ${event} ${JSON.stringify(payload)}`;
-    console.info(message);
-    logToFile?.(message);
-  };
-
-  session.webRequest.onSendHeaders(filter, (details) => {
-    const range = readHeader(details.requestHeaders, "range");
-    if (details.resourceType !== "media" && !range) return;
-    requests.set(details.id, Date.now());
-    log("request", details, { range });
-  });
-
-  session.webRequest.onHeadersReceived(filter, (details, callback) => {
-    if (requests.has(details.id)) {
-      log("response", details, {
-        status: details.statusCode,
-        contentType: readHeader(details.responseHeaders, "content-type"),
-        contentLength: readHeader(details.responseHeaders, "content-length"),
-        contentRange: readHeader(details.responseHeaders, "content-range"),
-        acceptRanges: readHeader(details.responseHeaders, "accept-ranges"),
-      });
-    }
-    callback({});
-  });
-
-  session.webRequest.onCompleted(filter, (details) => {
-    const startedAt = requests.get(details.id);
-    if (startedAt == null) return;
-    requests.delete(details.id);
-    log("complete", details, {
-      status: details.statusCode,
-      durationMs: Date.now() - startedAt,
-      fromCache: details.fromCache,
-    });
-  });
-
-  session.webRequest.onErrorOccurred(filter, (details) => {
-    const startedAt = requests.get(details.id);
-    if (startedAt == null) return;
-    requests.delete(details.id);
-    log("error", details, {
-      error: details.error,
-      durationMs: Date.now() - startedAt,
-    });
-  });
-}
-
 function registerContentBlocker({ session, logToFile }) {
   if (!session?.webRequest?.onBeforeRequest) {
     return;
@@ -210,8 +135,6 @@ function registerContentBlocker({ session, logToFile }) {
       callback({ cancel: shouldBlockRequest(details) });
     },
   );
-
-  registerPlaybackNetworkDiagnostics({ session, logToFile });
 
   logToFile?.("Content blocker registered");
 }
