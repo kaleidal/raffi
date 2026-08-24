@@ -1,5 +1,5 @@
 import { get, writable } from "svelte/store";
-import { checkLimboHealth, LimboUnavailableError } from "../limbo/client";
+import { ensureLimboAvailable } from "../limbo/client";
 
 const ALLOW_TORRENTING_KEY = "raffi_allow_torrenting";
 const TORRENT_WARNING_SHOWN_KEY = "torrentWarningShown";
@@ -44,12 +44,7 @@ export const acknowledgeTorrentWarning = () => {
 
 export const setTorrentingAllowed = async (enabled: boolean) => {
 	if (enabled) {
-		const health = await checkLimboHealth();
-		if (!health?.ok) {
-			throw new LimboUnavailableError(
-				"Limbo is not running. Install and open Limbo, then try again.",
-			);
-		}
+		await ensureLimboAvailable();
 	}
 	allowTorrenting.set(enabled);
 };
@@ -60,10 +55,5 @@ export const ensureTorrentingAllowed = async () => {
 			"Torrenting is disabled. Turn on Allow Torrenting in Settings to play torrent sources.",
 		);
 	}
-	const health = await checkLimboHealth();
-	if (!health?.ok) {
-		throw new LimboUnavailableError(
-			"Limbo is not running. Install and open Limbo to play torrent sources.",
-		);
-	}
+	await ensureLimboAvailable();
 };

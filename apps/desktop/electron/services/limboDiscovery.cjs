@@ -9,12 +9,14 @@ function candidateLimboApiPaths() {
     const appData = process.env.APPDATA || path.join(home, "AppData", "Roaming");
     const localAppData = process.env.LOCALAPPDATA || path.join(home, "AppData", "Local");
     candidates.push(
+      path.join(appData, "kaleid", "Limbo", "api.json"),
       path.join(appData, "limbo", "api.json"),
       path.join(appData, "Limbo", "api.json"),
       path.join(localAppData, "limbo", "api.json"),
     );
   } else if (process.platform === "darwin") {
     candidates.push(
+      path.join(home, "Library", "Application Support", "al.kaleid.Limbo", "api.json"),
       path.join(home, "Library", "Application Support", "limbo", "api.json"),
       path.join(home, "Library", "Application Support", "Limbo", "api.json"),
     );

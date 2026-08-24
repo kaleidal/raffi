@@ -2,6 +2,7 @@
 
 export const LIMBO_DEFAULT_PORT = 17890;
 export const LIMBO_INSTALL_URL = "https://limbo.kaleid.al";
+export const LIMBO_MIN_API_VERSION = 2;
 
 const RAFFI_ICON_DATA_URL =
 	"data:image/svg+xml," +
@@ -43,7 +44,6 @@ export type LimboTorrentStatus = {
 	files: LimboTorrentFile[];
 	selectedFileIndex: number | null;
 	streamUrl: string | null;
-	filePath: string | null;
 	ready: boolean;
 	contiguousBytes: number;
 	clientId: string | null;
@@ -54,6 +54,17 @@ export class LimboUnavailableError extends Error {
 	constructor(message = "Limbo is not running") {
 		super(message);
 		this.name = "LimboUnavailableError";
+	}
+}
+
+export class LimboApiError extends Error {
+	constructor(
+		message: string,
+		readonly status: number,
+		readonly code?: string,
+	) {
+		super(message);
+		this.name = "LimboApiError";
 	}
 }
 
@@ -167,10 +178,22 @@ export async function ensureLimboAvailable(): Promise<LimboHealth> {
 			"Limbo is not running. Install and open Limbo to play torrent sources.",
 		);
 	}
+	assertLimboCompatible(health);
+	return health;
+}
+
+export function assertLimboCompatible(health: LimboHealth): void {
+	if (
+		typeof health.apiVersion !== "number" ||
+		health.apiVersion < LIMBO_MIN_API_VERSION
+	) {
+		throw new LimboUnavailableError(
+			"This version of Limbo is too old for Raffi. Update Limbo and try again.",
+		);
+	}
 	if (health.torrentReady === false) {
 		throw new Error("Limbo torrent engine is not ready yet. Try again in a moment.");
 	}
-	return health;
 }
 
 export async function addLimboTorrent(input: {
@@ -219,19 +242,19 @@ export async function addLimboTorrent(input: {
 				);
 			}
 		}
-		throw new Error(text || `Limbo add torrent failed (${response.status})`);
+		throw apiError(response.status, text, "Limbo add torrent failed");
 	}
 
-	return (await response.json()) as LimboTorrentStatus;
+	return parseLimboTorrentStatus(await response.json());
 }
 
 export async function getLimboTorrent(id: string): Promise<LimboTorrentStatus> {
 	const response = await limboFetch(`/v1/torrents/${encodeURIComponent(id)}`);
 	if (!response.ok) {
 		const text = (await response.text().catch(() => "")).trim();
-		throw new Error(text || `Limbo torrent status failed (${response.status})`);
+		throw apiError(response.status, text, "Limbo torrent status failed");
 	}
-	return (await response.json()) as LimboTorrentStatus;
+	return parseLimboTorrentStatus(await response.json());
 }
 
 export async function removeLimboTorrent(id: string, deleteFiles = false): Promise<void> {
@@ -245,37 +268,6 @@ export async function removeLimboTorrent(id: string, deleteFiles = false): Promi
 	}
 }
 
-export async function waitForLimboReady(
-	id: string,
-	opts?: {
-		timeoutMs?: number;
-		pollMs?: number;
-		onUpdate?: (status: LimboTorrentStatus) => void;
-		signal?: AbortSignal;
-	},
-): Promise<LimboTorrentStatus> {
-	const timeoutMs = opts?.timeoutMs ?? 120_000;
-	const pollMs = opts?.pollMs ?? 1000;
-	const started = Date.now();
-
-	while (Date.now() - started < timeoutMs) {
-		if (opts?.signal?.aborted) {
-			throw new DOMException("Aborted", "AbortError");
-		}
-		const status = await getLimboTorrent(id);
-		opts?.onUpdate?.(status);
-		if (status.stage === "error" || status.lastError) {
-			throw new Error(status.lastError || "Torrent error");
-		}
-		if (status.ready && status.streamUrl) {
-			return status;
-		}
-		await new Promise((resolve) => setTimeout(resolve, pollMs));
-	}
-
-	throw new Error("Timed out waiting for Limbo torrent to become ready");
-}
-
 export async function openLimboInstallPage(): Promise<void> {
 	const api = getElectronApi();
 	if (api?.openExternal) {
@@ -285,4 +277,35 @@ export async function openLimboInstallPage(): Promise<void> {
 	if (typeof window !== "undefined") {
 		window.open(LIMBO_INSTALL_URL, "_blank", "noopener,noreferrer");
 	}
+}
+
+function apiError(status: number, text: string, fallback: string): LimboApiError {
+	let code: string | undefined;
+	let message = text;
+	try {
+		const body = JSON.parse(text) as { error?: unknown; message?: unknown };
+		if (typeof body.error === "string") code = body.error;
+		if (typeof body.message === "string") message = body.message;
+	} catch {}
+	return new LimboApiError(message || `${fallback} (${status})`, status, code);
+}
+
+export function parseLimboTorrentStatus(value: unknown): LimboTorrentStatus {
+	if (!value || typeof value !== "object") {
+		throw new LimboApiError("Limbo returned an invalid torrent status. Update Limbo and try again.", 502);
+	}
+	const status = value as Partial<LimboTorrentStatus>;
+	const validStage = ["metadata", "downloading", "ready", "done", "error"].includes(
+		String(status.stage),
+	);
+	if (
+		typeof status.id !== "string" ||
+		!status.id ||
+		!validStage ||
+		typeof status.ready !== "boolean" ||
+		!Array.isArray(status.files)
+	) {
+		throw new LimboApiError("Limbo returned an incompatible torrent status. Update Limbo and try again.", 502);
+	}
+	return status as LimboTorrentStatus;
 }

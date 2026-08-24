@@ -1,5 +1,10 @@
 import { get } from "svelte/store";
-import { getLimboTorrent, type LimboTorrentStatus } from "../../lib/limbo/client";
+import {
+	getLimboTorrent,
+	LimboApiError,
+	LimboUnavailableError,
+	type LimboTorrentStatus,
+} from "../../lib/limbo/client";
 import { loading, loadingDetails, loadingProgress, loadingStage } from "./playerState";
 
 function formatBytes(bytes: number): string {
@@ -88,20 +93,22 @@ export const createTorrentStatusPoller = ({
 }: {
 	onTorrentError?: (message: string) => void;
 }) => {
-	let intervalRef: ReturnType<typeof setInterval> | null = null;
+	let timeoutRef: ReturnType<typeof setTimeout> | null = null;
 	let torrentId: string | null = null;
 	let fatalHandled = false;
+	let unavailableFailures = 0;
 	let readyPromise: Promise<void> | null = null;
 	let resolveReady: (() => void) | null = null;
 	let rejectReady: ((error: Error) => void) | null = null;
 
 	const stop = () => {
-		if (intervalRef) {
-			clearInterval(intervalRef);
-			intervalRef = null;
+		if (timeoutRef) {
+			clearTimeout(timeoutRef);
+			timeoutRef = null;
 		}
 		torrentId = null;
 		fatalHandled = false;
+		unavailableFailures = 0;
 		if (rejectReady) {
 			rejectReady(new Error("Torrent readiness wait canceled"));
 		}
@@ -112,7 +119,7 @@ export const createTorrentStatusPoller = ({
 
 	const start = (id: string) => {
 		if (!id) return;
-		if (intervalRef && torrentId === id) return;
+		if (torrentId === id && readyPromise) return;
 
 		stop();
 		torrentId = id;
@@ -122,24 +129,30 @@ export const createTorrentStatusPoller = ({
 			rejectReady = reject;
 		});
 
+		const fail = (message: string) => {
+			loadingStage.set("Torrent error");
+			loadingDetails.set(message);
+			loadingProgress.set(null);
+			if (!fatalHandled) {
+				fatalHandled = true;
+				onTorrentError?.(message);
+			}
+			rejectReady?.(new Error(message));
+			resolveReady = null;
+			rejectReady = null;
+		};
+
 		const poll = async () => {
-			if (!torrentId) return;
+			const activeId = torrentId;
+			if (!activeId) return;
 			try {
-				const data = await getLimboTorrent(torrentId);
+				const data = await getLimboTorrent(activeId);
+				unavailableFailures = 0;
 				const stage = String(data.stage || "");
 				const error = typeof data.lastError === "string" ? data.lastError : "";
 
 				if (error || stage === "error") {
-					loadingStage.set("Torrent error");
-					loadingDetails.set(error || "Torrent error");
-					loadingProgress.set(null);
-					if (!fatalHandled) {
-						fatalHandled = true;
-						onTorrentError?.(error || "Torrent error");
-					}
-					rejectReady?.(new Error(error || "Torrent error"));
-					resolveReady = null;
-					rejectReady = null;
+					fail(error || "Torrent error");
 					return;
 				}
 
@@ -160,13 +173,23 @@ export const createTorrentStatusPoller = ({
 					resolveReady = null;
 					rejectReady = null;
 				}
-			} catch {
-				// ignore transient polling errors
+			} catch (error) {
+				if (error instanceof LimboUnavailableError) {
+					unavailableFailures += 1;
+					if (unavailableFailures >= 3) fail("Lost connection to Limbo");
+				} else if (error instanceof LimboApiError) {
+					fail(error.message);
+				} else {
+					fail(error instanceof Error ? error.message : "Limbo status failed");
+				}
+			} finally {
+				if (torrentId === activeId && !fatalHandled) {
+					timeoutRef = setTimeout(poll, 1000);
+				}
 			}
 		};
 
 		void poll();
-		intervalRef = setInterval(poll, 1000);
 	};
 
 	const waitUntilReady = (id: string) => {
