@@ -72,34 +72,42 @@ export const handleProgress = async (time: number, duration: number, imdbID: str
     const data = get(metaData);
     if (!data) return;
 
+    const now = Date.now();
     const type = data.meta.type;
     let currentMap = get(progressMap);
+    let existingProgress: ProgressItem | undefined;
 
     if (type === "movie") {
+        existingProgress = currentMap as ProgressItem;
         currentMap = {
             time,
             duration,
             watched: isWatched,
-            updatedAt: Date.now(),
+            updatedAt: now,
         } as any;
     } else {
         const key = `${episode.season}:${episode.episode}`;
+        existingProgress = (currentMap as Record<string, ProgressItem>)[key];
         currentMap = { ...(currentMap as Record<string, ProgressItem>) };
         (currentMap as any)[key] = {
             time,
             duration,
             watched: isWatched,
-            updatedAt: Date.now(),
+            updatedAt: now,
         };
     }
 
-    const now = Date.now();
-    if (isWatched || now - lastProgressMapWrite >= PROGRESS_MAP_UI_THROTTLE_MS) {
+    const watchedStateChanged = Boolean(existingProgress?.watched) !== isWatched;
+    if (
+        isWatched
+        || watchedStateChanged
+        || now - lastProgressMapWrite >= PROGRESS_MAP_UI_THROTTLE_MS
+    ) {
         lastProgressMapWrite = now;
         progressMap.set(currentMap);
     }
 
-    if (now - lastUpdate > 5000 || isWatched) {
+    if (now - lastUpdate > 5000 || isWatched || watchedStateChanged) {
         lastUpdate = now;
         if (lastProgressMapWrite !== now) {
             lastProgressMapWrite = now;
@@ -112,7 +120,11 @@ export const handleProgress = async (time: number, duration: number, imdbID: str
             type,
             completed,
             undefined,
-            { syncDelayMs: isWatched ? undefined : PROGRESS_CLOUD_SYNC_DELAY_MS },
+            {
+                syncDelayMs: isWatched || watchedStateChanged
+                    ? undefined
+                    : PROGRESS_CLOUD_SYNC_DELAY_MS,
+            },
         );
     }
 };

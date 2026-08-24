@@ -137,6 +137,21 @@
         }
     };
 
+    const clearWatchedProgressOnStart = () => {
+        const progressKey = metaData?.meta?.type === "series"
+            && season != null
+            && episode != null
+            ? `${season}:${episode}`
+            : undefined;
+        const progress = ProgressLogic.getProgress(get(metaProgressMap), progressKey);
+        if (!progress?.watched) return;
+
+        const playbackTime = videoElem
+            ? $playbackOffset + videoElem.currentTime
+            : $currentTime;
+        handleProgressInternal(playbackTime, $duration);
+    };
+
     const handleNextEpisodeInternal = async () => {
         if (nextEpisodePrefetchStarting && nextEpisodePrefetchTask) {
             await Promise.race([
@@ -178,6 +193,7 @@
     let nextEpisodePrefetchResolved: Awaited<ReturnType<typeof NavigationLogic.resolveNextEpisodeStream>> = null;
     let bingeAutoAdvancing = false;
     let nextEpisodePrefetchRunId = 0;
+    let isTearingDown = false;
     let nextEpisodePrefetchStarting = false;
     let nextEpisodePrefetchTask: Promise<void> | null = null;
     let nextEpisodePrefetchAbort: AbortController | null = null;
@@ -821,6 +837,7 @@
     });
 
     onDestroy(() => {
+        isTearingDown = true;
         availabilityCheckRun += 1;
         getWindowControls()?.syncMiniPlayerState?.({
             enabled: false,
@@ -861,7 +878,7 @@
     });
 
     const handleTimeUpdate = () => {
-        if (!videoElem) return;
+        if (!videoElem || isTearingDown) return;
         if ($pendingSeek != null || $seekGuard) {
             return;
         }
@@ -995,6 +1012,7 @@
         torrentStatusPoller.stop();
         isPlaying.set(true);
         hasStarted = true;
+        clearWatchedProgressOnStart();
         void traktScrobbler.send("start");
         Discord.updateDiscordActivity(
             metaData,

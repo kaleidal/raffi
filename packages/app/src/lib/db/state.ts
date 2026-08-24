@@ -434,6 +434,10 @@ const normalizeProgressEntry = (value: any) => {
 const compareProgressEntries = (left: any, right: any) => {
     const leftEntry = normalizeProgressEntry(left);
     const rightEntry = normalizeProgressEntry(right);
+    if (leftEntry.updatedAt !== rightEntry.updatedAt) {
+        return leftEntry.updatedAt > rightEntry.updatedAt ? 1 : -1;
+    }
+
     if (leftEntry.watched !== rightEntry.watched) {
         return leftEntry.watched ? 1 : -1;
     }
@@ -448,14 +452,10 @@ const compareProgressEntries = (left: any, right: any) => {
         return leftEntry.time > rightEntry.time ? 1 : -1;
     }
 
-    if (leftEntry.updatedAt !== rightEntry.updatedAt) {
-        return leftEntry.updatedAt > rightEntry.updatedAt ? 1 : -1;
-    }
-
     return 0;
 };
 
-const chooseProgressEntry = (left: any, right: any) => {
+export const mergeProgressEntry = (left: any, right: any) => {
     if (!isPlainObject(left)) return right;
     if (!isPlainObject(right)) return left;
     return compareProgressEntries(left, right) >= 0 ? { ...right, ...left } : { ...left, ...right };
@@ -480,13 +480,13 @@ const mergeLibraryProgress = (localProgress: any, remoteProgress: any, type: str
                 merged[key] = localEntry;
                 continue;
             }
-            merged[key] = chooseProgressEntry(localEntry, remoteEntry);
+            merged[key] = mergeProgressEntry(localEntry, remoteEntry);
         }
         return merged;
     }
 
     if (isPlainObject(localProgress) && isPlainObject(remoteProgress)) {
-        return chooseProgressEntry(localProgress, remoteProgress);
+        return mergeProgressEntry(localProgress, remoteProgress);
     }
 
     return localProgress ?? remoteProgress;
