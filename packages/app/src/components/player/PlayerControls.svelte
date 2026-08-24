@@ -149,7 +149,7 @@
 <div
     class="player-controls relative z-10 items-center flex flex-col text-white overflow-hidden"
 >
-    <div class="absolute inset-0 rounded-4xl bg-[#000000]/10 backdrop-blur-xl pointer-events-none"></div>
+    <div class="absolute inset-0 rounded-[inherit] bg-[#000000]/10 backdrop-blur-xl pointer-events-none"></div>
 
     <div class="relative z-10 flex flex-col gap-2 w-full">
         <div class="player-seek-row flex flex-row items-center w-full">
@@ -242,7 +242,7 @@
 
         <div class="player-actions flex items-center w-full justify-center">
             <ExpandingButton
-                label={"Fullscreen"}
+                label="Fullscreen"
                 onClick={() => {
                     toggleFullscreen();
                 }}
@@ -279,7 +279,7 @@
 
             {#if metaData && showWatchParty}
                 <ExpandingButton
-                    label={"Watch Party"}
+                    label="Watch Party"
                     onClick={onWatchPartyClick}
                 >
                     <Users size={20} color="#E9E9E9" strokeWidth={2} />
@@ -288,7 +288,7 @@
 
             {#if metaData}
             <ExpandingButton
-                label={"Download"}
+                label="Download"
                 onClick={() => {
                     window.open(videoSrc!!);
                 }}
@@ -299,7 +299,7 @@
 
             {#if !isWatchPartyMember}
                 <ExpandingButton
-                    label={"Clip"}
+                    label="Clip"
                     onClick={() => setClipPanelOpen(!showClipPanel)}
                 >
                     <Scissors size={20} color="#E9E9E9" strokeWidth={2} />
@@ -334,14 +334,14 @@
 
 <style>
     .player-controls {
-        width: min(680px, calc(100vw - 24px));
-        gap: 8px;
-        border-radius: clamp(20px, 1.6vw, 26px);
-        padding: 12px 16px;
+        width: min(860px, calc(100vw - 32px));
+        gap: 10px;
+        border-radius: 28px;
+        padding: 16px 20px;
     }
 
     .player-seek-row {
-        gap: 12px;
+        gap: 14px;
     }
 
     .player-play-button,
@@ -352,23 +352,30 @@
     }
 
     .player-actions {
-        gap: 8px;
+        gap: 10px;
     }
 
     .player-volume {
-        width: clamp(96px, 7vw, 116px);
+        width: clamp(108px, 9vw, 144px);
     }
 
     @media (max-width: 760px), (orientation: portrait) {
         .player-controls {
             width: calc(100vw - 20px);
-            padding: 12px;
+            gap: 8px;
+            border-radius: 22px;
+            padding: 10px 12px 12px;
+        }
+
+        .player-seek-row {
+            gap: 10px;
         }
 
         .player-actions {
+            gap: 8px;
             justify-content: flex-start;
             overflow-x: auto;
-            padding-bottom: 2px;
+            padding: 2px 0;
             scrollbar-width: none;
         }
 

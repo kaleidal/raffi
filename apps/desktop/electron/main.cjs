@@ -96,19 +96,6 @@ if (process.platform === "linux") {
   );
   enabledFeatures.add("AcceleratedVideoDecoder");
 
-  try {
-    const hasNvidiaGpu = fs
-      .readdirSync("/sys/class/drm")
-      .filter((entry) => /^card\d+$/.test(entry))
-      .some((entry) => {
-        const vendorPath = path.join("/sys/class/drm", entry, "device/vendor");
-        return fs.readFileSync(vendorPath, "utf8").trim() === "0x10de";
-      });
-    if (hasNvidiaGpu) {
-      enabledFeatures.add("VaapiOnNvidiaGPUs");
-    }
-  } catch {}
-
   app.commandLine.appendSwitch(
     "enable-features",
     [...enabledFeatures].join(","),
