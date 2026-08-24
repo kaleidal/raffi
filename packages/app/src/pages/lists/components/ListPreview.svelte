@@ -1,6 +1,6 @@
 <script lang="ts">
     import { ArchiveX, Info, Pause, Play, Volume2, VolumeX } from "@lucide/svelte";
-    import ExpandingButton from "../../../components/common/ExpandingButton.svelte";
+    import IconButton from "../../../components/common/IconButton.svelte";
     import { router } from "../../../lib/stores/router";
     import { handleRemoveFromList } from "../listActions";
     import { playerState, selectedItem } from "../listsState";
@@ -50,7 +50,7 @@
 
                 {#if trailerId}
                     <div class="absolute right-[clamp(14px,1.4vw,22px)] top-[clamp(14px,1.4vw,22px)] z-10 flex gap-2">
-                        <ExpandingButton
+                        <IconButton
                             label={$playerState.isPaused ? "Play" : "Pause"}
                             onClick={togglePlay}
                         >
@@ -59,9 +59,9 @@
                             {:else}
                                 <Pause size={22} strokeWidth={2.2} />
                             {/if}
-                        </ExpandingButton>
+                        </IconButton>
 
-                        <ExpandingButton
+                        <IconButton
                             label={$playerState.isMuted ? "Unmute" : "Mute"}
                             onClick={toggleMute}
                         >
@@ -70,7 +70,7 @@
                             {:else}
                                 <Volume2 size={22} strokeWidth={2.2} />
                             {/if}
-                        </ExpandingButton>
+                        </IconButton>
                     </div>
                 {/if}
             </div>

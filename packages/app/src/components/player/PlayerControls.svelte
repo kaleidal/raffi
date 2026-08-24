@@ -1,6 +1,6 @@
 <script lang="ts">
     import Slider from "../common/Slider.svelte";
-    import ExpandingButton from "../common/ExpandingButton.svelte";
+    import IconButton from "../common/IconButton.svelte";
     import type { ShowResponse } from "../../lib/library/types/meta_types";
     import type { Chapter } from "../../pages/player/types";
     import ClipPanel from "./ClipPanel.svelte";
@@ -156,7 +156,8 @@
             {#if !isWatchPartyMember}
                 <button
                     on:click={togglePlay}
-                    class="player-play-button cursor-pointer hover:opacity-80 transition-opacity duration-200"
+                    class="player-play-button cursor-pointer hover:opacity-80"
+                    aria-label={isPlaying ? "Pause" : "Play"}
                 >
                     {#if isPlaying}
                         <svg
@@ -241,16 +242,16 @@
         </div>
 
         <div class="player-actions flex items-center w-full justify-center">
-            <ExpandingButton
+            <IconButton
                 label="Fullscreen"
                 onClick={() => {
                     toggleFullscreen();
                 }}
             >
                 <Maximize size={22} color="#E9E9E9" strokeWidth={2} />
-            </ExpandingButton>
+            </IconButton>
 
-            <ExpandingButton
+            <IconButton
                 label={objectFit === "contain" ? "Zoom" : "Fit"}
                 onClick={toggleObjectFit}
             >
@@ -259,51 +260,51 @@
                 {:else}
                     <ZoomOut size={20} color="#E9E9E9" strokeWidth={2} />
                 {/if}
-            </ExpandingButton>
+            </IconButton>
 
             {#if !isWatchPartyMember}
-                <ExpandingButton
+                <IconButton
                     label={currentAudioLabel || "Audio"}
                     onClick={onAudioClick}
                 >
                     <AudioWaveform size={20} color="#E9E9E9" strokeWidth={2} />
-                </ExpandingButton>
+                </IconButton>
             {/if}
 
-            <ExpandingButton
+            <IconButton
                 label={currentSubtitleLabel || "Subtitles: Off"}
                 onClick={onSubtitleClick}
             >
                 <Subtitles size={20} color="#E9E9E9" strokeWidth={2} />
-            </ExpandingButton>
+            </IconButton>
 
             {#if metaData && showWatchParty}
-                <ExpandingButton
+                <IconButton
                     label="Watch Party"
                     onClick={onWatchPartyClick}
                 >
                     <Users size={20} color="#E9E9E9" strokeWidth={2} />
-                </ExpandingButton>
+                </IconButton>
             {/if}
 
             {#if metaData}
-            <ExpandingButton
+            <IconButton
                 label="Download"
                 onClick={() => {
                     window.open(videoSrc!!);
                 }}
             >
                 <Download size={22} color="#E9E9E9" strokeWidth={2} />
-            </ExpandingButton>
+            </IconButton>
             {/if}
 
             {#if !isWatchPartyMember}
-                <ExpandingButton
+                <IconButton
                     label="Clip"
                     onClick={() => setClipPanelOpen(!showClipPanel)}
                 >
                     <Scissors size={20} color="#E9E9E9" strokeWidth={2} />
-                </ExpandingButton>
+                </IconButton>
             {/if}
 
             <div class="player-volume">
@@ -349,6 +350,14 @@
         width: clamp(40px, 3.125vw, 60px);
         height: clamp(40px, 3.125vw, 60px);
         flex: 0 0 auto;
+    }
+
+    .player-play-button {
+        transition: opacity 200ms ease-out, transform 200ms ease-out;
+    }
+
+    .player-play-button:active {
+        transform: scale(0.96);
     }
 
     .player-actions {

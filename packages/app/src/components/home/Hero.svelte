@@ -3,7 +3,7 @@
     import { Info, Play, Pause, VolumeX, Volume2 } from "@lucide/svelte";
     import type { PopularTitleMeta } from "../../lib/library/types/popular_types";
     import { router } from "../../lib/stores/router";
-    import ExpandingButton from "../common/ExpandingButton.svelte";
+    import IconButton from "../common/IconButton.svelte";
 
     export let showcasedTitle: PopularTitleMeta;
 
@@ -177,7 +177,7 @@
                 Details
             </button>
 
-            <ExpandingButton
+            <IconButton
                 label={isPaused ? "Play" : "Pause"}
                 onClick={togglePlay}
             >
@@ -186,9 +186,9 @@
                 {:else}
                     <Pause size={24} strokeWidth={2} color="#E9E9E9" />
                 {/if}
-            </ExpandingButton>
+            </IconButton>
 
-            <ExpandingButton
+            <IconButton
                 label={isMuted ? "Unmute" : "Mute"}
                 onClick={toggleMute}
             >
@@ -197,7 +197,7 @@
                 {:else}
                     <Volume2 size={24} strokeWidth={2} color="#E9E9E9" />
                 {/if}
-            </ExpandingButton>
+            </IconButton>
         </div>
     </div>
 
