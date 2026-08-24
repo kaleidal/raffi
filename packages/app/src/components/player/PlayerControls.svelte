@@ -353,11 +353,7 @@
     }
 
     .player-play-button {
-        transition: opacity 200ms ease-out, transform 200ms ease-out;
-    }
-
-    .player-play-button:active {
-        transform: scale(0.96);
+        transition: opacity 200ms ease-out, scale 140ms cubic-bezier(0.2, 0, 0, 1);
     }
 
     .player-actions {

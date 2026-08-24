@@ -20,6 +20,11 @@ describe("desktop external URL policy", () => {
         }
     });
 
+    test("allows the current Limbo download site", () => {
+        expect(isAllowedExternalUrl("https://limbo.kaleid.al/#download")).toBe(true);
+        expect(isAllowedExternalUrl("https://limbo.al")).toBe(false);
+    });
+
     test("still rejects insecure and unrelated URLs", () => {
         expect(isAllowedExternalUrl("http://www.torbox.app/dashboard")).toBe(false);
         expect(isAllowedExternalUrl("https://example.com/dashboard")).toBe(false);

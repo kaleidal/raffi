@@ -6,6 +6,7 @@ export interface Addon {
     flags: any;
     addon_id: string;
     position?: number;
+    updated_at: string;
 }
 
 export interface LibraryItem {
@@ -17,6 +18,7 @@ export interface LibraryItem {
     type: string;
     shown: boolean;
     poster?: string;
+    updated_at: string;
 }
 
 export interface List {
@@ -25,6 +27,7 @@ export interface List {
     created_at: string;
     name: string;
     position: number;
+    updated_at: string;
 }
 
 export interface ListItem {
@@ -33,12 +36,13 @@ export interface ListItem {
     position: number;
     type: string;
     poster?: string;
+    updated_at: string;
 }
 
 export interface UserMeta {
     user_id: string;
     settings: any;
-    updated_at?: string;
+    updated_at: string;
 }
 
 export interface WatchParty {
@@ -99,6 +103,7 @@ export type RemoteState = {
     lists: List[];
     listItems: ListItem[];
     userMeta: UserMeta | null;
+    tombstones: SyncTombstone[];
 };
 
 export type RemoteStateSection = "addons" | "library" | "lists" | "listItems" | "userMeta";
@@ -112,6 +117,12 @@ export type RemoteStateChunkResponse<T> = {
 };
 
 export type SyncSection = "addons" | "library" | "lists" | "listItems" | "userMeta";
+
+export type SyncTombstone = {
+    section: SyncSection;
+    key: string;
+    updated_at: string;
+};
 
 export type SyncStateSectionMap = Record<SyncSection, Record<string, number>>;
 

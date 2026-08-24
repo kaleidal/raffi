@@ -1,7 +1,7 @@
 /** Limbo localhost companion client for torrent add/stream. */
 
 export const LIMBO_DEFAULT_PORT = 17890;
-export const LIMBO_INSTALL_URL = "https://limbo.al";
+export const LIMBO_INSTALL_URL = "https://limbo.kaleid.al/#download";
 
 const RAFFI_ICON_DATA_URL =
 	"data:image/svg+xml," +

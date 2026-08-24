@@ -238,10 +238,16 @@ export const handleContextResetProgress = async (imdbID: string) => {
     if (!episode || !imdbID) return;
 
     const key = `${episode.season}:${episode.episode}`;
-    let currentMap = get(progressMap);
+    let currentMap = { ...get(progressMap) };
 
     if ((currentMap as any)[key]) {
-        delete (currentMap as any)[key];
+        const existing = (currentMap as any)[key];
+        (currentMap as any)[key] = {
+            ...existing,
+            time: 0,
+            watched: false,
+            updatedAt: Date.now(),
+        };
         progressMap.set(currentMap);
 
         const data = get(metaData);

@@ -16,11 +16,7 @@
         height: clamp(44px, 2.5vw, 48px);
         gap: clamp(7px, 0.52vw, 10px);
         padding-inline: clamp(13px, 0.78vw, 15px);
-        transition-property: background-color, opacity, transform;
-    }
-
-    .icon-button:active {
-        transform: scale(0.96);
+        transition-property: background-color, opacity, scale;
     }
 
     .icon-button :global(svg) {

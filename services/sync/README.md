@@ -8,6 +8,7 @@ Production apps use `https://sync.raffi.al` by default.
 
 - Verify Ave ID tokens on every authenticated request.
 - Store addons, library progress, lists, user settings, and Trakt connections in D1.
+- Resolve multi-device edits by update time, including timestamped deletion tombstones and per-episode progress merging.
 - Coordinate watch parties through Durable Objects.
 - Provide Trakt OAuth exchange, refresh, client auth, and scrobble endpoints.
 
@@ -17,6 +18,7 @@ Production apps use `https://sync.raffi.al` by default.
 bun install
 bun run types
 bun run check
+bun run test
 bun run dev
 ```
 

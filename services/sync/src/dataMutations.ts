@@ -1,6 +1,7 @@
 import { HttpError, optionalString } from "./http";
-import type { Addon, JsonValue, LibraryItem, List, ListItem } from "./types";
+import type { Addon, JsonValue, LibraryItem, List, ListItem, SyncPayload, SyncSection } from "./types";
 import type { SyncD1Database } from "./d1Session";
+import { applySyncState } from "./db";
 
 type AddonRow = {
   user_id: string;
@@ -10,6 +11,7 @@ type AddonRow = {
   flags: string | null;
   addon_id: string;
   position: number | null;
+  updated_at: string;
 };
 
 type LibraryRow = {
@@ -21,6 +23,7 @@ type LibraryRow = {
   type: string;
   shown: number;
   poster: string | null;
+  updated_at: string;
 };
 
 type ListRow = {
@@ -29,6 +32,7 @@ type ListRow = {
   created_at: string;
   name: string;
   position: number;
+  updated_at: string;
 };
 
 const nowIso = () => new Date().toISOString();
@@ -61,7 +65,48 @@ const toAddon = (row: AddonRow): Addon => ({
   flags: parseStoredJson(row.flags, null),
   addon_id: row.addon_id,
   position: row.position ?? undefined,
+  updated_at: row.updated_at,
 });
+
+const toLibraryItem = (row: LibraryRow): LibraryItem => ({
+  user_id: row.user_id,
+  imdb_id: row.imdb_id,
+  progress: parseStoredJson(row.progress, null),
+  last_watched: row.last_watched,
+  completed_at: row.completed_at,
+  type: row.type,
+  shown: row.shown !== 0,
+  poster: row.poster ?? undefined,
+  updated_at: row.updated_at,
+});
+
+const emptySyncPayload = (): SyncPayload => ({
+  addons: [],
+  library: [],
+  lists: [],
+  listItems: [],
+  deletes: [],
+});
+
+const applyRecord = async (
+  db: SyncD1Database,
+  userId: string,
+  section: "addons" | "library" | "lists" | "listItems",
+  record: Addon | LibraryItem | List | ListItem,
+) => {
+  const payload = emptySyncPayload();
+  if (section === "addons") payload.addons.push(record as Addon);
+  if (section === "library") payload.library.push(record as LibraryItem);
+  if (section === "lists") payload.lists.push(record as List);
+  if (section === "listItems") payload.listItems.push(record as ListItem);
+  await applySyncState(db, userId, payload, false);
+};
+
+const applyDeletion = async (db: SyncD1Database, userId: string, section: SyncSection, key: string) => {
+  const payload = emptySyncPayload();
+  payload.deletes.push({ section, key, updated_at: nowIso() });
+  await applySyncState(db, userId, payload, false);
+};
 
 const requireString = (value: unknown, field: string) => {
   const text = optionalString(value);
@@ -94,42 +139,35 @@ export const addAddon = async (db: SyncD1Database, userId: string, addon: Partia
     flags: addon.flags ?? null,
     addon_id: optionalString(addon.addon_id) || crypto.randomUUID(),
     position,
+    updated_at: nowIso(),
   };
-
-  await db.prepare(`
-    INSERT INTO addons (user_id, added_at, transport_url, manifest, flags, addon_id, position)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).bind(
-    userId,
-    next.added_at,
-    next.transport_url,
-    storedJson(next.manifest, {}),
-    storedJson(next.flags),
-    next.addon_id,
-    next.position ?? 0,
-  ).run();
+  await applyRecord(db, userId, "addons", next);
 
   return next;
 };
 
 export const removeAddon = async (db: SyncD1Database, userId: string, transportUrl: unknown) => {
-  await db.prepare("DELETE FROM addons WHERE user_id = ? AND transport_url = ?")
-    .bind(userId, requireString(transportUrl, "transport_url"))
-    .run();
+  await applyDeletion(db, userId, "addons", requireString(transportUrl, "transport_url"));
   return { ok: true };
 };
 
 export const hideFromContinueWatching = async (db: SyncD1Database, userId: string, imdbId: unknown) => {
-  await db.prepare("UPDATE libraries SET shown = 0 WHERE user_id = ? AND imdb_id = ?")
-    .bind(userId, requireString(imdbId, "imdb_id"))
-    .run();
+  const key = requireString(imdbId, "imdb_id");
+  const existing = await db.prepare("SELECT * FROM libraries WHERE user_id = ? AND imdb_id = ?")
+    .bind(userId, key)
+    .first<LibraryRow>();
+  if (existing) {
+    await applyRecord(db, userId, "library", {
+      ...toLibraryItem(existing),
+      shown: false,
+      updated_at: nowIso(),
+    });
+  }
   return { ok: true };
 };
 
 export const forgetProgress = async (db: SyncD1Database, userId: string, imdbId: unknown) => {
-  await db.prepare("DELETE FROM libraries WHERE user_id = ? AND imdb_id = ?")
-    .bind(userId, requireString(imdbId, "imdb_id"))
-    .run();
+  await applyDeletion(db, userId, "library", requireString(imdbId, "imdb_id"));
   return { ok: true };
 };
 
@@ -162,28 +200,9 @@ export const updateLibraryProgress = async (
     type: optionalString(input.type) || "movie",
     shown: true,
     poster: optionalString(input.poster) || existing?.poster || undefined,
+    updated_at: now,
   };
-
-  await db.prepare(`
-    INSERT INTO libraries (user_id, imdb_id, progress, last_watched, completed_at, type, shown, poster)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(user_id, imdb_id) DO UPDATE SET
-      progress = excluded.progress,
-      last_watched = excluded.last_watched,
-      completed_at = excluded.completed_at,
-      type = excluded.type,
-      shown = excluded.shown,
-      poster = excluded.poster
-  `).bind(
-    userId,
-    item.imdb_id,
-    storedJson(item.progress),
-    item.last_watched,
-    item.completed_at,
-    item.type,
-    1,
-    item.poster ?? null,
-  ).run();
+  await applyRecord(db, userId, "library", item);
 
   return item;
 };
@@ -193,9 +212,17 @@ export const updateLibraryPoster = async (
   userId: string,
   input: { imdb_id?: unknown; poster?: unknown },
 ) => {
-  await db.prepare("UPDATE libraries SET poster = ? WHERE user_id = ? AND imdb_id = ?")
-    .bind(requireString(input.poster, "poster"), userId, requireString(input.imdb_id, "imdb_id"))
-    .run();
+  const imdbId = requireString(input.imdb_id, "imdb_id");
+  const existing = await db.prepare("SELECT * FROM libraries WHERE user_id = ? AND imdb_id = ?")
+    .bind(userId, imdbId)
+    .first<LibraryRow>();
+  if (existing) {
+    await applyRecord(db, userId, "library", {
+      ...toLibraryItem(existing),
+      poster: requireString(input.poster, "poster"),
+      updated_at: nowIso(),
+    });
+  }
   return { ok: true };
 };
 
@@ -209,11 +236,9 @@ export const createList = async (db: SyncD1Database, userId: string, name: unkno
     created_at: nowIso(),
     name: requireString(name, "name"),
     position: (currentMax?.position ?? 0) + 1,
+    updated_at: nowIso(),
   };
-  await db.prepare(`
-    INSERT INTO lists (user_id, list_id, created_at, name, position)
-    VALUES (?, ?, ?, ?, ?)
-  `).bind(userId, list.list_id, list.created_at, list.name, list.position).run();
+  await applyRecord(db, userId, "lists", list);
   return list;
 };
 
@@ -238,16 +263,9 @@ export const addToList = async (
     position: toInteger(input.position),
     type: optionalString(input.type) || "movie",
     poster: optionalString(input.poster),
+    updated_at: nowIso(),
   };
-
-  await db.prepare(`
-    INSERT INTO list_items (user_id, list_id, imdb_id, position, type, poster)
-    VALUES (?, ?, ?, ?, ?, ?)
-    ON CONFLICT(user_id, list_id, imdb_id) DO UPDATE SET
-      position = excluded.position,
-      type = excluded.type,
-      poster = excluded.poster
-  `).bind(userId, item.list_id, item.imdb_id, item.position, item.type, item.poster ?? null).run();
+  await applyRecord(db, userId, "listItems", item);
 
   return item;
 };
@@ -261,13 +279,7 @@ export const removeFromList = async (
   const list = await getListForUser(db, userId, listId);
   if (!list) throw new HttpError(404, "List not found", "list_not_found");
 
-  await db.prepare(`
-    DELETE FROM list_items
-    WHERE user_id = ?
-      AND list_id = ?
-      AND imdb_id = ?
-  `)
-    .bind(userId, listId, requireString(input.imdb_id, "imdb_id"))
-    .run();
+  const imdbId = requireString(input.imdb_id, "imdb_id");
+  await applyDeletion(db, userId, "listItems", `${listId}::${imdbId}`);
   return { ok: true };
 };

@@ -1,6 +1,7 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "raffi-sync",
+  "account_id": "ab780d52c6d4df0c826897411f1558e0",
   "main": "src/index.ts",
   "routes": [
     {
@@ -8,7 +9,7 @@
       "custom_domain": true
     }
   ],
-  "compatibility_date": "2026-05-26",
+  "compatibility_date": "2026-08-24",
   "compatibility_flags": ["nodejs_compat"],
   "observability": {
     "enabled": true,

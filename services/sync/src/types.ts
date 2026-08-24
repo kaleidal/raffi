@@ -15,6 +15,7 @@ export interface Addon {
   flags?: JsonValue;
   addon_id: string;
   position?: number;
+  updated_at: string;
 }
 
 export interface LibraryItem {
@@ -26,6 +27,7 @@ export interface LibraryItem {
   type: string;
   shown: boolean;
   poster?: string;
+  updated_at: string;
 }
 
 export interface List {
@@ -34,6 +36,7 @@ export interface List {
   created_at: string;
   name: string;
   position: number;
+  updated_at: string;
 }
 
 export interface ListItem {
@@ -42,6 +45,7 @@ export interface ListItem {
   position: number;
   type: string;
   poster?: string;
+  updated_at: string;
 }
 
 export interface UserMeta {
@@ -56,13 +60,15 @@ export interface RemoteState {
   lists: List[];
   listItems: ListItem[];
   userMeta: UserMeta | null;
+  tombstones: SyncTombstone[];
 }
 
-interface SyncDeletes {
-  addons: string[];
-  library: string[];
-  lists: string[];
-  listItems: Array<{ list_id: string; imdb_id: string }>;
+export type SyncSection = "addons" | "library" | "lists" | "listItems" | "userMeta";
+
+export interface SyncTombstone {
+  section: SyncSection;
+  key: string;
+  updated_at: string;
 }
 
 export interface SyncPayload {
@@ -71,7 +77,7 @@ export interface SyncPayload {
   lists: List[];
   listItems: ListItem[];
   userMeta?: Pick<UserMeta, "settings" | "updated_at"> | null;
-  deletes: SyncDeletes;
+  deletes: SyncTombstone[];
 }
 
 export interface WatchParty {

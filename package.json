@@ -13,8 +13,9 @@
     "check:sync": "bun --filter @raffi/sync check",
     "check:marketing": "bun --filter @raffi/marketing check",
     "test:app": "bun test packages/app/tests",
+    "test:sync": "bun --filter @raffi/sync test",
     "test:playback": "bun --filter @raffi/desktop test:playback",
-    "test": "bun run test:app && bun run test:playback",
+    "test": "bun run test:app && bun run test:sync && bun run test:playback",
     "check": "bun run check:app && bun run check:web && bun run check:desktop && bun run check:sync && bun run check:marketing",
     "validate": "bun run check && bun run test"
   },

@@ -21,6 +21,7 @@ import {
     DEFAULT_ADDON,
 } from "./state";
 import { syncGet, syncPost } from "./raffiSync";
+import { normalizeRemoteState } from "./reconciliation";
 import { get } from "svelte/store";
 import { getCachedUser } from "../stores/authStore";
 
@@ -64,13 +65,14 @@ const getRemoteState = async (force = false): Promise<RemoteState> => {
                         : [],
                 )
                 : [];
-    const normalized = {
+    const normalized = normalizeRemoteState({
         addons: Array.isArray(snapshot?.addons) ? snapshot.addons : [],
         library: Array.isArray(snapshot?.library) ? snapshot.library : [],
         lists,
         listItems,
         userMeta: snapshot?.userMeta || null,
-    };
+        tombstones: Array.isArray(snapshot?.tombstones) ? snapshot.tombstones : [],
+    });
     remoteStateCache = { userId, data: normalized, updatedAt: now };
     return normalized;
 };
@@ -156,166 +158,52 @@ const buildDirtySyncPayload = (local: RemoteState, syncState: CloudSyncState) =>
     const listItemsByKey = new Map(local.listItems.map((item) => [`${item.list_id}::${item.imdb_id}`, item]));
     const shouldSyncUserMeta = Boolean(local.userMeta && syncState.dirty.userMeta?.settings);
 
+    const withDirtyTimestamp = <T extends { updated_at: string }>(item: T, timestamp: number): T => ({
+        ...item,
+        updated_at: new Date(Math.max(timestamp, Date.parse(item.updated_at) || 0)).toISOString(),
+    });
+
     return {
         addons: Object.keys(syncState.dirty.addons)
             .map((key) => addonsByTransportUrl.get(key))
-            .filter((value): value is NonNullable<typeof value> => Boolean(value)),
+            .filter((value): value is NonNullable<typeof value> => Boolean(value))
+            .map((value) => withDirtyTimestamp(value, syncState.dirty.addons[value.transport_url])),
         library: Object.keys(syncState.dirty.library)
             .map((key) => libraryByImdbId.get(key))
-            .filter((value): value is NonNullable<typeof value> => Boolean(value)),
+            .filter((value): value is NonNullable<typeof value> => Boolean(value))
+            .map((value) => withDirtyTimestamp(value, syncState.dirty.library[value.imdb_id])),
         lists: Object.keys(syncState.dirty.lists)
             .map((key) => listsById.get(key))
-            .filter((value): value is NonNullable<typeof value> => Boolean(value)),
+            .filter((value): value is NonNullable<typeof value> => Boolean(value))
+            .map((value) => withDirtyTimestamp(value, syncState.dirty.lists[value.list_id])),
         listItems: Array.from(listItemsByKey.entries())
             .filter(([key, item]) => Boolean(syncState.dirty.listItems[key] || syncState.dirty.lists[item.list_id]))
-            .map(([_, item]) => item),
-        userMeta: shouldSyncUserMeta ? local.userMeta : null,
-        deletes: {
-            addons: Object.keys(syncState.tombstones.addons),
-            library: Object.keys(syncState.tombstones.library),
-            lists: Object.keys(syncState.tombstones.lists),
-            listItems: Object.keys(syncState.tombstones.listItems)
-                .map((key) => {
-                    const [list_id, imdb_id] = key.split("::");
-                    if (!list_id || !imdb_id) return null;
-                    return { list_id, imdb_id };
-                })
-                .filter((item): item is { list_id: string; imdb_id: string } => Boolean(item)),
-        },
+            .map(([key, item]) => withDirtyTimestamp(item, Math.max(
+                syncState.dirty.listItems[key] || 0,
+                syncState.dirty.lists[item.list_id] || 0,
+            ))),
+        userMeta: shouldSyncUserMeta && local.userMeta
+            ? withDirtyTimestamp(local.userMeta, syncState.dirty.userMeta.settings)
+            : null,
+        deletes: (Object.keys(syncState.tombstones) as SyncSection[]).flatMap((section) =>
+            Object.entries(syncState.tombstones[section]).map(([key, timestamp]) => ({
+                section,
+                key,
+                updated_at: new Date(timestamp).toISOString(),
+            })),
+        ),
     };
 };
 
-const buildFullSyncPayload = (local: RemoteState) => ({
-    addons: local.addons,
-    library: local.library,
-    lists: local.lists,
-    listItems: local.listItems,
-    userMeta: local.userMeta,
-    deletes: {
-        addons: [],
-        library: [],
-        lists: [],
-        listItems: [],
-    },
-});
-
-const stableStringify = (value: unknown) => {
-    const normalize = (input: unknown): unknown => {
-        if (input === null || input === undefined) return null;
-        if (Array.isArray(input)) return input.map(normalize);
-        if (typeof input !== "object") return input;
-        const entries = Object.entries(input as Record<string, unknown>)
-            .filter(([_, itemValue]) => itemValue !== undefined)
-            .sort(([left], [right]) => left.localeCompare(right))
-            .map(([itemKey, itemValue]) => [itemKey, normalize(itemValue)] as const);
-        return Object.fromEntries(entries);
-    };
-
-    return JSON.stringify(normalize(value));
-};
-
-const areRecordsEqual = (left: unknown, right: unknown) =>
-    stableStringify(left) === stableStringify(right);
-
-const buildMismatchSyncPayload = (local: RemoteState, remote: RemoteState) => {
-    const remoteAddons = new Map(remote.addons.map((item) => [item.transport_url, item]));
-
-    const remoteLibrary = new Map(remote.library.map((item) => [item.imdb_id, item]));
-
-    const remoteLists = new Map(remote.lists.map((item) => [item.list_id, item]));
-
-    const remoteListItems = new Map(remote.listItems.map((item) => [`${item.list_id}::${item.imdb_id}`, item]));
-
-    const remoteAddonMismatch: RemoteState["addons"] = [];
-    const remoteLibraryMismatch: RemoteState["library"] = [];
-    const remoteListMismatch: RemoteState["lists"] = [];
-    const remoteListItemMismatch: RemoteState["listItems"] = [];
-
-    for (const item of local.addons) {
-        const remoteItem = remoteAddons.get(item.transport_url);
-        if (!remoteItem) {
-            remoteAddonMismatch.push(item);
-            continue;
-        }
-        const hasAddonDiff = remoteItem.addon_id !== item.addon_id
-            || remoteItem.added_at !== item.added_at
-            || remoteItem.position !== item.position
-            || !areRecordsEqual(remoteItem.manifest, item.manifest)
-            || !areRecordsEqual(remoteItem.flags, item.flags);
-
-        if (hasAddonDiff) {
-            remoteAddonMismatch.push(item);
-        }
-    }
-
-    for (const item of local.library) {
-        const remoteItem = remoteLibrary.get(item.imdb_id);
-        if (!remoteItem) {
-            remoteLibraryMismatch.push(item);
-            continue;
-        }
-        const hasLibraryDiff = remoteItem.last_watched !== item.last_watched
-            || remoteItem.type !== item.type
-            || remoteItem.shown !== item.shown
-            || remoteItem.poster !== item.poster
-            || remoteItem.completed_at !== item.completed_at
-            || !areRecordsEqual(remoteItem.progress, item.progress);
-
-        if (hasLibraryDiff) {
-            remoteLibraryMismatch.push(item);
-        }
-    }
-
-    for (const item of local.lists) {
-        const remoteItem = remoteLists.get(item.list_id);
-        if (!remoteItem) {
-            remoteListMismatch.push(item);
-            continue;
-        }
-        const hasListDiff = remoteItem.created_at !== item.created_at
-            || remoteItem.name !== item.name
-            || remoteItem.position !== item.position;
-
-        if (hasListDiff) {
-            remoteListMismatch.push(item);
-        }
-    }
-
-    for (const item of local.listItems) {
-        const remoteItem = remoteListItems.get(`${item.list_id}::${item.imdb_id}`);
-        if (!remoteItem) {
-            remoteListItemMismatch.push(item);
-            continue;
-        }
-        const hasListItemDiff = remoteItem.position !== item.position
-            || remoteItem.type !== item.type
-            || remoteItem.poster !== item.poster;
-
-        if (hasListItemDiff) {
-            remoteListItemMismatch.push(item);
-        }
-    }
-
-    const localMeta = local.userMeta;
-    const remoteMeta = remote.userMeta;
-    const shouldSyncUserMeta = localMeta && (
-        !remoteMeta
-        || remoteMeta.updated_at !== localMeta.updated_at
-        || stableStringify(remoteMeta.settings) !== stableStringify(localMeta.settings)
-    );
-
+const buildFullSyncPayload = (local: RemoteState) => {
+    const normalized = normalizeRemoteState(local);
     return {
-        addons: remoteAddonMismatch,
-        library: remoteLibraryMismatch,
-        lists: remoteListMismatch,
-        listItems: remoteListItemMismatch,
-        userMeta: shouldSyncUserMeta ? localMeta : null,
-        deletes: {
-            addons: [],
-            library: [],
-            lists: [],
-            listItems: [],
-        },
+        addons: normalized.addons,
+        library: normalized.library,
+        lists: normalized.lists,
+        listItems: normalized.listItems,
+        userMeta: normalized.userMeta,
+        deletes: [],
     };
 };
 
@@ -324,7 +212,8 @@ const isRemoteStateEmpty = (state: RemoteState) =>
     && state.library.length === 0
     && state.lists.length === 0
     && state.listItems.length === 0
-    && !state.userMeta;
+    && !state.userMeta
+    && state.tombstones.length === 0;
 
 const isRemoteStateBootstrapTarget = (state: RemoteState) =>
     isRemoteStateEmpty(state)
@@ -335,6 +224,7 @@ const isRemoteStateBootstrapTarget = (state: RemoteState) =>
         && state.lists.length === 0
         && state.listItems.length === 0
         && !state.userMeta
+        && state.tombstones.length === 0
     );
 
 const hasStateData = (state: RemoteState) =>
@@ -350,17 +240,14 @@ const hasSyncPayloadChanges = (payload: ReturnType<typeof buildDirtySyncPayload>
     + payload.lists.length
     + payload.listItems.length
     + (payload.userMeta ? 1 : 0)
-    + payload.deletes.addons.length
-    + payload.deletes.library.length
-    + payload.deletes.lists.length
-    + payload.deletes.listItems.length > 0;
+    + payload.deletes.length > 0;
 
 const toMutationPayload = (payload: ReturnType<typeof buildDirtySyncPayload> | ReturnType<typeof buildFullSyncPayload>) => {
     const mutationPayload: Record<string, any> = {
-        addons: payload.addons.map((addon) => ({ transport_url: addon.transport_url, manifest: addon.manifest, flags: addon.flags, addon_id: addon.addon_id, added_at: addon.added_at, position: addon.position })),
-        library: payload.library.map((item) => ({ imdb_id: item.imdb_id, progress: item.progress, last_watched: item.last_watched, completed_at: item.completed_at, type: item.type, shown: item.shown, poster: item.poster })),
-        lists: payload.lists.map((list) => ({ list_id: list.list_id, name: list.name, position: list.position, created_at: list.created_at })),
-        listItems: payload.listItems.map((item) => ({ list_id: item.list_id, imdb_id: item.imdb_id, position: item.position, type: item.type, poster: item.poster })),
+        addons: payload.addons.map((addon) => ({ transport_url: addon.transport_url, manifest: addon.manifest, flags: addon.flags, addon_id: addon.addon_id, added_at: addon.added_at, position: addon.position, updated_at: addon.updated_at })),
+        library: payload.library.map((item) => ({ imdb_id: item.imdb_id, progress: item.progress, last_watched: item.last_watched, completed_at: item.completed_at, type: item.type, shown: item.shown, poster: item.poster, updated_at: item.updated_at })),
+        lists: payload.lists.map((list) => ({ list_id: list.list_id, name: list.name, position: list.position, created_at: list.created_at, updated_at: list.updated_at })),
+        listItems: payload.listItems.map((item) => ({ list_id: item.list_id, imdb_id: item.imdb_id, position: item.position, type: item.type, poster: item.poster, updated_at: item.updated_at })),
         deletes: payload.deletes,
     };
     if (payload.userMeta) {
@@ -415,8 +302,6 @@ export const syncLocalStateToUser = async (userId: string, options?: { forceRemo
     if (isCloudSyncPaused()) return { ok: false, paused: true as const };
     const active = getCloudSyncPromise();
     if (active) return active;
-    const pending = getPendingCloudSyncCounts();
-
     const promise = (async () => {
         try {
             const remote = await getRemoteState(options?.forceRemoteRefresh ?? true);
@@ -432,19 +317,19 @@ export const syncLocalStateToUser = async (userId: string, options?: { forceRemo
             const syncState = needsBootstrap ? syncStateBeforeMerge : readSyncState();
             const payload = needsBootstrap
                 ? buildFullSyncPayload(local)
-                : pending.uploads + pending.deletes === 0
-                    ? buildMismatchSyncPayload(local, remote)
-                    : buildDirtySyncPayload(local, syncState);
+                : buildDirtySyncPayload(local, syncState);
 
             if (!hasSyncPayloadChanges(payload)) {
                 publishCloudSyncStatus();
                 return { ok: true, skipped: true as const, reason: "clean" as const };
             }
 
-            await syncPost("/sync", toMutationPayload(payload));
-
+            const response = await syncPost<{ state?: RemoteState }>("/sync", toMutationPayload(payload));
             clearSyncedSnapshot(syncState);
-            invalidateRemoteCache();
+            if (!response.state) throw new Error("Cloud sync response did not include the reconciled state");
+            const reconciledRemote = normalizeRemoteState(response.state);
+            remoteStateCache = { userId, data: reconciledRemote, updatedAt: Date.now() };
+            mergeRemoteStateIntoLocal(reconciledRemote);
             setSyncResult(null);
             return { ok: true };
         } catch (error) {

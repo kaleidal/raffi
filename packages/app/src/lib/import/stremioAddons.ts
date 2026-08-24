@@ -124,7 +124,7 @@ export const importStremioAddons = async (
     descriptors: StremioAddonDescriptor[],
     deps: {
         getAddons: () => Promise<Addon[]>;
-        addAddon: (addon: Omit<Addon, "user_id" | "added_at">) => Promise<Addon>;
+        addAddon: (addon: Omit<Addon, "user_id" | "added_at" | "updated_at">) => Promise<Addon>;
         signal?: AbortSignal;
     },
 ): Promise<StremioAddonImportResult> => {

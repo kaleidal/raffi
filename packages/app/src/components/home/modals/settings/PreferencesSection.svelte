@@ -33,6 +33,8 @@
 		getStoredHomeSearchBarPosition,
 		setStoredHomeSearchBarPosition,
 	} from "../../../../lib/home/searchBarSettings";
+	import { Download } from "@lucide/svelte";
+	import { LIMBO_INSTALL_URL } from "../../../../lib/limbo/client";
 
 	let discordRpcEnabled = true;
 	let seekBarStyle = "raffi";
@@ -373,26 +375,37 @@
 				<p class="mt-1 text-red-300 text-xs">{torrentingError}</p>
 			{/if}
 		</div>
-		<button
-			class={`relative w-16 h-9 rounded-full border border-white/10 transition-colors duration-200 cursor-pointer disabled:cursor-wait disabled:opacity-60 ${
-				$allowTorrenting ? "bg-white" : "bg-white/10"
-			}`}
-			on:click={toggleTorrenting}
-			disabled={torrentingSaving}
-			aria-label="Toggle torrenting"
-			role="switch"
-			aria-checked={$allowTorrenting}
-		>
-			<span
-				class={`absolute top-1 left-1 w-7 h-7 rounded-full text-[10px] font-semibold flex items-center justify-center transition-all duration-200 ${
-					$allowTorrenting
-						? "translate-x-7 bg-black text-white/90"
-						: "translate-x-0 bg-white/80 text-black"
-				}`}
-			>
-				{$allowTorrenting ? "On" : "Off"}
-			</span>
-		</button>
+		<div class="flex items-center gap-2">
+				<a
+					href={LIMBO_INSTALL_URL}
+					target="_blank"
+					rel="noreferrer"
+					class="pressable inline-flex min-h-10 items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/16"
+				>
+					<Download size={17} strokeWidth={2} />
+					Download Limbo
+				</a>
+				<button
+					class={`relative w-16 h-9 rounded-full border border-white/10 transition-colors duration-200 cursor-pointer disabled:cursor-wait disabled:opacity-60 ${
+						$allowTorrenting ? "bg-white" : "bg-white/10"
+					}`}
+					on:click={toggleTorrenting}
+					disabled={torrentingSaving}
+					aria-label="Toggle torrenting"
+					role="switch"
+					aria-checked={$allowTorrenting}
+				>
+					<span
+						class={`absolute top-1 left-1 w-7 h-7 rounded-full text-[10px] font-semibold flex items-center justify-center transition-all duration-200 ${
+							$allowTorrenting
+								? "translate-x-7 bg-black text-white/90"
+								: "translate-x-0 bg-white/80 text-black"
+						}`}
+					>
+						{$allowTorrenting ? "On" : "Off"}
+					</span>
+				</button>
+		</div>
 	</div>
 
 	{#if isWindowsDesktop}

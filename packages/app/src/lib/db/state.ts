@@ -13,6 +13,9 @@ import type {
     TraktStatus,
     UserMeta,
 } from "./types";
+import { reconcileRemoteState } from "./reconciliation";
+
+export { mergeProgressEntry } from "./reconciliation";
 
 export const LOCAL_USER_ID = "local-user";
 export const LOCAL_ADDONS_KEY = "local:addons";
@@ -349,6 +352,7 @@ export const readLocalState = (): RemoteState => ({
     lists: readLocal<List[]>(LOCAL_LISTS_KEY, []),
     listItems: readLocal<ListItem[]>(LOCAL_LIST_ITEMS_KEY, []),
     userMeta: readLocal<UserMeta | null>(LOCAL_USER_META_KEY, null),
+    tombstones: [],
 });
 
 export const writeLocalState = (state: RemoteState) => {
@@ -398,8 +402,9 @@ export const upsertLibraryItem = (
         last_watched: nowIso,
         completed_at: completed === true ? nowIso : null,
         type,
-        shown: existing?.shown !== false,
+        shown: true,
         poster: poster ?? existing?.poster,
+        updated_at: nowIso,
     };
     if (completed === false) next.completed_at = null;
     const updated = [...items];
@@ -410,211 +415,13 @@ export const upsertLibraryItem = (
 
 export const listItemKey = (listId: string, imdbId: string) => `${listId}::${imdbId}`;
 
-const toTimestamp = (value: string | null | undefined) => {
-    if (!value) return 0;
-    const parsed = Date.parse(value);
-    return Number.isFinite(parsed) ? parsed : 0;
-};
-
-const isPlainObject = (value: unknown): value is Record<string, any> =>
-    Boolean(value) && typeof value === "object" && !Array.isArray(value);
-
-const normalizeProgressEntry = (value: any) => {
-    const time = Number(value?.time || 0);
-    const duration = Number(value?.duration || 0);
-    const updatedAt = Number(value?.updatedAt || 0);
-    return {
-        time: Number.isFinite(time) ? Math.max(0, time) : 0,
-        duration: Number.isFinite(duration) ? Math.max(0, duration) : 0,
-        watched: Boolean(value?.watched),
-        updatedAt: Number.isFinite(updatedAt) ? updatedAt : 0,
-    };
-};
-
-const compareProgressEntries = (left: any, right: any) => {
-    const leftEntry = normalizeProgressEntry(left);
-    const rightEntry = normalizeProgressEntry(right);
-    if (leftEntry.updatedAt !== rightEntry.updatedAt) {
-        return leftEntry.updatedAt > rightEntry.updatedAt ? 1 : -1;
-    }
-
-    if (leftEntry.watched !== rightEntry.watched) {
-        return leftEntry.watched ? 1 : -1;
-    }
-
-    const leftRatio = leftEntry.duration > 0 ? leftEntry.time / leftEntry.duration : 0;
-    const rightRatio = rightEntry.duration > 0 ? rightEntry.time / rightEntry.duration : 0;
-    if (Math.abs(leftRatio - rightRatio) > 0.005) {
-        return leftRatio > rightRatio ? 1 : -1;
-    }
-
-    if (Math.abs(leftEntry.time - rightEntry.time) > 1) {
-        return leftEntry.time > rightEntry.time ? 1 : -1;
-    }
-
-    return 0;
-};
-
-export const mergeProgressEntry = (left: any, right: any) => {
-    if (!isPlainObject(left)) return right;
-    if (!isPlainObject(right)) return left;
-    return compareProgressEntries(left, right) >= 0 ? { ...right, ...left } : { ...left, ...right };
-};
-
-const isEpisodeProgressMap = (value: any) =>
-    isPlainObject(value) && Object.values(value).some((entry) => isPlainObject(entry) && ("time" in entry || "watched" in entry));
-
-const mergeLibraryProgress = (localProgress: any, remoteProgress: any, type: string) => {
-    if (type === "series" && (isEpisodeProgressMap(localProgress) || isEpisodeProgressMap(remoteProgress))) {
-        const localMap = isPlainObject(localProgress) ? localProgress : {};
-        const remoteMap = isPlainObject(remoteProgress) ? remoteProgress : {};
-        const merged: Record<string, any> = {};
-        for (const key of new Set([...Object.keys(remoteMap), ...Object.keys(localMap)])) {
-            const localEntry = localMap[key];
-            const remoteEntry = remoteMap[key];
-            if (localEntry == null) {
-                merged[key] = remoteEntry;
-                continue;
-            }
-            if (remoteEntry == null) {
-                merged[key] = localEntry;
-                continue;
-            }
-            merged[key] = mergeProgressEntry(localEntry, remoteEntry);
-        }
-        return merged;
-    }
-
-    if (isPlainObject(localProgress) && isPlainObject(remoteProgress)) {
-        return mergeProgressEntry(localProgress, remoteProgress);
-    }
-
-    return localProgress ?? remoteProgress;
-};
-
-const mergeLibraryItem = (localItem: LibraryItem, remoteItem: LibraryItem) => {
-    const type = localItem.type || remoteItem.type || "movie";
-    const mergedProgress = mergeLibraryProgress(localItem.progress, remoteItem.progress, type);
-    const mergedLastWatched = toTimestamp(localItem.last_watched) >= toTimestamp(remoteItem.last_watched)
-        ? (localItem.last_watched || remoteItem.last_watched)
-        : (remoteItem.last_watched || localItem.last_watched);
-    const movieWatched = type === "movie" ? normalizeProgressEntry(mergedProgress).watched : null;
-    const localCompletedAt = toTimestamp(localItem.completed_at);
-    const remoteCompletedAt = toTimestamp(remoteItem.completed_at);
-    const mergedCompletedAt = movieWatched === false
-        ? null
-        : localCompletedAt >= remoteCompletedAt
-            ? (localItem.completed_at ?? remoteItem.completed_at ?? null)
-            : (remoteItem.completed_at ?? localItem.completed_at ?? null);
-
-    return {
-        ...remoteItem,
-        ...localItem,
-        type,
-        progress: mergedProgress,
-        last_watched: mergedLastWatched || localItem.last_watched || remoteItem.last_watched,
-        completed_at: mergedCompletedAt,
-        shown: localItem.shown !== false && remoteItem.shown !== false,
-        poster: localItem.poster ?? remoteItem.poster,
-    };
-};
-
 export const mergeRemoteStateIntoLocal = (remote: RemoteState) => {
     const local = readLocalState();
     const syncState = readSyncState();
-
-    const addons = new Map(
-        local.addons
-            .filter((item) => syncState.dirty.addons[item.transport_url])
-            .map((item) => [item.transport_url, item]),
-    );
-    for (const remoteItem of remote.addons) {
-        const key = remoteItem.transport_url;
-        if (syncState.tombstones.addons[key]) continue;
-        const localItem = addons.get(key);
-        if (!localItem) addons.set(key, { ...remoteItem });
-        else if (syncState.dirty.addons[key]) {
-            addons.set(key, { ...remoteItem, ...localItem, addon_id: localItem.addon_id || remoteItem.addon_id, added_at: localItem.added_at || remoteItem.added_at });
-        } else {
-            addons.set(key, { ...localItem, ...remoteItem, addon_id: remoteItem.addon_id || localItem.addon_id, added_at: remoteItem.added_at || localItem.added_at });
-        }
-    }
-
-    const library = new Map(
-        local.library
-            .filter((item) => syncState.dirty.library[item.imdb_id])
-            .map((item) => [item.imdb_id, item]),
-    );
-    for (const remoteItem of remote.library) {
-        const key = remoteItem.imdb_id;
-        if (syncState.tombstones.library[key]) continue;
-        const localItem = library.get(key);
-        if (!localItem) {
-            library.set(key, { ...remoteItem });
-        } else {
-            library.set(key, mergeLibraryItem(localItem, remoteItem));
-        }
-    }
-
-    const lists = new Map(
-        local.lists
-            .filter((item) => syncState.dirty.lists[item.list_id])
-            .map((item) => [item.list_id, item]),
-    );
-    for (const remoteItem of remote.lists) {
-        const key = remoteItem.list_id;
-        if (syncState.tombstones.lists[key]) continue;
-        const localItem = lists.get(key);
-        if (!localItem) lists.set(key, { ...remoteItem });
-        else if (syncState.dirty.lists[key]) lists.set(key, { ...remoteItem, ...localItem, created_at: localItem.created_at || remoteItem.created_at });
-        else lists.set(key, { ...localItem, ...remoteItem, created_at: remoteItem.created_at || localItem.created_at });
-    }
-
-    const listItems = new Map(
-        local.listItems
-            .filter((item) => {
-                const key = listItemKey(item.list_id, item.imdb_id);
-                return syncState.dirty.listItems[key] || syncState.dirty.lists[item.list_id];
-            })
-            .map((item) => [listItemKey(item.list_id, item.imdb_id), item]),
-    );
-    for (const remoteItem of remote.listItems) {
-        const key = listItemKey(remoteItem.list_id, remoteItem.imdb_id);
-        if (syncState.tombstones.listItems[key] || syncState.tombstones.lists[remoteItem.list_id]) continue;
-        const localItem = listItems.get(key);
-        if (!localItem) listItems.set(key, { ...remoteItem });
-        else if (syncState.dirty.listItems[key]) listItems.set(key, { ...remoteItem, ...localItem, poster: localItem.poster ?? remoteItem.poster });
-        else listItems.set(key, { ...localItem, ...remoteItem, poster: remoteItem.poster ?? localItem.poster });
-    }
-
-    const userMetaKey = "settings";
-    let userMeta = syncState.dirty.userMeta[userMetaKey] && local.userMeta ? { ...local.userMeta } : null;
-    if (remote.userMeta && !syncState.tombstones.userMeta[userMetaKey]) {
-        if (!userMeta) {
-            userMeta = { ...remote.userMeta };
-        } else if (syncState.dirty.userMeta[userMetaKey]) {
-            userMeta = {
-                ...remote.userMeta,
-                ...userMeta,
-                settings: {
-                    ...(remote.userMeta.settings || {}),
-                    ...(userMeta.settings || {}),
-                },
-            };
-        } else {
-            userMeta = { ...userMeta, ...remote.userMeta };
-        }
-    }
-
-    const merged: RemoteState = {
-        addons: Array.from(addons.values()),
-        library: Array.from(library.values()),
-        lists: Array.from(lists.values()),
-        listItems: Array.from(listItems.values()),
-        userMeta,
-    };
-    writeLocalState(merged);
-    return merged;
+    const reconciled = reconcileRemoteState(local, remote, syncState);
+    writeSyncState(reconciled.syncState);
+    writeLocalState(reconciled.state);
+    return reconciled.state;
 };
 
 export const canUseCloudFeatures = () => {

@@ -19,6 +19,7 @@ const createPartialListItem = (listId: string, item: any): ExtendedListItem => (
     db_item: item,
     _partial: true,
     position: item.position,
+    updated_at: item.updated_at,
 });
 
 export async function loadLists() {
@@ -78,7 +79,7 @@ export async function loadListItems(listId: string, items?: any[]) {
                             console.error("Failed to backfill poster", e);
                         }
                     }
-                    return { ...data.meta, list_id: listId, db_item: item, position: item.position } as ExtendedListItem;
+                    return { ...data.meta, list_id: listId, db_item: item, position: item.position, updated_at: item.updated_at } as ExtendedListItem;
                 }
             } catch (e) {
                 console.error(`Failed to load meta for ${item.imdb_id}`, e);
@@ -121,6 +122,7 @@ export async function selectItem(item: ExtendedListItem, listId: string) {
                     list_id: listId,
                     db_item: item.db_item,
                     position: item.position,
+                    updated_at: item.updated_at,
                 } as ExtendedListItem;
 
                 selectedItem.set(fullItem);

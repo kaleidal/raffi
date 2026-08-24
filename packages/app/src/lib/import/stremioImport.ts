@@ -406,6 +406,9 @@ const isEpisodeProgressMap = (value: unknown): value is Record<string, StremioIm
 };
 
 const compareProgressEntries = (left: StremioImportProgressEntry, right: StremioImportProgressEntry): number => {
+    if (left.updatedAt !== right.updatedAt) {
+        return left.updatedAt > right.updatedAt ? 1 : -1;
+    }
     if (left.watched !== right.watched) {
         return left.watched ? 1 : -1;
     }
@@ -416,9 +419,6 @@ const compareProgressEntries = (left: StremioImportProgressEntry, right: Stremio
     }
     if (Math.abs(left.time - right.time) > 1) {
         return left.time > right.time ? 1 : -1;
-    }
-    if (left.updatedAt !== right.updatedAt) {
-        return left.updatedAt > right.updatedAt ? 1 : -1;
     }
     return 0;
 };
@@ -497,6 +497,7 @@ export const mergeStremioImportIntoLibrary = (
                 shown: true,
                 poster: preview.poster,
                 user_id: "",
+                updated_at: preview.lastWatched || new Date().toISOString(),
             };
             libraryById.set(preview.imdbId, nextItem);
             added += 1;
@@ -540,7 +541,10 @@ export const mergeStremioImportIntoLibrary = (
                 last_watched: nextLastWatched || existingLastWatched,
                 progress: mergedProgress,
                 poster: current.poster || preview.poster,
-                completed_at: current.completed_at,
+                completed_at: Object.values(mergedProgress).some((entry) => !entry.watched)
+                    ? null
+                    : current.completed_at,
+                updated_at: new Date().toISOString(),
             };
             libraryById.set(preview.imdbId, updated);
             merged += 1;
@@ -583,6 +587,7 @@ export const mergeStremioImportIntoLibrary = (
             progress: mergedProgress,
             poster: current.poster || preview.poster,
             completed_at: completedAt,
+            updated_at: new Date().toISOString(),
         };
         libraryById.set(preview.imdbId, updated);
         merged += 1;

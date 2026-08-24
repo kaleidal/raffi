@@ -19,6 +19,7 @@ type AddonRow = {
   flags: string | null;
   addon_id: string;
   position: number | null;
+  updated_at: string;
 };
 
 type LibraryRow = {
@@ -30,6 +31,7 @@ type LibraryRow = {
   type: string;
   shown: number;
   poster: string | null;
+  updated_at: string;
 };
 
 type ListRow = {
@@ -38,6 +40,7 @@ type ListRow = {
   created_at: string;
   name: string;
   position: number;
+  updated_at: string;
 };
 
 type ListItemRow = {
@@ -46,11 +49,18 @@ type ListItemRow = {
   position: number;
   type: string;
   poster: string | null;
+  updated_at: string;
 };
 
 type UserMetaRow = {
   user_id: string;
   settings: string;
+  updated_at: string;
+};
+
+type TombstoneRow = {
+  section: RemoteState["tombstones"][number]["section"];
+  item_key: string;
   updated_at: string;
 };
 
@@ -62,6 +72,7 @@ const MAX_IMPORT_COUNTS = {
 } as const;
 
 const nowIso = () => new Date().toISOString();
+const EPOCH = "1970-01-01T00:00:00.000Z";
 
 const parseStoredJson = (value: string | null | undefined, fallback: JsonValue): JsonValue => {
   if (typeof value !== "string" || value.length === 0) return fallback;
@@ -109,6 +120,7 @@ const toAddon = (row: AddonRow): Addon => ({
   flags: parseStoredJson(row.flags, null),
   addon_id: row.addon_id,
   position: row.position ?? undefined,
+  updated_at: row.updated_at,
 });
 
 const toLibraryItem = (row: LibraryRow): LibraryItem => ({
@@ -120,6 +132,7 @@ const toLibraryItem = (row: LibraryRow): LibraryItem => ({
   type: row.type,
   shown: row.shown !== 0,
   poster: row.poster ?? undefined,
+  updated_at: row.updated_at,
 });
 
 const toList = (row: ListRow): List => ({
@@ -128,6 +141,7 @@ const toList = (row: ListRow): List => ({
   created_at: row.created_at,
   name: row.name,
   position: row.position,
+  updated_at: row.updated_at,
 });
 
 const toListItem = (row: ListItemRow): ListItem => ({
@@ -136,6 +150,7 @@ const toListItem = (row: ListItemRow): ListItem => ({
   position: row.position,
   type: row.type,
   poster: row.poster ?? undefined,
+  updated_at: row.updated_at,
 });
 
 const toUserMeta = (row: UserMetaRow | null): UserMeta | null => {
@@ -148,7 +163,7 @@ const toUserMeta = (row: UserMetaRow | null): UserMeta | null => {
 };
 
 export const getState = async (db: SyncD1Database, userId: string): Promise<RemoteState> => {
-  const [addons, library, lists, listItems, userMeta] = await Promise.all([
+  const [addons, library, lists, listItems, userMeta, tombstones] = await Promise.all([
     db.prepare("SELECT * FROM addons WHERE user_id = ? ORDER BY position ASC, added_at ASC")
       .bind(userId)
       .all<AddonRow>(),
@@ -159,7 +174,7 @@ export const getState = async (db: SyncD1Database, userId: string): Promise<Remo
       .bind(userId)
       .all<ListRow>(),
     db.prepare(`
-      SELECT list_id, imdb_id, position, type, poster
+      SELECT list_id, imdb_id, position, type, poster, updated_at
       FROM list_items
       WHERE user_id = ?
       ORDER BY list_id ASC, position ASC
@@ -167,6 +182,12 @@ export const getState = async (db: SyncD1Database, userId: string): Promise<Remo
     db.prepare("SELECT * FROM user_meta WHERE user_id = ?")
       .bind(userId)
       .first<UserMetaRow>(),
+    db.prepare(`
+      SELECT section, item_key, updated_at
+      FROM sync_tombstones
+      WHERE user_id = ?
+      ORDER BY updated_at ASC
+    `).bind(userId).all<TombstoneRow>(),
   ]);
 
   return {
@@ -175,6 +196,11 @@ export const getState = async (db: SyncD1Database, userId: string): Promise<Remo
     lists: (lists.results || []).map(toList),
     listItems: (listItems.results || []).map(toListItem),
     userMeta: toUserMeta(userMeta || null),
+    tombstones: (tombstones.results || []).map((row) => ({
+      section: row.section,
+      key: row.item_key,
+      updated_at: row.updated_at,
+    })),
   };
 };
 
@@ -195,98 +221,210 @@ export const ensureDefaultAddon = async (
   if (existing?.addon_id) return { ok: true, addon_id: existing.addon_id };
 
   const addonId = crypto.randomUUID();
-  await db.prepare(`
-    INSERT INTO addons (user_id, added_at, transport_url, manifest, flags, addon_id, position)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).bind(
-    userId,
-    nowIso(),
-    transportUrl,
-    storedJson(addon.manifest, {}),
-    storedJson({ protected: false, official: false }),
-    addonId,
-    1,
-  ).run();
+  const updatedAt = nowIso();
+  await db.batch([
+    db.prepare(`
+      INSERT INTO addons (user_id, added_at, transport_url, manifest, flags, addon_id, position, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      userId,
+      updatedAt,
+      transportUrl,
+      storedJson(addon.manifest, {}),
+      storedJson({ protected: false, official: false }),
+      addonId,
+      1,
+      updatedAt,
+    ),
+    db.prepare(`
+      DELETE FROM sync_tombstones
+      WHERE user_id = ? AND section = 'addons' AND item_key = ? AND updated_at < ?
+    `).bind(userId, transportUrl, updatedAt),
+  ]);
 
   return { ok: true, addon_id: addonId };
 };
 
-export const applySyncState = async (db: SyncD1Database, userId: string, payload: SyncPayload) => {
+const normalizeTimestamp = (value: unknown, fallback: string) => {
+  const parsed = Date.parse(optionalString(value) || "");
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : fallback;
+};
+
+const tombstoneClearStatement = (
+  db: SyncD1Database,
+  userId: string,
+  section: string,
+  key: string,
+  updatedAt: string,
+) => db.prepare(`
+  DELETE FROM sync_tombstones
+  WHERE user_id = ? AND section = ? AND item_key = ? AND updated_at < ?
+`).bind(userId, section, key, updatedAt);
+
+const runStatementGroups = async (db: SyncD1Database, groups: D1PreparedStatement[][]) => {
+  const batch: D1PreparedStatement[] = [];
+  for (const group of groups) {
+    if (batch.length + group.length > 300) {
+      await db.batch(batch.splice(0));
+    }
+    batch.push(...group);
+  }
+  if (batch.length > 0) await db.batch(batch);
+};
+
+export const applySyncState = async (
+  db: SyncD1Database,
+  userId: string,
+  payload: SyncPayload,
+  includeState = true,
+) => {
   const addons = uniqueBy(Array.isArray(payload.addons) ? payload.addons : [], (item) => item.transport_url || "");
   const library = uniqueBy(Array.isArray(payload.library) ? payload.library : [], (item) => item.imdb_id || "");
   const lists = uniqueBy(Array.isArray(payload.lists) ? payload.lists : [], (item) => item.list_id || "");
   const listItems = uniqueBy(
     Array.isArray(payload.listItems) ? payload.listItems : [],
-    (item) => `${item.list_id || ""}:${item.imdb_id || ""}`,
+    (item) => `${item.list_id || ""}::${item.imdb_id || ""}`,
+  );
+  const deletes = uniqueBy(
+    Array.isArray(payload.deletes) ? payload.deletes : [],
+    (item) => `${item.section || ""}:${item.key || ""}`,
   );
 
   assertCount("addons", addons.length);
   assertCount("library", library.length);
   assertCount("lists", lists.length);
   assertCount("listItems", listItems.length);
+  assertCount("listItems", deletes.length);
 
-  const statements: D1PreparedStatement[] = [];
-  const syncTime = nowIso();
+  const groups: D1PreparedStatement[][] = [];
 
   for (const addon of addons) {
-    statements.push(db.prepare(`
-      INSERT INTO addons (user_id, added_at, transport_url, manifest, flags, addon_id, position)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(user_id, transport_url) DO UPDATE SET
-        added_at = excluded.added_at,
-        manifest = excluded.manifest,
-        flags = excluded.flags,
-        addon_id = excluded.addon_id,
-        position = excluded.position
-    `).bind(
-      userId,
-      optionalString(addon.added_at) || syncTime,
-      addon.transport_url,
-      storedJson(addon.manifest, {}),
-      addon.flags === undefined ? null : storedJson(addon.flags),
-      optionalString(addon.addon_id) || crypto.randomUUID(),
-      addon.position ?? 0,
-    ));
+    const updatedAt = normalizeTimestamp(addon.updated_at, normalizeTimestamp(addon.added_at, EPOCH));
+    groups.push([
+      db.prepare(`
+        INSERT INTO addons (user_id, added_at, transport_url, manifest, flags, addon_id, position, updated_at)
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?
+        WHERE NOT EXISTS (
+          SELECT 1 FROM sync_tombstones
+          WHERE user_id = ? AND section = 'addons' AND item_key = ? AND updated_at >= ?
+        )
+        ON CONFLICT(user_id, transport_url) DO UPDATE SET
+          added_at = excluded.added_at,
+          manifest = excluded.manifest,
+          flags = excluded.flags,
+          addon_id = excluded.addon_id,
+          position = excluded.position,
+          updated_at = excluded.updated_at
+        WHERE excluded.updated_at > addons.updated_at
+      `).bind(
+        userId,
+        optionalString(addon.added_at) || updatedAt,
+        addon.transport_url,
+        storedJson(addon.manifest, {}),
+        addon.flags === undefined ? null : storedJson(addon.flags),
+        optionalString(addon.addon_id) || crypto.randomUUID(),
+        addon.position ?? 0,
+        updatedAt,
+        userId,
+        addon.transport_url,
+        updatedAt,
+      ),
+      tombstoneClearStatement(db, userId, "addons", addon.transport_url, updatedAt),
+    ]);
   }
 
   for (const item of library) {
-    statements.push(db.prepare(`
-      INSERT INTO libraries (user_id, imdb_id, progress, last_watched, completed_at, type, shown, poster)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(user_id, imdb_id) DO UPDATE SET
-        progress = excluded.progress,
-        last_watched = excluded.last_watched,
-        completed_at = excluded.completed_at,
-        type = excluded.type,
-        shown = excluded.shown,
-        poster = excluded.poster
-    `).bind(
-      userId,
-      item.imdb_id,
-      storedJson(item.progress),
-      optionalString(item.last_watched) || syncTime,
-      item.completed_at ?? null,
-      optionalString(item.type) || "movie",
-      item.shown === false ? 0 : 1,
-      optionalString(item.poster) ?? null,
-    ));
+    const updatedAt = normalizeTimestamp(item.updated_at, normalizeTimestamp(item.last_watched, EPOCH));
+    groups.push([
+      db.prepare(`
+        INSERT INTO libraries (user_id, imdb_id, progress, last_watched, completed_at, type, shown, poster, updated_at)
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+        WHERE NOT EXISTS (
+          SELECT 1 FROM sync_tombstones
+          WHERE user_id = ? AND section = 'library' AND item_key = ? AND updated_at >= ?
+        )
+        ON CONFLICT(user_id, imdb_id) DO UPDATE SET
+          progress = CASE
+            WHEN libraries.type = 'series' OR excluded.type = 'series' THEN COALESCE((
+              SELECT json_group_object(entry_key, json(entry_value))
+              FROM (
+                SELECT entry_key, entry_value
+                FROM (
+                  SELECT
+                    entry_key,
+                    entry_value,
+                    ROW_NUMBER() OVER (
+                      PARTITION BY entry_key
+                      ORDER BY
+                        COALESCE(CAST(json_extract(entry_value, '$.updatedAt') AS INTEGER), 0) DESC,
+                        COALESCE(CAST(json_extract(entry_value, '$.watched') AS INTEGER), 0) DESC,
+                        source DESC
+                    ) AS entry_rank
+                  FROM (
+                    SELECT key AS entry_key, value AS entry_value, 0 AS source FROM json_each(libraries.progress)
+                    UNION ALL
+                    SELECT key AS entry_key, value AS entry_value, 1 AS source FROM json_each(excluded.progress)
+                  )
+                )
+                WHERE entry_rank = 1
+              )
+            ), '{}')
+            WHEN excluded.updated_at > libraries.updated_at THEN excluded.progress
+            ELSE libraries.progress
+          END,
+          last_watched = CASE WHEN excluded.updated_at > libraries.updated_at THEN excluded.last_watched ELSE libraries.last_watched END,
+          completed_at = CASE WHEN excluded.updated_at > libraries.updated_at THEN excluded.completed_at ELSE libraries.completed_at END,
+          type = CASE WHEN excluded.updated_at > libraries.updated_at THEN excluded.type ELSE libraries.type END,
+          shown = CASE WHEN excluded.updated_at > libraries.updated_at THEN excluded.shown ELSE libraries.shown END,
+          poster = CASE WHEN excluded.updated_at > libraries.updated_at THEN excluded.poster ELSE libraries.poster END,
+          updated_at = MAX(libraries.updated_at, excluded.updated_at)
+      `).bind(
+        userId,
+        item.imdb_id,
+        storedJson(item.progress),
+        optionalString(item.last_watched) || updatedAt,
+        item.completed_at ?? null,
+        optionalString(item.type) || "movie",
+        item.shown === false ? 0 : 1,
+        optionalString(item.poster) ?? null,
+        updatedAt,
+        userId,
+        item.imdb_id,
+        updatedAt,
+      ),
+      tombstoneClearStatement(db, userId, "library", item.imdb_id, updatedAt),
+    ]);
   }
 
   for (const list of lists) {
-    statements.push(db.prepare(`
-      INSERT INTO lists (user_id, list_id, created_at, name, position)
-      VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT(user_id, list_id) DO UPDATE SET
-        created_at = excluded.created_at,
-        name = excluded.name,
-        position = excluded.position
-    `).bind(
-      userId,
-      list.list_id,
-      optionalString(list.created_at) || syncTime,
-      optionalString(list.name) || "Untitled",
-      toInteger(list.position),
-    ));
+    const updatedAt = normalizeTimestamp(list.updated_at, normalizeTimestamp(list.created_at, EPOCH));
+    groups.push([
+      db.prepare(`
+        INSERT INTO lists (user_id, list_id, created_at, name, position, updated_at)
+        SELECT ?, ?, ?, ?, ?, ?
+        WHERE NOT EXISTS (
+          SELECT 1 FROM sync_tombstones
+          WHERE user_id = ? AND section = 'lists' AND item_key = ? AND updated_at >= ?
+        )
+        ON CONFLICT(user_id, list_id) DO UPDATE SET
+          created_at = excluded.created_at,
+          name = excluded.name,
+          position = excluded.position,
+          updated_at = excluded.updated_at
+        WHERE excluded.updated_at > lists.updated_at
+      `).bind(
+        userId,
+        list.list_id,
+        optionalString(list.created_at) || updatedAt,
+        optionalString(list.name) || "Untitled",
+        toInteger(list.position),
+        updatedAt,
+        userId,
+        list.list_id,
+        updatedAt,
+      ),
+      tombstoneClearStatement(db, userId, "lists", list.list_id, updatedAt),
+    ]);
   }
 
   const ownedListIds = new Set(
@@ -301,83 +439,148 @@ export const applySyncState = async (db: SyncD1Database, userId: string, payload
 
   for (const item of listItems) {
     const listId = optionalString(item.list_id);
-    if (!listId || !ownedListIds.has(listId)) {
-      continue;
-    }
-    statements.push(db.prepare(`
-      INSERT INTO list_items (user_id, list_id, imdb_id, position, type, poster)
-      VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(user_id, list_id, imdb_id) DO UPDATE SET
-        position = excluded.position,
-        type = excluded.type,
-        poster = excluded.poster
-    `).bind(
-      userId,
-      listId,
-      item.imdb_id,
-      toInteger(item.position),
-      optionalString(item.type) || "movie",
-      optionalString(item.poster) ?? null,
-    ));
+    if (!listId || !ownedListIds.has(listId)) continue;
+    const key = `${listId}::${item.imdb_id}`;
+    const updatedAt = normalizeTimestamp(item.updated_at, EPOCH);
+    groups.push([
+      db.prepare(`
+        INSERT INTO list_items (user_id, list_id, imdb_id, position, type, poster, updated_at)
+        SELECT ?, ?, ?, ?, ?, ?, ?
+        WHERE NOT EXISTS (
+          SELECT 1 FROM sync_tombstones
+          WHERE user_id = ? AND section = 'listItems' AND item_key = ? AND updated_at >= ?
+        )
+        AND EXISTS (SELECT 1 FROM lists WHERE user_id = ? AND list_id = ?)
+        ON CONFLICT(user_id, list_id, imdb_id) DO UPDATE SET
+          position = excluded.position,
+          type = excluded.type,
+          poster = excluded.poster,
+          updated_at = excluded.updated_at
+        WHERE excluded.updated_at > list_items.updated_at
+      `).bind(
+        userId,
+        listId,
+        item.imdb_id,
+        toInteger(item.position),
+        optionalString(item.type) || "movie",
+        optionalString(item.poster) ?? null,
+        updatedAt,
+        userId,
+        key,
+        updatedAt,
+        userId,
+        listId,
+      ),
+      tombstoneClearStatement(db, userId, "listItems", key, updatedAt),
+    ]);
   }
 
   if (payload.userMeta) {
-    statements.push(db.prepare(`
-      INSERT INTO user_meta (user_id, settings, updated_at)
-      VALUES (?, ?, ?)
-      ON CONFLICT(user_id) DO UPDATE SET
-        settings = excluded.settings,
-        updated_at = excluded.updated_at
-    `).bind(
-      userId,
-      storedJson(payload.userMeta.settings, {}),
-      optionalString(payload.userMeta.updated_at) || syncTime,
-    ));
+    const updatedAt = normalizeTimestamp(payload.userMeta.updated_at, EPOCH);
+    groups.push([
+      db.prepare(`
+        INSERT INTO user_meta (user_id, settings, updated_at)
+        SELECT ?, ?, ?
+        WHERE NOT EXISTS (
+          SELECT 1 FROM sync_tombstones
+          WHERE user_id = ? AND section = 'userMeta' AND item_key = 'settings' AND updated_at >= ?
+        )
+        ON CONFLICT(user_id) DO UPDATE SET
+          settings = excluded.settings,
+          updated_at = excluded.updated_at
+        WHERE excluded.updated_at > user_meta.updated_at
+      `).bind(userId, storedJson(payload.userMeta.settings, {}), updatedAt, userId, updatedAt),
+      tombstoneClearStatement(db, userId, "userMeta", "settings", updatedAt),
+    ]);
   }
 
-  for (const transportUrl of uniqueBy((payload.deletes?.addons || []).map((value) => ({ value })), (item) => item.value).map((item) => item.value)) {
-    statements.push(db.prepare("DELETE FROM addons WHERE user_id = ? AND transport_url = ?").bind(userId, transportUrl));
-  }
+  for (const deletion of deletes) {
+    const section = deletion.section;
+    const key = optionalString(deletion.key);
+    if (!key || !["addons", "library", "lists", "listItems", "userMeta"].includes(section)) continue;
+    const updatedAt = normalizeTimestamp(deletion.updated_at, EPOCH);
+    const statements: D1PreparedStatement[] = [];
 
-  for (const imdbId of uniqueBy((payload.deletes?.library || []).map((value) => ({ value })), (item) => item.value).map((item) => item.value)) {
-    statements.push(db.prepare("DELETE FROM libraries WHERE user_id = ? AND imdb_id = ?").bind(userId, imdbId));
-  }
-
-  for (const listId of uniqueBy((payload.deletes?.lists || []).map((value) => ({ value })), (item) => item.value).map((item) => item.value)) {
-    statements.push(db.prepare(`
-      DELETE FROM list_items
-      WHERE user_id = ?
-        AND list_id = ?
-    `).bind(userId, listId));
-    statements.push(db.prepare("DELETE FROM lists WHERE user_id = ? AND list_id = ?").bind(userId, listId));
-  }
-
-  const deletedListItems = uniqueBy(payload.deletes?.listItems || [], (item) => `${item.list_id}:${item.imdb_id}`);
-  for (const item of deletedListItems) {
-    statements.push(db.prepare(`
-      DELETE FROM list_items
-      WHERE user_id = ?
-        AND list_id = ?
-        AND imdb_id = ?
-    `).bind(userId, item.list_id, item.imdb_id));
-  }
-
-  if (statements.length > 0) {
-    const CHUNK_SIZE = 300;
-    for (let i = 0; i < statements.length; i += CHUNK_SIZE) {
-      await db.batch(statements.slice(i, i + CHUNK_SIZE));
+    if (section === "addons") {
+      statements.push(db.prepare(`
+        INSERT INTO sync_tombstones (user_id, section, item_key, updated_at)
+        SELECT ?, 'addons', ?, ?
+        WHERE NOT EXISTS (SELECT 1 FROM addons WHERE user_id = ? AND transport_url = ? AND updated_at > ?)
+        ON CONFLICT(user_id, section, item_key) DO UPDATE SET updated_at = excluded.updated_at
+        WHERE excluded.updated_at > sync_tombstones.updated_at
+      `).bind(userId, key, updatedAt, userId, key, updatedAt));
+      statements.push(db.prepare("DELETE FROM addons WHERE user_id = ? AND transport_url = ? AND updated_at <= ?").bind(userId, key, updatedAt));
+    } else if (section === "library") {
+      statements.push(db.prepare(`
+        INSERT INTO sync_tombstones (user_id, section, item_key, updated_at)
+        SELECT ?, 'library', ?, ?
+        WHERE NOT EXISTS (SELECT 1 FROM libraries WHERE user_id = ? AND imdb_id = ? AND updated_at > ?)
+        ON CONFLICT(user_id, section, item_key) DO UPDATE SET updated_at = excluded.updated_at
+        WHERE excluded.updated_at > sync_tombstones.updated_at
+      `).bind(userId, key, updatedAt, userId, key, updatedAt));
+      statements.push(db.prepare("DELETE FROM libraries WHERE user_id = ? AND imdb_id = ? AND updated_at <= ?").bind(userId, key, updatedAt));
+    } else if (section === "lists") {
+      statements.push(db.prepare(`
+        INSERT INTO sync_tombstones (user_id, section, item_key, updated_at)
+        SELECT ?, 'lists', ?, ?
+        WHERE NOT EXISTS (SELECT 1 FROM lists WHERE user_id = ? AND list_id = ? AND updated_at > ?)
+        ON CONFLICT(user_id, section, item_key) DO UPDATE SET updated_at = excluded.updated_at
+        WHERE excluded.updated_at > sync_tombstones.updated_at
+      `).bind(userId, key, updatedAt, userId, key, updatedAt));
+      statements.push(db.prepare(`
+        DELETE FROM list_items
+        WHERE user_id = ? AND list_id = ?
+          AND NOT EXISTS (
+            SELECT 1 FROM lists
+            WHERE user_id = ? AND list_id = ? AND updated_at > ?
+          )
+      `).bind(userId, key, userId, key, updatedAt));
+      statements.push(db.prepare("DELETE FROM lists WHERE user_id = ? AND list_id = ? AND updated_at <= ?").bind(userId, key, updatedAt));
+    } else if (section === "listItems") {
+      const separator = key.indexOf("::");
+      if (separator < 1) continue;
+      const listId = key.slice(0, separator);
+      const imdbId = key.slice(separator + 2);
+      if (!imdbId) continue;
+      statements.push(db.prepare(`
+        INSERT INTO sync_tombstones (user_id, section, item_key, updated_at)
+        SELECT ?, 'listItems', ?, ?
+        WHERE NOT EXISTS (
+          SELECT 1 FROM list_items
+          WHERE user_id = ? AND list_id = ? AND imdb_id = ? AND updated_at > ?
+        )
+        ON CONFLICT(user_id, section, item_key) DO UPDATE SET updated_at = excluded.updated_at
+        WHERE excluded.updated_at > sync_tombstones.updated_at
+      `).bind(userId, key, updatedAt, userId, listId, imdbId, updatedAt));
+      statements.push(db.prepare(`
+        DELETE FROM list_items
+        WHERE user_id = ? AND list_id = ? AND imdb_id = ? AND updated_at <= ?
+      `).bind(userId, listId, imdbId, updatedAt));
+    } else {
+      statements.push(db.prepare(`
+        INSERT INTO sync_tombstones (user_id, section, item_key, updated_at)
+        SELECT ?, 'userMeta', 'settings', ?
+        WHERE NOT EXISTS (SELECT 1 FROM user_meta WHERE user_id = ? AND updated_at > ?)
+        ON CONFLICT(user_id, section, item_key) DO UPDATE SET updated_at = excluded.updated_at
+        WHERE excluded.updated_at > sync_tombstones.updated_at
+      `).bind(userId, updatedAt, userId, updatedAt));
+      statements.push(db.prepare("DELETE FROM user_meta WHERE user_id = ? AND updated_at <= ?").bind(userId, updatedAt));
     }
+    groups.push(statements);
   }
 
-  return {
+  await runStatementGroups(db, groups);
+
+  const result: {
+    ok: true;
+    deleted: number;
+    state?: RemoteState;
+  } = {
     ok: true,
-    deleted: {
-      addons: payload.deletes?.addons?.length || 0,
-      library: payload.deletes?.library?.length || 0,
-      lists: payload.deletes?.lists?.length || 0,
-      listItems: payload.deletes?.listItems?.length || 0,
-    },
+    deleted: deletes.length,
   };
+  if (includeState) result.state = await getState(db, userId);
+  return result;
 };
 
 export const getTraktIntegration = async (db: SyncD1Database, userId: string) => {

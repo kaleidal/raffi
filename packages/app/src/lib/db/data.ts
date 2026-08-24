@@ -94,16 +94,18 @@ export const ensureDefaultAddonsForUser = async (userId: string) => {
 export const ensureDefaultAddonsForLocal = async () => {
     const addons = readLocal<Addon[]>(LOCAL_ADDONS_KEY, []);
     if (addons.some((addon) => addon.transport_url === DEFAULT_ADDON.transportUrl)) return;
+    const updatedAt = new Date().toISOString();
     writeLocal(LOCAL_ADDONS_KEY, [
         ...addons,
         {
             user_id: getLocalUserId(),
-            added_at: new Date().toISOString(),
+            added_at: updatedAt,
             transport_url: DEFAULT_ADDON.transportUrl,
             manifest: DEFAULT_ADDON.manifest,
             flags: { protected: false, official: false },
             addon_id: crypto.randomUUID(),
             position: addons.length + 1,
+            updated_at: updatedAt,
         },
     ]);
     markDirty("addons", DEFAULT_ADDON.transportUrl);
@@ -120,7 +122,7 @@ export const getAddons = async () => {
     return normalized;
 };
 
-export const addAddon = async (addon: Omit<Addon, "user_id" | "added_at">) => {
+export const addAddon = async (addon: Omit<Addon, "user_id" | "added_at" | "updated_at">) => {
     const current = await getAddons();
     const existing = current.find((item) => item.transport_url === addon.transport_url);
     if (existing) return existing;
@@ -134,6 +136,7 @@ export const addAddon = async (addon: Omit<Addon, "user_id" | "added_at">) => {
         added_at: new Date().toISOString(),
         addon_id: addon.addon_id || crypto.randomUUID(),
         position: addon.position ?? maxPosition + 1,
+        updated_at: new Date().toISOString(),
     } as Addon;
     writeLocal(LOCAL_ADDONS_KEY, [...current, next]);
     markDirty("addons", next.transport_url);
@@ -162,7 +165,8 @@ export const reorderAddons = async (transportUrlsInOrder: string[]) => {
         }
     }
 
-    const next = ordered.map((addon, index) => ({ ...addon, position: index + 1 }));
+    const updatedAt = new Date().toISOString();
+    const next = ordered.map((addon, index) => ({ ...addon, position: index + 1, updated_at: updatedAt }));
     writeLocal(LOCAL_ADDONS_KEY, next);
     for (const addon of next) {
         markDirty("addons", addon.transport_url);
@@ -212,7 +216,8 @@ export const getLibrary = async (limit = 100, offset = 0) => {
 export const getLibraryItem = async (imdb_id: string) => readLocal<LibraryItem[]>(LOCAL_LIBRARY_KEY, []).find((item) => item.imdb_id === imdb_id) ?? null;
 
 export const hideFromContinueWatching = async (imdb_id: string) => {
-    writeLocal(LOCAL_LIBRARY_KEY, readLocal<LibraryItem[]>(LOCAL_LIBRARY_KEY, []).map((item) => item.imdb_id === imdb_id ? { ...item, shown: false } : item));
+    const updatedAt = new Date().toISOString();
+    writeLocal(LOCAL_LIBRARY_KEY, readLocal<LibraryItem[]>(LOCAL_LIBRARY_KEY, []).map((item) => item.imdb_id === imdb_id ? { ...item, shown: false, updated_at: updatedAt } : item));
     markDirty("library", imdb_id);
     scheduleCloudBackupSync();
     publishCloudSyncStatus();
@@ -241,7 +246,8 @@ export const updateLibraryProgress = async (
 };
 
 export const updateLibraryPoster = async (imdb_id: string, poster: string) => {
-    writeLocal(LOCAL_LIBRARY_KEY, readLocal<LibraryItem[]>(LOCAL_LIBRARY_KEY, []).map((item) => item.imdb_id === imdb_id ? { ...item, poster } : item));
+    const updatedAt = new Date().toISOString();
+    writeLocal(LOCAL_LIBRARY_KEY, readLocal<LibraryItem[]>(LOCAL_LIBRARY_KEY, []).map((item) => item.imdb_id === imdb_id ? { ...item, poster, updated_at: updatedAt } : item));
     markDirty("library", imdb_id);
     scheduleCloudBackupSync();
 };
@@ -271,6 +277,7 @@ export const createList = async (name: string) => {
         created_at: new Date().toISOString(),
         name,
         position: lists.length ? Math.max(...lists.map((item) => item.position)) + 1 : 1,
+        updated_at: new Date().toISOString(),
     };
     writeLocal(LOCAL_LISTS_KEY, [...lists, next]);
     markDirty("lists", next.list_id);
@@ -279,7 +286,8 @@ export const createList = async (name: string) => {
 };
 
 export const updateList = async (list_id: string, updates: Partial<List>) => {
-    writeLocal(LOCAL_LISTS_KEY, readLocal<List[]>(LOCAL_LISTS_KEY, []).map((list) => list.list_id === list_id ? { ...list, ...updates } : list));
+    const updatedAt = new Date().toISOString();
+    writeLocal(LOCAL_LISTS_KEY, readLocal<List[]>(LOCAL_LISTS_KEY, []).map((list) => list.list_id === list_id ? { ...list, ...updates, updated_at: updatedAt } : list));
     markDirty("lists", list_id);
     scheduleCloudBackupSync();
 };
@@ -297,7 +305,7 @@ export const deleteList = async (list_id: string) => {
 export const addToList = async (list_id: string, imdb_id: string, position: number, type: string, poster?: string) => {
     const items = readLocal<ListItem[]>(LOCAL_LIST_ITEMS_KEY, []);
     const index = items.findIndex((item) => item.list_id === list_id && item.imdb_id === imdb_id);
-    const next: ListItem = { list_id, imdb_id, position, type, poster };
+    const next: ListItem = { list_id, imdb_id, position, type, poster, updated_at: new Date().toISOString() };
     const updated = [...items];
     if (index >= 0) updated[index] = { ...items[index], ...next };
     else updated.push(next);
@@ -315,13 +323,15 @@ export const removeFromList = async (list_id: string, imdb_id: string) => {
 export const getListItems = async (list_id: string) => readLocal<ListItem[]>(LOCAL_LIST_ITEMS_KEY, []).filter((item) => item.list_id === list_id).sort((a, b) => a.position - b.position);
 
 export const updateListItemPosition = async (list_id: string, imdb_id: string, position: number) => {
-    writeLocal(LOCAL_LIST_ITEMS_KEY, readLocal<ListItem[]>(LOCAL_LIST_ITEMS_KEY, []).map((item) => item.list_id === list_id && item.imdb_id === imdb_id ? { ...item, position } : item));
+    const updatedAt = new Date().toISOString();
+    writeLocal(LOCAL_LIST_ITEMS_KEY, readLocal<ListItem[]>(LOCAL_LIST_ITEMS_KEY, []).map((item) => item.list_id === list_id && item.imdb_id === imdb_id ? { ...item, position, updated_at: updatedAt } : item));
     markDirty("listItems", listItemKey(list_id, imdb_id));
     scheduleCloudBackupSync();
 };
 
 export const updateListItemPoster = async (list_id: string, imdb_id: string, poster: string) => {
-    writeLocal(LOCAL_LIST_ITEMS_KEY, readLocal<ListItem[]>(LOCAL_LIST_ITEMS_KEY, []).map((item) => item.list_id === list_id && item.imdb_id === imdb_id ? { ...item, poster } : item));
+    const updatedAt = new Date().toISOString();
+    writeLocal(LOCAL_LIST_ITEMS_KEY, readLocal<ListItem[]>(LOCAL_LIST_ITEMS_KEY, []).map((item) => item.list_id === list_id && item.imdb_id === imdb_id ? { ...item, poster, updated_at: updatedAt } : item));
     markDirty("listItems", listItemKey(list_id, imdb_id));
     scheduleCloudBackupSync();
 };
@@ -527,7 +537,9 @@ export const importStremioLibrary = async (
             );
             const mergedItem = library.find((item) => item.imdb_id === preview.imdbId);
             const mergedProgress = mergedItem?.progress ?? existing?.progress;
-            const completedAt = mergedItem?.completed_at ?? existing?.completed_at ?? null;
+            const completedAt = mergedItem
+                ? mergedItem.completed_at
+                : existing?.completed_at ?? null;
             const progressChanged = Boolean(mergeSummary.items[0]?.progressChanged);
 
             let action: "added" | "merged" | "skipped";
@@ -551,6 +563,7 @@ export const importStremioLibrary = async (
                 type: preview.type,
                 shown: existing?.shown !== false,
                 poster: existing?.poster || preview.poster,
+                updated_at: new Date().toISOString(),
             };
 
             if (existingIndex >= 0) nextLibrary[existingIndex] = nextItem;
