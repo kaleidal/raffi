@@ -15,7 +15,13 @@ import {
 	ensureAudioDecoderRegistered,
 	ensureMediaCodersRegistered,
 } from "./registerCoders";
-import { codecsCompatible, friendlyCodecName, isMseFriendlyVideo, mapContainerCodec, NATIVE_AUDIO, normalizeCodecId } from "./codecSupport";
+import {
+	codecsCompatible,
+	isMseFriendlyVideo,
+	mapContainerCodec,
+	NATIVE_AUDIO,
+	normalizeCodecId,
+} from "./codecSupport";
 export { isMseFriendlyVideo, isNativeFriendlyAudio } from "./codecSupport";
 
 export type ProbedAudioTrack = {
@@ -152,20 +158,8 @@ export function formatAudioTrackLabel(track: {
 	codecName?: string | null;
 	index: number;
 }): string {
-	const title = track.title?.trim() || "";
-	// Prefer real titles except generic placeholders that hide the language.
-	const genericTitle = /^(original|audio|track|default|und)$/i.test(title);
-	if (title && !genericTitle) return title;
-
 	const lang = normalizeLang(track.language);
-	const langLabel = lang ? LANGUAGE_LABELS[lang] || lang.toUpperCase() : "";
-	const codec = friendlyCodecName(track.codecName);
-
-	if (langLabel && codec) return `${langLabel} (${codec})`;
-	if (langLabel) return langLabel;
-	if (title) return title;
-	if (codec) return `Audio ${track.index} (${codec})`;
-	return `Audio ${track.index}`;
+	return lang ? LANGUAGE_LABELS[lang] || lang.toUpperCase() : "Unknown";
 }
 
 export function preferredAudioIndex(tracks: ProbedAudioTrack[]): number {

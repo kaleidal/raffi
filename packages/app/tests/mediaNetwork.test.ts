@@ -5,6 +5,7 @@ import { mapContainerCodec } from "../src/lib/media/codecSupport";
 import {
 	canRemuxOrTranscodeAudio,
 	createRemoteUrlSource,
+	formatAudioTrackLabel,
 	preferredAudioIndex,
 } from "../src/lib/media/probe";
 import {
@@ -96,6 +97,27 @@ describe("MediaBunny network lifecycle", () => {
 });
 
 describe("MediaBunny audio planning", () => {
+	test("labels audio tracks by language without titles or codecs", () => {
+		expect(formatAudioTrackLabel({
+			index: 0,
+			title: "Sony Sci-Fi",
+			language: "jpn",
+			codecName: "A_DTS",
+		})).toBe("Japanese");
+		expect(formatAudioTrackLabel({
+			index: 1,
+			title: "English DTS",
+			language: "eng",
+			codecName: "A_DTS",
+		})).toBe("English");
+		expect(formatAudioTrackLabel({
+			index: 2,
+			title: "Commentary",
+			language: null,
+			codecName: "A_AAC",
+		})).toBe("Unknown");
+	});
+
 	test("recognizes and decodes DTS from the playback fixture", async () => {
 		ensureMediaCodersRegistered();
 		const fixture = await Bun.file(
