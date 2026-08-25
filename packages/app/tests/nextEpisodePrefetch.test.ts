@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
 	canReuseNextEpisodePrefetch,
+	isSamePlaybackSource,
 	type NextEpisodePrefetchHandoff,
 } from "../src/pages/player/nextEpisodePrefetch";
 
@@ -16,6 +17,12 @@ const handoff = (mode: NextEpisodePrefetchHandoff["mode"]) =>
 	}) satisfies NextEpisodePrefetchHandoff;
 
 describe("canReuseNextEpisodePrefetch", () => {
+	test("treats a different file in the same torrent as a new playback source", () => {
+		const magnet = "magnet:?xt=urn:btih:episode-pack";
+		expect(isSamePlaybackSource(magnet, 8, magnet, 7)).toBe(false);
+		expect(isSamePlaybackSource(magnet, 8, magnet, 8)).toBe(true);
+	});
+
 	test("reuses directly seekable streams when the episode has saved progress", () => {
 		expect(
 			canReuseNextEpisodePrefetch(

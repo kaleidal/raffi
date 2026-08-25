@@ -99,6 +99,7 @@
     import { createPlayerModalHandlers } from "./playerModalHandlers";
     import {
         canReuseNextEpisodePrefetch,
+        isSamePlaybackSource,
         startNextEpisodePrefetch,
         type NextEpisodePrefetchHandoff,
     } from "./nextEpisodePrefetch";
@@ -434,6 +435,7 @@
     let hls: any = null;
     let playbackController: import("../../lib/media").ClientPlaybackController | null = null;
     let currentVideoSrc: string | null = null;
+    let currentVideoFileIdx: number | null = null;
     let currentEmbedSrc: string | null = null;
     let metadataCheckInterval: any;
     let bufferingActive = false;
@@ -1257,6 +1259,7 @@
     $: if (embedSrc && embedSrc !== currentEmbedSrc) {
         currentEmbedSrc = embedSrc;
         currentVideoSrc = embedSrc;
+        currentVideoFileIdx = null;
         introDbChapters = [];
         effectiveChapterMarkers = [];
         skipButtonLabel = "Skip Intro";
@@ -1285,13 +1288,17 @@
         embedLoadFallbackTimeout = setTimeout(finishEmbedLoad, 1200);
     }
 
-    const transitionToVideoSource = (nextVideoSrc: string) => {
+    const transitionToVideoSource = (
+        nextVideoSrc: string,
+        nextFileIdx: number | null,
+    ) => {
         clearEmbedLoadFallback();
         currentEmbedSrc = null;
         introDbChapters = [];
         effectiveChapterMarkers = [];
         skipButtonLabel = "Skip Intro";
         currentVideoSrc = nextVideoSrc;
+        currentVideoFileIdx = nextFileIdx;
         hasStarted = false;
         bingeAutoAdvancing = false;
         recentPlaybackStalls = [];
@@ -1311,7 +1318,7 @@
         const canReuseHandoff = canReuseNextEpisodePrefetch(
             handoff,
             nextVideoSrc,
-            fileIdx,
+            nextFileIdx,
             startTime,
         );
 
@@ -1388,15 +1395,23 @@
             $selectedStream?.directPlaybackMode !== "iframe",
         );
 
-    const prepareVideoSource = async (nextVideoSrc: string) => {
+    const prepareVideoSource = async (
+        nextVideoSrc: string,
+        nextFileIdx: number | null,
+    ) => {
         if (
-            nextVideoSrc === currentVideoSrc ||
+            isSamePlaybackSource(
+                nextVideoSrc,
+                nextFileIdx,
+                currentVideoSrc,
+                currentVideoFileIdx,
+            ) ||
             nextVideoSrc === availabilityCheckSource ||
             nextVideoSrc === availabilityBlockedSource
         ) return;
 
         if (!shouldPreflightSource(nextVideoSrc)) {
-            transitionToVideoSource(nextVideoSrc);
+            transitionToVideoSource(nextVideoSrc, nextFileIdx);
             return;
         }
 
@@ -1414,7 +1429,10 @@
         loadingProgress.set(null);
 
         const result = await preflightStreamUrl(nextVideoSrc);
-        if (run !== availabilityCheckRun || videoSrc !== nextVideoSrc) return;
+        if (
+            run !== availabilityCheckRun ||
+            !isSamePlaybackSource(videoSrc, fileIdx, nextVideoSrc, nextFileIdx)
+        ) return;
         availabilityCheckSource = null;
 
         if (result.state === "network-error") {
@@ -1445,7 +1463,7 @@
             return;
         }
 
-        transitionToVideoSource(nextVideoSrc);
+        transitionToVideoSource(nextVideoSrc, nextFileIdx);
     };
 
     const retryInitialSource = () => {
@@ -1456,7 +1474,7 @@
         ) {
             availabilityBlockedSource = null;
             showError.set(false);
-            void prepareVideoSource(videoSrc);
+            void prepareVideoSource(videoSrc, fileIdx);
             return;
         }
         modalHandlers.onErrorRetry();
@@ -1484,11 +1502,16 @@
 
     $: if (
         videoSrc &&
-        videoSrc !== currentVideoSrc &&
+        !isSamePlaybackSource(
+            videoSrc,
+            fileIdx,
+            currentVideoSrc,
+            currentVideoFileIdx,
+        ) &&
         videoSrc !== availabilityCheckSource &&
         videoSrc !== availabilityBlockedSource
     ) {
-        void prepareVideoSource(videoSrc);
+        void prepareVideoSource(videoSrc, fileIdx);
     }
 
     $: effectiveChapterMarkers = Chapters.getEffectiveChapterSegments($sessionData, introDbChapters);

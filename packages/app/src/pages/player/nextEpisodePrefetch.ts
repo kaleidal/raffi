@@ -34,6 +34,15 @@ export type NextEpisodePrefetchHandoff = {
 	hls: Hls | null;
 };
 
+export function isSamePlaybackSource(
+	src: string | null,
+	fileIdx: number | null,
+	currentSrc: string | null,
+	currentFileIdx: number | null,
+): boolean {
+	return src === currentSrc && fileIdx === currentFileIdx;
+}
+
 export function canReuseNextEpisodePrefetch(
 	handoff: NextEpisodePrefetchHandoff | null,
 	src: string,
