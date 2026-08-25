@@ -3,6 +3,7 @@
 export const LIMBO_DEFAULT_PORT = 17890;
 export const LIMBO_INSTALL_URL = "https://limbo.kaleid.al";
 export const LIMBO_MIN_API_VERSION = 2;
+const LIMBO_DEFAULT_BASE_URL = `http://127.0.0.1:${LIMBO_DEFAULT_PORT}`;
 
 const RAFFI_ICON_DATA_URL =
 	"data:image/svg+xml," +
@@ -157,20 +158,39 @@ async function limboFetch(path: string, init: RequestInit = {}): Promise<Respons
 	}
 }
 
-export async function checkLimboHealth(signal?: AbortSignal): Promise<LimboHealth | null> {
+async function fetchLimboHealth(
+	baseUrl: string,
+	signal?: AbortSignal,
+): Promise<LimboHealth | null> {
 	try {
-		const { baseUrl } = await resolveConnection();
 		const response = await fetch(`${baseUrl}/v1/health`, {
 			cache: "no-store",
 			signal,
 		});
 		if (!response.ok) return null;
-		return (await response.json()) as LimboHealth;
+		const health = (await response.json()) as LimboHealth;
+		return health?.ok && health.service === "limbo" ? health : null;
 	} catch (error) {
 		if (signal?.aborted) throw error;
-		clearLimboDiscoveryCache();
 		return null;
 	}
+}
+
+export async function checkLimboHealth(signal?: AbortSignal): Promise<LimboHealth | null> {
+	const { baseUrl } = await resolveConnection();
+	const discoveredHealth = await fetchLimboHealth(baseUrl, signal);
+	if (discoveredHealth) return discoveredHealth;
+
+	if (baseUrl !== LIMBO_DEFAULT_BASE_URL) {
+		const defaultHealth = await fetchLimboHealth(LIMBO_DEFAULT_BASE_URL, signal);
+		if (defaultHealth) {
+			cachedBaseUrl = LIMBO_DEFAULT_BASE_URL;
+			return defaultHealth;
+		}
+	}
+
+	clearLimboDiscoveryCache();
+	return null;
 }
 
 export async function ensureLimboAvailable(signal?: AbortSignal): Promise<LimboHealth> {

@@ -10,9 +10,11 @@ import {
 } from "../src/lib/limbo/client";
 
 const originalFetch = globalThis.fetch;
+const originalWindow = globalThis.window;
 
 afterEach(() => {
 	globalThis.fetch = originalFetch;
+	globalThis.window = originalWindow;
 	clearLimboDiscoveryCache();
 });
 
@@ -68,13 +70,47 @@ describe("Limbo companion contract", () => {
 		});
 	});
 
+	test("recovers when a stopped secondary Limbo instance left stale discovery", async () => {
+		globalThis.window = {
+			electronAPI: {
+				readLimboApiDiscovery: async () => ({
+					baseUrl: "http://127.0.0.1:43025",
+					token: "discovery-token",
+				}),
+			},
+		} as unknown as Window & typeof globalThis;
+		const requestedUrls: string[] = [];
+		globalThis.fetch = (async (input) => {
+			const url = String(input);
+			requestedUrls.push(url);
+			if (url.includes(":43025")) throw new TypeError("fetch failed");
+			return Response.json({
+				ok: true,
+				service: "limbo",
+				apiVersion: 2,
+				torrentReady: true,
+			});
+		}) as typeof fetch;
+
+		expect(await checkLimboHealth()).toMatchObject({ ok: true, service: "limbo" });
+		expect(requestedUrls).toEqual([
+			"http://127.0.0.1:43025/v1/health",
+			"http://127.0.0.1:17890/v1/health",
+		]);
+	});
+
 	test("removes a torrent created as approval cancellation wins the race", async () => {
 		const abortController = new AbortController();
 		let removed = false;
 		globalThis.fetch = (async (input, init) => {
 			const url = String(input);
 			if (url.endsWith("/v1/health")) {
-				return Response.json({ ok: true, apiVersion: 2, torrentReady: true });
+				return Response.json({
+					ok: true,
+					service: "limbo",
+					apiVersion: 2,
+					torrentReady: true,
+				});
 			}
 			if (init?.method === "DELETE") {
 				removed = true;
