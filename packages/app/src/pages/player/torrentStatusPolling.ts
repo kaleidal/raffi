@@ -100,8 +100,11 @@ export const createTorrentStatusPoller = ({
 	let readyPromise: Promise<void> | null = null;
 	let resolveReady: (() => void) | null = null;
 	let rejectReady: ((error: Error) => void) | null = null;
+	let requestAbortController: AbortController | null = null;
 
 	const stop = () => {
+		requestAbortController?.abort();
+		requestAbortController = null;
 		if (timeoutRef) {
 			clearTimeout(timeoutRef);
 			timeoutRef = null;
@@ -145,8 +148,10 @@ export const createTorrentStatusPoller = ({
 		const poll = async () => {
 			const activeId = torrentId;
 			if (!activeId) return;
+			const abortController = new AbortController();
+			requestAbortController = abortController;
 			try {
-				const data = await getLimboTorrent(activeId);
+				const data = await getLimboTorrent(activeId, abortController.signal);
 				unavailableFailures = 0;
 				const stage = String(data.stage || "");
 				const error = typeof data.lastError === "string" ? data.lastError : "";
@@ -174,6 +179,7 @@ export const createTorrentStatusPoller = ({
 					rejectReady = null;
 				}
 			} catch (error) {
+				if (abortController.signal.aborted) return;
 				if (error instanceof LimboUnavailableError) {
 					unavailableFailures += 1;
 					if (unavailableFailures >= 3) fail("Lost connection to Limbo");
@@ -183,6 +189,9 @@ export const createTorrentStatusPoller = ({
 					fail(error instanceof Error ? error.message : "Limbo status failed");
 				}
 			} finally {
+				if (requestAbortController === abortController) {
+					requestAbortController = null;
+				}
 				if (torrentId === activeId && !fatalHandled) {
 					timeoutRef = setTimeout(poll, 1000);
 				}

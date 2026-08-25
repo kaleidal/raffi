@@ -20,15 +20,19 @@ const REMOTE_PROBE_TIMEOUT_MS = 30_000;
 async function probeWithTimeout(
 	src: string,
 	externalSignal?: AbortSignal,
+	timeoutMs: number | null = REMOTE_PROBE_TIMEOUT_MS,
 ): Promise<ProbedStream> {
 	const probeAbort = new AbortController();
 	let timedOut = false;
 	const handleExternalAbort = () => probeAbort.abort();
 	externalSignal?.addEventListener("abort", handleExternalAbort, { once: true });
-	const timeout = setTimeout(() => {
-		timedOut = true;
-		probeAbort.abort();
-	}, REMOTE_PROBE_TIMEOUT_MS);
+	if (externalSignal?.aborted) probeAbort.abort();
+	const timeout = timeoutMs == null
+		? null
+		: setTimeout(() => {
+			timedOut = true;
+			probeAbort.abort();
+		}, timeoutMs);
 
 	try {
 		return await probeRemoteStream(src, probeAbort.signal);
@@ -41,7 +45,7 @@ async function probeWithTimeout(
 		}
 		throw error;
 	} finally {
-		clearTimeout(timeout);
+		if (timeout != null) clearTimeout(timeout);
 		externalSignal?.removeEventListener("abort", handleExternalAbort);
 	}
 }
@@ -57,6 +61,7 @@ export async function resolveHttpPlayback(
 	src: string,
 	videoElem?: HTMLVideoElement,
 	signal?: AbortSignal,
+	options?: { probeTimeoutMs?: number | null },
 ): Promise<ResolvedHttpPlayback> {
 	if (!src) return { mode: "unsupported", meta: null, reason: "empty" };
 	if (/^magnet:/i.test(src)) return { mode: "unsupported", meta: null, reason: "torrent" };
@@ -73,7 +78,13 @@ export async function resolveHttpPlayback(
 	try {
 		const meta = ensureAudioTracks(
 			await (/^https?:\/\//i.test(playable)
-				? probeWithTimeout(playable, signal)
+				? probeWithTimeout(
+						playable,
+						signal,
+						options?.probeTimeoutMs === undefined
+							? REMOTE_PROBE_TIMEOUT_MS
+							: options.probeTimeoutMs,
+					)
 				: probeRemoteStream(playable, signal)),
 		);
 		if (signal?.aborted) throw new DOMException("Aborted", "AbortError");

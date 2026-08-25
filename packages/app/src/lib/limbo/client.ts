@@ -149,6 +149,7 @@ async function limboFetch(path: string, init: RequestInit = {}): Promise<Respons
 			headers,
 		});
 	} catch (error) {
+		if (init.signal?.aborted) throw error;
 		clearLimboDiscoveryCache();
 		throw new LimboUnavailableError(
 			error instanceof Error ? error.message : "Could not reach Limbo",
@@ -156,23 +157,25 @@ async function limboFetch(path: string, init: RequestInit = {}): Promise<Respons
 	}
 }
 
-export async function checkLimboHealth(): Promise<LimboHealth | null> {
+export async function checkLimboHealth(signal?: AbortSignal): Promise<LimboHealth | null> {
 	try {
 		const { baseUrl } = await resolveConnection();
 		const response = await fetch(`${baseUrl}/v1/health`, {
 			cache: "no-store",
+			signal,
 		});
 		if (!response.ok) return null;
 		return (await response.json()) as LimboHealth;
-	} catch {
+	} catch (error) {
+		if (signal?.aborted) throw error;
 		clearLimboDiscoveryCache();
 		return null;
 	}
 }
 
-export async function ensureLimboAvailable(): Promise<LimboHealth> {
+export async function ensureLimboAvailable(signal?: AbortSignal): Promise<LimboHealth> {
 	clearLimboDiscoveryCache();
-	const health = await checkLimboHealth();
+	const health = await checkLimboHealth(signal);
 	if (!health?.ok) {
 		throw new LimboUnavailableError(
 			"Limbo is not running. Install and open Limbo to play torrent sources.",
@@ -201,10 +204,11 @@ export async function addLimboTorrent(input: {
 	fileIndex?: number | null;
 	sequential?: boolean;
 	name?: string | null;
-}): Promise<LimboTorrentStatus> {
-	await ensureLimboAvailable();
+}, signal?: AbortSignal): Promise<LimboTorrentStatus> {
+	await ensureLimboAvailable(signal);
 	const response = await limboFetch("/v1/torrents", {
 		method: "POST",
+		signal,
 		body: JSON.stringify({
 			magnet: input.magnet,
 			fileIndex: input.fileIndex ?? undefined,
@@ -245,11 +249,21 @@ export async function addLimboTorrent(input: {
 		throw apiError(response.status, text, "Limbo add torrent failed");
 	}
 
-	return parseLimboTorrentStatus(await response.json());
+	const created = parseLimboTorrentStatus(await response.json());
+	if (signal?.aborted) {
+		await removeLimboTorrent(created.id, false);
+		throw new DOMException("Torrent request canceled", "AbortError");
+	}
+	return created;
 }
 
-export async function getLimboTorrent(id: string): Promise<LimboTorrentStatus> {
-	const response = await limboFetch(`/v1/torrents/${encodeURIComponent(id)}`);
+export async function getLimboTorrent(
+	id: string,
+	signal?: AbortSignal,
+): Promise<LimboTorrentStatus> {
+	const response = await limboFetch(`/v1/torrents/${encodeURIComponent(id)}`, {
+		signal,
+	});
 	if (!response.ok) {
 		const text = (await response.text().catch(() => "")).trim();
 		throw apiError(response.status, text, "Limbo torrent status failed");

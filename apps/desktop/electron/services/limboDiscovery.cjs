@@ -1,34 +1,29 @@
 const path = require("path");
 const os = require("os");
 
-function candidateLimboApiPaths() {
-  const home = os.homedir();
+function candidateLimboApiPaths({
+  platform = process.platform,
+  env = process.env,
+  home = os.homedir(),
+} = {}) {
   const candidates = [];
+  const platformPath = platform === "win32" ? path.win32 : path.posix;
 
-  if (process.platform === "win32") {
-    const appData = process.env.APPDATA || path.join(home, "AppData", "Roaming");
-    const localAppData = process.env.LOCALAPPDATA || path.join(home, "AppData", "Local");
+  if (platform === "win32") {
+    const appData = env.APPDATA || platformPath.join(home, "AppData", "Roaming");
     candidates.push(
-      path.join(appData, "kaleid", "Limbo", "api.json"),
-      path.join(appData, "limbo", "api.json"),
-      path.join(appData, "Limbo", "api.json"),
-      path.join(localAppData, "limbo", "api.json"),
+      platformPath.join(appData, "kaleid", "Limbo", "data", "api.json"),
     );
-  } else if (process.platform === "darwin") {
+  } else if (platform === "darwin") {
     candidates.push(
-      path.join(home, "Library", "Application Support", "al.kaleid.Limbo", "api.json"),
-      path.join(home, "Library", "Application Support", "limbo", "api.json"),
-      path.join(home, "Library", "Application Support", "Limbo", "api.json"),
+      platformPath.join(home, "Library", "Application Support", "al.kaleid.Limbo", "api.json"),
     );
   } else {
-    const dataHome = process.env.XDG_DATA_HOME || path.join(home, ".local", "share");
-    const configHome = process.env.XDG_CONFIG_HOME || path.join(home, ".config");
-    candidates.push(
-      path.join(dataHome, "limbo", "api.json"),
-      path.join(dataHome, "Limbo", "api.json"),
-      path.join(configHome, "limbo", "api.json"),
-      path.join(configHome, "Limbo", "api.json"),
-    );
+    const dataHomes = [
+      env.XDG_DATA_HOME || platformPath.join(home, ".local", "share"),
+      env.HOST_XDG_DATA_HOME,
+    ].filter((value, index, values) => value && values.indexOf(value) === index);
+    candidates.push(...dataHomes.map((dataHome) => platformPath.join(dataHome, "limbo", "api.json")));
   }
 
   return candidates;

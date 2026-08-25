@@ -196,7 +196,9 @@ export async function probeRemoteStream(
 	src: string,
 	signal?: AbortSignal,
 ): Promise<ProbedStream> {
+	signal?.throwIfAborted();
 	await ensureMediaCodersRegistered();
+	signal?.throwIfAborted();
 	const networkAbort = new AbortController();
 
 	const input = new Input({

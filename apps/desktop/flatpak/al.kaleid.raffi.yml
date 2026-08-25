@@ -16,6 +16,7 @@ finish-args:
   - --device=dri
   - --filesystem=xdg-videos:ro
   - --filesystem=xdg-download:ro
+  - --filesystem=xdg-data/limbo:ro
   - --filesystem=xdg-run/app/com.discordapp.Discord:create
   - --env=XCURSOR_PATH=/run/host/user-share/icons:/run/host/share/icons
 

@@ -185,7 +185,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
         loadingProgress.set(null);
 
         try {
-            await ensureTorrentingAllowed();
+            await ensureTorrentingAllowed(signal);
         } catch (error) {
             if (error instanceof LimboUnavailableError) {
                 throw new Error(
@@ -199,21 +199,28 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
 
         loadingStage.set("Waiting for Limbo approval");
         loadingDetails.set("Approve the request in Limbo if prompted…");
-        const created = await addLimboTorrent({
-            magnet,
-            fileIndex: fileIdx,
-            sequential: true,
-            name: (() => {
-                const stream = get(selectedStream);
-                if (!stream) return null;
-                return (
-                    stream.behaviorHints?.filename?.trim() ||
-                    stream.title?.trim() ||
-                    stream.name?.trim() ||
-                    null
-                );
-            })(),
-        });
+        const created = await addLimboTorrent(
+            {
+                magnet,
+                fileIndex: fileIdx,
+                sequential: true,
+                name: (() => {
+                    const stream = get(selectedStream);
+                    if (!stream) return null;
+                    return (
+                        stream.behaviorHints?.filename?.trim() ||
+                        stream.title?.trim() ||
+                        stream.name?.trim() ||
+                        null
+                    );
+                })(),
+            },
+            signal,
+        );
+        if (signal.aborted) {
+            await removeLimboTorrent(created.id, false);
+            throw new DOMException("Aborted", "AbortError");
+        }
         activeLimboTorrentId = created.id;
         deps.startTorrentStatusPolling(created.id);
         await deps.awaitTorrentReady(created.id);
@@ -221,7 +228,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
         if (signal.aborted) throw new DOMException("Aborted", "AbortError");
 
         const { getLimboTorrent } = await import("../../lib/limbo/client");
-        const ready = await getLimboTorrent(created.id);
+        const ready = await getLimboTorrent(created.id, signal);
         if (!ready.streamUrl) {
             throw new Error("Limbo did not return a stream URL for this torrent");
         }
@@ -435,6 +442,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                         playableSrc,
                         deps.getVideoElem(),
                         abortController.signal,
+                        limboStatus ? { probeTimeoutMs: null } : undefined,
                     );
                 } catch (error) {
                     if (error instanceof DOMException && error.name === "AbortError") {

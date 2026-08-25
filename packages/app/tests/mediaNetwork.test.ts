@@ -7,6 +7,7 @@ import {
 	createRemoteUrlSource,
 	formatAudioTrackLabel,
 	preferredAudioIndex,
+	probeRemoteStream,
 } from "../src/lib/media/probe";
 import {
 	ensureAudioDecoderRegistered,
@@ -15,6 +16,15 @@ import {
 import { needsFfmpegAudio } from "../src/lib/media/ffmpegPlayback";
 
 describe("MediaBunny network lifecycle", () => {
+	test("rejects a probe whose signal was already canceled", async () => {
+		const abortController = new AbortController();
+		abortController.abort();
+
+		await expect(
+			probeRemoteStream("https://media.example/video.mkv", abortController.signal),
+		).rejects.toMatchObject({ name: "AbortError" });
+	});
+
 	test("aborts active UrlSource fetches with the owning pipeline", async () => {
 		const pipelineAbort = new AbortController();
 		let requestSignal: AbortSignal | null = null;

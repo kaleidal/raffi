@@ -275,6 +275,18 @@
                 .resume-button-shell {
                     border-radius: clamp(30px, 5vw, 50px);
                     overflow: hidden;
+                    transform-origin: center;
+                    transition-property: scale;
+                    transition-duration: 140ms;
+                    transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+                }
+
+                .resume-button-shell:has(.resume-button:not(:disabled):active) {
+                    scale: 0.96;
+                }
+
+                .resume-button:not(:disabled):active {
+                    scale: 1;
                 }
 
                 .resume-button {
@@ -295,6 +307,17 @@
                 .resume-button__icon :global(svg) {
                     width: 100%;
                     height: 100%;
+                    transform: translateX(2px);
+                }
+
+                @media (prefers-reduced-motion: reduce) {
+                    .resume-button-shell {
+                        transition-duration: 0ms;
+                    }
+
+                    .resume-button-shell:has(.resume-button:not(:disabled):active) {
+                        scale: 1;
+                    }
                 }
             </style>
                     <div

@@ -49,11 +49,11 @@ export const setTorrentingAllowed = async (enabled: boolean) => {
 	allowTorrenting.set(enabled);
 };
 
-export const ensureTorrentingAllowed = async () => {
+export const ensureTorrentingAllowed = async (signal?: AbortSignal) => {
 	if (!get(allowTorrenting)) {
 		throw new Error(
 			"Torrenting is disabled. Turn on Allow Torrenting in Settings to play torrent sources.",
 		);
 	}
-	await ensureLimboAvailable();
+	await ensureLimboAvailable(signal);
 };
