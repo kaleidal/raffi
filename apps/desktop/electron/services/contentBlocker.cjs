@@ -63,6 +63,7 @@ const PATH_RESOURCE_TYPES = new Set([
   "xhr",
 ]);
 const TRACKING_RESOURCE_TYPES = new Set(["image", "ping", "script", "xhr"]);
+const YOUTUBE_CLIENT_REFERER = "https://raffi.al/";
 
 const AD_PATH_PATTERN =
   /(^|[/.?&=_-])(adservice|adserver|ads|adsystem|adunit|advert|advertising|bannerads|popads|popunder|prebid|vast|vpaid)([/.?&=_-]|$)/i;
@@ -124,6 +125,29 @@ function shouldBlockRequest(details = {}) {
   return TRACKING_RESOURCE_TYPES.has(resourceType) && TRACKING_PATH_PATTERN.test(requestTarget);
 }
 
+function identifyYoutubeRequest(details = {}) {
+  let hostname;
+  try {
+    hostname = normalizeHost(new URL(details.url).hostname);
+  } catch {
+    return details.requestHeaders || {};
+  }
+
+  const isYoutube =
+    hostname === "youtube.com" ||
+    hostname.endsWith(".youtube.com") ||
+    hostname === "youtube-nocookie.com" ||
+    hostname.endsWith(".youtube-nocookie.com");
+  if (!isYoutube) {
+    return details.requestHeaders || {};
+  }
+
+  return {
+    ...details.requestHeaders,
+    Referer: YOUTUBE_CLIENT_REFERER,
+  };
+}
+
 function registerContentBlocker({ session, logToFile }) {
   if (!session?.webRequest?.onBeforeRequest) {
     return;
@@ -136,9 +160,17 @@ function registerContentBlocker({ session, logToFile }) {
     },
   );
 
+  session.webRequest.onBeforeSendHeaders(
+    { urls: ["https://*.youtube.com/*", "https://*.youtube-nocookie.com/*"] },
+    (details, callback) => {
+      callback({ requestHeaders: identifyYoutubeRequest(details) });
+    },
+  );
+
   logToFile?.("Content blocker registered");
 }
 
 module.exports = {
+  identifyYoutubeRequest,
   registerContentBlocker,
 };

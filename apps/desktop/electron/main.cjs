@@ -114,7 +114,7 @@ if (process.platform === "linux") {
     "enable-features",
     [...enabledFeatures].join(","),
   );
-  app.commandLine.appendSwitch("class", isFlatpak ? linuxDesktopId : "Raffi");
+  app.commandLine.appendSwitch("class", linuxDesktopId);
 }
 app.setName("Raffi");
 if (process.platform === "linux" && !isDev) {
@@ -256,7 +256,7 @@ app.whenReady().then(async () => {
       }
 
       if (process.platform === "linux") {
-        registerLinuxProtocolHandler({ app, fs, spawn, isDev, logToFile, desktopId: linuxDesktopId });
+        registerLinuxProtocolHandler({ app, fs, spawn, isDev, logToFile });
       }
     } catch (error) {
       logToFile("Failed to register raffi protocol", error);

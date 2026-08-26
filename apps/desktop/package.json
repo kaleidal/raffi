@@ -71,6 +71,10 @@
       {
         "from": "vendor/ffmpeg",
         "to": "ffmpeg"
+      },
+      {
+        "from": "build/icons/512x512.png",
+        "to": "icon.png"
       }
     ],
     "asar": true,
