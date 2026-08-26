@@ -1,4 +1,5 @@
 const { registerContentBlocker } = require("./contentBlocker.cjs");
+const { APP_ORIGIN } = require("./appProtocol.cjs");
 
 const DEV_SERVER_URL = "http://localhost:43173";
 const DEV_SERVER_ORIGIN = new URL(DEV_SERVER_URL).origin;
@@ -94,7 +95,8 @@ function createMainWindow({
   const isAppUrl = (value) => {
     try {
       const parsed = new URL(value);
-      if (parsed.protocol === "about:" || parsed.protocol === "file:") return true;
+      if (parsed.protocol === "about:") return true;
+      if (parsed.protocol === "raffi-app:" && parsed.hostname === "app") return true;
       if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
       if (isDev) {
         return parsed.origin === DEV_SERVER_ORIGIN;
@@ -422,10 +424,9 @@ function createMainWindow({
       logToFile("autoUpdater not available");
     }
 
-    const distPath = path.join(baseDir, "..", "dist");
-    const indexHtml = path.join(distPath, "index.html");
-    logToFile(`Loading packaged app from ${indexHtml}`);
-    mainWindow.loadFile(indexHtml).catch((err) => {
+    const appUrl = `${APP_ORIGIN}/`;
+    logToFile(`Loading packaged app from ${appUrl}`);
+    mainWindow.loadURL(appUrl).catch((err) => {
       logToFile("Failed to load packaged app", err);
     });
   }

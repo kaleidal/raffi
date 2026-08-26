@@ -14,6 +14,10 @@ const {
   createLocalMediaProtocolHandler,
 } = require("./services/localMediaProtocol.cjs");
 const { createLocalMediaAccess } = require("./services/localMediaAccess.cjs");
+const {
+  appPrivilegedScheme,
+  createAppProtocolHandler,
+} = require("./services/appProtocol.cjs");
 const { registerMainIpcHandlers } = require("./services/mainIpc.cjs");
 const { registerDiscordRpcHandlers } = require("./services/rpc.cjs");
 const { createMainWindow } = require("./services/window.cjs");
@@ -23,7 +27,7 @@ const {
   createFfmpegPlaybackService,
 } = require("./services/ffmpegPlayback.cjs");
 
-registerPrivilegedSchemes(protocol, [ffmpegPrivilegedScheme]);
+registerPrivilegedSchemes(protocol, [appPrivilegedScheme, ffmpegPrivilegedScheme]);
 
 const { logFallback, logToFile } = createLogger(app);
 
@@ -223,6 +227,18 @@ function createWindow() {
 app.whenReady().then(async () => {
   logToFile("App whenReady start");
   await localMediaAccess.loadRoots(path.join(app.getPath("userData"), "local-library-roots.json"));
+  if (!isDev) {
+    try {
+      createAppProtocolHandler({
+        protocol,
+        net,
+        distPath: path.join(electronRuntimeDir, "..", "dist"),
+        logToFile,
+      });
+    } catch (error) {
+      logToFile("Failed to register packaged app protocol", error);
+    }
+  }
   try {
     createLocalMediaProtocolHandler({ protocol, net, logToFile, localMediaAccess });
   } catch (error) {

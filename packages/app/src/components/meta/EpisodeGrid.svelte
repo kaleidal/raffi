@@ -29,15 +29,15 @@
 </script>
 
 <div class="episode-grid">
-    {#each metaData.meta.videos.filter((video) => video.season === currentSeason) as episode}
+    {#each metaData.meta.videos.filter((video) => video.season === currentSeason) as episode (`${episode.season}:${episode.episode}`)}
         {@const epKey = `${episode.season}:${episode.episode}`}
         {@const epProgress = progressMap[epKey]}
         {@const isWatched = epProgress && epProgress.watched}
 
         <button
-            class="group bg-[#121212] rounded-[20px] overflow-hidden cursor-pointer transition-all duration-200 ease-out relative hover:-translate-y-1.5 hover:shadow-[0_14px_30px_rgba(0,0,0,0.35)] hover:bg-[#171717] {isWatched
+            class="group appearance-none border-0 p-0 text-left bg-[#121212] rounded-[20px] overflow-hidden cursor-pointer transition-[transform,box-shadow,background-color] duration-200 ease-out relative hover:-translate-y-1.5 hover:shadow-[0_14px_30px_rgba(0,0,0,0.35)] hover:bg-[#171717] {isWatched
                 ? 'opacity-60'
-                : 'hover:opacity-95'}"
+                : ''}"
 
             on:click={() => handleEpisodeClick(episode)}
             on:contextmenu|preventDefault={(e) =>
