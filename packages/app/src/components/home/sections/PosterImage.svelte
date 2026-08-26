@@ -38,7 +38,7 @@
             loading="lazy"
             decoding="async"
             draggable="false"
-            class="h-full w-full object-cover opacity-0 transition-[opacity,transform] duration-300 ease-out group-hover/poster:scale-[1.025] group-focus-visible/poster:scale-[1.025] {loaded ? 'opacity-100' : ''}"
+            class="block h-full w-full object-cover opacity-0 transition-[opacity,transform] duration-300 ease-out group-hover/poster:scale-[1.025] group-focus-visible/poster:scale-[1.025] {loaded ? 'opacity-100' : ''}"
             on:load={() => (loaded = true)}
             on:error={handleError}
         />
@@ -55,6 +55,10 @@
                 {/if}
             </div>
         {/if}
+        <div
+            class="pointer-events-none absolute inset-0 rounded-[inherit] shadow-[inset_0_0_0_1px_rgba(9,9,9,0.88)]"
+            aria-hidden="true"
+        ></div>
     </div>
 {:else}
     <div

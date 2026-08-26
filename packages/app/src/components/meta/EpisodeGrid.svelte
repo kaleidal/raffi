@@ -51,7 +51,7 @@
                 <img
                     src={episode.thumbnail}
                     alt="Episode Thumbnail"
-                    class="w-full h-full object-cover aspect-video transition-transform duration-200 relative z-0 {isWatched
+                    class="block w-full h-full object-cover aspect-video transition-transform duration-200 relative z-0 {isWatched
                         ? 'grayscale'
                         : 'group-hover:scale-[1.02]'}"
                     on:error={() => handleImageError(epKey)}
@@ -94,6 +94,10 @@
                     >{truncateWords(episode.description ?? "", 10)}</span
                 >
             </div>
+            <div
+                class="pointer-events-none absolute inset-0 z-30 rounded-[inherit] shadow-[inset_0_0_0_1px_rgba(9,9,9,0.88)]"
+                aria-hidden="true"
+            ></div>
         </button>
     {/each}
 </div>

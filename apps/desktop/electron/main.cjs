@@ -7,7 +7,6 @@ const { scanLibraryRoots } = require("./services/mediaScan.cjs");
 const {
   isAllowedExternalUrl,
   createProtocolUrlHandler,
-  registerLinuxProtocolHandler,
 } = require("./services/protocol.cjs");
 const {
   registerPrivilegedSchemes,
@@ -269,10 +268,6 @@ app.whenReady().then(async () => {
         app.setAsDefaultProtocolClient("raffi", process.execPath, [path.resolve(process.argv[1])]);
       } else {
         app.setAsDefaultProtocolClient("raffi");
-      }
-
-      if (process.platform === "linux") {
-        registerLinuxProtocolHandler({ app, fs, spawn, isDev, logToFile });
       }
     } catch (error) {
       logToFile("Failed to register raffi protocol", error);

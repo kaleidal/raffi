@@ -61,6 +61,14 @@
       "repo": "raffi",
       "releaseType": "draft"
     },
+    "protocols": [
+      {
+        "name": "Raffi links",
+        "schemes": [
+          "raffi"
+        ]
+      }
+    ],
     "files": [
       "dist/**/*",
       "electron-dist/**/*",
@@ -88,7 +96,7 @@
       "artifactName": "Raffi-${version}-${arch}.${ext}",
       "executableName": "raffi",
       "icon": "build/icons",
-      "category": "Video"
+      "category": "AudioVideo;Video"
     },
     "deb": {
       "packageName": "raffi"
