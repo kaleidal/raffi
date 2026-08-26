@@ -23,7 +23,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Validate release source
-        run: bun run validate
+        run: xvfb-run --auto-servernum bun run validate
 
   release:
     needs: validate
