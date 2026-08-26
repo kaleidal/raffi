@@ -14,13 +14,7 @@ const {
 const { createLocalMediaAccess } = require("../electron/services/localMediaAccess.cjs");
 const desktopDir = join(import.meta.dir, "..");
 const ffmpeg = join(desktopDir, "vendor", "ffmpeg", process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg");
-const electron = join(
-	desktopDir,
-	"node_modules",
-	"electron",
-	"dist",
-	process.platform === "win32" ? "electron.exe" : "electron",
-);
+const electron = require("electron") as string;
 const localSource = join(import.meta.dir, "fixtures", "h264-aac-dts.mkv");
 const trueHdSource = join(import.meta.dir, "fixtures", "h264-truehd.mkv");
 const outputDir = mkdtempSync(join(tmpdir(), "raffi-playback-matrix-"));
