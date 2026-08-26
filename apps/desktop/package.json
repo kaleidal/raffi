@@ -58,7 +58,8 @@
     "publish": {
       "provider": "github",
       "owner": "kaleidal",
-      "repo": "raffi"
+      "repo": "raffi",
+      "releaseType": "draft"
     },
     "files": [
       "dist/**/*",

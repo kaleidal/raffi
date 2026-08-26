@@ -49,6 +49,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
+          EP_DRAFT: true
         run: bun run dist -- --publish always
         working-directory: apps/desktop
 
@@ -82,21 +83,6 @@ jobs:
         run: |
           VERSION="$(bun -e "console.log(require('./package.json').version)")"
           TAG="v${VERSION}"
-          gh release view "${TAG}" >/dev/null 2>&1 || gh release create "${TAG}" --title "Raffi ${VERSION}" --notes ""
+          gh release view "${TAG}" >/dev/null 2>&1 || gh release create "${TAG}" --draft --title "Raffi ${VERSION}" --notes ""
           gh release upload "${TAG}" flatpak/artifacts/*.flatpak --clobber
         working-directory: apps/desktop
-
-  publish:
-    needs: release
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Publish completed release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="$(jq -r .version apps/desktop/package.json)"
-          gh release edit "v${VERSION}" --target "${GITHUB_SHA}" --draft=false --latest

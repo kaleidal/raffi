@@ -1,4 +1,4 @@
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -20,5 +20,12 @@ for (const entry of ["main", "preload"]) {
 	});
 	if (!result.success) {
 		throw new AggregateError(result.logs, `Could not bundle Electron ${entry}`);
+	}
+}
+
+for (const entry of ["main", "preload"]) {
+	const output = await readFile(path.join(outputDir, `${entry}.cjs`), "utf8");
+	if (output.includes(desktopDir)) {
+		throw new Error(`Electron ${entry} bundle contains the build machine path`);
 	}
 }

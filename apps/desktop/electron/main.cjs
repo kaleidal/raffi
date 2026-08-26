@@ -85,6 +85,7 @@ const DEFAULT_WINDOW_WIDTH = 1778;
 const DEFAULT_WINDOW_HEIGHT = 1000;
 
 const isDev = !app.isPackaged;
+const electronRuntimeDir = path.join(app.getAppPath(), isDev ? "electron" : "electron-dist");
 const linuxDesktopId = process.env.FLATPAK_ID || "raffi";
 if (process.platform === "linux") {
   const enabledFeatures = new Set(
@@ -194,7 +195,7 @@ function createWindow() {
     isDev,
     autoUpdater,
     logToFile,
-    baseDir: __dirname,
+    baseDir: electronRuntimeDir,
     resourcesPath: process.resourcesPath,
     shell,
     isAllowedExternalUrl,
@@ -233,7 +234,7 @@ app.whenReady().then(async () => {
       protocol,
       ipcMain,
       spawn,
-      baseDir: __dirname,
+      baseDir: electronRuntimeDir,
       resourcesPath: process.resourcesPath,
       logToFile,
       localMediaAccess,
