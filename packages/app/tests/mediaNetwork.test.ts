@@ -14,6 +14,7 @@ import {
 	ensureMediaCodersRegistered,
 } from "../src/lib/media/registerCoders";
 import { needsFfmpegAudio } from "../src/lib/media/ffmpegPlayback";
+import { outputLanguageCode } from "../src/lib/media/trackMetadata";
 
 describe("MediaBunny network lifecycle", () => {
 	test("rejects a probe whose signal was already canceled", async () => {
@@ -107,6 +108,13 @@ describe("MediaBunny network lifecycle", () => {
 });
 
 describe("MediaBunny audio planning", () => {
+	test("forwards only valid ISO 639-2 track metadata", () => {
+		expect(outputLanguageCode("eng")).toBe("eng");
+		expect(outputLanguageCode("ENG")).toBe("eng");
+		expect(outputLanguageCode("en")).toBeUndefined();
+		expect(outputLanguageCode("en-US")).toBeUndefined();
+	});
+
 	test("labels audio tracks by language without titles or codecs", () => {
 		expect(formatAudioTrackLabel({
 			index: 0,

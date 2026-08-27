@@ -11,6 +11,7 @@ import {
 	type Output,
 	type VideoCodec,
 } from "mediabunny";
+import { outputLanguageCode } from "./trackMetadata";
 
 export type PlaybackConversion = {
 	readonly state: "idle" | "executing" | "canceled" | "done";
@@ -48,8 +49,11 @@ export class KeyframeCopyConversion implements PlaybackConversion {
 		options: KeyframeCopyConversionOptions,
 	): Promise<KeyframeCopyConversion> {
 		const videoSource = new EncodedVideoPacketSource(options.videoCodec);
+		const languageCode = outputLanguageCode(
+			await options.videoTrack.getLanguageCode(),
+		);
 		options.output.addVideoTrack(videoSource, {
-			languageCode: (await options.videoTrack.getLanguageCode()) ?? undefined,
+			languageCode,
 			name: (await options.videoTrack.getName()) ?? undefined,
 			disposition: await options.videoTrack.getDisposition(),
 			rotation: await options.videoTrack.getRotation(),
