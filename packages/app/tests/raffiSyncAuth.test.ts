@@ -54,7 +54,7 @@ describe("Raffi Sync authentication", () => {
 		expect(authorizations.filter((value) => value === `Bearer ${newToken}`)).toHaveLength(2);
 	});
 
-	test("invalidates the signed-in state when the refreshed token is rejected", async () => {
+	test("keeps the Ave session when Raffi Sync rejects a freshly rotated token", async () => {
 		const oldToken = token("old");
 		const newToken = token("new");
 		let refreshes = 0;
@@ -70,18 +70,16 @@ describe("Raffi Sync authentication", () => {
 		});
 		globalThis.fetch = (async () => new Response(null, { status: 401 })) as typeof fetch;
 
-		await expect(syncGet("/state")).rejects.toThrow("Cloud session expired. Sign in again.");
+		await expect(syncGet("/state")).rejects.toThrow("Cloud authentication is temporarily unavailable");
 		expect(refreshes).toBe(1);
-		expect(invalidations).toBe(1);
+		expect(invalidations).toBe(0);
 	});
 
-	test("invalidates the signed-in state when token refresh fails", async () => {
+	test("invalidates the signed-in state when Ave rejects the refresh token", async () => {
 		let invalidations = 0;
 
 		setRaffiSyncAuthToken(token("old"));
-		setRaffiSyncAuthRefreshHandler(async () => {
-			throw new Error("invalid_grant");
-		});
+		setRaffiSyncAuthRefreshHandler(async () => null);
 		setRaffiSyncAuthFailureHandler(() => {
 			invalidations += 1;
 		});
@@ -89,6 +87,22 @@ describe("Raffi Sync authentication", () => {
 
 		await expect(syncGet("/state")).rejects.toThrow("Cloud session expired. Sign in again.");
 		expect(invalidations).toBe(1);
+	});
+
+	test("keeps the Ave session when refresh is temporarily unavailable", async () => {
+		let invalidations = 0;
+
+		setRaffiSyncAuthToken(token("old"));
+		setRaffiSyncAuthRefreshHandler(async () => {
+			throw new Error("Failed to refresh token (503)");
+		});
+		setRaffiSyncAuthFailureHandler(() => {
+			invalidations += 1;
+		});
+		globalThis.fetch = (async () => new Response(null, { status: 401 })) as typeof fetch;
+
+		await expect(syncGet("/state")).rejects.toThrow("Cloud authentication is temporarily unavailable");
+		expect(invalidations).toBe(0);
 	});
 
 	test("does not treat a forbidden operation as an expired session", async () => {

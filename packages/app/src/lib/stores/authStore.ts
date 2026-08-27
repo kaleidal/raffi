@@ -126,8 +126,9 @@ const readLegacyAveSession = (): AppUser | null => {
             token,
             refreshToken: refreshToken ?? parsed.refreshToken ?? null,
         };
-    } catch {
-        return null;
+    } catch (error) {
+        if (isPermanentAveRefreshError(error)) return null;
+        throw error;
     }
 };
 

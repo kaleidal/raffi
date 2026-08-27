@@ -62,6 +62,10 @@ const invalidateCloudSession = async (): Promise<never> => {
     throw new Error("Cloud session expired. Sign in again.");
 };
 
+const cloudAuthenticationUnavailable = (): never => {
+    throw new Error("Cloud authentication is temporarily unavailable. Your Ave session is still signed in.");
+};
+
 const ensureValidAuthToken = async () => {
     if (!authToken || !authRefreshHandler || !isAuthTokenExpired(authToken)) {
         return false;
@@ -72,7 +76,7 @@ const ensureValidAuthToken = async () => {
         }
         return true;
     } catch {
-        return invalidateCloudSession();
+        return cloudAuthenticationUnavailable();
     }
 };
 
@@ -110,10 +114,11 @@ const syncRequest = async <T>(
                     return syncRequest<T>(path, init, { retryAuth: false });
                 }
             } catch {
-                return invalidateCloudSession();
+                return cloudAuthenticationUnavailable();
             }
+            return invalidateCloudSession();
         }
-        return invalidateCloudSession();
+        return cloudAuthenticationUnavailable();
     }
 
     if (!response.ok) {
