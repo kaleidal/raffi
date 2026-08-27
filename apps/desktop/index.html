@@ -8,7 +8,7 @@
   <title>Raffi</title>
   <meta http-equiv="Content-Security-Policy" content="
     default-src 'self';
-    script-src 'self' __RAFFI_DEV_EVAL__;
+    script-src 'self' 'wasm-unsafe-eval' __RAFFI_DEV_EVAL__;
     worker-src 'self' blob:;
     style-src 'self' 'unsafe-inline';
     img-src 'self' data: blob: https: http: raffi-media:;
