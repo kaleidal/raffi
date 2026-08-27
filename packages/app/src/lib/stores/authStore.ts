@@ -2,7 +2,7 @@ import type { AppUser } from "../auth/types";
 import {
     adoptLegacyAveSession,
     clearAveSessionStorage,
-    refreshAveUserSession,
+    forceRefreshAveUserSession,
     restoreAveUserFromSession,
     signInWithAveViaBrowser,
 } from "../auth/aveAuth";
@@ -18,7 +18,11 @@ import {
     syncLocalStateToUser,
     warmRemoteStateCache,
 } from "../db/db";
-import { setRaffiSyncAuthRefreshHandler, setRaffiSyncAuthToken } from "../db/raffiSync";
+import {
+    setRaffiSyncAuthFailureHandler,
+    setRaffiSyncAuthRefreshHandler,
+    setRaffiSyncAuthToken,
+} from "../db/raffiSync";
 import { writable } from "svelte/store";
 
 export type UpdateStatus = {
@@ -220,21 +224,6 @@ const clearAveSession = () => {
     setRaffiSyncAuthToken(null);
 };
 
-const tryRefreshAveSession = async (user: AppUser): Promise<AppUser | null> => {
-    try {
-        const refreshedUser = await refreshAveUserSession(user);
-        setRaffiSyncAuthToken(refreshedUser.token);
-        persistAveSession(refreshedUser);
-        return refreshedUser;
-    } catch (error) {
-        if (isPermanentAveRefreshError(error)) {
-            return null;
-        }
-        // Transient refresh failures should not immediately sign users out.
-        return user;
-    }
-};
-
 const applyRefreshedUser = (refreshed: AppUser) => {
     userCache = refreshed;
     currentUser.set(refreshed);
@@ -245,16 +234,14 @@ const refreshSessionFromSyncAuthFailure = async (): Promise<string | null> => {
     const activeUser = userCache;
     if (!activeUser) return null;
 
-    const refreshed = await tryRefreshAveSession(activeUser);
-    if (!refreshed) {
-        clearAveSession();
-        enableLocalMode();
-        emitHomeRefresh();
+    try {
+        const refreshed = await forceRefreshAveUserSession(activeUser);
+        applyRefreshedUser(refreshed);
+        persistAveSession(refreshed);
+        return refreshed.token;
+    } catch {
         return null;
     }
-
-    applyRefreshedUser(refreshed);
-    return refreshed.token;
 };
 
 export async function initAuth() {
@@ -325,15 +312,15 @@ export async function signInWithAve() {
     }
 }
 
-export function signOutToLocalMode() {
+export async function signOutToLocalMode() {
     stopCloudReconciliationLoop();
     userCache = null;
     currentUser.set(null);
     persistAveSession(null);
-    void clearAveSessionStorage();
     resetRemoteStateCache();
     enableLocalMode();
     emitHomeRefresh();
+    await clearAveSessionStorage().catch(() => undefined);
 }
 
 export function getCachedUser(): AppUser | null {
@@ -341,3 +328,4 @@ export function getCachedUser(): AppUser | null {
 }
 
 setRaffiSyncAuthRefreshHandler(refreshSessionFromSyncAuthFailure);
+setRaffiSyncAuthFailureHandler(signOutToLocalMode);

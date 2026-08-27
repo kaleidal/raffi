@@ -7,6 +7,7 @@ import {
     generateCodeVerifier,
     generateNonce,
     mergeAppKeyFromUrl,
+    refreshToken,
     verifyJwt,
 } from "@ave-id/sdk";
 import { completeOAuthCallback, startPkceLogin } from "@ave-id/sdk/client";
@@ -41,6 +42,8 @@ export const aveSession = new AveSession({
     storage: createLocalStorageAdapter(AVE_SESSION_STORAGE_KEY),
     devtools: import.meta.env.DEV,
 });
+
+let forcedRefreshPromise: Promise<AppUser> | null = null;
 
 const getElectronApi = () => (window as any).electronAPI as {
     openExternal?: (url: string) => Promise<void>;
@@ -204,6 +207,27 @@ export async function refreshAveUserSession(user: AppUser): Promise<AppUser> {
     return buildUserFromSessionTokens({
         fallback: user,
     });
+}
+
+export function forceRefreshAveUserSession(user: AppUser): Promise<AppUser> {
+    if (!forcedRefreshPromise) {
+        forcedRefreshPromise = (async () => {
+            const currentRefreshToken = aveSession.getState().snapshot?.refresh_token || user.refreshToken;
+            if (!currentRefreshToken) {
+                throw new Error("No Ave refresh token is available");
+            }
+
+            const tokens = await refreshToken(getAveOAuthConfig(), {
+                refreshToken: currentRefreshToken,
+            });
+            await aveSession.setTokensFromResponse(tokens);
+            return buildUserFromSessionTokens({ fallback: user });
+        })().finally(() => {
+            forcedRefreshPromise = null;
+        });
+    }
+
+    return forcedRefreshPromise;
 }
 
 export async function hydrateAveSession(): Promise<void> {

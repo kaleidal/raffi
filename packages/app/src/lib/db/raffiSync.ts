@@ -5,8 +5,11 @@ const RAFFI_SYNC_URL = (configuredUrl || DEFAULT_SYNC_URL).replace(/\/+$/, "");
 
 let authToken: string | null = null;
 let authRefreshHandler: (() => Promise<string | null>) | null = null;
+let authFailureHandler: (() => void | Promise<void>) | null = null;
+let authRefreshPromise: Promise<string | null> | null = null;
+let authFailurePromise: Promise<void> | null = null;
 
-const isAuthStatus = (status: number) => status === 401 || status === 403;
+const isAuthStatus = (status: number) => status === 401;
 const TOKEN_EXPIRY_SKEW_MS = 90 * 1000;
 
 const decodeJwtPayload = (token: string) => {
@@ -33,14 +36,44 @@ const isAuthTokenExpired = (token: string | null) => {
     return now >= expiryMs - TOKEN_EXPIRY_SKEW_MS;
 };
 
-const ensureValidAuthToken = async () => {
-    if (!authToken || !authRefreshHandler) return authToken;
-    if (!isAuthTokenExpired(authToken)) return authToken;
-    const refreshedToken = await authRefreshHandler();
-    if (refreshedToken) {
-        authToken = refreshedToken;
+const refreshAuthToken = async () => {
+    if (!authRefreshHandler) return null;
+    if (!authRefreshPromise) {
+        authRefreshPromise = authRefreshHandler()
+            .then((refreshedToken) => {
+                authToken = refreshedToken;
+                return refreshedToken;
+            })
+            .finally(() => {
+                authRefreshPromise = null;
+            });
     }
-    return authToken;
+    return authRefreshPromise;
+};
+
+const invalidateCloudSession = async (): Promise<never> => {
+    authToken = null;
+    if (authFailureHandler && !authFailurePromise) {
+        authFailurePromise = Promise.resolve(authFailureHandler()).finally(() => {
+            authFailurePromise = null;
+        });
+    }
+    await authFailurePromise;
+    throw new Error("Cloud session expired. Sign in again.");
+};
+
+const ensureValidAuthToken = async () => {
+    if (!authToken || !authRefreshHandler || !isAuthTokenExpired(authToken)) {
+        return false;
+    }
+    try {
+        if (!await refreshAuthToken()) {
+            return invalidateCloudSession();
+        }
+        return true;
+    } catch {
+        return invalidateCloudSession();
+    }
 };
 
 const getErrorMessage = async (response: Response) => {
@@ -58,7 +91,7 @@ const syncRequest = async <T>(
     init: RequestInit = {},
     options: { retryAuth?: boolean } = {},
 ): Promise<T> => {
-    await ensureValidAuthToken();
+    const refreshedBeforeRequest = await ensureValidAuthToken();
 
     const headers = new Headers(init.headers);
     headers.set("Accept", "application/json");
@@ -70,11 +103,17 @@ const syncRequest = async <T>(
         headers,
     });
 
-    if (isAuthStatus(response.status) && options.retryAuth !== false && authRefreshHandler) {
-        const refreshedToken = await authRefreshHandler();
-        if (refreshedToken) {
-            return syncRequest<T>(path, init, { retryAuth: false });
+    if (isAuthStatus(response.status)) {
+        if (options.retryAuth !== false && !refreshedBeforeRequest) {
+            try {
+                if (await refreshAuthToken()) {
+                    return syncRequest<T>(path, init, { retryAuth: false });
+                }
+            } catch {
+                return invalidateCloudSession();
+            }
         }
+        return invalidateCloudSession();
     }
 
     if (!response.ok) {
@@ -91,6 +130,10 @@ export const setRaffiSyncAuthToken = (token: string | null) => {
 
 export const setRaffiSyncAuthRefreshHandler = (handler: (() => Promise<string | null>) | null) => {
     authRefreshHandler = handler;
+};
+
+export const setRaffiSyncAuthFailureHandler = (handler: (() => void | Promise<void>) | null) => {
+    authFailureHandler = handler;
 };
 
 export const syncGet = async <T = unknown>(path: string): Promise<T> => {
