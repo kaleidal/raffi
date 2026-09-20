@@ -34,6 +34,12 @@ Apply D1 migrations to Cloudflare:
 bunx wrangler d1 migrations apply raffi-sync --remote
 ```
 
+## Deployment
+
+Cloudflare Workers Builds deploys `main` from `/services/sync` with `npx wrangler deploy`. Set the build variable `BUN_VERSION=1.4.2` so dependency installation uses a Bun version compatible with the workspace lockfile. Cloudflare's default Bun 1.2.15 rejects it during `bun install --frozen-lockfile`.
+
+Include `/services/sync/*`, `/bun.lock`, `/package.json`, and `/bunfig.toml` in the build watch paths so shared dependency changes also trigger deployment. Keep the lockfile committed and apply any pending D1 migrations before deploying.
+
 ## Configuration
 
 `wrangler.jsonc` declares the D1 binding and Durable Object binding. Set these values before deploying:
