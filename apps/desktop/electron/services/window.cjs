@@ -20,10 +20,8 @@ function createMainWindow({
   defaultWindowHeight,
   fileToOpen,
   authorizeLocalMediaPath,
-  pendingAveAuthPayload,
   pendingTraktAuthPayload,
   setFileToOpen,
-  setPendingAveAuthPayload,
   setPendingTraktAuthPayload,
   setPendingUpdateInfo,
 }) {
@@ -443,10 +441,6 @@ function createMainWindow({
       } catch (error) {
         logToFile("Failed to authorize startup media file", error);
       }
-    }
-    if (pendingAveAuthPayload) {
-      mainWindow.webContents.send("AVE_AUTH_CALLBACK", pendingAveAuthPayload);
-      setPendingAveAuthPayload(null);
     }
     if (pendingTraktAuthPayload) {
       mainWindow.webContents.send("TRAKT_AUTH_CALLBACK", pendingTraktAuthPayload);

@@ -1,12 +1,5 @@
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
-export interface AuthedUser {
-  id: string;
-  email: string | null;
-  name: string | null;
-  avatar: string | null;
-}
-
 export interface Addon {
   user_id: string;
   added_at: string;

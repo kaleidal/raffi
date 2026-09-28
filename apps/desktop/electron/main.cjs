@@ -66,7 +66,6 @@ app.on("child-process-gone", (_event, details) => {
 
 let mainWindow;
 let fileToOpen = null;
-let pendingAveAuthPayload = null;
 let pendingTraktAuthPayload = null;
 let pendingUpdateInfo = null;
 let ffmpegPlaybackService = null;
@@ -74,9 +73,6 @@ const localMediaAccess = createLocalMediaAccess({ logToFile });
 const handleProtocolUrl = createProtocolUrlHandler({
   logToFile,
   getMainWindow: () => mainWindow,
-  setPendingAveAuthPayload: (payload) => {
-    pendingAveAuthPayload = payload;
-  },
   setPendingTraktAuthPayload: (payload) => {
     pendingTraktAuthPayload = payload;
   },
@@ -206,13 +202,9 @@ function createWindow() {
     defaultWindowHeight: DEFAULT_WINDOW_HEIGHT,
     fileToOpen,
     authorizeLocalMediaPath: (filePath) => localMediaAccess.authorizeTrustedFile(filePath),
-    pendingAveAuthPayload,
     pendingTraktAuthPayload,
     setFileToOpen: (value) => {
       fileToOpen = value;
-    },
-    setPendingAveAuthPayload: (value) => {
-      pendingAveAuthPayload = value;
     },
     setPendingTraktAuthPayload: (value) => {
       pendingTraktAuthPayload = value;

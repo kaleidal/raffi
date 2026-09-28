@@ -1,5 +1,5 @@
 <script lang="ts">
-  const updatedAt = "August 20, 2026";
+  const updatedAt = "September 28, 2026";
 
   const sections = [
     { id: "scope", label: "Scope and operator" },
@@ -125,7 +125,7 @@
             <li>cached metadata, posters, subtitles you upload, downloads, and playback state;</li>
             <li>desktop library locations, file paths, and the local index used to play files you select;</li>
             <li>desktop diagnostic logs containing runtime details and operational errors;</li>
-            <li>Ave session tokens when you sign in; and</li>
+            <li>your Raffi session token when you sign in; and</li>
             <li>a Stremio email address and session key if you choose to remain connected.</li>
           </ul>
           <p>
@@ -137,7 +137,8 @@
           <h3>In Raffi cloud sync</h3>
           <p>If you sign in and leave local mode, Raffi stores the data needed to provide synchronization:</p>
           <ul>
-            <li>your Ave user ID and, when available, email address, profile name, and avatar;</li>
+            <li>your email address, the display name you choose, and a profile photo if you upload one;</li>
+            <li>active sign-in sessions, including the IP address and user agent that created each session;</li>
             <li>installed add-on addresses and manifests;</li>
             <li>title identifiers, posters, watch progress, completion state, and timestamps;</li>
             <li>lists, list items, and synchronized preferences;</li>
@@ -178,12 +179,8 @@
           <p>Raffi shares information with another service only when needed for a feature you use:</p>
           <div class="divide-y divide-black/5 border-y border-black/5">
             <div class="service-row">
-              <h3><a href="https://aveid.net/privacy" target="_blank" rel="noreferrer">Ave</a></h3>
-              <p>Provides optional OAuth/OIDC sign-in. Ave handles the sign-in flow and returns identity details and session tokens requested by Raffi.</p>
-            </div>
-            <div class="service-row">
               <h3><a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noreferrer">Cloudflare</a></h3>
-              <p>Hosts Raffi’s website, web app, sync database, and watch-party coordination. Cloudflare may process request and security metadata.</p>
+              <p>Hosts Raffi’s website, web app, sync database, profile photos, and watch-party coordination, and delivers sign-in code emails. Cloudflare may process request and security metadata.</p>
             </div>
             <div class="service-row">
               <h3><a href="https://trakt.tv/privacy" target="_blank" rel="noreferrer">Trakt</a></h3>
@@ -230,7 +227,8 @@
           <h2>Storage and retention</h2>
           <ul>
             <li>Local data remains on your device until you clear it, sign out where applicable, or uninstall Raffi.</li>
-            <li>Ave session data remains locally until you sign out, clear app data, or the session expires or is revoked.</li>
+            <li>Your session token remains locally until you sign out, clear app data, or the session expires after 90 days without use.</li>
+            <li>Sign-in codes expire after 10 minutes and are stored only as a one-way hash.</li>
             <li>A saved Stremio session remains locally until you disconnect it or clear app data.</li>
             <li>Trakt tokens remain in Raffi’s sync database until you disconnect Trakt or request deletion.</li>
             <li>Cloud-synced account data remains while your Raffi account data is active or until you request deletion.</li>

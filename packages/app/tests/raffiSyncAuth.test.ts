@@ -54,7 +54,7 @@ describe("Raffi Sync authentication", () => {
 		expect(authorizations.filter((value) => value === `Bearer ${newToken}`)).toHaveLength(2);
 	});
 
-	test("keeps the Ave session when Raffi Sync rejects a freshly rotated token", async () => {
+	test("keeps the account signed in when Raffi Sync rejects a freshly issued token", async () => {
 		const oldToken = token("old");
 		const newToken = token("new");
 		let refreshes = 0;
@@ -75,7 +75,7 @@ describe("Raffi Sync authentication", () => {
 		expect(invalidations).toBe(0);
 	});
 
-	test("invalidates the signed-in state when Ave rejects the refresh token", async () => {
+	test("invalidates the signed-in state when the account session is revoked", async () => {
 		let invalidations = 0;
 
 		setRaffiSyncAuthToken(token("old"));
@@ -89,7 +89,7 @@ describe("Raffi Sync authentication", () => {
 		expect(invalidations).toBe(1);
 	});
 
-	test("keeps the Ave session when refresh is temporarily unavailable", async () => {
+	test("keeps the account signed in when refresh is temporarily unavailable", async () => {
 		let invalidations = 0;
 
 		setRaffiSyncAuthToken(token("old"));

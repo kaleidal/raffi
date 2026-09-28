@@ -142,7 +142,7 @@ Run `bun run validate` from the repository root to typecheck every workspace and
 #### Sync Service (`services/sync/`)
 - **Runtime**: Cloudflare Workers
 - **Storage**: Cloudflare D1 for account data and Durable Objects for watch-party state
-- **Features**: Ave-authenticated cloud sync, Trakt token integration, watch-party coordination
+- **Features**: Email sign-in codes, cloud sync, profile photos, Trakt token integration, watch-party coordination
 
 #### Marketing Site (`marketing/`)
 - **Framework**: SvelteKit
@@ -229,7 +229,8 @@ bun --filter @raffi/marketing build
 - **Runtime**: Cloudflare Workers
 - **Database**: Cloudflare D1
 - **State Coordination**: Durable Objects for active watch parties
-- **Auth**: Ave ID tokens verified at the API edge
+- **Auth**: Better Auth email sign-in codes, with short-lived signed tokens verified at the API edge
+- **Profile photos**: Cloudflare R2
 
 ### Key Features Implementation
 
@@ -265,7 +266,7 @@ bun --filter @raffi/marketing build
 - Watched/unwatched states
 
 #### Cross-Device Synchronization
-- **Shared authentication** via Ave across desktop and web
+- **One account everywhere** - Sign in on desktop or web with a code sent to your email
 - **Watch progress sync** - Start on desktop or web, continue on another client
 - **Library sync** - Custom lists and favorites across devices
 - **Addon settings** - Configured addons available on all platforms

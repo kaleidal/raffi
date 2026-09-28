@@ -10,14 +10,19 @@ export class HttpError extends Error {
   }
 }
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "Authorization, Content-Type",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Expose-Headers": "set-auth-jwt",
+  "Access-Control-Max-Age": "86400",
+};
+
 export const json = (body: unknown, status = 200, headers?: HeadersInit) =>
   Response.json(body, {
     status,
     headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "Authorization, Content-Type",
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Max-Age": "86400",
+      ...CORS_HEADERS,
       ...headers,
     },
   });
@@ -25,13 +30,18 @@ export const json = (body: unknown, status = 200, headers?: HeadersInit) =>
 export const empty = (status = 204) =>
   new Response(null, {
     status,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "Authorization, Content-Type",
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Max-Age": "86400",
-    },
+    headers: CORS_HEADERS,
   });
+
+export const withCors = (response: Response) => {
+  const headers = new Headers(response.headers);
+  for (const [name, value] of Object.entries(CORS_HEADERS)) headers.set(name, value);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+};
 
 export const readJson = async <T = JsonValue>(request: Request): Promise<T> => {
   const contentType = request.headers.get("content-type") || "";

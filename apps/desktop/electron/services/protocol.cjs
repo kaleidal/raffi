@@ -1,7 +1,4 @@
 const ALLOWED_EXTERNAL_HOSTS = new Set([
-  "aveid.net",
-  "www.aveid.net",
-  "api.aveid.net",
   "github.com",
   "www.github.com",
   "stator.sh",
@@ -45,7 +42,6 @@ function isAllowedExternalUrl(value) {
 function createProtocolUrlHandler({
   logToFile,
   getMainWindow,
-  setPendingAveAuthPayload,
   setPendingTraktAuthPayload,
 }) {
   return function handleProtocolUrl(url) {
@@ -60,18 +56,6 @@ function createProtocolUrlHandler({
         error: parsed.searchParams.get("error") || undefined,
         url,
       };
-
-      if (parsed.hostname === "auth" && parsed.pathname === "/callback") {
-        setPendingAveAuthPayload(payload);
-        const mainWindow = getMainWindow();
-        if (mainWindow && mainWindow.webContents) {
-          mainWindow.__raffiMiniPlayer?.exit?.({ focus: false });
-          mainWindow.webContents.send("AVE_AUTH_CALLBACK", payload);
-          if (mainWindow.isMinimized()) mainWindow.restore();
-          mainWindow.focus();
-        }
-        return true;
-      }
 
       if (parsed.hostname === "trakt" && parsed.pathname === "/callback") {
         setPendingTraktAuthPayload(payload);

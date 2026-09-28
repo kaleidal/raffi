@@ -9,11 +9,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     disableRPC: () => ipcRenderer.send('RPC_DISABLE'),
     onOpenFile: (callback) => ipcRenderer.on('open-file', (_event, value) => callback(value)),
     openExternal: (url) => ipcRenderer.invoke('OPEN_EXTERNAL_URL', url),
-    onAveAuthCallback: (callback) => {
-        const handler = (_event, payload) => callback(payload);
-        ipcRenderer.on('AVE_AUTH_CALLBACK', handler);
-        return () => ipcRenderer.removeListener('AVE_AUTH_CALLBACK', handler);
-    },
     onTraktAuthCallback: (callback) => {
         const handler = (_event, payload) => callback(payload);
         ipcRenderer.on('TRAKT_AUTH_CALLBACK', handler);

@@ -13,7 +13,6 @@
 	} from "../../../lib/db/db";
 	import {
         currentUser,
-        signInWithAve,
         signOutToLocalMode,
         localMode,
 		authInitializing,
@@ -24,11 +23,11 @@
     import FeedbackSection from "./settings/FeedbackSection.svelte";
     import LoadingSpinner from "../../common/LoadingSpinner.svelte";
 	import UpdateSection from "./settings/UpdateSection.svelte";
-	import LocalModeSignInSection from "./settings/LocalModeSignInSection.svelte";
+	import LocalModeSignInSection from "./settings/account/LocalModeSignInSection.svelte";
 	import PreferencesSection from "./settings/PreferencesSection.svelte";
 	import LocalLibrarySection from "./settings/LocalLibrarySection.svelte";
-	import AccountSection from "./settings/AccountSection.svelte";
-	import AccountStateMismatchSection from "./settings/AccountStateMismatchSection.svelte";
+	import AccountSection from "./settings/account/AccountSection.svelte";
+	import AccountStateMismatchSection from "./settings/account/AccountStateMismatchSection.svelte";
 	import StremioImportModal from "./StremioImportModal.svelte";
 
 	const portal = (node: HTMLElement) => {
@@ -53,13 +52,11 @@
 		showsWatched: 0,
 	};
 
-	let message = "";
 	let error = "";
 	let showUpdateNotes = false;
 	let showSignOutModal = false;
 	let showStremioImport = false;
 	let stremioConnectionRevision = 0;
-	let aveLoading = false;
 	let bodyLocked = false;
 
 	const refreshStats = async () => {
@@ -206,7 +203,6 @@
 
 	async function switchToLocalMode(keepData: boolean) {
 		if (!$currentUser) return;
-		message = "";
 		error = "";
 		showSignOutModal = false;
 		try {
@@ -217,9 +213,6 @@
 			}
 			signOutToLocalMode();
 			await refreshStats();
-			message = keepData
-				? "Switched to local mode. Your device data stays available offline."
-				: "Switched to local mode with a fresh local library.";
 			router.navigate("home");
 		} catch (e: any) {
 			console.error("Failed to switch to local mode", e);
@@ -229,38 +222,20 @@
 
 	function recoverToLocalMode() {
 		signOutToLocalMode();
-		message = "Recovered auth state. You are now in local mode.";
 		error = "";
 	}
 
-
-	async function handleAveLogin() {
-		error = "";
-		message = "";
-		aveLoading = true;
-		try {
-			await signInWithAve();
-			await refreshStats();
-			message = "Signed in. Local data will keep working and sync in the background.";
-			setTimeout(() => {
-				close();
-				router.navigate("home");
-			}, 500);
-		} catch (e: any) {
-			console.error(e);
-			error = e?.message || "Failed to sign in";
-		} finally {
-			aveLoading = false;
-		}
+	async function handleSignedIn() {
+		await refreshStats();
+		close();
+		router.navigate("home");
 	}
 
 	async function syncNow() {
-		message = "";
 		error = "";
 		try {
 			const result = await syncCloudBackupNow();
 			if (result?.ok) {
-				message = "Cloud backup synced successfully.";
 				await refreshStats();
 			} else {
 				error = "Cloud backup is currently unavailable.";
@@ -306,14 +281,9 @@
 			on:wheel|stopPropagation
 		>
 			<div class="relative z-10 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-				<div>
-					<h2 class="text-white text-3xl font-poppins font-bold">
-						Settings
-					</h2>
-					<p class="text-white/60 text-sm">
-						Personalize Raffi with an account-first layout and cleaner controls.
-					</p>
-				</div>
+				<h2 class="text-white text-3xl font-poppins font-bold">
+					Settings
+				</h2>
 				<div class="flex items-center gap-3 justify-end">
 					<button
 						on:click={close}
@@ -330,7 +300,7 @@
 					<div class="min-h-0 min-w-0 overflow-y-auto pr-1 md:pr-3">
 						<div class="flex flex-col gap-5 pb-1">
 								{#if $localMode}
-									<LocalModeSignInSection aveLoading={aveLoading} onAveLogin={handleAveLogin} />
+									<LocalModeSignInSection onSignedIn={handleSignedIn} />
 								{:else if $authInitializing}
 									<div class="rounded-[28px] bg-white/4 p-6 flex flex-col items-center justify-center gap-3 text-center">
 										<LoadingSpinner size="30px" />

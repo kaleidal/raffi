@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { onMount } from "svelte";
-	import { currentUser, localMode } from "../../../../lib/stores/authStore";
 	import {
 		cloudSyncStatus,
 		type TraktStatus,
@@ -10,8 +8,9 @@
 		syncStremioLibrary,
 		disconnectStremio,
 		type StremioConnectionStatus,
-	} from "../../../../lib/db/db";
-	import { signInWithTraktViaBrowser } from "../../../../lib/auth/traktAuth";
+	} from "../../../../../lib/db/db";
+	import { signInWithTraktViaBrowser } from "../../../../../lib/auth/traktAuth";
+	import AccountProfile from "./AccountProfile.svelte";
 
 	let traktLoading = false;
 	let traktStatus: TraktStatus | null = null;
@@ -37,17 +36,12 @@
 		return new Date(value).toLocaleString();
 	};
 
-	$: accountName = $currentUser?.name || $currentUser?.email?.split("@")[0] || "Local viewer";
-	$: accountEmail = $currentUser?.email || "No email on file";
-	$: avatarInitial = (accountName || "?").slice(0, 1).toUpperCase();
 	$: pendingSyncCount = $cloudSyncStatus.pendingUploads + $cloudSyncStatus.pendingDeletes;
-	$: syncStatusLabel = $localMode
-		? "Device only"
-		: $cloudSyncStatus.isSyncing
-			? "Syncing"
-			: $cloudSyncStatus.lastError
-				? "Sync failed"
-				: "Sync ready";
+	$: syncStatusLabel = $cloudSyncStatus.isSyncing
+		? "Syncing"
+		: $cloudSyncStatus.lastError
+			? "Sync failed"
+			: "Sync ready";
 	$: syncStatusDetail = $cloudSyncStatus.lastError
 		? (
 			$cloudSyncStatus.lastSuccessAt
@@ -55,7 +49,6 @@
 				: "No successful sync yet"
 		)
 		: `Last sync ${formatTimestamp($cloudSyncStatus.lastSuccessAt)}`;
-	$: showSyncNow = !$localMode && $cloudSyncStatus.cloudFeaturesAvailable;
 	$: traktActionLabel = traktLoading
 		? "Loading..."
 		: traktBusy
@@ -72,29 +65,17 @@
 
 	$: stremioActionLabel = stremioBusy ? "Syncing..." : "Sync now";
 
-	onMount(() => {
-		stremioStatus = getStremioStatus();
-		if (!$localMode && $currentUser && $cloudSyncStatus.cloudFeaturesAvailable && !traktStatusRequested) {
-			traktStatusRequested = true;
-			void loadTraktStatus();
-		}
-	});
-
-	$: if ($localMode || !$cloudSyncStatus.cloudFeaturesAvailable) {
+	$: if (!$cloudSyncStatus.cloudFeaturesAvailable) {
 		traktStatusRequested = false;
 		traktStatus = null;
 	}
 
-	$: if (!$localMode && $currentUser && $cloudSyncStatus.cloudFeaturesAvailable && !traktStatusRequested) {
+	$: if ($cloudSyncStatus.cloudFeaturesAvailable && !traktStatusRequested) {
 		traktStatusRequested = true;
 		void loadTraktStatus();
 	}
 
 	async function loadTraktStatus() {
-		if ($localMode || !$currentUser || !$cloudSyncStatus.cloudFeaturesAvailable) {
-			traktStatus = null;
-			return;
-		}
 		traktLoading = true;
 		traktError = "";
 		try {
@@ -177,35 +158,7 @@
 
 <section class="flex flex-col gap-5">
 	<div class="rounded-[28px] bg-white/4 p-6 flex flex-col gap-5">
-		<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-			<div class="flex items-center gap-4 min-w-0">
-				<div class="h-18 w-18 rounded-[26px] bg-white/9 overflow-hidden shrink-0 flex items-center justify-center text-white text-2xl font-semibold">
-					{#if $currentUser?.avatar}
-						<img
-							src={$currentUser.avatar}
-							alt={accountName}
-							class="h-full w-full object-cover"
-						/>
-					{:else}
-						{avatarInitial}
-					{/if}
-				</div>
-				<div class="min-w-0">
-					<p class="text-white text-2xl font-semibold truncate">{accountName}</p>
-					<p class="text-white/62 text-sm break-all">{accountEmail}</p>
-					<div class="mt-3 flex flex-wrap gap-2">
-						<div class="rounded-full bg-black/25 px-3 py-1 text-xs font-medium text-white/78">
-							{$localMode ? "Local" : "Cloud"}
-						</div>
-						{#if !$localMode && $cloudSyncStatus.cloudFeaturesAvailable}
-							<div class="rounded-full bg-white/8 px-3 py-1 text-xs text-white/72">
-								{$cloudSyncStatus.isSyncing ? "Syncing now" : `${pendingSyncCount} queued change${pendingSyncCount === 1 ? "" : "s"}`}
-							</div>
-						{/if}
-					</div>
-				</div>
-			</div>
-		</div>
+		<AccountProfile />
 
 		<div class="grid gap-3 sm:grid-cols-2">
 			<div class="rounded-2xl bg-black/20 px-4 py-4">
@@ -221,7 +174,7 @@
 		</div>
 
 		<div class="flex flex-wrap gap-3">
-			{#if showSyncNow}
+			{#if $cloudSyncStatus.cloudFeaturesAvailable}
 				<button
 					class="bg-white/10 text-white px-4 py-2 rounded-2xl font-semibold hover:bg-white/20 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
 					on:click={onSyncNow}
@@ -280,9 +233,6 @@
 			{:else}
 				{#if traktStatus && !traktStatus.configured}
 					<p class="text-white/60 text-sm">Trakt is not configured yet in this build.</p>
-				{/if}
-				{#if traktStatus && !traktStatus.configured}
-					<p class="text-white/50 text-sm">This slot is ready for future integrations too.</p>
 				{/if}
 			{/if}
 

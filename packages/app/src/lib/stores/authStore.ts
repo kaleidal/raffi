@@ -1,11 +1,24 @@
 import type { AppUser } from "../auth/types";
 import {
-    adoptLegacyAveSession,
-    clearAveSessionStorage,
-    forceRefreshAveUserSession,
-    restoreAveUserFromSession,
-    signInWithAveViaBrowser,
-} from "../auth/aveAuth";
+    AccountRequestError,
+    fetchActiveSession,
+    fetchSessionJwt,
+    handOffAveSession,
+    isRejectedSession,
+    requestSignInCode,
+    revokeSession,
+    updateAccountName,
+    verifySignInCode,
+    type SignedInSession,
+} from "../auth/accountApi";
+import { prepareAvatarImage } from "../auth/avatarImage";
+import { clearLegacyAveSession, readLegacyAveTokens } from "../auth/legacyAveSession";
+import {
+    clearStoredSession,
+    readStoredSession,
+    storeSessionToken,
+    storeSessionUser,
+} from "../auth/storedSession";
 import {
     ensureDefaultAddonsForUser,
     ensureDefaultAddonsForLocal,
@@ -22,6 +35,8 @@ import {
     setRaffiSyncAuthFailureHandler,
     setRaffiSyncAuthRefreshHandler,
     setRaffiSyncAuthToken,
+    syncDelete,
+    syncPut,
 } from "../db/raffiSync";
 import { writable } from "svelte/store";
 
@@ -34,9 +49,12 @@ export type UpdateStatus = {
     releaseDate: string | null;
 };
 
+export type SignInChangeNotice = "signed-in" | "sign-in-needed";
+
 export const currentUser = writable<AppUser | null>(null);
 export const localMode = writable(false);
 export const authInitializing = writable(false);
+export const signInChangeNotice = writable<SignInChangeNotice | null>(null);
 export const updateStatus = writable<UpdateStatus>({
     available: false,
     downloaded: false,
@@ -47,12 +65,10 @@ export const updateStatus = writable<UpdateStatus>({
 });
 
 const LOCAL_MODE_KEY = "local_mode_enabled";
-const AVE_USER_KEY = "ave_user";
-const AVE_TOKEN_KEY = "ave_token_jwt";
-const AVE_REFRESH_TOKEN_KEY = "ave_refresh_token";
 const HOME_REFRESH_EVENT = "raffi:home-refresh";
 
 let userCache: AppUser | null = null;
+let sessionToken: string | null = null;
 let initialized = false;
 let seededUserId: string | null = null;
 
@@ -89,49 +105,6 @@ export const disableLocalMode = () => {
     persistLocalMode(false);
 };
 
-const persistAveSession = (user: AppUser | null) => {
-    if (typeof window === "undefined") return;
-    if (!user) {
-        localStorage.removeItem(AVE_USER_KEY);
-        localStorage.removeItem(AVE_TOKEN_KEY);
-        localStorage.removeItem(AVE_REFRESH_TOKEN_KEY);
-        return;
-    }
-    localStorage.setItem(AVE_USER_KEY, JSON.stringify({
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        avatar: user.avatar,
-        provider: user.provider,
-    }));
-    localStorage.removeItem(AVE_TOKEN_KEY);
-    localStorage.removeItem(AVE_REFRESH_TOKEN_KEY);
-};
-
-const readLegacyAveSession = (): AppUser | null => {
-    if (typeof window === "undefined") return null;
-    try {
-        const userRaw = localStorage.getItem(AVE_USER_KEY);
-        const token = localStorage.getItem(AVE_TOKEN_KEY);
-        const refreshToken = localStorage.getItem(AVE_REFRESH_TOKEN_KEY);
-        if (!userRaw || !token) return null;
-        const parsed = JSON.parse(userRaw);
-        if (!parsed?.id) return null;
-        return {
-            id: String(parsed.id),
-            email: parsed.email ?? null,
-            name: parsed.name ?? null,
-            avatar: parsed.avatar ?? null,
-            provider: "ave",
-            token,
-            refreshToken: refreshToken ?? parsed.refreshToken ?? null,
-        };
-    } catch (error) {
-        if (isPermanentAveRefreshError(error)) return null;
-        throw error;
-    }
-};
-
 const emitHomeRefresh = (options: { preserveHero?: boolean } = {}) => {
     if (typeof window === "undefined") return;
     window.dispatchEvent(new CustomEvent(HOME_REFRESH_EVENT, {
@@ -141,16 +114,24 @@ const emitHomeRefresh = (options: { preserveHero?: boolean } = {}) => {
     }));
 };
 
-const isPermanentAveRefreshError = (error: any) => {
-    const message = String(error?.message || "").toLowerCase();
-    return (
-        message.includes("invalid refresh token") ||
-        message.includes("refresh token not found") ||
-        message.includes("invalid_grant") ||
-        message.includes("refresh token expired") ||
-        message.includes("refresh token revoked") ||
-        message.includes("token has been revoked")
-    );
+const setActiveUser = (user: AppUser | null) => {
+    userCache = user;
+    currentUser.set(user);
+    if (user) storeSessionUser(user);
+};
+
+const adoptSession = (session: SignedInSession) => {
+    sessionToken = session.sessionToken;
+    storeSessionToken(session.sessionToken);
+    setActiveUser(session.user);
+};
+
+const forgetSession = () => {
+    sessionToken = null;
+    userCache = null;
+    currentUser.set(null);
+    clearStoredSession();
+    setRaffiSyncAuthToken(null);
 };
 
 async function seedDefaultsIfNeeded(user: AppUser | null) {
@@ -162,16 +143,13 @@ async function seedDefaultsIfNeeded(user: AppUser | null) {
 }
 
 async function hydrateSignedInState(context: string) {
-    let shouldRefreshHome = false;
-
     try {
         const result = await hydrateLocalBackupFromCloud();
-        shouldRefreshHome = shouldRefreshHome || result.ok;
+        return result.ok;
     } catch (error) {
         console.error(`${context} cloud hydrate failed`, error);
+        return false;
     }
-
-    return shouldRefreshHome;
 }
 
 async function seedSignedInDefaults(user: AppUser, context: string) {
@@ -184,12 +162,12 @@ async function seedSignedInDefaults(user: AppUser, context: string) {
     }
 }
 
-async function finishSignedInStartup(user: AppUser) {
-    let shouldRefreshHome = await hydrateSignedInState("Startup sync");
+async function syncSignedInUser(user: AppUser, context: string) {
+    let shouldRefreshHome = await hydrateSignedInState(context);
 
     const syncResult = await syncLocalStateToUser(user.id);
     shouldRefreshHome = shouldRefreshHome || syncResult.ok;
-    shouldRefreshHome = await seedSignedInDefaults(user, "Startup sync") || shouldRefreshHome;
+    shouldRefreshHome = await seedSignedInDefaults(user, context) || shouldRefreshHome;
     void flushPendingLibraryProgress();
 
     if (hasLocalState()) {
@@ -203,45 +181,56 @@ async function finishSignedInStartup(user: AppUser) {
     }
 }
 
-const resolveStoredAveUser = async (legacyUser: AppUser | null): Promise<AppUser | null> => {
+async function restoreStoredSession(): Promise<AppUser | null> {
+    const stored = readStoredSession();
+    if (!stored) return null;
+    sessionToken = stored.sessionToken;
+
     try {
-        const sessionUser = await restoreAveUserFromSession(legacyUser);
-        if (sessionUser) return sessionUser;
-        if (!legacyUser) return null;
-        return await adoptLegacyAveSession(legacyUser);
+        const active = await fetchActiveSession(stored.sessionToken);
+        setRaffiSyncAuthToken(active.jwt);
+        setActiveUser(active.user);
+        return active.user;
     } catch (error) {
-        if (!isPermanentAveRefreshError(error) && !String((error as any)?.message || "").includes("No Ave session")) {
-            console.error("Ave session restore failed", error);
+        if (isRejectedSession(error)) {
+            forgetSession();
+            return null;
+        }
+        console.error("Session restore failed", error);
+        setActiveUser(stored.user);
+        return stored.user;
+    }
+}
+
+async function handOffLegacyAveSession(): Promise<AppUser | null> {
+    const tokens = readLegacyAveTokens();
+    if (!tokens) return null;
+
+    try {
+        const session = await handOffAveSession(tokens);
+        clearLegacyAveSession();
+        adoptSession(session);
+        signInChangeNotice.set("signed-in");
+        setRaffiSyncAuthToken(await fetchSessionJwt(session.sessionToken).catch(() => null));
+        return session.user;
+    } catch (error) {
+        if (error instanceof AccountRequestError) {
+            clearLegacyAveSession();
+            signInChangeNotice.set("sign-in-needed");
+        } else {
+            console.error("Account handoff failed", error);
         }
         return null;
     }
-};
+}
 
-const clearAveSession = () => {
-    userCache = null;
-    currentUser.set(null);
-    persistAveSession(null);
-    void clearAveSessionStorage();
-    setRaffiSyncAuthToken(null);
-};
-
-const applyRefreshedUser = (refreshed: AppUser) => {
-    userCache = refreshed;
-    currentUser.set(refreshed);
-    setRaffiSyncAuthToken(refreshed.token);
-};
-
-const refreshSessionFromSyncAuthFailure = async (): Promise<string | null> => {
-    const activeUser = userCache;
-    if (!activeUser) return null;
-
+const refreshSessionJwt = async (): Promise<string | null> => {
+    if (!sessionToken) return null;
     try {
-        const refreshed = await forceRefreshAveUserSession(activeUser);
-        applyRefreshedUser(refreshed);
-        persistAveSession(refreshed);
-        return refreshed.token;
-    } catch {
-        return null;
+        return await fetchSessionJwt(sessionToken);
+    } catch (error) {
+        if (isRejectedSession(error)) return null;
+        throw error;
     }
 };
 
@@ -251,31 +240,19 @@ export async function initAuth() {
     authInitializing.set(true);
 
     try {
-        const storedLocalMode = readLocalMode();
         const hasStoredLocalMode = typeof window !== "undefined" && localStorage.getItem(LOCAL_MODE_KEY) !== null;
-        localMode.set(hasStoredLocalMode ? storedLocalMode : true);
+        localMode.set(hasStoredLocalMode ? readLocalMode() : true);
         if (!hasStoredLocalMode) {
             persistLocalMode(true);
         }
 
-        const legacyUser = readLegacyAveSession();
-        const activeUser = await resolveStoredAveUser(legacyUser);
+        const activeUser = await restoreStoredSession() ?? await handOffLegacyAveSession();
 
         if (activeUser) {
-            userCache = activeUser;
-            currentUser.set(activeUser);
-            setRaffiSyncAuthToken(activeUser.token);
-            persistAveSession(activeUser);
-        } else if (legacyUser) {
-            clearAveSession();
-            enableLocalMode();
-        }
-
-        if (userCache) {
             disableLocalMode();
             resetRemoteStateCache();
             startCloudReconciliationLoop();
-            void finishSignedInStartup(userCache);
+            void syncSignedInUser(activeUser, "Startup sync");
         } else {
             enableLocalMode();
             void ensureDefaultAddonsForLocal().then(() => emitHomeRefresh());
@@ -285,48 +262,55 @@ export async function initAuth() {
     }
 }
 
-export async function signInWithAve() {
-    const user = await signInWithAveViaBrowser();
-    userCache = user;
-    currentUser.set(user);
-    setRaffiSyncAuthToken(user.token);
-    persistAveSession(user);
+export const sendSignInCode = (email: string) => requestSignInCode(email);
+
+export async function signInWithCode(email: string, code: string) {
+    const session = await verifySignInCode(email, code);
+    adoptSession(session);
+    setRaffiSyncAuthToken(await fetchSessionJwt(session.sessionToken));
+    signInChangeNotice.set(null);
 
     disableLocalMode();
     resetRemoteStateCache();
     startCloudReconciliationLoop();
-
-    let shouldRefreshHome = await hydrateSignedInState("Sign-in sync");
-
-    const syncResult = await syncLocalStateToUser(user.id);
-    shouldRefreshHome = shouldRefreshHome || syncResult.ok;
-    shouldRefreshHome = await seedSignedInDefaults(user, "Sign-in sync") || shouldRefreshHome;
-    void flushPendingLibraryProgress();
-    if (hasLocalState()) {
-        void warmRemoteStateCache().then((merged) => {
-            if (merged) emitHomeRefresh();
-        });
-    }
-
-    if (shouldRefreshHome) {
-        emitHomeRefresh();
-    }
+    await syncSignedInUser(session.user, "Sign-in sync");
 }
 
 export async function signOutToLocalMode() {
+    const revokedToken = sessionToken;
     stopCloudReconciliationLoop();
-    userCache = null;
-    currentUser.set(null);
-    persistAveSession(null);
+    forgetSession();
     resetRemoteStateCache();
     enableLocalMode();
     emitHomeRefresh();
-    await clearAveSessionStorage().catch(() => undefined);
+    if (revokedToken) await revokeSession(revokedToken).catch(() => undefined);
+}
+
+const updateActiveUser = (changes: Partial<AppUser>) => {
+    if (!userCache) return;
+    setActiveUser({ ...userCache, ...changes });
+};
+
+export async function renameAccount(name: string) {
+    if (!sessionToken) return;
+    const trimmed = name.trim();
+    await updateAccountName(sessionToken, trimmed);
+    updateActiveUser({ name: trimmed || null });
+}
+
+export async function changeAccountAvatar(file: Blob) {
+    const { image } = await syncPut<{ image: string }>("/profile/avatar", await prepareAvatarImage(file));
+    updateActiveUser({ avatar: image });
+}
+
+export async function removeAccountAvatar() {
+    await syncDelete("/profile/avatar");
+    updateActiveUser({ avatar: null });
 }
 
 export function getCachedUser(): AppUser | null {
     return userCache;
 }
 
-setRaffiSyncAuthRefreshHandler(refreshSessionFromSyncAuthFailure);
+setRaffiSyncAuthRefreshHandler(refreshSessionJwt);
 setRaffiSyncAuthFailureHandler(signOutToLocalMode);

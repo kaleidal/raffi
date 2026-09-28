@@ -3,6 +3,7 @@
   "name": "raffi-sync",
   "account_id": "ab780d52c6d4df0c826897411f1558e0",
   "main": "src/index.ts",
+  "minify": true,
   "routes": [
     {
       "pattern": "sync.raffi.al",
@@ -16,10 +17,26 @@
     "head_sampling_rate": 1
   },
   "vars": {
+    "BETTER_AUTH_URL": "https://sync.raffi.al",
+    "EMAIL_FROM": "sign-in@raffi.al",
+    "TRUSTED_ORIGINS": "raffi-app://app,https://web.raffi.al",
     "AVE_CLIENT_ID": "app_13afc5b8884e9985d89eac0f4ca4b5af",
     "AVE_ISSUER": "https://aveid.net",
+    "AVE_ACCEPTED_UNTIL": "2026-11-01T00:00:00Z",
     "TRAKT_REDIRECT_URI": "raffi://trakt/callback"
   },
+  "send_email": [
+    {
+      "name": "EMAIL",
+      "allowed_sender_addresses": ["sign-in@raffi.al"]
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "AVATARS",
+      "bucket_name": "raffi-avatars"
+    }
+  ],
   "d1_databases": [
     {
       "binding": "DB",

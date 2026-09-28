@@ -1,7 +1,7 @@
 const DEFAULT_SYNC_URL = "https://sync.raffi.al";
 
 const configuredUrl = import.meta.env.VITE_RAFFI_SYNC_URL as string | undefined;
-const RAFFI_SYNC_URL = (configuredUrl || DEFAULT_SYNC_URL).replace(/\/+$/, "");
+export const RAFFI_SYNC_URL = (configuredUrl || DEFAULT_SYNC_URL).replace(/\/+$/, "");
 
 let authToken: string | null = null;
 let authRefreshHandler: (() => Promise<string | null>) | null = null;
@@ -63,7 +63,7 @@ const invalidateCloudSession = async (): Promise<never> => {
 };
 
 const cloudAuthenticationUnavailable = (): never => {
-    throw new Error("Cloud authentication is temporarily unavailable. Your Ave session is still signed in.");
+    throw new Error("Cloud authentication is temporarily unavailable. You're still signed in.");
 };
 
 const ensureValidAuthToken = async () => {
@@ -99,7 +99,7 @@ const syncRequest = async <T>(
 
     const headers = new Headers(init.headers);
     headers.set("Accept", "application/json");
-    if (init.body !== undefined) headers.set("Content-Type", "application/json");
+    if (init.body !== undefined && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
     if (authToken) headers.set("Authorization", `Bearer ${authToken}`);
 
     const response = await fetch(`${RAFFI_SYNC_URL}${path}`, {
@@ -150,4 +150,16 @@ export const syncPost = async <T = unknown>(path: string, body: unknown = {}): P
         method: "POST",
         body: JSON.stringify(body),
     });
+};
+
+export const syncPut = async <T = unknown>(path: string, body: Blob): Promise<T> => {
+    return syncRequest<T>(path, {
+        method: "PUT",
+        headers: { "Content-Type": body.type },
+        body,
+    });
+};
+
+export const syncDelete = async <T = unknown>(path: string): Promise<T> => {
+    return syncRequest<T>(path, { method: "DELETE" });
 };
