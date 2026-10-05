@@ -39,6 +39,11 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="0.14.0" date="2026-10-05">
+      <description>
+        <p>Sign in with a code sent to your email, profile names and photos, and refreshed home posters.</p>
+      </description>
+    </release>
     <release version="0.13.0" date="2026-08-25">
       <description>
         <p>Improved playback reliability, Limbo torrent integration, cloud synchronization, watched progress, and responsive player controls.</p>
