@@ -19,7 +19,7 @@
   "vars": {
     "BETTER_AUTH_URL": "https://sync.raffi.al",
     "EMAIL_FROM": "sign-in@raffi.al",
-    "TRUSTED_ORIGINS": "raffi-app://app,https://web.raffi.al",
+    "TRUSTED_ORIGINS": "raffi-app://app,https://web.raffi.al,http://localhost:*",
     "AVE_CLIENT_ID": "app_13afc5b8884e9985d89eac0f4ca4b5af",
     "AVE_ISSUER": "https://aveid.net",
     "AVE_ACCEPTED_UNTIL": "2026-11-01T00:00:00Z",

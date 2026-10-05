@@ -77,7 +77,6 @@ For local development, create `.dev.vars`:
 ```bash
 BETTER_AUTH_SECRET=<openssl rand -base64 32>
 BETTER_AUTH_URL=http://localhost:8787
-TRUSTED_ORIGINS=raffi-app://app,http://localhost:*
 ```
 
 `wrangler dev` doesn't send email. It prints each sign-in code to the console instead.
