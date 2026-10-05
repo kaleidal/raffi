@@ -17,7 +17,7 @@ export type MseVideoOutput = {
 	mime: string;
 };
 
-export async function createTranscodingConversion(options: {
+export async function createPlaybackConversion(options: {
 	input: Input;
 	output: Output;
 	primaryVideoTrack: InputVideoTrack;
@@ -32,13 +32,17 @@ export async function createTranscodingConversion(options: {
 		showWarnings: false,
 		video: (track) =>
 			track.id === options.primaryVideoTrack.id
-				? { codec: options.videoOutput.codec, forceTranscode: true }
+				? {
+						codec: options.videoOutput.codec,
+						forceTranscode: options.videoOutput.forceTranscode,
+					}
 				: { discard: true },
 		audio: async (track) =>
 			track.id === options.selectedInputAudioTrack?.id
 				? audioConversionOptions(track)
 				: { discard: true },
 		trim: { start: options.startTimestamp },
+		copy: { boundaryPolicy: "shrink" },
 	});
 
 	const retainedVideo = conversion.utilizedTracks.some(
@@ -55,7 +59,7 @@ export async function createTranscodingConversion(options: {
 				entry.track.id === options.primaryVideoTrack.id,
 		)?.reason;
 		throw new Error(
-			`MediaBunny could not transcode ${codec} video on this platform${reason ? ` (${reason})` : ""}`,
+			`MediaBunny could not ${options.videoOutput.forceTranscode ? "transcode" : "remux"} ${codec} video on this platform${reason ? ` (${reason})` : ""}`,
 		);
 	}
 
@@ -95,7 +99,7 @@ export function isBenignConversionError(error: unknown): boolean {
 	);
 }
 
-export async function audioConversionOptions(track: InputAudioTrack) {
+async function audioConversionOptions(track: InputAudioTrack) {
 	const codec = await track.getCodec();
 	if (MSE_COPYABLE_AUDIO.has(codec)) return { codec: "aac" as AudioCodec };
 	await ensureAudioDecoderRegistered(codec);

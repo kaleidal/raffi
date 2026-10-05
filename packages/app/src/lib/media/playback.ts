@@ -1,6 +1,7 @@
 import {
 	ALL_FORMATS,
 	AppendOnlyStreamTarget,
+	type Conversion,
 	Input,
 	Mp4OutputFormat,
 	Output,
@@ -16,14 +17,9 @@ import {
 } from "./probe";
 import { pickMseMimeType, pumpStreamToSourceBuffer, RESUME_BUFFER_AHEAD_SECONDS, TARGET_BUFFER_AHEAD_SECONDS, getBufferedAheadSeconds } from "./msePump";
 import { ensureMediaCodersRegistered } from "./registerCoders";
-import {
-	KeyframeCopyConversion,
-	type PlaybackConversion,
-} from "./keyframeCopyConversion";
 import { snapToVideoKeyframe } from "./videoKeyframes";
 import {
-	audioConversionOptions,
-	createTranscodingConversion,
+	createPlaybackConversion,
 	isBenignConversionError,
 	type MseVideoOutput,
 	waitForBufferedThrough,
@@ -83,7 +79,7 @@ export class MediaBunnyPlayback {
 	private mediaSource: MediaSource | null = null;
 	private sourceBuffer: SourceBuffer | null = null;
 	private objectUrl: string | null = null;
-	private conversion: PlaybackConversion | null = null;
+	private conversion: Conversion | null = null;
 	private input: Input | null = null;
 	private abort: AbortController | null = null;
 	private networkAbort: AbortController | null = null;
@@ -330,7 +326,7 @@ export class MediaBunnyPlayback {
 	 * raced the writable stream (ERRORED) when the pump canceled the reader first.
 	 */
 	private async runConversionWindowed(
-		conversion: PlaybackConversion,
+		conversion: Conversion,
 		mediaSource: MediaSource,
 		generation: number,
 		abort: AbortController,
@@ -498,24 +494,14 @@ export class MediaBunnyPlayback {
 			target: new AppendOnlyStreamTarget(writable),
 		});
 
-		const conversion = videoOutput.forceTranscode
-			? await createTranscodingConversion({
-					input,
-					output,
-					primaryVideoTrack,
-					selectedInputAudioTrack,
-					videoOutput,
-					startTimestamp: snappedStart,
-				})
-			: await KeyframeCopyConversion.init({
-					input,
-					output,
-					videoTrack: primaryVideoTrack,
-					videoCodec: videoOutput.codec,
-					audioTrack: selectedInputAudioTrack,
-					startTimestamp: snappedStart,
-					audio: audioConversionOptions,
-				});
+		const conversion = await createPlaybackConversion({
+			input,
+			output,
+			primaryVideoTrack,
+			selectedInputAudioTrack,
+			videoOutput,
+			startTimestamp: snappedStart,
+		});
 
 		this.conversion = conversion;
 		let rejectPipeline: (error: unknown) => void = () => {};
