@@ -266,7 +266,7 @@
                             movieProgress.time > 0}
 
                         <button
-                            class="group/poster w-[clamp(150px,13vw,200px)] aspect-[2/3] h-fit appearance-none border-0 bg-transparent p-0 rounded-[16px] transition-[width,transform,box-shadow] duration-300 ease-out cursor-pointer overflow-clip relative flex-shrink-0 hover:-translate-y-1.5 hover:shadow-[0_14px_30px_rgba(0,0,0,0.35)] focus-visible:-translate-y-1.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white/70"
+                            class="w-[clamp(150px,13vw,200px)] aspect-[2/3] h-fit appearance-none border-0 bg-transparent p-0 rounded-[16px] transition-[width,translate,box-shadow] duration-300 ease-out cursor-pointer overflow-clip relative flex-shrink-0 hover:-translate-y-1.5 hover:shadow-[0_14px_30px_rgba(0,0,0,0.35)] focus-visible:-translate-y-1.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white/70"
                             aria-label={`Open ${title.meta.name || "continue watching title"}`}
 
                             on:click={() =>
@@ -286,7 +286,6 @@
                                 src={title.libraryItem.poster ||
                                     title.meta.poster}
                                 title={title.meta.name}
-                                year={title.meta.year || title.meta.releaseInfo}
                                 alt={title.meta.name || "Continue Watching poster"}
                             />
                             {#if isMovieResumable}

@@ -3,7 +3,6 @@
 
     export let src: string | null | undefined = null;
     export let title: string | null | undefined = null;
-    export let year: string | null | undefined = null;
     export let alt = "Poster";
 
     let failed = false;
@@ -18,7 +17,6 @@
     }
 
     $: displayTitle = String(title || "").trim();
-    $: displayYear = String(year || "").trim();
 
     function handleError() {
         failed = true;
@@ -38,23 +36,11 @@
             loading="lazy"
             decoding="async"
             draggable="false"
-            class="block h-full w-full object-cover opacity-0 transition-[opacity,transform] duration-300 ease-out group-hover/poster:scale-[1.025] group-focus-visible/poster:scale-[1.025] {loaded ? 'opacity-100' : ''}"
+            class="block h-full w-full object-cover opacity-0 transition-opacity duration-300 ease-out {loaded ? 'opacity-100' : ''}"
             on:load={() => (loaded = true)}
             on:error={handleError}
         />
 
-        {#if displayTitle}
-            <div
-                class="pointer-events-none absolute inset-x-0 bottom-0 flex translate-y-2 flex-col justify-end bg-gradient-to-t from-black/90 via-black/45 to-transparent px-4 pb-4 pt-14 text-left opacity-0 transition-[opacity,transform] duration-200 ease-out group-hover/poster:translate-y-0 group-hover/poster:opacity-100 group-focus-visible/poster:translate-y-0 group-focus-visible/poster:opacity-100"
-            >
-                <span class="line-clamp-2 text-sm font-semibold leading-snug text-white">
-                    {displayTitle}
-                </span>
-                {#if displayYear}
-                    <span class="mt-0.5 text-xs font-medium text-white/62">{displayYear}</span>
-                {/if}
-            </div>
-        {/if}
         <div
             class="pointer-events-none absolute inset-0 rounded-[inherit] shadow-[inset_0_0_0_1px_rgba(9,9,9,0.88)]"
             aria-hidden="true"

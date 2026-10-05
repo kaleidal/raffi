@@ -166,7 +166,7 @@
     >
             {#each renderedTitles as title (`${title.type}:${title.imdb_id}`)}
                 <button
-                    class="group/poster w-[clamp(150px,13vw,200px)] aspect-[2/3] h-fit appearance-none border-0 bg-transparent p-0 rounded-[16px] transition-[width,transform,box-shadow] duration-300 ease-out cursor-pointer overflow-clip relative flex-shrink-0 hover:-translate-y-1.5 hover:shadow-[0_14px_30px_rgba(0,0,0,0.35)] focus-visible:-translate-y-1.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white/70"
+                    class="w-[clamp(150px,13vw,200px)] aspect-[2/3] h-fit appearance-none border-0 bg-transparent p-0 rounded-[16px] transition-[width,translate,box-shadow] duration-300 ease-out cursor-pointer overflow-clip relative flex-shrink-0 hover:-translate-y-1.5 hover:shadow-[0_14px_30px_rgba(0,0,0,0.35)] focus-visible:-translate-y-1.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white/70"
                     aria-label={`Open ${title.name}`}
 
                     on:click={() => {
@@ -186,7 +186,6 @@
                     <PosterImage
                         src={title.poster}
                         title={title.name}
-                        year={title.year || title.releaseInfo}
                         alt={title.name || `${genre} title poster`}
                     />
                 </button>
