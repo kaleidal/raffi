@@ -208,7 +208,7 @@
 		</div>
 
 		<div class="rounded-2xl bg-black/20 px-4 py-4 space-y-3">
-			<div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+			<div class="flex flex-col gap-3 sm:gap-6 sm:flex-row sm:items-center sm:justify-between">
 				<div>
 					<p class="text-white font-medium">Trakt</p>
 					<p class="text-white/60 text-sm">Send watch progress and playback state to your Trakt profile.</p>
@@ -245,7 +245,7 @@
 		</div>
 
 		<div class="rounded-2xl bg-black/20 px-4 py-4 space-y-3">
-			<div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+			<div class="flex flex-col gap-3 sm:gap-6 sm:flex-row sm:items-center sm:justify-between">
 				<div>
 					<p class="text-white font-medium">Stremio</p>
 					<p class="text-white/60 text-sm">
@@ -255,7 +255,7 @@
 								· since {formatTimestamp(Date.parse(stremioStatus.connectedAt))}
 							{/if}
 						{:else}
-							Import your library and addons once, or stay connected to sync watch progress again later.
+							Import your library and addons, or stay connected to keep progress in sync.
 						{/if}
 					</p>
 				</div>

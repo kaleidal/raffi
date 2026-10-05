@@ -15,14 +15,14 @@
             <div class="flex flex-col gap-1.5">
                 <p class="text-white text-lg font-semibold">Same account, new sign-in</p>
                 <p class="text-white/60 text-sm">
-                    From now on you'll sign in with a code sent to {$currentUser?.email ?? "your email"}. Your library, lists, and settings are right where you left them.
+                    From now on you'll sign in with a code sent to {$currentUser?.email ?? "your email"}, the same email as your Ave ID. Your library, lists, and settings are right where you left them.
                 </p>
             </div>
         {:else}
             <div class="flex flex-col gap-1.5">
                 <p class="text-white text-lg font-semibold">Sign in with your email</p>
                 <p class="text-white/60 text-sm">
-                    Raffi now signs you in with a code sent to your email. Open Settings and use the same email as before to pick up where you left off.
+                    Raffi now signs you in with a code sent to your email. Open Settings and use the same email as your Ave ID to pick up where you left off.
                 </p>
             </div>
         {/if}
