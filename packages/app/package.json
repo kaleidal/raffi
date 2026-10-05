@@ -18,21 +18,21 @@
   "devDependencies": {
     "@typescript/native": "npm:typescript@^7.0.2",
     "@tsconfig/svelte": "^5.0.8",
-    "svelte": "^5.56.8",
-    "svelte-check": "^4.7.5",
+    "svelte": "^5.57.1",
+    "svelte-check": "^4.7.6",
     "tailwindcss": "^4.3.3",
-    "typescript": "^6.0.2",
-    "vite": "^8.2.1"
+    "typescript": "^6.0.3",
+    "vite": "^8.3.2"
   },
   "dependencies": {
     "@fontsource/poppins": "5.3.0",
     "@fontsource/roboto": "5.3.0",
-    "@lucide/svelte": "^1.31.0",
-    "@mediabunny/aac-encoder": "^1.55.3",
-    "@mediabunny/ac3": "^1.55.3",
-    "@mediabunny/dts": "^1.55.3",
-    "hls.js": "^1.6.18",
-    "mediabunny": "^1.55.3"
+    "@lucide/svelte": "^1.52.0",
+    "@mediabunny/aac-encoder": "^1.61.3",
+    "@mediabunny/ac3": "^1.61.3",
+    "@mediabunny/dts": "^1.61.3",
+    "hls.js": "^1.7.3",
+    "mediabunny": "^1.61.3"
   },
   "peerDependencies": {
     "svelte": "^5.0.0"

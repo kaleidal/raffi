@@ -4,14 +4,14 @@
   "type": "module",
   "private": true,
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260927.1",
+    "@cloudflare/workers-types": "^5.20261005.1",
     "@types/bun": "^1.4.2",
     "typescript": "^7.0.2",
-    "wrangler": "^4.142.0"
+    "wrangler": "^4.147.0"
   },
   "dependencies": {
-    "@ave-id/sdk": "^0.11.0",
-    "better-auth": "^1.7.6",
+    "@ave-id/sdk": "^0.12.0",
+    "better-auth": "^1.7.7",
     "jose": "^6.2.12",
     "zod": "^4.6.5"
   },

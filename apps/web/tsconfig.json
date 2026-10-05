@@ -1,5 +1,6 @@
 {
-	"extends": "./.svelte-kit/tsconfig.json",
+	"extends": "$app/tsconfig",
+	"include": ["src", "*"],
 	"compilerOptions": {
 		"allowJs": true,
 		"checkJs": true,
@@ -11,6 +12,4 @@
 		"strict": true,
 		"moduleResolution": "bundler"
 	}
-	// Note: .svelte-kit/tsconfig.json is generated on first `bun run sync` or dev run.
-	// The warning on first start is normal.
 }
