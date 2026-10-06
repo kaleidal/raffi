@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { portal } from "../../common/portal";
     import { createEventDispatcher, onDestroy, tick } from "svelte";
     import { fade, scale } from "svelte/transition";
     import { Check, X } from "@lucide/svelte";
@@ -13,20 +14,6 @@
         defaultSelectedLibraryIds,
     } from "../../../lib/import/stremioImportPreview";
     import LoadingSpinner from "../../common/LoadingSpinner.svelte";
-
-    const portal = (node: HTMLElement) => {
-        if (typeof document === "undefined") {
-            return { destroy() {} };
-        }
-        document.body.appendChild(node);
-        return {
-            destroy() {
-                if (node.parentNode) {
-                    node.parentNode.removeChild(node);
-                }
-            },
-        };
-    };
 
     const dispatch = createEventDispatcher<{
         close: void;

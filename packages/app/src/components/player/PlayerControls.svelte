@@ -4,6 +4,8 @@
     import type { ShowResponse } from "../../lib/library/types/meta_types";
     import type { Chapter } from "../../pages/player/types";
     import ClipPanel from "./ClipPanel.svelte";
+    import SeekPreviewCard from "./SeekPreviewCard.svelte";
+    import type { SeekPreview } from "../../lib/media/preview/seekPreview";
     import { formatTime } from "../../lib/utils/time";
     import {
         CirclePause,
@@ -31,6 +33,7 @@
     export let isWatchPartyMember = false;
     export let showWatchParty = true;
     export let chapterMarkers: Chapter[] = [];
+    export let seekPreview: SeekPreview | null = null;
 
     export let seekBarStyle: "raffi" | "normal" = "raffi";
 
@@ -59,9 +62,22 @@
     let showClipPanel = false;
 
     let seekHoverVisible = false;
-    let seekHoverLeftPct = 0;
+    let seekHoverX = 0;
+    let seekHoverTop = 0;
     let seekHoverTime = 0;
     let seekHoverChapter: Chapter | null = null;
+    let previewFrame: ImageBitmap | null = null;
+
+    const forgetPreviewFrame = (_source: SeekPreview | null) => {
+        previewFrame = null;
+    };
+    $: forgetPreviewFrame(seekPreview);
+
+    const requestPreviewFrame = (preview: SeekPreview, time: number) => {
+        void preview.frameAt(time).then((frame) => {
+            if (frame && seekHoverVisible && preview === seekPreview) previewFrame = frame;
+        });
+    };
 
     const updateSeekHover = (event: MouseEvent) => {
         if (!duration || duration <= 0) return;
@@ -77,11 +93,13 @@
             seekBarStyle === "normal" ? timeAtCursor : duration - timeAtCursor;
 
         seekHoverVisible = true;
-        seekHoverLeftPct = ratio * 100;
+        seekHoverX = rect.left + ratio * rect.width;
+        seekHoverTop = rect.top;
         seekHoverTime = Math.max(0, Math.min(duration, desiredGlobal));
         seekHoverChapter = chapterMarkers.find(
             (chapter) => seekHoverTime >= chapter.startTime && seekHoverTime < chapter.endTime,
         ) ?? null;
+        if (seekPreview) requestPreviewFrame(seekPreview, seekHoverTime);
     };
 
     const hideSeekHover = () => {
@@ -220,16 +238,14 @@
                         step={0.1}
                     />
                     {#if seekHoverVisible && duration > 0}
-                        <div
-                            class="absolute -top-9 z-10 pointer-events-none"
-                            style={`left: ${seekHoverLeftPct}%; transform: translateX(-50%);`}
-                        >
-                            <div
-                                class="tabular-nums bg-[#000000]/60 backdrop-blur-md text-white text-[12px] px-2 py-1 rounded-md"
-                            >
-                                {formatTime(seekHoverTime)}{#if seekHoverChapter} · {seekHoverChapter.title}{/if}
-                            </div>
-                        </div>
+                        <SeekPreviewCard
+                            anchorX={seekHoverX}
+                            anchorTop={seekHoverTop}
+                            time={seekHoverTime}
+                            chapterTitle={seekHoverChapter?.title ?? null}
+                            frame={previewFrame}
+                            withImage={Boolean(seekPreview)}
+                        />
                     {/if}
                 </div>
             </div>

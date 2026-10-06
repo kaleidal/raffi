@@ -102,6 +102,7 @@
         type NextEpisodePrefetchHandoff,
     } from "./session/nextEpisodePrefetch";
     import type { Chapter } from "./types";
+    import { SeekPreview } from "../../lib/media/preview/seekPreview";
     import {
         LONG_PLAYBACK_STALL_MS,
         recordPlaybackStall,
@@ -859,6 +860,7 @@
 
     onDestroy(() => {
         isTearingDown = true;
+        followSeekPreviewSource(null);
         availabilityCheckRun += 1;
         getWindowControls()?.syncMiniPlayerState?.({
             enabled: false,
@@ -1535,6 +1537,14 @@
 
     $: effectiveChapterMarkers = Chapters.getEffectiveChapterSegments($sessionData, introDbChapters);
 
+    let seekPreview: SeekPreview | null = null;
+    const followSeekPreviewSource = (src: string | null) => {
+        if (seekPreview?.src === src) return;
+        seekPreview?.dispose();
+        seekPreview = src ? new SeekPreview(src) : null;
+    };
+    $: followSeekPreviewSource($sessionData?.isDirectHttp ? $sessionData.sourceUrl : null);
+
     $: if (videoElem) {
         videoElem.muted = false;
     }
@@ -1827,6 +1837,7 @@
                         volume={$volume}
                         {seekBarStyle}
                         chapterMarkers={effectiveChapterMarkers}
+                        {seekPreview}
                         {videoSrc}
                         {metaData}
                         currentAudioLabel={$currentAudioLabel}

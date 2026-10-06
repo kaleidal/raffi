@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { portal } from "../../common/portal";
 	import { onDestroy, onMount } from "svelte";
 	import { X } from "@lucide/svelte";
     import { fade, scale } from "svelte/transition";
@@ -30,21 +31,6 @@
 	import AccountStateMismatchSection from "./settings/account/AccountStateMismatchSection.svelte";
 	import StremioImportModal from "./StremioImportModal.svelte";
 
-	const portal = (node: HTMLElement) => {
-		if (typeof document === "undefined") {
-			return { destroy() {} };
-		}
-		document.body.appendChild(node);
-		return {
-			destroy() {
-				if (node.parentNode) {
-					node.parentNode.removeChild(node);
-				}
-			},
-		};
-	};
-
-
 	export let showSettings = false;
 
 	let stats = {
@@ -68,7 +54,6 @@
 			console.error("Failed to load stats", e);
 		}
 	};
-
 
 	onMount(async () => {
 		await refreshStats();
@@ -139,7 +124,6 @@
 		}
 	};
 
-
 	function close() {
 		showSignOutModal = false;
 		showSettings = false;
@@ -171,7 +155,6 @@
 		window.location.assign(target);
 	}
 
-
 	async function downloadData() {
 		try {
 			const library = await getLibrary(10000);
@@ -199,7 +182,6 @@
 			error = "Failed to download data";
 		}
 	}
-
 
 	async function switchToLocalMode(keepData: boolean) {
 		if (!$currentUser) return;
@@ -260,7 +242,6 @@
 		updateBodyLock(false);
 	});
 </script>
-
 
 {#if showSettings}
 	<div

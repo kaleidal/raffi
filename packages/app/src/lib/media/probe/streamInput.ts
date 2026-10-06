@@ -5,6 +5,8 @@ import { createStreamFetch, streamRetryDelay } from "./streamFetch";
 const IDLE_RELEASE_MS = 60_000;
 const MAX_IDLE_INPUTS = 2;
 const CACHE_BYTES = 32 * 1024 * 1024;
+/** Playback keeps up to two sequential reads going; the third keeps seek previews from interrupting them. */
+const CONNECTIONS = 3;
 
 type Entry = {
 	input: Input;
@@ -48,7 +50,7 @@ export function acquireStreamInput(src: string): StreamInput {
 		entry = {
 			input: new Input({
 				source: new UrlSource(src, {
-					parallelism: 2,
+					parallelism: CONNECTIONS,
 					maxCacheSize: CACHE_BYTES,
 					fetchFn: createStreamFetch(subtitles.observe),
 					getRetryDelay: streamRetryDelay,

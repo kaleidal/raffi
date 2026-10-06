@@ -1,25 +1,11 @@
 <script lang="ts">
+    import { portal } from "../../common/portal";
     import { fade, scale } from "svelte/transition";
     import { onDestroy } from "svelte";
     import { X } from "@lucide/svelte";
 
     import CommunityAddonsSection from "./addons/CommunityAddonsSection.svelte";
     import InstalledAddonsSection from "./addons/InstalledAddonsSection.svelte";
-
-    const portal = (node: HTMLElement) => {
-        if (typeof document === "undefined") {
-            return { destroy() {} };
-        }
-        document.body.appendChild(node);
-        return {
-            destroy() {
-                if (node.parentNode) {
-                    node.parentNode.removeChild(node);
-                }
-            },
-        };
-    };
-
 
     export let showAddonsModal = false;
     export let initialResourceFilter: "all" | "stream" | "subtitles" | "catalog" | "meta" = "all";

@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { portal } from "../../common/portal";
     import { fade } from "svelte/transition";
     import {
         getLists,
@@ -9,21 +10,6 @@
         type List,
     } from "../../../lib/db/db";
     import LoadingSpinner from "../../common/LoadingSpinner.svelte";
-
-    const portal = (node: HTMLElement) => {
-        if (typeof document === "undefined") {
-            return { destroy() {} };
-        }
-        document.body.appendChild(node);
-        return {
-            destroy() {
-                if (node.parentNode) {
-                    node.parentNode.removeChild(node);
-                }
-            },
-        };
-    };
-
 
     export let visible = false;
     export let imdbId: string;
@@ -84,7 +70,6 @@
             console.error("Failed to toggle list", e);
         }
     }
-
 
     $: if (visible) {
         loadLists();

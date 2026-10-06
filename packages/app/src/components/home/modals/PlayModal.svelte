@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { portal } from "../../common/portal";
     import { onDestroy } from "svelte";
     import { X, FileVideo, Magnet, Users, Film } from "@lucide/svelte";
     import { fade, scale } from "svelte/transition";
@@ -13,22 +14,7 @@
         hasAcknowledgedTorrentWarning,
     } from "../../../lib/stores/torrenting";
 
-    const portal = (node: HTMLElement) => {
-        if (typeof document === "undefined") {
-            return { destroy() {} };
-        }
-        document.body.appendChild(node);
-        return {
-            destroy() {
-                if (node.parentNode) {
-                    node.parentNode.removeChild(node);
-                }
-            },
-        };
-    };
-
     export let onClose: () => void;
-
 
     let mode: "select" | "join" | "preview" | "magnet" = "select";
     let bodyLocked = false;

@@ -21,12 +21,19 @@ export const EBML = {
 	Channels: 0x9f,
 	Cluster: 0x1f43b675,
 	Cues: 0x1c53bb6b,
+	CuePoint: 0xbb,
+	CueTime: 0xb3,
+	CueTrackPositions: 0xb7,
+	CueTrack: 0xf7,
+	CueClusterPosition: 0xf1,
+	CueRelativePosition: 0xf0,
 	TimestampScale: 0x2ad7b1,
 	Timestamp: 0xe7,
 	SimpleBlock: 0xa3,
 	BlockGroup: 0xa0,
 	Block: 0xa1,
 	BlockDuration: 0x9b,
+	ReferenceBlock: 0xfb,
 	FlagDefault: 0x88,
 	FlagForced: 0x55aa,
 	DefaultDuration: 0x23e383,
@@ -60,6 +67,39 @@ export function readElementAt(data: Uint8Array, offset: number): ElementInfo | n
 		end: offset + headerSize + (size ?? 0),
 		endAbsolute: (start) => start + headerSize + (size ?? 0),
 	};
+}
+
+export type ChildElement = { id: number; start: number; end: number };
+
+/** Sized children of an element body, as content ranges within `data`. */
+export function* childElements(data: Uint8Array, start = 0, end = data.byteLength): Generator<ChildElement> {
+	let offset = start;
+	while (offset < end) {
+		const element = readElementAt(data, offset);
+		if (!element || element.size == null || element.end > end) return;
+		yield { id: element.id, start: offset + element.headerSize, end: element.end };
+		offset = element.end;
+	}
+}
+
+export function readUnsignedChild(data: Uint8Array, child: ChildElement): number {
+	return readUnsigned(data.subarray(child.start, child.end));
+}
+
+/** Seek entries of a SeekHead body, with positions relative to the segment data. */
+export function readSeekHead(data: Uint8Array): Array<{ id: number; position: number }> {
+	const entries: Array<{ id: number; position: number }> = [];
+	for (const seek of childElements(data)) {
+		if (seek.id !== EBML.Seek) continue;
+		let id: number | null = null;
+		let position: number | null = null;
+		for (const child of childElements(data, seek.start, seek.end)) {
+			if (child.id === EBML.SeekID) id = readElementIdBytes(data.subarray(child.start, child.end));
+			else if (child.id === EBML.SeekPosition) position = readUnsignedChild(data, child);
+		}
+		if (id != null && position != null) entries.push({ id, position });
+	}
+	return entries;
 }
 
 export function readVint(

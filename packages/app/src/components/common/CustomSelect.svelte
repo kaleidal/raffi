@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { portal } from "./portal";
     import { createEventDispatcher, onDestroy, tick } from "svelte";
     import { ChevronDown } from "@lucide/svelte";
 
@@ -18,21 +19,6 @@
     let menuEl: HTMLDivElement | null = null;
     let menuStyle = "";
     let menuReady = false;
-
-    const portal = (node: HTMLElement) => {
-        if (typeof document === "undefined") {
-            return { destroy() {} };
-        }
-
-        document.body.appendChild(node);
-        return {
-            destroy() {
-                if (node.parentNode) {
-                    node.parentNode.removeChild(node);
-                }
-            },
-        };
-    };
 
     const handlePointerDown = (event: MouseEvent) => {
         if (!root) return;

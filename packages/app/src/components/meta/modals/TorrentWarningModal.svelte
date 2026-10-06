@@ -1,19 +1,6 @@
 <script lang="ts">
+    import { portal } from "../../common/portal";
     import { fade, scale } from "svelte/transition";
-
-    const portal = (node: HTMLElement) => {
-        if (typeof document === "undefined") {
-            return { destroy() {} };
-        }
-        document.body.appendChild(node);
-        return {
-            destroy() {
-                if (node.parentNode) {
-                    node.parentNode.removeChild(node);
-                }
-            },
-        };
-    };
 
     export let onConfirm: () => void = () => {};
     export let onCancel: () => void = () => {};

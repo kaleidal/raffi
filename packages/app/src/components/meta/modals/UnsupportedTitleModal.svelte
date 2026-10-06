@@ -1,20 +1,7 @@
 <script lang="ts">
+    import { portal } from "../../common/portal";
     import { fade, scale } from "svelte/transition";
     import { AlertTriangle } from "@lucide/svelte";
-
-    const portal = (node: HTMLElement) => {
-        if (typeof document === "undefined") {
-            return { destroy() {} };
-        }
-        document.body.appendChild(node);
-        return {
-            destroy() {
-                if (node.parentNode) {
-                    node.parentNode.removeChild(node);
-                }
-            },
-        };
-    };
 
     export let title: string = "Unsupported Title";
     export let message: string = "This title is not currently supported.";

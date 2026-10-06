@@ -1,23 +1,8 @@
 <script lang="ts">
+    import { fullscreenPortal } from "../../common/portal";
     import { fade, scale } from "svelte/transition";
     import { isDesktopPlatform } from "../../../lib/shell/platform";
     import { MonitorDown } from "@lucide/svelte";
-
-    const portal = (node: HTMLElement) => {
-        if (typeof document === "undefined") {
-            return { destroy() {} };
-        }
-        const target = document.fullscreenElement || document.body;
-        target.appendChild(node);
-        return {
-            destroy() {
-                if (node.parentNode) {
-                    node.parentNode.removeChild(node);
-                }
-            },
-        };
-    };
-
 
     export let errorMessage: string = "Stream failed to load";
     export let errorDetails: string = "";
@@ -40,7 +25,7 @@
 </script>
 
 <div
-    use:portal
+    use:fullscreenPortal
     class="raffi-modal-backdrop fixed inset-0 z-[300] flex items-center justify-center bg-[#101010]/56 backdrop-blur-xl"
     transition:fade={{ duration: 200 }}
 >

@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { fullscreenPortal } from "../../common/portal";
     import {
         watchParty,
         createWatchParty as createParty,
@@ -8,24 +9,9 @@
     } from "../../../lib/stores/watchPartyStore";
     import { fade, scale } from "svelte/transition";
 
-    const portal = (node: HTMLElement) => {
-        if (typeof document === "undefined") {
-            return { destroy() {} };
-        }
-        const target = document.fullscreenElement || document.body;
-        target.appendChild(node);
-        return {
-            destroy() {
-                if (node.parentNode) {
-                    node.parentNode.removeChild(node);
-                }
-            },
-        };
-    };
     import { onDestroy, onMount } from "svelte";
 
     import { Users } from "@lucide/svelte";
-
 
     export let onClose: () => void;
     export let onPartyCreated: (partyId: string) => void = () => {};
@@ -135,7 +121,6 @@
         updateBodyLock(false);
     });
 
-
     async function handleCreateParty() {
         if (!imdbId || !streamSource) {
             error = "Missing content information";
@@ -165,7 +150,6 @@
         }
     }
 
-
     async function handlePreviewParty() {
         if (!partyIdInput.trim()) {
             error = "Please enter a party ID";
@@ -192,7 +176,6 @@
             loading = false;
         }
     }
-
 
     function handleContinueToJoin() {
         if (!partyPreview) return;
@@ -262,7 +245,7 @@
 </script>
 
 <div
-    use:portal
+    use:fullscreenPortal
     class="raffi-modal-backdrop fixed inset-0 z-[300] flex items-center justify-center bg-[#101010]/56 backdrop-blur-xl"
     transition:fade={{ duration: 200 }}
     on:click|self={onClose}
@@ -743,7 +726,6 @@
                                         </p>
                                     </div>
                                 </div>
-
 
                                 <div class="flex gap-3">
                                     <button

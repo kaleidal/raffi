@@ -1,24 +1,9 @@
 <script lang="ts">
+    import { fullscreenPortal } from "../common/portal";
     import { fade, scale } from "svelte/transition";
     import { onMount } from "svelte";
 
     import * as Subtitles from "../../pages/player/subtitles/subtitles";
-
-    const portal = (node: HTMLElement) => {
-        if (typeof document === "undefined") {
-            return { destroy() {} };
-        }
-        const target = document.fullscreenElement || document.body;
-        target.appendChild(node);
-        return {
-            destroy() {
-                if (node.parentNode) {
-                    node.parentNode.removeChild(node);
-                }
-            },
-        };
-    };
-
 
     export let title: string;
     export let kind: "audio" | "subtitles" = title === "Subtitles" ? "subtitles" : "audio";
@@ -167,7 +152,7 @@
 </script>
 
 <div
-    use:portal
+    use:fullscreenPortal
     class="raffi-modal-backdrop fixed inset-0 z-[100] flex items-center justify-center bg-[#0f0f0f]/58 backdrop-blur-xl cursor-default"
     transition:fade={{ duration: 200 }}
     on:click={close}

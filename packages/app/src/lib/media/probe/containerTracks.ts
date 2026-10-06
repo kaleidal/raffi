@@ -1,4 +1,4 @@
-import { EBML, readAscii, readElementAt, readElementIdBytes, readUnsigned } from "./ebml";
+import { EBML, readAscii, readElementAt, readSeekHead, readUnsigned } from "./ebml";
 import { RemoteBytes } from "./remoteBytes";
 
 export type ContainerAudioTrack = {
@@ -57,7 +57,7 @@ export async function listMatroskaAudioTracks(
 					absoluteStart + el.headerSize,
 					el.size ?? 0,
 				);
-				seekEntries.push(...parseSeekHead(data));
+				seekEntries.push(...readSeekHead(data));
 				pos = absoluteStart + el.headerSize + (el.size ?? 0);
 				continue;
 			}
@@ -213,42 +213,6 @@ function parseTrackEntry(data: Uint8Array): Omit<ContainerAudioTrack, "index"> |
 		channels,
 		enabled,
 	};
-}
-
-function parseSeekHead(data: Uint8Array): Array<{ id: number; position: number }> {
-	const entries: Array<{ id: number; position: number }> = [];
-	let offset = 0;
-	while (offset < data.byteLength) {
-		const el = readElementAt(data, offset);
-		if (!el || el.size == null) break;
-		const contentStart = offset + el.headerSize;
-		const contentEnd = contentStart + el.size;
-		if (contentEnd > data.byteLength) break;
-
-		if (el.id === EBML.Seek) {
-			let seekId: number | null = null;
-			let seekPos: number | null = null;
-			let inner = contentStart;
-			while (inner < contentEnd) {
-				const child = readElementAt(data, inner);
-				if (!child || child.size == null) break;
-				const cStart = inner + child.headerSize;
-				const cEnd = cStart + child.size;
-				if (cEnd > contentEnd) break;
-				if (child.id === EBML.SeekID) {
-					seekId = readElementIdBytes(data.subarray(cStart, cEnd));
-				} else if (child.id === EBML.SeekPosition) {
-					seekPos = readUnsigned(data.subarray(cStart, cEnd));
-				}
-				inner = cEnd;
-			}
-			if (seekId != null && seekPos != null) {
-				entries.push({ id: seekId, position: seekPos });
-			}
-		}
-		offset = contentEnd;
-	}
-	return entries;
 }
 
 async function listIsobmffAudioTracks(

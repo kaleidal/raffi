@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { portal } from "../../common/portal";
     import { onMount } from "svelte";
     import { fade } from "svelte/transition";
     import { Play, Check, CircleX, CheckCircle, Ban, Trash } from "@lucide/svelte";
@@ -14,19 +15,6 @@
     export let onMarkSeasonWatched: () => void = () => {};
     export let onMarkSeasonUnwatched: () => void = () => {};
 
-    export const portal = (node: HTMLElement) => {
-        if (typeof document === "undefined") {
-            return { destroy() {} };
-        }
-        document.body.appendChild(node);
-        return {
-            destroy() {
-                if (node.parentNode) {
-                    node.parentNode.removeChild(node);
-                }
-            },
-        };
-    };
 
     function close() {
         onClose();

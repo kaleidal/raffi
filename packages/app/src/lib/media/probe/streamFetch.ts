@@ -6,6 +6,10 @@ const MAX_RETRY_DELAY_SECONDS = 16;
 /** Observes the bytes of each response, given the absolute file offset it starts at. */
 export type ResponseObserver = (start: number, body: ReadableStream<Uint8Array>) => ReadableStream<Uint8Array>;
 
+export function isRetryableStatus(status: number) {
+	return RETRYABLE_STATUSES.has(status);
+}
+
 function rangeStart(init: RequestInit | undefined, response: Response) {
 	if (response.status !== 206) return 0;
 	const contentRange = response.headers.get("content-range")?.match(/bytes\s+(\d+)-/i);
@@ -27,7 +31,7 @@ export function streamRetryDelay(previousAttempts: number): number | null {
 export function createStreamFetch(observe: ResponseObserver): typeof fetch {
 	return (async (input: RequestInfo | URL, init?: RequestInit) => {
 		const response = await fetch(input, init);
-		if (RETRYABLE_STATUSES.has(response.status)) {
+		if (isRetryableStatus(response.status)) {
 			void response.body?.cancel().catch(() => {});
 			throw new Error(`Stream host responded with ${response.status}`);
 		}
