@@ -4,7 +4,8 @@
     import type { ShowResponse } from "../../lib/library/types/meta_types";
     import type { Chapter } from "../../pages/player/types";
     import ClipPanel from "./ClipPanel.svelte";
-    import SeekPreviewCard from "./SeekPreviewCard.svelte";
+    import SeekBar from "./seek/SeekBar.svelte";
+    import type { TimeRange } from "./seek/seekTrack";
     import type { SeekPreview } from "../../lib/media/preview/seekPreview";
     import { formatTime } from "../../lib/utils/time";
     import {
@@ -34,13 +35,14 @@
     export let showWatchParty = true;
     export let chapterMarkers: Chapter[] = [];
     export let seekPreview: SeekPreview | null = null;
+    export let buffered: TimeRange[] = [];
 
     export let seekBarStyle: "raffi" | "normal" = "raffi";
 
     export let togglePlay: () => void;
-    export let onSeekInput: (e: Event) => void;
-    export let onSeekChange: (e: Event) => void;
-    export let onVolumeChange: (e: Event) => void;
+    export let onSeekInput: (time: number) => void;
+    export let onSeekChange: (time: number) => void;
+    export let onVolumeChange: (volume: number) => void;
     export let toggleFullscreen: () => void;
     export let toggleObjectFit: () => void;
 
@@ -51,120 +53,18 @@
 
     $: displayedTime = pendingSeek ?? currentTime;
     $: remainingTime = Math.max(0, duration - displayedTime);
-    $: progress = duration > 0 ? (displayedTime / duration) * 100 : 0;
-    $: sliderValue =
-        seekBarStyle === "normal"
-            ? displayedTime
-            : duration > 0
-              ? duration - displayedTime
-              : 0;
 
     let showClipPanel = false;
-
-    let seekHoverVisible = false;
-    let seekHoverX = 0;
-    let seekHoverTop = 0;
-    let seekHoverTime = 0;
-    let seekHoverChapter: Chapter | null = null;
-    let previewFrame: ImageBitmap | null = null;
-
-    const forgetPreviewFrame = (_source: SeekPreview | null) => {
-        previewFrame = null;
-    };
-    $: forgetPreviewFrame(seekPreview);
-
-    const requestPreviewFrame = (preview: SeekPreview, time: number) => {
-        void preview.frameAt(time).then((frame) => {
-            if (frame && seekHoverVisible && preview === seekPreview) previewFrame = frame;
-        });
-    };
-
-    const updateSeekHover = (event: MouseEvent) => {
-        if (!duration || duration <= 0) return;
-        const el = event.currentTarget as HTMLElement | null;
-        if (!el) return;
-
-        const rect = el.getBoundingClientRect();
-        const raw = (event.clientX - rect.left) / rect.width;
-        const ratio = Math.max(0, Math.min(1, raw));
-
-        const timeAtCursor = ratio * duration;
-        const desiredGlobal =
-            seekBarStyle === "normal" ? timeAtCursor : duration - timeAtCursor;
-
-        seekHoverVisible = true;
-        seekHoverX = rect.left + ratio * rect.width;
-        seekHoverTop = rect.top;
-        seekHoverTime = Math.max(0, Math.min(duration, desiredGlobal));
-        seekHoverChapter = chapterMarkers.find(
-            (chapter) => seekHoverTime >= chapter.startTime && seekHoverTime < chapter.endTime,
-        ) ?? null;
-        if (seekPreview) requestPreviewFrame(seekPreview, seekHoverTime);
-    };
-
-    const hideSeekHover = () => {
-        seekHoverVisible = false;
-        seekHoverChapter = null;
-    };
+    let controlsElem: HTMLDivElement | undefined;
 
     const setClipPanelOpen = (open: boolean) => {
         showClipPanel = open;
         onClipPanelOpenChange({ open });
     };
-
-    const getMarkerLeft = (chapter: Chapter) => {
-        if (duration <= 0) return 0;
-        const endTime = chapter.kind === "outro" ? duration : chapter.endTime;
-        if (seekBarStyle === "normal") {
-            return (chapter.startTime / duration) * 100;
-        }
-        return ((duration - endTime) / duration) * 100;
-    };
-
-    const getMarkerWidth = (chapter: Chapter) => {
-        if (duration <= 0) return 0;
-        const endTime = chapter.kind === "outro" ? duration : chapter.endTime;
-        return ((endTime - chapter.startTime) / duration) * 100;
-    };
-
-    const getMarkerColor = (chapter: Chapter) => {
-        switch (chapter.kind) {
-            case "intro":
-                return "rgba(59,130,246,0.92)";
-            case "recap":
-                return "rgba(245,158,11,0.92)";
-            case "outro":
-                return "rgba(168,85,247,0.94)";
-            default:
-                return "rgba(87,87,87,0.85)";
-        }
-    };
-
-    $: chapterSliderMarkers = duration > 0
-        ? chapterMarkers
-            .map((chapter) => {
-                const rawLeft = Math.max(0, Math.min(100, getMarkerLeft(chapter)));
-                const rawWidth = Math.max(0, Math.min(100, getMarkerWidth(chapter)));
-                const rawRight = rawLeft + rawWidth;
-                const left = rawLeft <= 0.5 ? 0 : rawLeft;
-                const right = rawRight >= 99.5 ? 100 : rawRight;
-                const width = Math.max(0, right - left);
-                const touchesStart = left <= 0.05;
-                const touchesEnd = right >= 99.95;
-
-                return {
-                    left,
-                    width,
-                    color: getMarkerColor(chapter),
-                    roundStart: touchesStart || !touchesEnd,
-                    roundEnd: touchesEnd || !touchesStart,
-                };
-            })
-            .filter((marker) => marker.width > 0)
-        : [];
 </script>
 
 <div
+    bind:this={controlsElem}
     class="player-controls relative z-10 items-center flex flex-col text-white overflow-hidden"
 >
     <div class="absolute inset-0 rounded-[inherit] bg-[#000000]/10 backdrop-blur-xl pointer-events-none"></div>
@@ -214,40 +114,19 @@
                 )}</span
             >
 
-            <div class="relative flex min-w-0 flex-1 items-center gap-2">
-                <div
-                    class="relative min-w-0 flex-1"
-                    role="presentation"
-                    on:mouseenter={(e) => updateSeekHover(e as unknown as MouseEvent)}
-                    on:mousemove={(e) => updateSeekHover(e as unknown as MouseEvent)}
-                    on:mouseleave={hideSeekHover}
-                >
-                    <Slider
-                        widthProgress={seekBarStyle === "normal"
-                            ? progress
-                            : 100 - progress}
-                        widthGrey={seekBarStyle === "normal"
-                            ? 100 - progress
-                            : progress}
-                        markers={chapterSliderMarkers}
-                        onInput={onSeekInput}
-                        onChange={onSeekChange}
-                        value={sliderValue}
-                        min={0}
-                        max={duration}
-                        step={0.1}
-                    />
-                    {#if seekHoverVisible && duration > 0}
-                        <SeekPreviewCard
-                            anchorX={seekHoverX}
-                            anchorTop={seekHoverTop}
-                            time={seekHoverTime}
-                            chapterTitle={seekHoverChapter?.title ?? null}
-                            frame={previewFrame}
-                            withImage={Boolean(seekPreview)}
-                        />
-                    {/if}
-                </div>
+            <div class="min-w-0 flex-1">
+                <SeekBar
+                    {duration}
+                    time={displayedTime}
+                    inverted={seekBarStyle !== "normal"}
+                    chapters={chapterMarkers}
+                    {buffered}
+                    {seekPreview}
+                    previewAnchor={controlsElem}
+                    disabled={isWatchPartyMember}
+                    onScrub={onSeekInput}
+                    onCommit={onSeekChange}
+                />
             </div>
             {#if seekBarStyle === "normal"}
                 <span
@@ -325,14 +204,9 @@
 
             <div class="player-volume">
                 <Slider
-                    widthProgress={volume * 100}
-                    widthGrey={100}
                     onInput={onVolumeChange}
                     value={volume}
                     label="Volume"
-                    min={0}
-                    max={1}
-                    step={0.01}
                 />
             </div>
         </div>

@@ -61,49 +61,20 @@ export function createControlsManager(
         resetHideTimer(setControlsVisible);
     }
 
-    function onSeekInput(
-        event: Event,
-        duration: number,
-        setPendingSeek: (time: number) => void
-    ) {
-        // Disable for participants
+    function onSeekInput(time: number, setPendingSeek: (time: number) => void) {
         if (isWatchPartyActive && !isWatchPartyHost) return;
-
-        const value = Number((event.target as HTMLInputElement).value);
-        const seekBarStyle = localStorage.getItem("seek_bar_style") || "raffi";
-        
-        let desiredGlobal;
-        if (seekBarStyle === "normal") {
-            desiredGlobal = value;
-        } else {
-            desiredGlobal = Math.max(
-                0,
-                Math.min(duration, duration - value),
-            );
-        }
-
-        setPendingSeek(desiredGlobal);
+        setPendingSeek(time);
     }
 
-    function onSeekChange(event: Event, duration: number, performSeek: (time: number) => void) {
-        const value = Number((event.target as HTMLInputElement).value);
-        const seekBarStyle = localStorage.getItem("seek_bar_style") || "raffi";
-
-        let desiredGlobal;
-        if (seekBarStyle === "normal") {
-            desiredGlobal = value;
-        } else {
-            desiredGlobal = duration - value;
-        }
-        
-        performSeek(desiredGlobal);
+    function onSeekChange(time: number, performSeek: (time: number) => void) {
+        if (isWatchPartyActive && !isWatchPartyHost) return;
+        performSeek(time);
     }
 
-    function onVolumeChange(event: Event, setVolume: (vol: number) => void) {
+    function onVolumeChange(volume: number, setVolume: (vol: number) => void) {
         if (!videoElem) return;
-        const v = Number((event.target as HTMLInputElement).value);
-        setVolume(v);
-        videoElem.volume = v;
+        setVolume(volume);
+        videoElem.volume = volume;
     }
 
     async function toggleFullscreen() {

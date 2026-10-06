@@ -1,5 +1,7 @@
 <script lang="ts">
     import LoadingSpinner from "../common/LoadingSpinner.svelte";
+    import { pointerScrub, type ScrubPosition } from "../common/pointerScrub";
+    import { fractionToTime, timeToFraction } from "./seek/seekTrack";
 
     export let currentTime = 0;
     export let duration = 0;
@@ -7,28 +9,17 @@
     export let loading = false;
     export let isPlaying = false;
     export let seekBarStyle: "raffi" | "normal" = "raffi";
-    export let onSeekInput: (event: Event) => void;
-    export let onSeekChange: (event: Event) => void;
+    export let onSeekInput: (time: number) => void;
+    export let onSeekChange: (time: number) => void;
     export let onTogglePlayback: () => void;
 
     let hovering = false;
 
     $: displayedTime = pendingSeek ?? currentTime;
-    $: progress = duration > 0 ? (displayedTime / duration) * 100 : 0;
-    $: sliderValue =
-        seekBarStyle === "normal"
-            ? displayedTime
-            : duration > 0
-              ? duration - displayedTime
-              : 0;
-    $: progressWidth = `${Math.max(
-        0,
-        Math.min(100, seekBarStyle === "normal" ? progress : 100 - progress),
-    )}%`;
-    $: greyWidth = `${Math.max(
-        0,
-        Math.min(100, seekBarStyle === "normal" ? 100 - progress : progress),
-    )}%`;
+    $: inverted = seekBarStyle !== "normal";
+    $: fill = timeToFraction(displayedTime, duration, inverted);
+
+    const timeAt = ({ ratio }: ScrubPosition) => fractionToTime(ratio, duration, inverted);
 </script>
 
 <div
@@ -90,28 +81,27 @@
     </div>
 
     <div class="pointer-events-auto absolute inset-x-0 bottom-0 px-3 pb-3">
-        <div class="relative h-5 rounded-full">
-            <div class="absolute inset-x-0 bottom-1 h-1 rounded-full bg-[#A3A3A3]/30"></div>
-            <div
-                class="absolute bottom-1 h-1 rounded-full bg-white transition-[width] duration-150"
-                style={`left:0;right:auto;width:${progressWidth};`}
-            ></div>
-            <div
-                class="absolute bottom-1 h-1 rounded-full bg-[#A3A3A3]/30 transition-[width] duration-150"
-                style={`right:0;left:auto;width:${greyWidth};`}
-            ></div>
-            <input
-                class="mini-player-action absolute inset-x-0 bottom-0 h-5 w-full cursor-pointer appearance-none bg-transparent"
-                type="range"
-                min={0}
-                max={duration}
-                step={0.1}
-                value={sliderValue}
-                on:click|stopPropagation
-                on:input={onSeekInput}
-                on:change={onSeekChange}
-                aria-label="Seek mini player"
-            />
+        <div
+            class="mini-player-action relative h-5 cursor-pointer touch-none"
+            role="slider"
+            tabindex="-1"
+            aria-label="Seek mini player"
+            aria-valuemin={0}
+            aria-valuemax={duration}
+            aria-valuenow={displayedTime}
+            use:pointerScrub={{
+                disabled: duration <= 0,
+                onStart: (position) => onSeekInput(timeAt(position)),
+                onMove: (position) => onSeekInput(timeAt(position)),
+                onEnd: (position) => onSeekChange(timeAt(position)),
+            }}
+        >
+            <div class="absolute inset-x-0 bottom-1 h-1 overflow-hidden rounded-full bg-[#A3A3A3]/30">
+                <div
+                    class="absolute inset-0 origin-left bg-white transition-transform duration-150"
+                    style={`transform:scaleX(${fill})`}
+                ></div>
+            </div>
         </div>
     </div>
 </div>
@@ -119,23 +109,5 @@
 <style>
     .mini-player-action {
         -webkit-app-region: no-drag;
-    }
-
-    input[type="range"]::-webkit-slider-thumb {
-        appearance: none;
-        width: 0;
-        height: 0;
-    }
-
-    input[type="range"]::-moz-range-thumb {
-        width: 0;
-        height: 0;
-        border: 0;
-    }
-
-    input[type="range"]::-ms-thumb {
-        width: 0;
-        height: 0;
-        border: 0;
     }
 </style>

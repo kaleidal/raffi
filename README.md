@@ -251,7 +251,7 @@ bun --filter @raffi/marketing build
 - Multiple quality selection
 - Subtitle parsing (SRT/VTT)
 - Audio track switching
-- Seek bar with time-remaining display and frame previews for HTTP/debrid streams. Previews fetch only the keyframe they show, found through the file's own index (MKV cues or the MP4 sample table).
+- Seek bar with time-remaining display, chapter segments, loaded ranges, drag scrubbing, and frame previews for HTTP/debrid streams. Previews fetch only the keyframe they show, found through the file's own index (MKV cues or the MP4 sample table).
 
 #### Watch Parties
 - Synchronized playback state through Raffi Sync

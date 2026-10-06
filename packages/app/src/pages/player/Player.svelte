@@ -103,6 +103,7 @@
     } from "./session/nextEpisodePrefetch";
     import type { Chapter } from "./types";
     import { SeekPreview } from "../../lib/media/preview/seekPreview";
+    import { readBufferedRanges, type TimeRange } from "../../components/player/seek/seekTrack";
     import {
         LONG_PLAYBACK_STALL_MS,
         recordPlaybackStall,
@@ -1538,6 +1539,12 @@
     $: effectiveChapterMarkers = Chapters.getEffectiveChapterSegments($sessionData, introDbChapters);
 
     let seekPreview: SeekPreview | null = null;
+    let bufferedRanges: TimeRange[] = [];
+    const refreshBuffered = () => {
+        if (!videoElem) return;
+        const next = readBufferedRanges(videoElem.buffered, bufferedRanges);
+        if (next !== bufferedRanges) bufferedRanges = next;
+    };
     const followSeekPreviewSource = (src: string | null) => {
         if (seekPreview?.src === src) return;
         seekPreview?.dispose();
@@ -1664,6 +1671,8 @@
                 objectFit={$objectFit}
                 showCanvas={$showCanvas}
                 on:timeupdate={handleTimeUpdate}
+                on:timeupdate={refreshBuffered}
+                on:progress={refreshBuffered}
                 on:play={handlePlay}
                 on:pause={handlePause}
                 on:ended={handleEnded}
@@ -1709,10 +1718,10 @@
             isPlaying={$isPlaying}
             {seekBarStyle}
             onTogglePlayback={togglePlaybackFromMiniPlayer}
-            onSeekInput={(e) =>
-                controlsManager.onSeekInput(e, $duration, pendingSeek.set)}
-            onSeekChange={(e) =>
-                controlsManager.onSeekChange(e, $duration, seekToTime)}
+            onSeekInput={(time) =>
+                controlsManager.onSeekInput(time, pendingSeek.set)}
+            onSeekChange={(time) =>
+                controlsManager.onSeekChange(time, seekToTime)}
         />
     {/if}
 
@@ -1838,17 +1847,18 @@
                         {seekBarStyle}
                         chapterMarkers={effectiveChapterMarkers}
                         {seekPreview}
+                        buffered={bufferedRanges}
                         {videoSrc}
                         {metaData}
                         currentAudioLabel={$currentAudioLabel}
                         currentSubtitleLabel={$currentSubtitleLabel}
                         isWatchPartyMember={!$localMode && $watchParty.isActive && !$watchParty.isHost}
                         togglePlay={togglePlayWithFeedback}
-                        onSeekInput={(e) =>
-                            controlsManager.onSeekInput(e, $duration, pendingSeek.set)}
-                        onSeekChange={(e) =>
-                            controlsManager.onSeekChange(e, $duration, seekToTime)}
-                        onVolumeChange={(e) => controlsManager.onVolumeChange(e, volume.set)}
+                        onSeekInput={(time) =>
+                            controlsManager.onSeekInput(time, pendingSeek.set)}
+                        onSeekChange={(time) =>
+                            controlsManager.onSeekChange(time, seekToTime)}
+                        onVolumeChange={(value) => controlsManager.onVolumeChange(value, volume.set)}
                         toggleFullscreen={handleToggleFullscreen}
                         objectFit={$objectFit}
                         toggleObjectFit={handleToggleObjectFit}

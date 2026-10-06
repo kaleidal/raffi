@@ -1,6 +1,6 @@
 <script lang="ts">
-    import { fullscreenPortal } from "../common/portal";
-    import { formatTime } from "../../lib/utils/time";
+    import { fullscreenPortal } from "../../common/portal";
+    import { formatTime } from "../../../lib/utils/time";
 
     export let anchorX = 0;
     export let anchorTop = 0;
@@ -11,7 +11,7 @@
 
     const CARD_WIDTH = 208;
     const VIEWPORT_MARGIN = 12;
-    const GAP_ABOVE_BAR = 14;
+    const GAP_ABOVE_ANCHOR = 12;
 
     let canvas: HTMLCanvasElement | undefined;
     let innerWidth = 0;
@@ -31,7 +31,7 @@
               innerWidth - CARD_WIDTH - VIEWPORT_MARGIN,
           )
         : anchorX;
-    $: bottom = innerHeight - anchorTop + GAP_ABOVE_BAR;
+    $: bottom = innerHeight - anchorTop + GAP_ABOVE_ANCHOR;
 </script>
 
 <svelte:window bind:innerWidth bind:innerHeight />
@@ -55,6 +55,6 @@
             ? 'px-3 py-2 text-center truncate'
             : 'px-2 py-1'}"
     >
-        {formatTime(time)}{#if chapterTitle} · {chapterTitle}{/if}
+        {chapterTitle ? `${formatTime(time)} · ${chapterTitle}` : formatTime(time)}
     </div>
 </div>

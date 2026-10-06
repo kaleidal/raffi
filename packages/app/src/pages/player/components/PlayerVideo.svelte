@@ -486,6 +486,7 @@
         disablepictureinpicture
         aria-hidden={activeSurface !== 0 || hidden}
         on:timeupdate={relay("timeupdate")}
+        on:progress={relay("progress")}
         on:play={relay("play")}
         on:pause={relay("pause")}
         on:ended={relay("ended")}
@@ -512,6 +513,7 @@
         disablepictureinpicture
         aria-hidden={activeSurface !== 1 || hidden}
         on:timeupdate={relay("timeupdate")}
+        on:progress={relay("progress")}
         on:play={relay("play")}
         on:pause={relay("pause")}
         on:ended={relay("ended")}

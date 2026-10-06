@@ -1,120 +1,59 @@
 <script lang="ts">
-    export let widthProgress: number = 0;
-    export let widthGrey: number = 100;
+    import { pointerScrub, type ScrubPosition } from "./pointerScrub";
+
     export let value: number;
-    export let label: string | undefined = "";
-    export let min: number = 0;
-    export let max: number = 1;
-    export let step: number = 0.01;
-    export let markers: Array<{
-        left: number;
-        width: number;
-        color?: string;
-        roundStart?: boolean;
-        roundEnd?: boolean;
-    }> = [];
-    export let onInput: (event: Event) => void;
-    export let onChange: (event: Event) => void = () => {};
+    export let label = "";
+    export let min = 0;
+    export let max = 1;
+    export let onInput: (value: number) => void;
+
+    let hovering = false;
+    let dragging = false;
+
+    $: fraction = max > min ? Math.min(1, Math.max(0, (value - min) / (max - min))) : 0;
+    $: active = hovering || dragging;
+
+    const valueAt = ({ ratio }: ScrubPosition) => onInput(min + ratio * (max - min));
 </script>
 
 <div class="flex flex-col items-stretch gap-1 w-full min-w-0">
     {#if label}
-        <span class="text-[#878787] text-[0.9375rem] font-poppins font-medium"
-            >{label}</span
-        >
+        <span class="text-[#878787] text-[0.9375rem] font-poppins font-medium">{label}</span>
     {/if}
     <div
-        class="slider-track relative w-full h-[4px] hover:h-2 cursor-pointer transition-all duration-150"
+        class="relative h-4 w-full cursor-pointer touch-none select-none"
+        role="slider"
+        tabindex="-1"
+        aria-label={label || undefined}
+        aria-valuemin={min}
+        aria-valuemax={max}
+        aria-valuenow={value}
+        use:pointerScrub={{
+            onHover: () => (hovering = true),
+            onLeave: () => (hovering = false),
+            onStart: (position) => {
+                dragging = true;
+                valueAt(position);
+            },
+            onMove: valueAt,
+            onEnd: () => (dragging = false),
+        }}
     >
-        <div class="absolute inset-0 overflow-hidden rounded-full pointer-events-none">
+        <div
+            class="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 overflow-hidden rounded-full bg-[#A3A3A3]/30 transition-[height] duration-150 ease-out {active
+                ? 'h-2'
+                : 'h-1'}"
+        >
             <div
-                class="absolute inset-0 z-0 rounded-full bg-[#A3A3A3]/30"
+                class="absolute inset-0 origin-left bg-white {dragging ? '' : 'transition-transform duration-150'}"
+                style={`transform:scaleX(${fraction})`}
             ></div>
-
-            <div
-                class="absolute inset-y-0 left-0 z-10 rounded-full bg-white transition-[width] duration-150"
-                style={`width:${widthProgress}%`}
-            ></div>
-
-            <div
-                class="absolute inset-y-0 right-0 z-10 rounded-full bg-[#A3A3A3]/30 transition-[width] duration-150"
-                style={`width:${widthGrey}%`}
-            ></div>
-
-            {#if markers.length > 0}
-                <div class="absolute inset-0 z-20 overflow-hidden rounded-full">
-                    {#each markers as marker, index (`${marker.left}-${marker.width}-${index}`)}
-                        <div
-                            class="absolute inset-y-0"
-                            style={`left:${marker.left}%;width:${marker.width}%;background:${marker.color || "rgba(87,87,87,0.85)"};border-top-left-radius:${marker.roundStart === false ? "0" : "9999px"};border-bottom-left-radius:${marker.roundStart === false ? "0" : "9999px"};border-top-right-radius:${marker.roundEnd === false ? "0" : "9999px"};border-bottom-right-radius:${marker.roundEnd === false ? "0" : "9999px"};`}
-                        ></div>
-                    {/each}
-                </div>
-            {/if}
         </div>
-
-        <input
-            type="range"
-            {min}
-            {max}
-            {step}
-            bind:value
-            on:input={onInput}
-            on:change={onChange}
-            class="relative z-30 w-full h-3 appearance-none bg-transparent cursor-pointer"
-        />
+        <div
+            class="pointer-events-none absolute top-1/2 size-3.5 rounded-full bg-white shadow-[0_1px_6px_rgba(0,0,0,0.35)] {active
+                ? 'scale-100'
+                : 'scale-0'}"
+            style={`left:${fraction * 100}%;translate:-50% -50%;transition:scale 150ms ease-out`}
+        ></div>
     </div>
 </div>
-
-<style>
-    /* kill default thumb */
-    input[type="range"]::-webkit-slider-thumb {
-        appearance: none;
-        width: 0;
-        height: 0;
-    }
-
-    /* show thumb only on hover / active */
-    .slider-track:hover input[type="range"]::-webkit-slider-thumb,
-    input[type="range"]:active::-webkit-slider-thumb {
-        appearance: none;
-        width: 18px;
-        height: 18px;
-        border-radius: 9999px;
-        background: #ffffff;
-        top: 50%;
-        transform: translateY(-50%);
-    }
-
-    input[type="range"]::-moz-range-thumb {
-        width: 0;
-        height: 0;
-        border: none;
-    }
-
-    .slider-track:hover input[type="range"]::-moz-range-thumb,
-    input[type="range"]:active::-moz-range-thumb {
-        width: 18px;
-        height: 18px;
-        border-radius: 9999px;
-        background: #ffffff;
-        top: 50%;
-        transform: translateY(-50%);
-    }
-
-    input[type="range"]::-ms-thumb {
-        width: 0;
-        height: 0;
-        border: none;
-    }
-
-    .slider-track:hover input[type="range"]::-ms-thumb,
-    input[type="range"]:active::-ms-thumb {
-        width: 18px;
-        height: 18px;
-        border-radius: 9999px;
-        background: #ffffff;
-        top: 50%;
-        transform: translateY(-50%);
-    }
-</style>
