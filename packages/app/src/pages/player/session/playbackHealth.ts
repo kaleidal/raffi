@@ -4,6 +4,12 @@ export type PlaybackStall = {
 };
 
 export const LONG_PLAYBACK_STALL_MS = 12_000;
+/** A stall this long usually means the connection died, often after a long pause. */
+export const STALL_RECOVERY_MS = 6_000;
+const STALL_RECOVERY_COOLDOWN_MS = 120_000;
+
+export const canRecoverStall = (lastRecoveryAt: number, now = Date.now()) =>
+	now - lastRecoveryAt >= STALL_RECOVERY_COOLDOWN_MS;
 
 const STALL_WINDOW_MS = 90_000;
 const MIN_STALL_MS = 1_500;

@@ -122,17 +122,19 @@ export abstract class MsePlayback implements ClientPlaybackController {
 		this.meta = meta;
 	}
 
+	/** Detaches from the video element right away; the feed winds down in the background. */
 	async destroy() {
 		this.generation += 1;
 		this.discardPrepared();
 		this.video?.pause();
-		await this.stopWindow();
+		const stopped = this.stopWindow();
 		this.timeline?.destroy();
 		this.timeline = null;
 		this.stream?.release();
 		this.stream = null;
 		this.videoTrack = null;
 		this.video = null;
+		await stopped;
 	}
 
 	protected clampTime(time: number) {
@@ -200,12 +202,17 @@ export abstract class MsePlayback implements ClientPlaybackController {
 		return timeline.bufferedRangeAt(target);
 	}
 
+	/**
+	 * Cancels production first, then aborts the pump: aborting cancels the stream the
+	 * producer writes into, which releases a write stuck behind a full buffer.
+	 */
 	private async stopWindow() {
 		const windowAbort = this.windowAbort;
 		this.windowAbort = null;
 		this.feedStart = null;
-		await this.stopFeed();
+		const stopped = this.stopFeed();
 		windowAbort?.abort();
+		await stopped;
 	}
 
 	/**

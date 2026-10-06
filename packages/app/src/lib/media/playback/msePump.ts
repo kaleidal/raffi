@@ -191,6 +191,8 @@ export async function pumpStreamToSourceBuffer(
 	limits: () => { aheadSeconds: number | null; behindSeconds: number },
 ): Promise<"complete"> {
 	const reader = readable.getReader();
+	const cancelOnAbort = () => void reader.cancel().catch(() => {});
+	signal.addEventListener("abort", cancelOnAbort, { once: true });
 	const pending: Uint8Array[] = [];
 	let pendingSize = 0;
 
@@ -215,6 +217,7 @@ export async function pumpStreamToSourceBuffer(
 				await waitForBufferCapacity(sourceBuffer, video, aheadSeconds, signal);
 			}
 			const { done, value } = await reader.read();
+			if (signal.aborted) throw new DOMException("Aborted", "AbortError");
 			if (done) break;
 			if (!value || value.byteLength === 0) continue;
 
@@ -225,11 +228,8 @@ export async function pumpStreamToSourceBuffer(
 		await flush(true);
 		return "complete";
 	} finally {
-		try {
-			reader.releaseLock();
-		} catch {
-			// ignore
-		}
+		signal.removeEventListener("abort", cancelOnAbort);
+		reader.releaseLock();
 	}
 }
 

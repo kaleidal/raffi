@@ -147,14 +147,12 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
             deps.setHls(null);
         }
         activeLimboTorrentId = "";
+        if (playbackController && playbackController !== preservedController) {
+            void playbackController.destroy().catch((error) => {
+                console.warn("Playback cleanup failed", error);
+            });
+        }
         cleanupPromise = cleanupPromise.then(async () => {
-            if (playbackController && playbackController !== preservedController) {
-                try {
-                    await playbackController.destroy();
-                } catch (error) {
-                    console.warn("Playback cleanup failed", error);
-                }
-            }
             if (limboTorrentId) {
                 await removeLimboTorrent(limboTorrentId, false);
             }
@@ -232,6 +230,8 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                 playbackController?: ClientPlaybackController | null;
                 hls?: any;
             };
+            /** Overrides the requested start, e.g. to resume where a reload left off. */
+            startTime?: number;
         },
     ) => {
         const cleanup = cancelCurrentLoad(
@@ -332,7 +332,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                 void deps
                     .resolvePlaybackStart({
                         sessionData: nextSession,
-                        startTime: deps.getStartTime(),
+                        startTime: opts?.startTime ?? deps.getStartTime(),
                         metaData,
                         season,
                         episode,
@@ -379,7 +379,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
             loadingProgress.set(null);
 
             const fileIdx = deps.getFileIdx();
-            const startTime = deps.getStartTime();
+            const startTime = opts?.startTime ?? deps.getStartTime();
             const metaData = deps.getMetaData();
             const season = deps.getSeason();
             const episode = deps.getEpisode();

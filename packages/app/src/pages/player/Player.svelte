@@ -106,6 +106,8 @@
     import { readBufferedRanges, type TimeRange } from "../../components/player/seek/seekTrack";
     import {
         LONG_PLAYBACK_STALL_MS,
+        STALL_RECOVERY_MS,
+        canRecoverStall,
         recordPlaybackStall,
         shouldSuggestAnotherStream,
         type PlaybackStall,
@@ -438,7 +440,7 @@
             void traktScrobbler.send("stop", true);
         }
         await exitFullscreenIfNeeded();
-        await playerSessionLoader.cancelCurrentLoad();
+        void playerSessionLoader.cancelCurrentLoad();
         if (!router.back()) {
             router.navigate("home");
         }
@@ -456,6 +458,8 @@
     let bufferingStartedAt = 0;
     let bufferingEligibleForHealthPrompt = false;
     let bufferingHealthTimer: ReturnType<typeof setTimeout> | null = null;
+    let stallRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
+    let lastStallRecoveryAt = 0;
     let playbackHealthRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
     let recentPlaybackStalls: PlaybackStall[] = [];
     let playbackHealthPromptVisible = false;
@@ -880,6 +884,7 @@
         if (playPauseFeedbackTimeout) clearTimeout(playPauseFeedbackTimeout);
         if (torrentFailureExitTimeout) clearTimeout(torrentFailureExitTimeout);
         if (bufferingHealthTimer) clearTimeout(bufferingHealthTimer);
+        if (stallRecoveryTimer) clearTimeout(stallRecoveryTimer);
         if (playbackHealthRecoveryTimer) clearTimeout(playbackHealthRecoveryTimer);
         clearEmbedLoadFallback();
         clearBrowserAudioCheck();
@@ -1103,6 +1108,9 @@
         }
         bufferingEligibleForHealthPrompt =
             hasStarted && !get(seekGuard) && get(pendingSeek) == null;
+        if (bufferingEligibleForHealthPrompt && canRecoverStall(lastStallRecoveryAt)) {
+            stallRecoveryTimer = setTimeout(recoverStalledPlayback, STALL_RECOVERY_MS);
+        }
         if (
             bufferingEligibleForHealthPrompt &&
             !playbackHealthPromptVisible &&
@@ -1124,6 +1132,10 @@
     const handleBufferEnd = () => {
         if (!bufferingActive) return;
         bufferingActive = false;
+        if (stallRecoveryTimer) {
+            clearTimeout(stallRecoveryTimer);
+            stallRecoveryTimer = null;
+        }
         if (bufferingHealthTimer) {
             clearTimeout(bufferingHealthTimer);
             bufferingHealthTimer = null;
@@ -1176,8 +1188,18 @@
         returnToStreams();
     };
 
+    /** Reopens a stream stuck buffering at the same position instead of spinning forever. */
+    const recoverStalledPlayback = () => {
+        stallRecoveryTimer = null;
+        if (!currentVideoSrc || !videoElem || !bufferingActive) return;
+        if (get(seekGuard) || get(pendingSeek) != null) return;
+        lastStallRecoveryAt = Date.now();
+        loadVideo(currentVideoSrc, { startTime: videoElem.currentTime });
+    };
+
     const reloadSession = () => {
         if (!currentVideoSrc) return;
+        const resumeAt = hasStarted && videoElem ? videoElem.currentTime : undefined;
 
         playerSessionLoader.cancelCurrentLoad();
         Session.cleanupSession(
@@ -1187,7 +1209,7 @@
             $watchParty.isActive,
             videoElem,
         );
-        loadVideo(currentVideoSrc);
+        loadVideo(currentVideoSrc, { startTime: resumeAt });
     };
 
     $: if ($showError && !errorModalOpen) {
