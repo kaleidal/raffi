@@ -181,7 +181,9 @@ function registerMainIpcHandlers({
       episode: String(episode),
     });
 
-    const response = await fetch(`https://api.introdb.app/segments?${params.toString()}`);
+    const response = await fetch(`https://api.introdb.app/segments?${params.toString()}`, {
+      signal: AbortSignal.timeout(8_000),
+    });
     if (response.status === 404) {
       return { status: 404, data: null };
     }

@@ -98,11 +98,18 @@ function buildArguments({
   const surroundArguments = audioChannels === 6
     ? ["-af", "aformat=channel_layouts=5.1", "-mapping_family", "1"]
     : [];
-  const protocolWhitelist = /^https?:\/\//i.test(source)
-    ? "http,https,tcp,tls,httpproxy"
-    : "file,crypto,data";
-  const sequentialHttpArguments = /^https?:\/\//i.test(source) && !httpSeekable
-    ? ["-seekable", "0"]
+  const isHttp = /^https?:\/\//i.test(source);
+  const protocolWhitelist = isHttp ? "http,https,tcp,tls,httpproxy" : "file,crypto,data";
+  const reconnectArguments = isHttp
+    ? [
+      "-reconnect", "1",
+      "-reconnect_on_network_error", "1",
+      "-reconnect_on_http_error", "5xx",
+      "-reconnect_delay_max", "10",
+    ]
+    : [];
+  const sequentialHttpArguments = isHttp && !httpSeekable
+    ? ["-seekable", "0", "-reconnect_streamed", "1"]
     : [];
   const inputSeekArguments = httpSeekable
     ? ["-ss", String(startTime), "-noaccurate_seek"]
@@ -113,7 +120,8 @@ function buildArguments({
   return [
     "-hide_banner", "-loglevel", "error", "-nostdin",
     ...inputSeekArguments, "-protocol_whitelist", protocolWhitelist,
-    ...(caFile ? ["-ca_file", caFile] : []), ...sequentialHttpArguments, "-i", source,
+    ...(caFile ? ["-ca_file", caFile] : []), ...reconnectArguments, ...sequentialHttpArguments,
+    "-i", source,
     ...outputSeekArguments,
     "-map", "0:v:0", "-map", `0:a:${audioIndex}`,
     "-c:v", "copy", "-c:a", "libopus", "-b:a", "320k", ...surroundArguments,
