@@ -9,7 +9,17 @@ import type { ProbedStream } from "../probe/probe";
 import type { StreamInput } from "../probe/streamInput";
 import { snapToVideoKeyframe } from "./videoKeyframes";
 
+const PREPARED_SECONDS = 4;
+
 const abortError = () => new DOMException("Aborted", "AbortError");
+
+/** Media rendered ahead of time for a likely seek target, such as the end of an intro. */
+type PreparedSeek = {
+	target: number;
+	keyframe: number;
+	chunks: Uint8Array[] | null;
+	abort: AbortController;
+};
 
 export const isAbortError = (error: unknown) =>
 	error instanceof DOMException && error.name === "AbortError";
@@ -27,6 +37,7 @@ export abstract class MsePlayback implements ClientPlaybackController {
 	protected audioIndex = 0;
 	protected prefetching = false;
 	private windowAbort: AbortController | null = null;
+	private prepared: PreparedSeek | null = null;
 	private feedStart: number | null = null;
 	private generation = 0;
 
@@ -54,13 +65,17 @@ export abstract class MsePlayback implements ClientPlaybackController {
 	/** Stops production before the timeline stops consuming it. */
 	protected abstract stopFeed(): Promise<void>;
 
+	/** Produces `seconds` of fragments from `keyframe` into memory without touching the timeline. */
+	protected renderClip?(keyframe: number, seconds: number, signal: AbortSignal): Promise<Uint8Array[]>;
+
 	async seek(time: number): Promise<void> {
 		const target = this.clampTime(time);
 		const { video, timeline } = this;
 		if (!video || !timeline) throw new Error("Playback is not attached");
 
-		const range = timeline.bufferedRangeAt(target);
+		const range = timeline.bufferedRangeAt(target) ?? (await this.appendPrepared(target));
 		if (!range) {
+			if (!this.prepared?.chunks) this.discardPrepared();
 			await this.startWindow(target, true);
 			return;
 		}
@@ -71,6 +86,23 @@ export abstract class MsePlayback implements ClientPlaybackController {
 				if (!isAbortError(error)) console.error("Failed to continue buffering", error);
 			});
 		}
+	}
+
+	/** Renders the first seconds after `time` so a later seek there starts instantly. */
+	prepareSeek(time: number) {
+		const target = this.clampTime(time);
+		if (!this.renderClip || !this.timeline) return;
+		if (this.timeline.bufferedRangeAt(target)) {
+			if (this.prepared?.target === target) this.discardPrepared();
+			return;
+		}
+		if (this.prepared?.target === target) return;
+		this.discardPrepared();
+		const prepared: PreparedSeek = { target, keyframe: target, chunks: null, abort: new AbortController() };
+		this.prepared = prepared;
+		void this.renderPrepared(prepared).catch((error) => {
+			if (!isAbortError(error)) console.warn("Failed to prepare seek target", error);
+		});
 	}
 
 	getAudioIndex() {
@@ -92,6 +124,7 @@ export abstract class MsePlayback implements ClientPlaybackController {
 
 	async destroy() {
 		this.generation += 1;
+		this.discardPrepared();
 		this.video?.pause();
 		await this.stopWindow();
 		this.timeline?.destroy();
@@ -125,8 +158,46 @@ export abstract class MsePlayback implements ClientPlaybackController {
 
 	/** Switches audio by rebuilding the timeline at `time`. */
 	protected async restartAt(time: number) {
+		this.discardPrepared();
 		await this.openTimeline();
 		await this.startWindow(this.clampTime(time), true);
+	}
+
+	private discardPrepared() {
+		this.prepared?.abort.abort();
+		this.prepared = null;
+	}
+
+	private async renderPrepared(prepared: PreparedSeek) {
+		if (!this.renderClip) return;
+		const { signal } = prepared.abort;
+		const keyframe = this.videoTrack ? await snapToVideoKeyframe(this.videoTrack, prepared.target) : prepared.target;
+		if (signal.aborted) return;
+		const chunks = await this.renderClip(keyframe, prepared.target - keyframe + PREPARED_SECONDS, signal);
+		if (signal.aborted) return;
+		prepared.keyframe = keyframe;
+		prepared.chunks = chunks;
+	}
+
+	/** Moves a prepared clip into the timeline when it covers `target`. */
+	private async appendPrepared(target: number) {
+		const prepared = this.prepared;
+		const timeline = this.timeline;
+		const covers =
+			prepared?.chunks && target >= prepared.keyframe && target <= prepared.target + PREPARED_SECONDS / 2;
+		if (!covers || !timeline) return null;
+		this.prepared = null;
+
+		const generation = ++this.generation;
+		await this.stopWindow();
+		if (generation !== this.generation) throw abortError();
+		const abort = new AbortController();
+		this.windowAbort = abort;
+		await timeline.retainAround(target);
+		await timeline.startSegment(prepared.keyframe);
+		await timeline.pump(new Blob(prepared.chunks as BlobPart[]).stream(), abort.signal, false);
+		if (generation !== this.generation) throw abortError();
+		return timeline.bufferedRangeAt(target);
 	}
 
 	private async stopWindow() {

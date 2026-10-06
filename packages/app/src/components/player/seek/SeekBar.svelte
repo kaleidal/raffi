@@ -21,8 +21,8 @@
     export let chapters: Chapter[] = [];
     export let buffered: TimeRange[] = [];
     export let seekPreview: SeekPreview | null = null;
-    export let previewAnchor: HTMLElement | undefined = undefined;
     export let disabled = false;
+    export let visible = true;
     export let onScrub: (time: number) => void;
     export let onCommit: (time: number) => void;
 
@@ -34,6 +34,7 @@
     let hoverX = 0;
     let hoverTop = 0;
     let previewFrame: ImageBitmap | null = null;
+    let previewRequest = 0;
 
     $: segments = trackSegments(chapters, duration, inverted);
     $: cursor = timeToFraction(time, duration, inverted);
@@ -62,15 +63,21 @@
         return color ? `rgb(${color})` : "#ffffff";
     };
 
+    const showPreview = (preview: SeekPreview, time: number) => {
+        const request = ++previewRequest;
+        previewFrame = preview.peek(time);
+        if (previewFrame) return;
+        void preview.frameAt(time).then((frame) => {
+            if (frame && request === previewRequest && preview === seekPreview) previewFrame = frame;
+        });
+    };
+
     const trackHover = ({ ratio, rect }: ScrubPosition) => {
+        if (!hovering && !dragging) hoverTop = rect.top;
         hovering = true;
         hoverTime = fractionToTime(ratio, duration, inverted);
         hoverX = rect.left + ratio * rect.width;
-        hoverTop = previewAnchor ? previewAnchor.getBoundingClientRect().top : rect.top;
-        const preview = seekPreview;
-        void preview?.frameAt(hoverTime).then((frame) => {
-            if (frame && (hovering || dragging) && preview === seekPreview) previewFrame = frame;
-        });
+        if (seekPreview) showPreview(seekPreview, hoverTime);
     };
 
     const scrubTo = ({ ratio }: ScrubPosition) => onScrub(fractionToTime(ratio, duration, inverted));
@@ -133,7 +140,7 @@
     ></div>
 </div>
 
-{#if (hovering || dragging) && duration > 0}
+{#if visible && (hovering || dragging) && duration > 0}
     <SeekPreviewCard
         anchorX={hoverX}
         anchorTop={hoverTop}

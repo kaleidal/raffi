@@ -35,6 +35,7 @@
     export let showWatchParty = true;
     export let chapterMarkers: Chapter[] = [];
     export let seekPreview: SeekPreview | null = null;
+    export let visible = true;
     export let buffered: TimeRange[] = [];
 
     export let seekBarStyle: "raffi" | "normal" = "raffi";
@@ -55,7 +56,6 @@
     $: remainingTime = Math.max(0, duration - displayedTime);
 
     let showClipPanel = false;
-    let controlsElem: HTMLDivElement | undefined;
 
     const setClipPanelOpen = (open: boolean) => {
         showClipPanel = open;
@@ -64,7 +64,6 @@
 </script>
 
 <div
-    bind:this={controlsElem}
     class="player-controls relative z-10 items-center flex flex-col text-white overflow-hidden"
 >
     <div class="absolute inset-0 rounded-[inherit] bg-[#000000]/10 backdrop-blur-xl pointer-events-none"></div>
@@ -122,8 +121,8 @@
                     chapters={chapterMarkers}
                     {buffered}
                     {seekPreview}
-                    previewAnchor={controlsElem}
                     disabled={isWatchPartyMember}
+                    {visible}
                     onScrub={onSeekInput}
                     onCommit={onSeekChange}
                 />

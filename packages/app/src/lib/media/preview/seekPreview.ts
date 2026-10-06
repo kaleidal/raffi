@@ -1,14 +1,17 @@
-import { EncodedPacketSink, MatroskaInputFormat } from "mediabunny";
+import { MatroskaInputFormat } from "mediabunny";
 import { acquireStreamInput, type StreamInput } from "../probe/streamInput";
 import { KeyframeDecoder } from "./keyframeDecoder";
 import { MatroskaKeyframes, type PreviewKeyframe } from "./matroskaKeyframes";
-import { RangeReader } from "./rangeReader";
+import { PacketKeyframes } from "./packetKeyframes";
+import { RangeReader } from "../probe/rangeReader";
 
 const PREVIEW_WIDTH = 320;
 const MAX_CACHED_FRAMES = 160;
 
 type KeyframeSource = {
 	keyframeAt: (time: number) => Promise<PreviewKeyframe | null> | PreviewKeyframe | null;
+	/** The keyframe timestamp for `time` when it is already known without any reads. */
+	knownKeyframeAt: (time: number) => number | undefined;
 };
 
 type Previewer = { source: KeyframeSource; decoder: KeyframeDecoder };
@@ -27,19 +30,7 @@ async function openKeyframeSource(stream: StreamInput, src: string, signal: Abor
 		const keyframes = await MatroskaKeyframes.open(new RangeReader(src, signal), track.id);
 		return keyframes && { config, source: keyframes };
 	}
-	const packets = new EncodedPacketSink(track);
-	const source: KeyframeSource = {
-		keyframeAt: async (time) => {
-			const packet = await packets.getKeyPacket(time, { metadataOnly: true });
-			return (
-				packet && {
-					timestamp: packet.timestamp,
-					read: async () => (await packets.getKeyPacket(time))?.data ?? null,
-				}
-			);
-		},
-	};
-	return { config, source };
+	return { config, source: new PacketKeyframes(track) };
 }
 
 /**
@@ -51,12 +42,20 @@ export class SeekPreview {
 	private readonly stream: StreamInput;
 	private readonly abort = new AbortController();
 	private previewer: Promise<Previewer | null> | null = null;
+	private ready: Previewer | null = null;
 	private frames = new Map<number, ImageBitmap>();
 	private running = false;
 	private queued: { time: number; resolve: (frame: ImageBitmap | null) => void } | null = null;
 
 	constructor(readonly src: string) {
 		this.stream = acquireStreamInput(src);
+		void this.loadPreviewer();
+	}
+
+	/** The cached frame for `time`, when it can be answered without waiting. */
+	peek(time: number): ImageBitmap | null {
+		const key = this.ready?.source.knownKeyframeAt(time);
+		return key === undefined ? null : this.touch(key);
 	}
 
 	/**
@@ -97,7 +96,10 @@ export class SeekPreview {
 
 	private loadPreviewer(): Promise<Previewer | null> {
 		this.previewer ??= openKeyframeSource(this.stream, this.src, this.abort.signal)
-			.then((opened) => opened && { source: opened.source, decoder: new KeyframeDecoder(opened.config, PREVIEW_WIDTH) })
+			.then((opened) => {
+				this.ready = opened && { source: opened.source, decoder: new KeyframeDecoder(opened.config, PREVIEW_WIDTH) };
+				return this.ready;
+			})
 			.catch(() => null);
 		return this.previewer;
 	}
@@ -107,12 +109,8 @@ export class SeekPreview {
 		const keyframe = await previewer?.source.keyframeAt(time);
 		if (!previewer || !keyframe) return null;
 
-		const cached = this.frames.get(keyframe.timestamp);
-		if (cached) {
-			this.frames.delete(keyframe.timestamp);
-			this.frames.set(keyframe.timestamp, cached);
-			return cached;
-		}
+		const cached = this.touch(keyframe.timestamp);
+		if (cached) return cached;
 
 		const data = await keyframe.read();
 		const frame = data && (await previewer.decoder.decode(data));
@@ -126,6 +124,15 @@ export class SeekPreview {
 			this.frames.get(oldest)?.close();
 			this.frames.delete(oldest);
 		}
+		return frame;
+	}
+
+	/** Returns a cached frame and marks it as most recently used. */
+	private touch(key: number) {
+		const frame = this.frames.get(key);
+		if (!frame) return null;
+		this.frames.delete(key);
+		this.frames.set(key, frame);
 		return frame;
 	}
 }

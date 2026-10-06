@@ -3,6 +3,7 @@ import type { Chapter, ChapterKind, SessionData } from "../types";
 import type { ShowResponse } from "../../../lib/library/types/meta_types";
 
 const OUTRO_FALLBACK_SECONDS = 45;
+const SKIP_PREPARE_LEAD_SECONDS = 45;
 export const CREDITS_FALLBACK_SECONDS = 60;
 /** Start next-episode prefetch this far before credits/outro. */
 export const NEXT_EPISODE_PREBUFFER_LEAD_SECONDS = 120;
@@ -73,13 +74,33 @@ const getRelevantNativeChapters = (sessionData: SessionData | null | undefined) 
 const findChapterAtTime = (chapters: Chapter[], time: number) =>
     chapters.find((chapter) => time >= chapter.startTime && time < chapter.endTime) ?? null;
 
+const isSkippable = (chapter: Chapter) => chapter.kind === "intro" || chapter.kind === "recap";
+
 export const shouldAutoSkipChapter = (
     chapter: Chapter | null,
     autoSkipIntros: boolean,
 ): chapter is Chapter => {
     if (!chapter) return false;
-    return autoSkipIntros && (chapter.kind === "intro" || chapter.kind === "recap");
+    return autoSkipIntros && isSkippable(chapter);
 };
+
+/** Where skipping `chapter` lands playback. */
+export const skipLandingTime = (chapter: Chapter) => chapter.endTime + 0.1;
+
+/** Landing time of the intro or recap the playhead is in or about to reach. */
+export function upcomingSkipLanding(
+    time: number,
+    sessionData: SessionData | null | undefined,
+    introDbChapters: Chapter[],
+): number | null {
+    const chapter = getEffectiveChapterSegments(sessionData, introDbChapters).find(
+        (candidate) =>
+            isSkippable(candidate) &&
+            time >= candidate.startTime - SKIP_PREPARE_LEAD_SECONDS &&
+            time < candidate.endTime,
+    );
+    return chapter ? skipLandingTime(chapter) : null;
+}
 
 export function getEffectiveChapterSegments(
     sessionData: SessionData | null | undefined,
@@ -124,7 +145,7 @@ export function getStartupSkipTarget(
             break;
         }
 
-        targetTime = currentChapter.endTime + 0.1;
+        targetTime = skipLandingTime(currentChapter);
     }
 
     return targetTime;
@@ -195,8 +216,7 @@ export function checkChapters(
     const nativeChapter = findChapterAtTime(getRelevantNativeChapters(sessionData), time);
     const currentChapter = nativeChapter ?? findChapterAtTime(getEffectiveChapterSegments(sessionData, introDbChapters), time);
 
-    const inSkippableIntro = currentChapter?.kind === "intro" || currentChapter?.kind === "recap";
-    const showSkipIntro = inSkippableIntro;
+    const showSkipIntro = Boolean(currentChapter && isSkippable(currentChapter));
     const skipButtonLabel = getSkipButtonLabel(currentChapter);
 
     let showNextEpisode = false;
@@ -215,6 +235,6 @@ export function checkChapters(
 
 export function skipChapter(currentChapter: Chapter | null, performSeek: (time: number) => void) {
     if (currentChapter) {
-        performSeek(currentChapter.endTime + 0.1);
+        performSeek(skipLandingTime(currentChapter));
     }
 }

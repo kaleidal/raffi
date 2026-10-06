@@ -11,7 +11,7 @@
 
     const CARD_WIDTH = 208;
     const VIEWPORT_MARGIN = 12;
-    const GAP_ABOVE_ANCHOR = 12;
+    const GAP_ABOVE_ANCHOR = 4;
 
     let canvas: HTMLCanvasElement | undefined;
     let innerWidth = 0;
@@ -46,7 +46,7 @@
     {#if withImage}
         <canvas
             bind:this={canvas}
-            class="block w-full bg-white/6 transition-opacity duration-150 {frame ? 'opacity-100' : 'opacity-0'}"
+            class="block w-full bg-white/6 {frame ? 'opacity-100 transition-opacity duration-150' : 'opacity-0'}"
             style={`aspect-ratio:${aspectRatio}`}
         ></canvas>
     {/if}

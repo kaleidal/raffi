@@ -149,24 +149,8 @@ export class MediaBunnyPlayback extends MsePlayback {
 	}
 
 	protected async startFeed(timeline: MseTimeline, keyframe: number, signal: AbortSignal) {
-		if (!this.stream || !this.videoTrack || !this.videoOutput) {
-			throw new Error("MediaBunny playback is not attached");
-		}
 		const { writable, readable } = new TransformStream<Uint8Array, Uint8Array>();
-		const conversion = await createPlaybackConversion({
-			input: this.stream.input,
-			output: new Output({
-				format: new Mp4OutputFormat({
-					fastStart: "fragmented",
-					minimumFragmentDuration: 0.5,
-				}),
-				target: new AppendOnlyStreamTarget(writable),
-			}),
-			primaryVideoTrack: this.videoTrack,
-			selectedInputAudioTrack: this.selectedAudioTrack(),
-			videoOutput: this.videoOutput,
-			startTimestamp: keyframe,
-		});
+		const conversion = await this.createConversion(writable, keyframe);
 		if (signal.aborted) {
 			await conversion.cancel().catch(() => {});
 			throw new DOMException("Aborted", "AbortError");
@@ -184,6 +168,43 @@ export class MediaBunnyPlayback extends MsePlayback {
 			},
 		);
 		return { done };
+	}
+
+	protected async renderClip(keyframe: number, seconds: number, signal: AbortSignal) {
+		const chunks: Uint8Array[] = [];
+		const conversion = await this.createConversion(
+			new WritableStream({ write: (chunk) => void chunks.push(chunk) }),
+			keyframe,
+		);
+		const cancel = () => void conversion.cancel().catch(() => {});
+		signal.addEventListener("abort", cancel, { once: true });
+		try {
+			await conversion.execute({ until: seconds });
+		} finally {
+			signal.removeEventListener("abort", cancel);
+			cancel();
+		}
+		return chunks;
+	}
+
+	private createConversion(writable: WritableStream<Uint8Array>, keyframe: number) {
+		if (!this.stream || !this.videoTrack || !this.videoOutput) {
+			throw new Error("MediaBunny playback is not attached");
+		}
+		return createPlaybackConversion({
+			input: this.stream.input,
+			output: new Output({
+				format: new Mp4OutputFormat({
+					fastStart: "fragmented",
+					minimumFragmentDuration: 0.5,
+				}),
+				target: new AppendOnlyStreamTarget(writable),
+			}),
+			primaryVideoTrack: this.videoTrack,
+			selectedInputAudioTrack: this.selectedAudioTrack(),
+			videoOutput: this.videoOutput,
+			startTimestamp: keyframe,
+		});
 	}
 
 	private selectedAudioTrack(): InputAudioTrack | null {

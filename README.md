@@ -251,6 +251,7 @@ bun --filter @raffi/marketing build
 - Multiple quality selection
 - Subtitle parsing (SRT/VTT)
 - Audio track switching
+- Skip Intro and Skip Recap land instantly on remuxed streams, since the first seconds after the chapter are prepared while it plays
 - Seek bar with time-remaining display, chapter segments, loaded ranges, drag scrubbing, and frame previews for HTTP/debrid streams. Previews fetch only the keyframe they show, found through the file's own index (MKV cues or the MP4 sample table).
 
 #### Watch Parties

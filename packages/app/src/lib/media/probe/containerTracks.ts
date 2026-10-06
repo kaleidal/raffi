@@ -1,5 +1,11 @@
-import { EBML, readAscii, readElementAt, readSeekHead, readUnsigned } from "./ebml";
-import { RemoteBytes } from "./remoteBytes";
+import { EBML, decodeText, readAscii, readElementAt, readSeekHead, readUnsigned } from "./ebml";
+import { RangeReader } from "./rangeReader";
+
+const ELEMENT_HEADER_BYTES = 12;
+const BOX_HEADER_BYTES = 16;
+const HEAD_WINDOW_BYTES = 64 * 1024;
+const MATROSKA_HEADER_SCAN_BYTES = 4 * 1024 * 1024;
+const BOX_TYPE = /^[a-z0-9 ]{4}$/i;
 
 export type ContainerAudioTrack = {
 	index: number;
@@ -11,117 +17,67 @@ export type ContainerAudioTrack = {
 };
 
 
-const TEXT_DECODER = new TextDecoder("utf-8", { fatal: false });
+/** Parses the Tracks element of a Matroska/WebM file, keeping FlagEnabled=0 tracks. */
+async function listMatroskaAudioTracks(reader: RangeReader): Promise<ContainerAudioTrack[]> {
+	const first = readElementAt(await reader.read(0, ELEMENT_HEADER_BYTES), 0);
+	if (!first) return [];
 
-/**
- * Lists audio tracks from a remote Matroska/WebM file by parsing the Tracks
- * element over HTTP range requests. Does not drop FlagEnabled=0 tracks.
- */
-export async function listMatroskaAudioTracks(
-	src: string,
-	signal?: AbortSignal,
-): Promise<ContainerAudioTrack[]> {
-	const reader = await RemoteBytes.open(src, signal);
-	try {
-		const header = await reader.read(0, 64);
-		const first = readElementAt(header, 0);
-		if (!first || first.id !== EBML.EBML) {
-			return [];
+	let pos = first.end;
+	let segmentDataStart = -1;
+	let tracksOffset: number | null = null;
+	const seekEntries: Array<{ id: number; position: number }> = [];
+
+	while (pos < MATROSKA_HEADER_SCAN_BYTES) {
+		const el = readElementAt(await reader.read(pos, pos + ELEMENT_HEADER_BYTES, HEAD_WINDOW_BYTES), 0);
+		if (!el) break;
+
+		if (el.id === EBML.Segment) {
+			segmentDataStart = pos + el.headerSize;
+			pos = segmentDataStart;
+			continue;
 		}
-
-		let pos = first.end;
-		const maxScan = Math.min(reader.size ?? 8 * 1024 * 1024, 12 * 1024 * 1024);
-		let segmentDataStart = -1;
-		let tracksOffset: number | null = null;
-		const seekEntries: Array<{ id: number; position: number }> = [];
-
-		while (pos < maxScan) {
-			const chunk = await reader.read(pos, 64);
-			const el = readElementAt(chunk, 0);
-			if (!el) break;
-
-			if (el.id === EBML.Segment) {
-				segmentDataStart = pos + el.headerSize;
-				pos = segmentDataStart;
-				continue;
-			}
-
-			if (segmentDataStart < 0) {
-				pos = el.endAbsolute(pos);
-				continue;
-			}
-
-			const absoluteStart = pos;
-			if (el.id === EBML.SeekHead) {
-				const data = await reader.read(
-					absoluteStart + el.headerSize,
-					el.size ?? 0,
-				);
-				seekEntries.push(...readSeekHead(data));
-				pos = absoluteStart + el.headerSize + (el.size ?? 0);
-				continue;
-			}
-
-			if (el.id === EBML.Tracks) {
-				tracksOffset = absoluteStart;
-				break;
-			}
-
-			if (el.id === EBML.Cluster) {
-				break;
-			}
-
-			if (el.size == null) break;
-			pos = absoluteStart + el.headerSize + el.size;
-			if (pos - segmentDataStart > 4 * 1024 * 1024) break;
+		if (segmentDataStart < 0) {
+			pos = el.endAbsolute(pos);
+			continue;
 		}
-
-		if (tracksOffset == null && segmentDataStart >= 0) {
-			const tracksSeek = seekEntries.find((entry) => entry.id === EBML.Tracks);
-			if (tracksSeek) {
-				tracksOffset = segmentDataStart + tracksSeek.position;
-			}
+		if (el.id === EBML.Tracks) {
+			tracksOffset = pos;
+			break;
 		}
-
-		if (tracksOffset == null) return [];
-
-		const tracksHeader = await reader.read(tracksOffset, 64);
-		const tracksEl = readElementAt(tracksHeader, 0);
-		if (!tracksEl || tracksEl.id !== EBML.Tracks || tracksEl.size == null) {
-			return [];
+		if (el.id === EBML.Cluster || el.size == null) break;
+		if (el.id === EBML.SeekHead) {
+			const contentStart = pos + el.headerSize;
+			seekEntries.push(...readSeekHead(await reader.read(contentStart, contentStart + el.size, HEAD_WINDOW_BYTES)));
 		}
-
-		const tracksData = await reader.read(
-			tracksOffset + tracksEl.headerSize,
-			tracksEl.size,
-		);
-		return parseTracksElement(tracksData);
-	} finally {
-		reader.close();
+		pos = el.endAbsolute(pos);
 	}
+
+	if (tracksOffset == null && segmentDataStart >= 0) {
+		const tracksSeek = seekEntries.find((entry) => entry.id === EBML.Tracks);
+		if (tracksSeek) tracksOffset = segmentDataStart + tracksSeek.position;
+	}
+	if (tracksOffset == null) return [];
+
+	const tracksEl = readElementAt(
+		await reader.read(tracksOffset, tracksOffset + ELEMENT_HEADER_BYTES, HEAD_WINDOW_BYTES),
+		0,
+	);
+	if (!tracksEl || tracksEl.id !== EBML.Tracks || tracksEl.size == null) return [];
+	const contentStart = tracksOffset + tracksEl.headerSize;
+	return parseTracksElement(await reader.read(contentStart, contentStart + tracksEl.size));
 }
 
+/** Audio tracks listed in the container headers of a remote Matroska or MP4 file. */
 export async function listContainerAudioTracks(
 	src: string,
 	signal?: AbortSignal,
 ): Promise<ContainerAudioTrack[]> {
 	if (!/^https?:\/\//i.test(src)) return [];
-
-	try {
-		const mkv = await listMatroskaAudioTracks(src, signal);
-		if (mkv.length > 0) return mkv;
-	} catch (error) {
-		if (error instanceof DOMException && error.name === "AbortError") throw error;
-		console.warn("Matroska track listing failed", error);
-	}
-
-	try {
-		return await listIsobmffAudioTracks(src, signal);
-	} catch (error) {
-		if (error instanceof DOMException && error.name === "AbortError") throw error;
-		console.warn("ISOBMFF track listing failed", error);
-		return [];
-	}
+	const reader = new RangeReader(src, signal);
+	const head = await reader.read(0, ELEMENT_HEADER_BYTES, HEAD_WINDOW_BYTES);
+	return readElementAt(head, 0)?.id === EBML.EBML
+		? listMatroskaAudioTracks(reader)
+		: listIsobmffAudioTracks(reader);
 }
 
 function parseTracksElement(data: Uint8Array): ContainerAudioTrack[] {
@@ -172,7 +128,7 @@ function parseTrackEntry(data: Uint8Array): Omit<ContainerAudioTrack, "index"> |
 				codecId = readAscii(content);
 				break;
 			case EBML.Name:
-				title = TEXT_DECODER.decode(content).replace(/\0+$/, "") || null;
+				title = decodeText(content) || null;
 				break;
 			case EBML.Language:
 				if (!language) language = readAscii(content) || null;
@@ -215,54 +171,24 @@ function parseTrackEntry(data: Uint8Array): Omit<ContainerAudioTrack, "index"> |
 	};
 }
 
-async function listIsobmffAudioTracks(
-	src: string,
-	signal?: AbortSignal,
-): Promise<ContainerAudioTrack[]> {
-	const reader = await RemoteBytes.open(src, signal);
-	try {
-		const probe = await reader.read(0, Math.min(reader.size ?? 2 * 1024 * 1024, 2 * 1024 * 1024));
-		if (probe.byteLength < 8) return [];
-
-		const brand = readAscii(probe.subarray(4, 8));
-		const looksMp4 =
-			brand === "ftyp" || findBox(probe, 0, probe.byteLength, "moov") != null;
-		if (!looksMp4) {
-			return [];
+/** Walks the top-level MP4 boxes to the moov box, wherever it sits in the file. */
+async function listIsobmffAudioTracks(reader: RangeReader): Promise<ContainerAudioTrack[]> {
+	let pos = 0;
+	while (reader.size == null || pos + 8 <= reader.size) {
+		const header = await reader.read(pos, pos + BOX_HEADER_BYTES, HEAD_WINDOW_BYTES);
+		const size = readU32(header, 0);
+		const type = readAscii(header.subarray(4, 8));
+		if (!BOX_TYPE.test(type)) break;
+		const headerSize = size === 1 ? 16 : 8;
+		const total =
+			size === 1 ? Number(readU64(header, 8)) : size === 0 ? (reader.size ?? pos) - pos : size;
+		if (type === "moov") {
+			return parseMoovAudioTracks(await reader.read(pos + headerSize, pos + total));
 		}
-
-		let moov = findBox(probe, 0, probe.byteLength, "moov");
-		if (!moov && reader.size != null) {
-			// Scan top-level boxes for moov via ranges
-			let pos = 0;
-			while (pos + 8 < reader.size && pos < 64 * 1024 * 1024) {
-				const header = await reader.read(pos, 16);
-				const size = readU32(header, 0);
-				const type = readAscii(header.subarray(4, 8));
-				const headerSize = size === 1 ? 16 : 8;
-				const total =
-					size === 1
-						? Number(readU64(header, 8))
-						: size === 0
-							? reader.size - pos
-							: size;
-				if (type === "moov") {
-					const data = await reader.read(pos + headerSize, total - headerSize);
-					return parseMoovAudioTracks(data);
-				}
-				if (!Number.isFinite(total) || total <= 0) break;
-				pos += total;
-			}
-			return [];
-		}
-
-		if (!moov) return [];
-		return parseMoovAudioTracks(
-			probe.subarray(moov.contentStart, moov.contentStart + moov.contentSize),
-		);
-	} finally {
-		reader.close();
+		if (!Number.isFinite(total) || total <= 0) break;
+		pos += total;
 	}
+	return [];
 }
 
 function parseMoovAudioTracks(moov: Uint8Array): ContainerAudioTrack[] {
@@ -319,13 +245,6 @@ function parseTrakAudio(trak: Uint8Array): Omit<ContainerAudioTrack, "index"> | 
 
 	const udta = findBox(trak, 0, trak.byteLength, "udta");
 	if (udta) {
-		const meta = findBox(
-			trak,
-			udta.contentStart,
-			udta.contentStart + udta.contentSize,
-			"meta",
-		);
-		// Common: ©nam in udta
 		const nameBox = findBox(
 			trak,
 			udta.contentStart,
@@ -334,11 +253,9 @@ function parseTrakAudio(trak: Uint8Array): Omit<ContainerAudioTrack, "index"> | 
 		);
 		if (nameBox) {
 			title =
-				TEXT_DECODER.decode(
-					trak.subarray(nameBox.contentStart, nameBox.contentStart + nameBox.contentSize),
-				).replace(/\0+$/, "") || null;
+				decodeText(trak.subarray(nameBox.contentStart, nameBox.contentStart + nameBox.contentSize)) ||
+				null;
 		}
-		void meta;
 	}
 
 	const minf = findBox(mdiaData, 0, mdiaData.byteLength, "minf");

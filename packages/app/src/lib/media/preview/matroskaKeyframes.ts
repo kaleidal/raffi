@@ -6,7 +6,7 @@ import {
 	readUnsignedChild,
 	readVint,
 } from "../probe/ebml";
-import type { RangeReader } from "./rangeReader";
+import type { RangeReader } from "../probe/rangeReader";
 
 const HEAD_BYTES = 64 * 1024;
 const ELEMENT_HEADER_BYTES = 12;
@@ -125,6 +125,15 @@ export class MatroskaKeyframes {
 	}
 
 	keyframeAt(time: number): PreviewKeyframe | null {
+		const cue = this.cueAt(time);
+		return cue ? { timestamp: cue.time, read: () => this.readKeyframe(cue) } : null;
+	}
+
+	knownKeyframeAt(time: number) {
+		return this.cueAt(time)?.time;
+	}
+
+	private cueAt(time: number) {
 		let low = 0;
 		let high = this.cues.length - 1;
 		while (low < high) {
@@ -132,8 +141,7 @@ export class MatroskaKeyframes {
 			if (this.cues[middle]!.time <= time) low = middle;
 			else high = middle - 1;
 		}
-		const cue = this.cues[low];
-		return cue ? { timestamp: cue.time, read: () => this.readKeyframe(cue) } : null;
+		return this.cues[low];
 	}
 
 	/** Walks the cluster from the cued block (or its first block) to the track's keyframe. */

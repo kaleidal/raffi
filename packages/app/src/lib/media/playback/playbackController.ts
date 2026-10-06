@@ -26,6 +26,8 @@ export type ClientPlaybackController = {
 		opts?: PlaybackAttachOptions,
 	) => Promise<PlaybackAttachResult>;
 	seek: (time: number) => Promise<void>;
+	/** Gets a likely seek target ready so jumping there doesn't wait on the network. */
+	prepareSeek: (time: number) => void;
 	setAudioTrack: (index: number, time: number) => Promise<void>;
 	setPrefetching: (prefetching: boolean) => void;
 	getAudioIndex: () => number;

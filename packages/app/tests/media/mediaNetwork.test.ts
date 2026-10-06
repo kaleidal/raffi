@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { ALL_FORMATS, BufferSource, Input } from "mediabunny";
-import { listMatroskaAudioTracks } from "../../src/lib/media/probe/containerTracks";
+import { listContainerAudioTracks } from "../../src/lib/media/probe/containerTracks";
 import { mapContainerCodec } from "../../src/lib/media/probe/codecSupport";
 import {
 	canRemuxOrTranscodeAudio,
@@ -24,29 +24,26 @@ describe("MediaBunny network lifecycle", () => {
 		).rejects.toMatchObject({ name: "AbortError" });
 	});
 
-	test("uses the first range response for size instead of issuing HEAD", async () => {
+	test("lists container audio tracks through range requests", async () => {
+		const fixture = await Bun.file(
+			new URL("../../../../apps/desktop/tests/fixtures/h264-aac-dts.mkv", import.meta.url),
+		).bytes();
 		const originalFetch = globalThis.fetch;
-		const methods: Array<string | undefined> = [];
-		const ranges: Array<string | null> = [];
 		globalThis.fetch = (async (_input, init) => {
-			methods.push(init?.method);
-			ranges.push(new Headers(init?.headers).get("range"));
-			return new Response(new Uint8Array(64), {
+			const [, start, end] = new Headers(init?.headers).get("range")!.match(/bytes=(\d+)-(\d+)/)!.map(Number);
+			const last = Math.min(end!, fixture.byteLength - 1);
+			return new Response(fixture.slice(start, last + 1), {
 				status: 206,
-				headers: {
-					"Content-Range": "bytes 0-63/1024",
-				},
+				headers: { "Content-Range": `bytes ${start}-${last}/${fixture.byteLength}` },
 			});
 		}) as typeof fetch;
 
 		try {
-			await listMatroskaAudioTracks("https://media.example/video.mkv");
+			const tracks = await listContainerAudioTracks("https://media.example/video.mkv");
+			expect(tracks.map((track) => track.codecId)).toContain("A_DTS");
 		} finally {
 			globalThis.fetch = originalFetch;
 		}
-
-		expect(methods).toEqual([undefined]);
-		expect(ranges).toEqual(["bytes=0-63"]);
 	});
 });
 

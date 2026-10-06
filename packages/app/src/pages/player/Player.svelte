@@ -928,13 +928,15 @@
             );
             currentChapter.set(result.currentChapter);
             showSkipIntro.set(result.showSkipIntro);
+            const skipLanding = Chapters.upcomingSkipLanding(time, $sessionData, introDbChapters);
+            if (skipLanding != null) playbackController?.prepareSeek(skipLanding);
             showNextEpisode.set(result.showNextEpisode);
             skipButtonLabel = result.skipButtonLabel;
 
             if (bingeNextSupported) {
                 const bingeChapter = result.currentChapter;
                 if (Chapters.shouldAutoSkipChapter(bingeChapter, $autoSkipIntros)) {
-                    seekToTime(bingeChapter.endTime + 0.1);
+                    seekToTime(Chapters.skipLandingTime(bingeChapter));
                     return;
                 }
 
@@ -1848,6 +1850,7 @@
                         chapterMarkers={effectiveChapterMarkers}
                         {seekPreview}
                         buffered={bufferedRanges}
+                        visible={$controlsVisible}
                         {videoSrc}
                         {metaData}
                         currentAudioLabel={$currentAudioLabel}

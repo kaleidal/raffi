@@ -38,6 +38,10 @@ export class AdaptivePlayback implements ClientPlaybackController {
 		return this.controller.seek(time);
 	}
 
+	prepareSeek(time: number) {
+		this.controller?.prepareSeek(time);
+	}
+
 	async setAudioTrack(index: number, time: number) {
 		if (!this.video || !this.meta) throw new Error("Adaptive playback is not attached");
 		const track = this.meta.audioTracks.find((entry) => entry.index === index);
