@@ -23,6 +23,8 @@ export interface Track {
     isAddon?: boolean;
     isLocal?: boolean;
     isEmbedded?: boolean;
+    /** Matroska track number of an embedded subtitle track. */
+    embeddedTrack?: number;
     format?: "vtt" | "srt";
 }
 
@@ -38,8 +40,4 @@ export interface SeekFeedback {
     id: number;
 }
 
-export interface ParsedCue {
-    start: number;
-    end: number;
-    text: string;
-}
+

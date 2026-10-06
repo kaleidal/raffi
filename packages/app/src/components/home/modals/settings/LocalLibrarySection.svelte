@@ -4,7 +4,7 @@
 		getRoots as getLocalRoots,
 		removeRoot,
 		scanAndIndex,
-	} from "../../../../lib/localLibrary/localLibrary";
+	} from "../../../../lib/library/localLibrary";
 
 	let localLibrarySupported = false;
 	let localRoots: string[] = [];

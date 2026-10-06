@@ -247,7 +247,7 @@ bun --filter @raffi/marketing build
 - Local files and clip export use MediaBunny on desktop (`raffi-media://` for disk access)
 - Torrents stream through Limbo
 - Community addon catalog is fetched from Electron main
-- Embedded container subtitles are not extracted yet (addon/external subs still work)
+- Text subtitles embedded in MKV files (SRT, ASS/SSA, WebVTT) are read from the stream as it plays, with no extra downloads. Image-based subtitles such as PGS aren't supported, and streams whose audio is converted by the bundled FFmpeg don't show embedded subtitles.
 - Multiple quality selection
 - Subtitle parsing (SRT/VTT)
 - Audio track switching

@@ -6,7 +6,7 @@ import {
     parseDebridAvailability,
     parsePeerCount,
 } from "../../../../lib/streams/streamMetadata";
-import { isWeb } from "../../../../lib/platform";
+import { isWeb } from "../../../../lib/shell/platform";
 import { getStreamFailureKey } from "../../../../pages/meta/streamFailures";
 import type {
     EnrichedStream,

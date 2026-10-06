@@ -3,8 +3,8 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const { createLocalMediaAccess } = require("../electron/services/localMediaAccess.cjs");
-const { validateSource } = require("../electron/services/ffmpegPlayback.cjs");
+const { createLocalMediaAccess } = require("../electron/services/media/localMediaAccess.cjs");
+const { validateSource } = require("../electron/services/media/ffmpegPlayback.cjs");
 
 const temporaryDirectories: string[] = [];
 

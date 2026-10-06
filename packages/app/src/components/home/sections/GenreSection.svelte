@@ -8,7 +8,7 @@
     import { onDestroy, onMount, tick } from "svelte";
     import { ChevronLeft, ChevronRight } from "@lucide/svelte";
     import PosterImage from "./PosterImage.svelte";
-    import { getPrimaryTrailerId } from "../../../lib/trailers";
+    import { getPrimaryTrailerId } from "../../../lib/home/trailers";
  
     export let genre: string;
     export let titles: PopularTitleMeta[];

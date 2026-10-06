@@ -3,8 +3,8 @@ import {
     getCatalogTitleKey,
     sanitizeCatalogTitle,
     sanitizeCatalogTitles,
-} from "../src/lib/library/catalogQuality";
-import type { PopularTitleMeta } from "../src/lib/library/types/popular_types";
+} from "../../src/lib/library/catalogQuality";
+import type { PopularTitleMeta } from "../../src/lib/library/types/popular_types";
 
 const title = (overrides: Partial<PopularTitleMeta> = {}): PopularTitleMeta => ({
     imdb_id: "tt1234567",

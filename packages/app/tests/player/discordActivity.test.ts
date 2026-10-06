@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { buildDiscordActivity } from "../src/pages/player/integrations/discord";
-import type { ShowResponse } from "../src/lib/library/types/meta_types";
+import { buildDiscordActivity } from "../../src/pages/player/integrations/discord";
+import type { ShowResponse } from "../../src/lib/library/types/meta_types";
 
 const show = {
     meta: {

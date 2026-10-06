@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isTorrentSource } from "../src/lib/stores/torrenting";
+import { isTorrentSource } from "../../src/lib/stores/torrenting";
 
 describe("torrent source visibility", () => {
     test("recognizes only sources that would enter torrent playback", () => {

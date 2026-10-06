@@ -1,7 +1,7 @@
 <script lang="ts">
     import { slide } from "svelte/transition";
-    import { createClip } from "../../lib/client";
-    import { formatTime } from "../../lib/time";
+    import { createClip } from "../../lib/shell/client";
+    import { formatTime } from "../../lib/utils/time";
 
     export let open = false;
     export let videoSrc: string | null = null;

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { reconcileRemoteState } from "../src/lib/db/reconciliation";
-import type { CloudSyncState, LibraryItem, RemoteState } from "../src/lib/db/types";
+import { reconcileRemoteState } from "../../src/lib/db/reconciliation";
+import type { CloudSyncState, LibraryItem, RemoteState } from "../../src/lib/db/types";
 
 const iso = (timestamp: number) => new Date(timestamp).toISOString();
 

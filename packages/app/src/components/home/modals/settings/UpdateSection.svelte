@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { formatReleaseNotes } from "../../../../lib/updateNotes";
+	import { formatReleaseNotes } from "../../../../lib/shell/updateNotes";
 
 	export let available = false;
 	export let version: string | null | undefined = null;

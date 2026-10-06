@@ -2,7 +2,7 @@
     import { fade } from "svelte/transition";
     import type { ShowResponse } from "../../../lib/library/types/meta_types";
     import { ChevronLeft, ExternalLink, MonitorDown } from "@lucide/svelte";
-    import { isDesktopPlatform } from "../../../lib/platform";
+    import { isDesktopPlatform } from "../../../lib/shell/platform";
     import LoadingSpinner from "../../../components/common/LoadingSpinner.svelte";
     import { onDestroy } from "svelte";
 

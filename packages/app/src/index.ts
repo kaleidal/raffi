@@ -8,5 +8,5 @@ export { router } from './lib/stores/router';
 export * from './lib/stores/authStore';
 
 // Platform flags
-export { getPlatformName, isDesktopPlatform, isWeb } from './lib/platform';
-export type { PlatformName } from './lib/platform';
+export { getPlatformName, isDesktopPlatform, isWeb } from './lib/shell/platform';
+export type { PlatformName } from './lib/shell/platform';

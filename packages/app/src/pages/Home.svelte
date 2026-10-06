@@ -26,7 +26,7 @@
         HOME_HERO_SOURCE_CINEMETA,
         HOME_HERO_SOURCE_TRAKT_RECOMMENDATIONS,
     } from "../lib/home/heroSettings";
-    import { mapWithConcurrency } from "../lib/async/mapWithConcurrency";
+    import { mapWithConcurrency } from "../lib/utils/mapWithConcurrency";
 
     import Hero from "../components/home/Hero.svelte";
     import SearchBar from "../components/home/SearchBar.svelte";

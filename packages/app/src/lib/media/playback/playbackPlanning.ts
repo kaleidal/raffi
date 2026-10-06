@@ -1,5 +1,5 @@
 import type { AudioCodec } from "mediabunny";
-import { isDesktopPlatform } from "../../platform";
+import { isDesktopPlatform } from "../../shell/platform";
 import { canUseFfmpegPlayback } from "./ffmpegPlayback";
 import { isLocalFilesystemPath, isLocalMediaUrl, toClientPlayableUrl } from "../localSource";
 import { getDirectMediaSupport, supportsEac3Playback } from "../probe/nativeSupport";
@@ -102,6 +102,11 @@ export async function resolveHttpPlayback(
 			return canUseMediaBunnyRemux(meta)
 				? { mode: "mediabunny", meta, reason: "local-remux" }
 				: { mode: "unsupported", meta, reason: "local-unsupported" };
+		}
+
+		// Native playback never exposes the bytes embedded subtitles are read from.
+		if (meta.subtitleTracks.length > 0 && canUseMediaBunnyRemux(meta)) {
+			return { mode: "mediabunny", meta, reason: "embedded-subtitles" };
 		}
 
 		const audioOk = isNativeFriendlyAudio(meta.audio?.codec ?? null, supportsEac3);

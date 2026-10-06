@@ -1,6 +1,5 @@
 import {
 	type AudioCodec,
-	type Input,
 	type InputAudioTrack,
 	type InputVideoTrack,
 	type VideoCodec,
@@ -13,7 +12,8 @@ import {
 	ensureAudioDecoderRegistered,
 	ensureMediaCodersRegistered,
 } from "../registerCoders";
-import { acquireStreamInput } from "./streamInput";
+import type { EmbeddedSubtitleTrack } from "../subtitles/embeddedSubtitles";
+import { acquireStreamInput, type StreamInput } from "./streamInput";
 import {
 	codecsCompatible,
 	isMseFriendlyVideo,
@@ -56,6 +56,8 @@ export type ProbedStream = {
 	} | null;
 	audioTracks: ProbedAudioTrack[];
 	preferredAudioIndex: number;
+	/** Text subtitle tracks embedded in a Matroska file. */
+	subtitleTracks: EmbeddedSubtitleTrack[];
 };
 
 const LANGUAGE_LABELS: Record<string, string> = {
@@ -173,7 +175,7 @@ export async function probeRemoteStream(
 
 	const stream = acquireStreamInput(src);
 	try {
-		const meta = await Promise.race([probeInput(stream.input), rejectOnAbort(signal)]);
+		const meta = await Promise.race([probeInput(stream), rejectOnAbort(signal)]);
 		stream.release();
 		return meta;
 	} catch (error) {
@@ -183,7 +185,7 @@ export async function probeRemoteStream(
 	}
 }
 
-async function probeInput(input: Input): Promise<ProbedStream> {
+async function probeInput({ input, subtitles }: StreamInput): Promise<ProbedStream> {
 	// Never scan the whole file for duration — that downloads the episode.
 	const durationFromMeta = await input.getDurationFromMetadata();
 	const durationSeconds =
@@ -244,6 +246,7 @@ async function probeInput(input: Input): Promise<ProbedStream> {
 		audio,
 		audioTracks: listedAudio,
 		preferredAudioIndex: preferredAudioIndex(listedAudio),
+		subtitleTracks: subtitles.tracks,
 	});
 
 	return meta;

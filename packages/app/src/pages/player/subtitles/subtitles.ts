@@ -1,10 +1,10 @@
 // Subtitle handling and parsing
 import { getAddons } from "../../../lib/db/db";
 import type { ShowResponse } from "../../../lib/library/types/meta_types";
-import type { Track, ParsedCue } from "../types";
+import { embeddedSubtitlesFor } from "../../../lib/media/probe/streamInput";
+import type { Track } from "../types";
 
 let currentSubtitleAbort: AbortController | null = null;
-let parsedCues: ParsedCue[] = [];
 const uploadedSubtitleUrls = new Set<string>();
 
 const MAX_UPLOADED_SUBTITLE_BYTES = 10 * 1024 * 1024;
@@ -121,6 +121,31 @@ function toPlainCueText(text: string): string {
     return text.replace(/[<>]/g, "");
 }
 
+function addTimedCue(
+    track: TextTrack,
+    start: number,
+    end: number,
+    text: string,
+    getCurrentCueLine: () => number,
+) {
+    const adjustedStart = start + subtitleDelaySeconds;
+    const adjustedEnd = end + subtitleDelaySeconds;
+    if (adjustedEnd < 0) return;
+    try {
+        const cue = new VTTCue(
+            adjustedStart,
+            adjustedEnd,
+            toPlainCueText(text).replace(/\u00A0/g, " "),
+        );
+        cue.snapToLines = false;
+        cue.lineAlign = "end";
+        cue.line = getCurrentCueLine();
+        track.addCue(cue);
+    } catch (e) {
+        console.warn("Failed to add subtitle cue:", e);
+    }
+}
+
 export function parseAndAddCue(track: TextTrack, block: string, getCurrentCueLine: () => number) {
     const lines = block
         .split("\n")
@@ -148,25 +173,7 @@ export function parseAndAddCue(track: TextTrack, block: string, getCurrentCueLin
     const end = parseVTTTime(endStr);
 
     if (start !== null && end !== null) {
-        parsedCues.push({ start, end, text });
-
-        try {
-            const cleanText = toPlainCueText(text);
-
-            const cue = new VTTCue(
-                start + subtitleDelaySeconds,
-                end + subtitleDelaySeconds,
-                cleanText,
-            );
-
-            cue.snapToLines = false;
-            cue.lineAlign = "end";
-            cue.line = getCurrentCueLine();
-
-            track.addCue(cue);
-        } catch (e) {
-            console.warn("Failed to add cue:", e);
-        }
+        addTimedCue(track, start, end, text, getCurrentCueLine);
     }
 }
 
@@ -205,24 +212,7 @@ export function parseAndAddSRTCue(
     const end = parseSRTTime(endStr);
 
     if (start !== null && end !== null) {
-        const adjustedStart = start + subtitleDelaySeconds;
-        const adjustedEnd = end + subtitleDelaySeconds;
-
-        if (adjustedEnd < 0) return;
-
-        parsedCues.push({ start: adjustedStart, end: adjustedEnd, text });
-        try {
-            const decodedText = toPlainCueText(text)
-                .replace(/\u00A0/g, " ");
-
-            const cue = new VTTCue(adjustedStart, adjustedEnd, decodedText);
-            cue.snapToLines = false;
-            cue.lineAlign = "end";
-            cue.line = getCurrentCueLine();
-            track.addCue(cue);
-        } catch (e) {
-            console.warn("Failed to add SRT cue:", e);
-        }
+        addTimedCue(track, start, end, text, getCurrentCueLine);
     } else {
         console.warn("Failed to parse SRT timing:", timing);
     }
@@ -237,8 +227,6 @@ export async function handleSubtitleSelect(
         currentSubtitleAbort.abort();
         currentSubtitleAbort = null;
     }
-
-    parsedCues = [];
 
     const video = videoElem;
     if (!video) return;
@@ -279,7 +267,17 @@ export async function handleSubtitleSelect(
                     track.url.endsWith(".srt") ||
                     track.url.includes("subencoding");
             } else if (track.isEmbedded) {
-                console.warn("Embedded subtitles are disabled");
+                const subtitles = embeddedSubtitlesFor(track.url);
+                const number = track.embeddedTrack;
+                if (!subtitles || number == null) return;
+                const addCue = (cue: { start: number; end: number; text: string }) =>
+                    addTimedCue(textTrack, cue.start, cue.end, cue.text, getCurrentCueLine);
+                subtitles.cuesFor(number).forEach(addCue);
+                currentSubtitleAbort.signal.addEventListener(
+                    "abort",
+                    subtitles.subscribe(number, addCue),
+                    { once: true },
+                );
                 return;
             } else {
                 response = await fetch(track.url, {

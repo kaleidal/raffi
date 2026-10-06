@@ -3,7 +3,7 @@ const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 const { createLogger } = require("./services/logging.cjs");
-const { scanLibraryRoots } = require("./services/mediaScan.cjs");
+const { scanLibraryRoots } = require("./services/media/mediaScan.cjs");
 const {
   isAllowedExternalUrl,
   createProtocolUrlHandler,
@@ -11,20 +11,20 @@ const {
 const {
   registerPrivilegedSchemes,
   createLocalMediaProtocolHandler,
-} = require("./services/localMediaProtocol.cjs");
-const { createLocalMediaAccess } = require("./services/localMediaAccess.cjs");
+} = require("./services/media/localMediaProtocol.cjs");
+const { createLocalMediaAccess } = require("./services/media/localMediaAccess.cjs");
 const {
   appPrivilegedScheme,
   createAppProtocolHandler,
 } = require("./services/appProtocol.cjs");
 const { registerMainIpcHandlers } = require("./services/mainIpc.cjs");
-const { registerDiscordRpcHandlers } = require("./services/rpc.cjs");
+const { registerDiscordRpcHandlers } = require("./services/integrations/rpc.cjs");
 const { createMainWindow } = require("./services/window.cjs");
-const { createDefenderService } = require("./services/defender.cjs");
+const { createDefenderService } = require("./services/integrations/defender.cjs");
 const {
   ffmpegPrivilegedScheme,
   createFfmpegPlaybackService,
-} = require("./services/ffmpegPlayback.cjs");
+} = require("./services/media/ffmpegPlayback.cjs");
 
 registerPrivilegedSchemes(protocol, [appPrivilegedScheme, ffmpegPrivilegedScheme]);
 

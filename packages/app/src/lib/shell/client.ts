@@ -12,7 +12,7 @@ export type CreateClipResponse = {
 
 /** In-app clip export via MediaBunny. */
 export async function createClip(req: CreateClipRequest): Promise<CreateClipResponse> {
-	const { exportClipWithMediaBunny } = await import("./media/clip");
+	const { exportClipWithMediaBunny } = await import("../media/clip");
 	const start = Math.max(0, req.start);
 	const end = Math.max(start + 0.1, req.end);
 

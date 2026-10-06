@@ -15,6 +15,7 @@ export class AdaptivePlayback implements ClientPlaybackController {
 	private ffmpegSource = "";
 	private meta: ProbedStream | null = null;
 	private audioIndex = 0;
+	private prefetching = false;
 
 	async attach(
 		video: HTMLVideoElement,
@@ -26,6 +27,7 @@ export class AdaptivePlayback implements ClientPlaybackController {
 		this.video = video;
 		this.source = src;
 		this.ffmpegSource = opts.ffmpegSource ?? src;
+		this.prefetching = opts.prefetch ?? false;
 		this.meta = ensureAudioTracks(opts.meta);
 		this.audioIndex = this.resolveAudioIndex(opts.audioIndex);
 		return this.attachController(this.audioIndex, Math.max(0, opts.startTime ?? 0), opts.signal);
@@ -58,6 +60,11 @@ export class AdaptivePlayback implements ClientPlaybackController {
 
 	getAudioIndex() {
 		return this.audioIndex;
+	}
+
+	setPrefetching(prefetching: boolean) {
+		this.prefetching = prefetching;
+		this.controller?.setPrefetching(prefetching);
 	}
 
 	getMeta() {
@@ -96,7 +103,7 @@ export class AdaptivePlayback implements ClientPlaybackController {
 			return await controller.attach(
 				this.video,
 				needsFfmpeg ? this.ffmpegSource : this.source,
-				{ startTime, signal, meta: this.meta, audioIndex: index },
+				{ startTime, signal, meta: this.meta, audioIndex: index, prefetch: this.prefetching },
 			);
 		} catch (error) {
 			if (this.controller === controller) this.controller = null;

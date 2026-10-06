@@ -4,7 +4,7 @@
     import type { ShowResponse } from "../../lib/library/types/meta_types";
     import type { Chapter } from "../../pages/player/types";
     import ClipPanel from "./ClipPanel.svelte";
-    import { formatTime } from "../../lib/time";
+    import { formatTime } from "../../lib/utils/time";
     import {
         CirclePause,
         CirclePlay,

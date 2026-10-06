@@ -9,10 +9,10 @@ import {
 import { router } from "../../lib/stores/router";
 
 import type { Stream } from "./types";
-import { getLocalStreamsFor } from "../../lib/localLibrary/localLibrary";
+import { getLocalStreamsFor } from "../../lib/library/localLibrary";
 import * as ProgressLogic from "./progressLogic";
-import { createDirectStream } from "../../lib/streaming/directLinks";
-import { getStreamingSourceSettings } from "../../lib/streaming/sourceSettings";
+import { createDirectStream } from "../../lib/streams/directLinks";
+import { getStreamingSourceSettings } from "../../lib/streams/sourceSettings";
 import {
     clearStreamFailureMessage,
     isStreamFailed,

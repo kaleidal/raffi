@@ -10,8 +10,8 @@ const {
     DiscordIpcClient,
     discordSocketCandidates,
     encodeFrame,
-} = require("../electron/services/discordIpc.cjs");
-const { normalizeActivity } = require("../electron/services/rpc.cjs");
+} = require("../electron/services/integrations/discordIpc.cjs");
+const { normalizeActivity } = require("../electron/services/integrations/rpc.cjs");
 
 describe("Discord IPC", () => {
     test("encodes Discord's little-endian IPC frame", () => {

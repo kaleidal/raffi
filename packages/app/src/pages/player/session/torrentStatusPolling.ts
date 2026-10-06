@@ -4,7 +4,7 @@ import {
 	LimboApiError,
 	LimboUnavailableError,
 	type LimboTorrentStatus,
-} from "../../../lib/limbo/client";
+} from "../../../lib/streams/limboClient";
 import { loading, loadingDetails, loadingProgress, loadingStage } from "../playerState";
 
 function formatBytes(bytes: number): string {

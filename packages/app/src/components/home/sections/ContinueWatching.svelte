@@ -9,7 +9,7 @@
     } from "../../../lib/db/db";
     import ListsPopup from "../../meta/modals/ListsPopup.svelte";
     import TrailerModal from "../../meta/modals/TrailerModal.svelte";
-    import { getPrimaryTrailerId } from "../../../lib/trailers";
+    import { getPrimaryTrailerId } from "../../../lib/home/trailers";
 
     import { onMount, onDestroy, tick } from "svelte";
     import { Play, ChevronDown, ChevronLeft, ChevronRight } from "@lucide/svelte";

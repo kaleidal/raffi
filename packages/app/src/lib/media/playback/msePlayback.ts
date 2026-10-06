@@ -25,6 +25,7 @@ export abstract class MsePlayback implements ClientPlaybackController {
 	protected videoTrack: InputVideoTrack | null = null;
 	protected timeline: MseTimeline | null = null;
 	protected audioIndex = 0;
+	protected prefetching = false;
 	private windowAbort: AbortController | null = null;
 	private feedStart: number | null = null;
 	private generation = 0;
@@ -76,6 +77,11 @@ export abstract class MsePlayback implements ClientPlaybackController {
 		return this.audioIndex;
 	}
 
+	setPrefetching(prefetching: boolean) {
+		this.prefetching = prefetching;
+		this.timeline?.setPrefetching(prefetching);
+	}
+
 	getMeta() {
 		return this.meta;
 	}
@@ -114,6 +120,7 @@ export abstract class MsePlayback implements ClientPlaybackController {
 			await streamBufferPolicy(this.stream.input, this.meta.durationSeconds),
 			signal,
 		);
+		this.timeline.setPrefetching(this.prefetching);
 	}
 
 	/** Switches audio by rebuilding the timeline at `time`. */

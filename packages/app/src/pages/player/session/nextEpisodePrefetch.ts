@@ -282,6 +282,7 @@ export async function startNextEpisodePrefetch(
 				signal: abort.signal,
 				meta: resolved.meta,
 				audioIndex: resolved.meta?.preferredAudioIndex ?? 0,
+				prefetch: true,
 			});
 			clearReadyTimeout();
 			if (disposed || abort.signal.aborted) {

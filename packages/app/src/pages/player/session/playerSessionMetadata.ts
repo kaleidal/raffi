@@ -52,3 +52,19 @@ export function applyClientAudioTracks(
 		availableStreams: streams,
 	};
 }
+
+export function embeddedSubtitleTracks(meta: ProbedStream | null, src: string): Track[] {
+	return (meta?.subtitleTracks ?? []).map((track) => {
+		const name = track.name || formatAudioTrackLabel({ language: track.language, index: track.number });
+		return {
+			id: `embedded:${track.number}`,
+			label: `${name}${track.isForced ? " · Forced" : ""} (Embedded)`,
+			selected: false,
+			group: "Embedded",
+			lang: track.language ?? "und",
+			url: src,
+			isEmbedded: true,
+			embeddedTrack: track.number,
+		};
+	});
+}

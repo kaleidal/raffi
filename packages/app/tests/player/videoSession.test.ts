@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
 	createSeekHandler,
 	performSeek,
-} from "../src/pages/player/session/videoSession";
+} from "../../src/pages/player/session/videoSession";
 
 class SeekableVideo extends EventTarget {
 	paused = true;

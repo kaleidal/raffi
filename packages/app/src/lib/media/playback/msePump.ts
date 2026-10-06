@@ -188,7 +188,7 @@ export async function pumpStreamToSourceBuffer(
 	sourceBuffer: SourceBuffer,
 	signal: AbortSignal,
 	video: HTMLVideoElement,
-	limits: { aheadSeconds: number | null; behindSeconds: number },
+	limits: () => { aheadSeconds: number | null; behindSeconds: number },
 ): Promise<"complete"> {
 	const reader = readable.getReader();
 	const pending: Uint8Array[] = [];
@@ -202,7 +202,7 @@ export async function pumpStreamToSourceBuffer(
 		const bytes = concatChunks(pending, pendingSize);
 		pending.length = 0;
 		pendingSize = 0;
-		await appendBytes(sourceBuffer, bytes, signal, video, limits.behindSeconds);
+		await appendBytes(sourceBuffer, bytes, signal, video, limits().behindSeconds);
 	};
 
 	try {
@@ -210,11 +210,9 @@ export async function pumpStreamToSourceBuffer(
 			if (signal.aborted) {
 				throw new DOMException("Aborted", "AbortError");
 			}
-			if (
-				limits.aheadSeconds != null &&
-				getBufferedAheadSeconds(sourceBuffer, video) >= limits.aheadSeconds
-			) {
-				await waitForBufferCapacity(sourceBuffer, video, limits.aheadSeconds, signal);
+			const { aheadSeconds } = limits();
+			if (aheadSeconds != null && getBufferedAheadSeconds(sourceBuffer, video) >= aheadSeconds) {
+				await waitForBufferCapacity(sourceBuffer, video, aheadSeconds, signal);
 			}
 			const { done, value } = await reader.read();
 			if (done) break;

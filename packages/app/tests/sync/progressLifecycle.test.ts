@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { get } from "svelte/store";
-import { mergeProgressEntry } from "../src/lib/db/state";
+import { mergeProgressEntry } from "../../src/lib/db/state";
 import {
     metaData,
     progressMap,
     selectedEpisode,
-} from "../src/pages/meta/metaState";
-import { handleProgress } from "../src/pages/meta/progressLogic";
+} from "../../src/pages/meta/metaState";
+import { handleProgress } from "../../src/pages/meta/progressLogic";
 
 describe("playback progress lifecycle", () => {
     afterEach(() => {

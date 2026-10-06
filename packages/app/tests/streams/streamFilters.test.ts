@@ -4,8 +4,8 @@ import {
     buildEnrichedStreams,
     getAvailableStreamFilterOptions,
     parseStreamMetadata,
-} from "../src/components/meta/modals/streams/streamFilters";
-import type { StreamFilterState } from "../src/components/meta/modals/streams/types";
+} from "../../src/components/meta/modals/streams/streamFilters";
+import type { StreamFilterState } from "../../src/components/meta/modals/streams/types";
 
 const cachedCometStream = {
     name: "[TB⚡] Comet 1080p",

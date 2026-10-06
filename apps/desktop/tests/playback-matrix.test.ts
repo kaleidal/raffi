@@ -10,8 +10,8 @@ const require = createRequire(import.meta.url);
 const {
 	buildArguments,
 	createFfmpegPlaybackService,
-} = require("../electron/services/ffmpegPlayback.cjs");
-const { createLocalMediaAccess } = require("../electron/services/localMediaAccess.cjs");
+} = require("../electron/services/media/ffmpegPlayback.cjs");
+const { createLocalMediaAccess } = require("../electron/services/media/localMediaAccess.cjs");
 const desktopDir = join(import.meta.dir, "..");
 const ffmpeg = join(desktopDir, "vendor", "ffmpeg", process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg");
 const electron = require("electron") as string;

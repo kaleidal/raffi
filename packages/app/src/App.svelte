@@ -3,7 +3,7 @@
     import { router } from "./lib/stores/router";
     import { onMount, tick } from "svelte";
     import { get } from "svelte/store";
-    import { enableRPC, disableRPC } from "./lib/rpc";
+    import { enableRPC, disableRPC } from "./lib/shell/rpc";
 
 
     import { X } from "@lucide/svelte";
@@ -13,7 +13,7 @@
         initAuth,
         updateStatus,
     } from "./lib/stores/authStore";
-    import { formatReleaseNotes } from "./lib/updateNotes";
+    import { formatReleaseNotes } from "./lib/shell/updateNotes";
     import { warmTraktClientAuth } from "./lib/db/db";
 
     type PageComponent = typeof Home | any;

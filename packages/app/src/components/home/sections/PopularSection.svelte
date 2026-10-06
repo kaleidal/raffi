@@ -9,7 +9,7 @@
     import ListsPopup from "../../meta/modals/ListsPopup.svelte";
     import TrailerModal from "../../meta/modals/TrailerModal.svelte";
     import PosterImage from "./PosterImage.svelte";
-    import { getPrimaryTrailerId } from "../../../lib/trailers";
+    import { getPrimaryTrailerId } from "../../../lib/home/trailers";
 
     export let popularMeta: PopularTitleMeta[] = [];
 

@@ -75,6 +75,7 @@ export class MediaBunnyPlayback extends MsePlayback {
 		await ensureMediaCodersRegistered();
 
 		this.video = video;
+		this.prefetching = opts?.prefetch ?? false;
 		const meta = ensureAudioTracks(opts?.meta ?? (await probeRemoteStream(src, opts?.signal)));
 		this.meta = meta;
 		this.stream = acquireStreamInput(src);
@@ -197,11 +198,11 @@ export class MediaBunnyPlayback extends MsePlayback {
 	 * playhead; cancelling and refilling instead would rebuild MSE from a keyframe.
 	 */
 	private async runWindowed(conversion: Conversion, timeline: MseTimeline, signal: AbortSignal) {
-		const { aheadSeconds, resumeSeconds } = timeline.policy;
-		let until = aheadSeconds;
+		let until = timeline.policy.aheadSeconds;
 		while (!signal.aborted) {
 			await conversion.execute({ until });
 			if (signal.aborted || conversion.state === "done") return;
+			const { aheadSeconds, resumeSeconds } = timeline.policy;
 			await timeline.waitForBufferBelow(resumeSeconds, signal);
 			until += aheadSeconds - resumeSeconds;
 		}

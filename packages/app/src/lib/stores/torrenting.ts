@@ -1,5 +1,5 @@
 import { get, writable } from "svelte/store";
-import { ensureLimboAvailable } from "../limbo/client";
+import { ensureLimboAvailable } from "../streams/limboClient";
 
 const ALLOW_TORRENTING_KEY = "raffi_allow_torrenting";
 const TORRENT_WARNING_SHOWN_KEY = "torrentWarningShown";

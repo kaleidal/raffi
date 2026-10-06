@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
     createUploadedSubtitleTrack,
     releaseUploadedSubtitleUrls,
-} from "../src/pages/player/subtitles/subtitles";
+} from "../../src/pages/player/subtitles/subtitles";
 
 describe("uploaded subtitles", () => {
     afterEach(releaseUploadedSubtitleUrls);

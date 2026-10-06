@@ -140,7 +140,7 @@ function registerMainIpcHandlers({
   });
 
   ipcMain.handle("LIMBO_API_DISCOVERY_READ", async () => {
-    const { readLimboApiDiscovery } = require("./limboDiscovery.cjs");
+    const { readLimboApiDiscovery } = require("./integrations/limboDiscovery.cjs");
     return readLimboApiDiscovery(fs);
   });
 

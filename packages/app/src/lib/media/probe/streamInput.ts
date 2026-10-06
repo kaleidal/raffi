@@ -1,4 +1,6 @@
 import { ALL_FORMATS, Input, UrlSource } from "mediabunny";
+import { EmbeddedSubtitles } from "../subtitles/embeddedSubtitles";
+import { createStreamFetch, streamRetryDelay } from "./streamFetch";
 
 const IDLE_RELEASE_MS = 60_000;
 const MAX_IDLE_INPUTS = 2;
@@ -6,12 +8,15 @@ const CACHE_BYTES = 32 * 1024 * 1024;
 
 type Entry = {
 	input: Input;
+	subtitles: EmbeddedSubtitles;
 	references: number;
 	idleTimer: ReturnType<typeof setTimeout> | null;
 };
 
 export type StreamInput = {
 	input: Input;
+	/** Text subtitles found in the bytes read for this stream so far. */
+	subtitles: EmbeddedSubtitles;
 	release: () => void;
 	/** Releases the input and stops sharing it, so a failed read is never reused. */
 	discard: () => void;
@@ -39,11 +44,18 @@ function evictIdleEntries() {
 export function acquireStreamInput(src: string): StreamInput {
 	let entry = entries.get(src);
 	if (!entry) {
+		const subtitles = new EmbeddedSubtitles();
 		entry = {
 			input: new Input({
-				source: new UrlSource(src, { parallelism: 2, maxCacheSize: CACHE_BYTES }),
+				source: new UrlSource(src, {
+					parallelism: 2,
+					maxCacheSize: CACHE_BYTES,
+					fetchFn: createStreamFetch(subtitles.observe),
+					getRetryDelay: streamRetryDelay,
+				}),
 				formats: ALL_FORMATS,
 			}),
+			subtitles,
 			references: 0,
 			idleTimer: null,
 		};
@@ -71,10 +83,16 @@ export function acquireStreamInput(src: string): StreamInput {
 	};
 	return {
 		input: acquired.input,
+		subtitles: acquired.subtitles,
 		release,
 		discard: () => {
 			if (entries.get(src) === acquired) entries.delete(src);
 			release();
 		},
 	};
+}
+
+/** Embedded subtitles of a stream that is still open, for the player's subtitle picker. */
+export function embeddedSubtitlesFor(src: string): EmbeddedSubtitles | null {
+	return entries.get(src)?.subtitles ?? null;
 }

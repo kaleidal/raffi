@@ -4,7 +4,7 @@ import {
 	setRaffiSyncAuthRefreshHandler,
 	setRaffiSyncAuthToken,
 	syncGet,
-} from "../src/lib/db/raffiSync";
+} from "../../src/lib/db/raffiSync";
 
 const originalFetch = globalThis.fetch;
 

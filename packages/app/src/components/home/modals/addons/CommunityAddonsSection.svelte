@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onDestroy, onMount } from "svelte";
 	import { addAddon, getAddons } from "../../../../lib/db/db";
-	import { alertDialog } from "../../../../lib/systemDialogs";
+	import { alertDialog } from "../../../../lib/shell/systemDialogs";
 	import LoadingSpinner from "../../../common/LoadingSpinner.svelte";
 	import AddonLogo from "./AddonLogo.svelte";
 	import {

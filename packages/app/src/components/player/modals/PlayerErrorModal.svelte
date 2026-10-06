@@ -1,6 +1,6 @@
 <script lang="ts">
     import { fade, scale } from "svelte/transition";
-    import { isDesktopPlatform } from "../../../lib/platform";
+    import { isDesktopPlatform } from "../../../lib/shell/platform";
     import { MonitorDown } from "@lucide/svelte";
 
     const portal = (node: HTMLElement) => {

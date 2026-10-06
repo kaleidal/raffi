@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import {
     getStartupSkipTarget,
     shouldAutoSkipChapter,
-} from "../src/pages/player/chapters/chapters";
-import type { Chapter } from "../src/pages/player/types";
+} from "../../src/pages/player/chapters/chapters";
+import type { Chapter } from "../../src/pages/player/types";
 
 const recap: Chapter = {
     startTime: 0,

@@ -48,6 +48,7 @@ export class FfmpegPlayback extends MsePlayback {
 		await this.destroy();
 		if (!opts?.meta) throw new Error("FFmpeg playback requires probed stream metadata");
 		this.video = video;
+		this.prefetching = opts.prefetch ?? false;
 		this.source = src;
 		const meta = enableFfmpegAudio(opts.meta);
 		this.meta = meta;

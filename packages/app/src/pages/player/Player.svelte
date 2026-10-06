@@ -26,7 +26,7 @@
     import * as ProgressLogic from "../meta/progressLogic";
     import { progressMap as metaProgressMap, streamsPopupVisible, selectedStream } from "../meta/metaState";
     import { markCurrentStreamAsFailed } from "../meta/streamLogic";
-    import { isDesktopPlatform } from "../../lib/platform";
+    import { isDesktopPlatform } from "../../lib/shell/platform";
     import {
         isLikelyProviderStatusMedia,
         isStreamPreparationPending,

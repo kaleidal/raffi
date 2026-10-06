@@ -11,7 +11,7 @@
         type DirectSourceConfig,
         type StreamingSourceMode,
         type StreamingSourceSettings,
-    } from "../../../../lib/streaming/sourceSettings";
+    } from "../../../../lib/streams/sourceSettings";
 
     const sourceModeOptions: Array<{ label: string; value: StreamingSourceMode }> = [
         { label: "Addons", value: "addons" },

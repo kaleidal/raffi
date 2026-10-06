@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
-const { candidateLimboApiPaths } = require("../electron/services/limboDiscovery.cjs");
+const { candidateLimboApiPaths } = require("../electron/services/integrations/limboDiscovery.cjs");
 
 describe("Limbo API discovery", () => {
 	test("uses the canonical Windows ProjectDirs data path", () => {

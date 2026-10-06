@@ -3,7 +3,7 @@ import { loadLists, loadListItems, selectItem } from "./dataLoader";
 import { lists, selectedListId, selectedItem, editingState, listItemsMap } from "./listsState";
 import { get } from "svelte/store";
 import type { List } from "./types";
-import { confirmDialog } from "../../lib/systemDialogs";
+import { confirmDialog } from "../../lib/shell/systemDialogs";
 
 
 export async function handleDeleteList(listId: string) {

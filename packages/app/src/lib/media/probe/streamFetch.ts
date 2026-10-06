@@ -1,0 +1,47 @@
+const RETRYABLE_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
+const MAX_RETRIES = 8;
+const FIRST_RETRY_DELAY_SECONDS = 0.5;
+const MAX_RETRY_DELAY_SECONDS = 16;
+
+/** Observes the bytes of each response, given the absolute file offset it starts at. */
+export type ResponseObserver = (start: number, body: ReadableStream<Uint8Array>) => ReadableStream<Uint8Array>;
+
+function rangeStart(init: RequestInit | undefined, response: Response) {
+	if (response.status !== 206) return 0;
+	const contentRange = response.headers.get("content-range")?.match(/bytes\s+(\d+)-/i);
+	if (contentRange) return Number(contentRange[1]);
+	const requested = new Headers(init?.headers).get("range")?.match(/bytes=(\d+)-/i);
+	return requested ? Number(requested[1]) : 0;
+}
+
+/**
+ * Debrid hosts drop connections and answer with transient errors under load. MediaBunny
+ * only retries thrown errors and treats cross-origin network failures as CORS, so this
+ * turns retryable statuses into errors and retries everything a bounded number of times.
+ */
+export function streamRetryDelay(previousAttempts: number): number | null {
+	if (previousAttempts > MAX_RETRIES) return null;
+	return Math.min(FIRST_RETRY_DELAY_SECONDS * 2 ** (previousAttempts - 1), MAX_RETRY_DELAY_SECONDS);
+}
+
+export function createStreamFetch(observe: ResponseObserver): typeof fetch {
+	return (async (input: RequestInfo | URL, init?: RequestInit) => {
+		const response = await fetch(input, init);
+		if (RETRYABLE_STATUSES.has(response.status)) {
+			void response.body?.cancel().catch(() => {});
+			throw new Error(`Stream host responded with ${response.status}`);
+		}
+		if (!response.ok || !response.body) return response;
+
+		const observed = new Response(observe(rangeStart(init, response), response.body), {
+			status: response.status,
+			statusText: response.statusText,
+			headers: response.headers,
+		});
+		Object.defineProperties(observed, {
+			url: { value: response.url },
+			redirected: { value: response.redirected },
+		});
+		return observed;
+	}) as typeof fetch;
+}

@@ -1,4 +1,4 @@
-import { searchTitles } from "../library/library";
+import { searchTitles } from "./library";
 
 export type LocalParsed =
     | {

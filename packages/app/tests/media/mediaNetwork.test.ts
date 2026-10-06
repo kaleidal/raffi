@@ -1,18 +1,18 @@
 import { describe, expect, test } from "bun:test";
 import { ALL_FORMATS, BufferSource, Input } from "mediabunny";
-import { listMatroskaAudioTracks } from "../src/lib/media/probe/containerTracks";
-import { mapContainerCodec } from "../src/lib/media/probe/codecSupport";
+import { listMatroskaAudioTracks } from "../../src/lib/media/probe/containerTracks";
+import { mapContainerCodec } from "../../src/lib/media/probe/codecSupport";
 import {
 	canRemuxOrTranscodeAudio,
 	formatAudioTrackLabel,
 	preferredAudioIndex,
 	probeRemoteStream,
-} from "../src/lib/media/probe/probe";
+} from "../../src/lib/media/probe/probe";
 import {
 	ensureAudioDecoderRegistered,
 	ensureMediaCodersRegistered,
-} from "../src/lib/media/registerCoders";
-import { needsFfmpegAudio } from "../src/lib/media/playback/ffmpegPlayback";
+} from "../../src/lib/media/registerCoders";
+import { needsFfmpegAudio } from "../../src/lib/media/playback/ffmpegPlayback";
 
 describe("MediaBunny network lifecycle", () => {
 	test("rejects a probe whose signal was already canceled", async () => {
@@ -75,7 +75,7 @@ describe("MediaBunny audio planning", () => {
 	test("recognizes and decodes DTS from the playback fixture", async () => {
 		ensureMediaCodersRegistered();
 		const fixture = await Bun.file(
-			new URL("../../../apps/desktop/tests/fixtures/h264-aac-dts.mkv", import.meta.url),
+			new URL("../../../../apps/desktop/tests/fixtures/h264-aac-dts.mkv", import.meta.url),
 		).bytes();
 		const input = new Input({
 			source: new BufferSource(fixture),
@@ -156,6 +156,7 @@ describe("MediaBunny audio planning", () => {
 			audio: null,
 			audioTracks,
 			preferredAudioIndex: 0,
+			subtitleTracks: [],
 		};
 
 		expect(needsFfmpegAudio(meta)).toBe(false);

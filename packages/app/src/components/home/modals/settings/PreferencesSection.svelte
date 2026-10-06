@@ -3,7 +3,7 @@
 	import SearchBarPositionCard from "./SearchBarPositionCard.svelte";
 	import HeroSourceCard from "./HeroSourceCard.svelte";
 	import DirectSourceSection from "./DirectSourceSection.svelte";
-	import { enableRPC, disableRPC } from "../../../../lib/rpc";
+	import { enableRPC, disableRPC } from "../../../../lib/shell/rpc";
 	import { getAddons, getTraktStatus } from "../../../../lib/db/db";
 	import {
 		autoSkipIntros,
@@ -34,7 +34,7 @@
 		setStoredHomeSearchBarPosition,
 	} from "../../../../lib/home/searchBarSettings";
 	import { Download } from "@lucide/svelte";
-	import { LIMBO_INSTALL_URL } from "../../../../lib/limbo/client";
+	import { LIMBO_INSTALL_URL } from "../../../../lib/streams/limboClient";
 
 	let discordRpcEnabled = true;
 	let seekBarStyle = "raffi";

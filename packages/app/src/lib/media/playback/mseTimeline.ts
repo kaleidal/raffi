@@ -10,6 +10,7 @@ const BUFFER_AHEAD_BYTES = 96 * MIB;
 const BUFFER_BEHIND_BYTES = 24 * MIB;
 const PLAYABLE_LEAD_SECONDS = 0.35;
 const PLAYABLE_TIMEOUT_MS = 30_000;
+const PREFETCH_AHEAD_SECONDS = 20;
 
 export type BufferPolicy = {
 	aheadSeconds: number;
@@ -79,8 +80,21 @@ export class MseTimeline {
 		private readonly mediaSource: MediaSource,
 		private readonly sourceBuffer: SourceBuffer,
 		private readonly objectUrl: string,
-		readonly policy: BufferPolicy,
+		private readonly basePolicy: BufferPolicy,
 	) {}
+
+	private prefetching = false;
+
+	/** Buffers only a short lead while this timeline is a prefetch nobody watches yet. */
+	setPrefetching(prefetching: boolean) {
+		this.prefetching = prefetching;
+	}
+
+	get policy(): BufferPolicy {
+		if (!this.prefetching) return this.basePolicy;
+		const aheadSeconds = Math.min(this.basePolicy.aheadSeconds, PREFETCH_AHEAD_SECONDS);
+		return { ...this.basePolicy, aheadSeconds, resumeSeconds: aheadSeconds * 0.4 };
+	}
 
 	static async open(
 		video: HTMLVideoElement,
@@ -112,10 +126,10 @@ export class MseTimeline {
 	}
 
 	pump(readable: ReadableStream<Uint8Array>, signal: AbortSignal, limitAhead: boolean) {
-		return pumpStreamToSourceBuffer(readable, this.sourceBuffer, signal, this.video, {
+		return pumpStreamToSourceBuffer(readable, this.sourceBuffer, signal, this.video, () => ({
 			aheadSeconds: limitAhead ? this.policy.aheadSeconds : null,
 			behindSeconds: this.policy.behindSeconds,
-		});
+		}));
 	}
 
 	/** Resolves once there is enough media at `time` to start playing from it. */

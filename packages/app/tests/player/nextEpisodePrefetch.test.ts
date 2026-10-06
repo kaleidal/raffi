@@ -3,7 +3,7 @@ import {
 	canReuseNextEpisodePrefetch,
 	isSamePlaybackSource,
 	type NextEpisodePrefetchHandoff,
-} from "../src/pages/player/session/nextEpisodePrefetch";
+} from "../../src/pages/player/session/nextEpisodePrefetch";
 
 const handoff = (mode: NextEpisodePrefetchHandoff["mode"]) =>
 	({

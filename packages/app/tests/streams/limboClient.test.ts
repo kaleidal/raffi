@@ -7,7 +7,7 @@ import {
 	LimboApiError,
     LimboUnavailableError,
     parseLimboTorrentStatus,
-} from "../src/lib/limbo/client";
+} from "../../src/lib/streams/limboClient";
 
 const originalFetch = globalThis.fetch;
 const originalWindow = globalThis.window;

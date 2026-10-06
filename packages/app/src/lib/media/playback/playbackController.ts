@@ -6,6 +6,8 @@ export type PlaybackAttachOptions = {
 	meta?: ProbedStream | null;
 	audioIndex?: number;
 	ffmpegSource?: string;
+	/** Buffers only a short lead until the player takes the stream over. */
+	prefetch?: boolean;
 };
 
 export type PlaybackAttachResult = {
@@ -25,6 +27,7 @@ export type ClientPlaybackController = {
 	) => Promise<PlaybackAttachResult>;
 	seek: (time: number) => Promise<void>;
 	setAudioTrack: (index: number, time: number) => Promise<void>;
+	setPrefetching: (prefetching: boolean) => void;
 	getAudioIndex: () => number;
 	getMeta: () => ProbedStream | null;
 	replaceMeta: (meta: ProbedStream) => void;

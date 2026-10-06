@@ -18,7 +18,7 @@ import {
     LimboUnavailableError,
     removeLimboTorrent,
     type LimboTorrentStatus,
-} from "../../../lib/limbo/client";
+} from "../../../lib/streams/limboClient";
 import { ensureTorrentingAllowed } from "../../../lib/stores/torrenting";
 import { selectedStream } from "../../meta/metaState";
 import type { Chapter, Track } from "../types";
@@ -26,7 +26,7 @@ import * as Session from "./videoSession";
 import * as Subtitles from "../subtitles/subtitles";
 import * as Discord from "../integrations/discord";
 import { autoEnableDefaultSubtitles as applyDefaultSubtitles } from "../subtitles/subtitleAutoSelect";
-import { applyClientAudioTracks, sessionFromProbe } from "./playerSessionMetadata";
+import { applyClientAudioTracks, embeddedSubtitleTracks, sessionFromProbe } from "./playerSessionMetadata";
 import { attachHlsPlayback } from "./hlsPlayback";
 import {
     describePlaybackFailure,
@@ -214,7 +214,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
 
         if (signal.aborted) throw new DOMException("Aborted", "AbortError");
 
-        const { getLimboTorrent } = await import("../../../lib/limbo/client");
+        const { getLimboTorrent } = await import("../../../lib/streams/limboClient");
         const ready = await getLimboTorrent(created.id, signal);
         if (!ready.streamUrl) {
             throw new Error("Limbo did not return a stream URL for this torrent");
@@ -294,12 +294,14 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
 
                 subtitleTracks.set([
                     { id: "off", label: "Off", selected: true, group: "None" },
+                    ...embeddedSubtitleTracks(reused.meta ?? null, sessionSource),
                 ]);
 
                 if (
                     (reused.mode === "mediabunny" || reused.mode === "ffmpeg") &&
                     reused.playbackController
                 ) {
+                    reused.playbackController.setPrefetching(false);
                     deps.setPlaybackController(reused.playbackController);
                 } else if (reused.mode === "addon-hls" && reused.hls) {
                     deps.setHls(reused.hls);
@@ -556,6 +558,10 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                         ...sessionFromProbe(clientPlayback.meta, sessionSource),
                     },
                 );
+                subtitleTracks.update((tracks) => [
+                    ...tracks,
+                    ...embeddedSubtitleTracks(clientPlayback.meta, sessionSource),
+                ]);
             }
 
             sessionData.set(result.sessionData);

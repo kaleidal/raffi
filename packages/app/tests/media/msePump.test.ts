@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { pumpStreamToSourceBuffer } from "../src/lib/media/playback/msePump";
+import { pumpStreamToSourceBuffer } from "../../src/lib/media/playback/msePump";
 
-const limits = { aheadSeconds: null, behindSeconds: 30 };
+const limits = () => ({ aheadSeconds: null, behindSeconds: 30 });
 
 function createVideo(buffered: TimeRanges, currentTime: number) {
 	return {

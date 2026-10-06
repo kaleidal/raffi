@@ -4,7 +4,7 @@ import {
     getResponseTotalBytes,
     isLikelyProviderStatusMedia,
     isStreamPreparationPending,
-} from "../src/lib/streams/streamAvailability";
+} from "../../src/lib/streams/streamAvailability";
 
 describe("stream availability preflight", () => {
     test("accepts immediately readable media responses", () => {
