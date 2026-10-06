@@ -4,10 +4,10 @@ import type {
 	ClientPlaybackController,
 	PlaybackAttachOptions,
 	PlaybackAttachResult,
-} from "./playbackController";
-import type { ProbedStream } from "../probe/probe";
-import type { StreamInput } from "../probe/streamInput";
-import { snapToVideoKeyframe } from "./videoKeyframes";
+} from "../playbackController";
+import type { ProbedStream } from "../../probe/probe";
+import type { StreamInput } from "../../probe/streamInput";
+import { snapToVideoKeyframe } from "../videoKeyframes";
 
 const PREPARED_SECONDS = 4;
 

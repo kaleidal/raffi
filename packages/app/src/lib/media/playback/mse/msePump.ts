@@ -1,3 +1,5 @@
+import type { FragmentKeyframes } from "./fragmentKeyframes";
+
 export function waitForSourceBufferIdle(sourceBuffer: SourceBuffer): Promise<void> {
 	if (!sourceBuffer.updating) return Promise.resolve();
 	return new Promise((resolve, reject) => {
@@ -40,12 +42,13 @@ async function appendBytes(
 	signal: AbortSignal,
 	video: HTMLVideoElement,
 	behindSeconds: number,
+	keyframes: FragmentKeyframes,
 ): Promise<void> {
 	await waitForSourceBufferIdle(sourceBuffer);
 	if (signal.aborted) {
 		throw new DOMException("Aborted", "AbortError");
 	}
-	await trimOldBuffer(sourceBuffer, video, signal, behindSeconds);
+	await trimOldBuffer(sourceBuffer, video, signal, behindSeconds, keyframes);
 	const buffer = bytes.buffer.slice(
 		bytes.byteOffset,
 		bytes.byteOffset + bytes.byteLength,
@@ -59,7 +62,7 @@ async function appendBytes(
 			if (!isQuotaExceededError(error) || attempt === MAX_APPEND_ATTEMPTS - 1) {
 				throw error;
 			}
-			const recovered = await waitForQuotaEviction(sourceBuffer, video, signal);
+			const recovered = await waitForQuotaEviction(sourceBuffer, video, signal, keyframes);
 			if (!recovered) throw error;
 		}
 	}
@@ -91,22 +94,26 @@ async function evictConsumedBufferForQuota(
 	sourceBuffer: SourceBuffer,
 	video: HTMLVideoElement,
 	signal: AbortSignal,
+	keyframes: FragmentKeyframes,
 ): Promise<boolean> {
 	if (sourceBuffer.buffered.length === 0) return false;
 	await waitForSourceBufferIdle(sourceBuffer);
 
-	const currentTime = Math.max(0, video.currentTime || 0);
+	const removeEnd = keyframes.cutPoint(Math.max(0, video.currentTime || 0) - QUOTA_RETAIN_BEHIND_SECONDS);
+	if (removeEnd == null) return false;
 	const firstStart = sourceBuffer.buffered.start(0);
-	const behindEnd = Math.min(currentTime - QUOTA_RETAIN_BEHIND_SECONDS, currentTime);
-	return removeBufferedRange(sourceBuffer, firstStart, behindEnd, signal);
+	const removed = await removeBufferedRange(sourceBuffer, firstStart, removeEnd, signal);
+	if (removed) keyframes.forget(firstStart, removeEnd);
+	return removed;
 }
 
 async function waitForQuotaEviction(
 	sourceBuffer: SourceBuffer,
 	video: HTMLVideoElement,
 	signal: AbortSignal,
+	keyframes: FragmentKeyframes,
 ): Promise<boolean> {
-	if (await evictConsumedBufferForQuota(sourceBuffer, video, signal)) return true;
+	if (await evictConsumedBufferForQuota(sourceBuffer, video, signal, keyframes)) return true;
 
 	return new Promise<boolean>((resolve, reject) => {
 		let checking = false;
@@ -122,7 +129,7 @@ async function waitForQuotaEviction(
 			if (checking) return;
 			checking = true;
 			try {
-				if (await evictConsumedBufferForQuota(sourceBuffer, video, signal)) {
+				if (await evictConsumedBufferForQuota(sourceBuffer, video, signal, keyframes)) {
 					finish(true);
 				}
 			} catch (error) {
@@ -142,20 +149,23 @@ async function waitForQuotaEviction(
 	});
 }
 
+/** Drops media far behind the playhead, cutting at a keyframe so playback can still resume. */
 async function trimOldBuffer(
 	sourceBuffer: SourceBuffer,
 	video: HTMLVideoElement,
 	signal: AbortSignal,
 	retainSeconds: number,
+	keyframes: FragmentKeyframes,
 ): Promise<void> {
 	if (sourceBuffer.buffered.length === 0) return;
-	const removeEnd = video.currentTime - retainSeconds;
-	if (removeEnd <= 0) return;
+	const removeEnd = keyframes.cutPoint(video.currentTime - retainSeconds);
+	if (removeEnd == null || removeEnd <= 0) return;
 	const firstStart = sourceBuffer.buffered.start(0);
 	if (removeEnd - firstStart < BUFFER_TRIM_HYSTERESIS_SECONDS) return;
 	if (signal.aborted) throw new DOMException("Aborted", "AbortError");
 	sourceBuffer.remove(0, removeEnd);
 	await waitForSourceBufferIdle(sourceBuffer);
+	keyframes.forget(0, removeEnd);
 }
 
 export function getBufferedAheadSeconds(
@@ -189,8 +199,10 @@ export async function pumpStreamToSourceBuffer(
 	signal: AbortSignal,
 	video: HTMLVideoElement,
 	limits: () => { aheadSeconds: number | null; behindSeconds: number },
+	keyframes: FragmentKeyframes,
 ): Promise<"complete"> {
 	const reader = readable.getReader();
+	const scanner = keyframes.scanner(sourceBuffer.timestampOffset);
 	const cancelOnAbort = () => void reader.cancel().catch(() => {});
 	signal.addEventListener("abort", cancelOnAbort, { once: true });
 	const pending: Uint8Array[] = [];
@@ -204,7 +216,7 @@ export async function pumpStreamToSourceBuffer(
 		const bytes = concatChunks(pending, pendingSize);
 		pending.length = 0;
 		pendingSize = 0;
-		await appendBytes(sourceBuffer, bytes, signal, video, limits().behindSeconds);
+		await appendBytes(sourceBuffer, bytes, signal, video, limits().behindSeconds, keyframes);
 	};
 
 	try {
@@ -220,6 +232,7 @@ export async function pumpStreamToSourceBuffer(
 			if (signal.aborted) throw new DOMException("Aborted", "AbortError");
 			if (done) break;
 			if (!value || value.byteLength === 0) continue;
+			scanner.push(value);
 
 			pending.push(value);
 			pendingSize += value.byteLength;

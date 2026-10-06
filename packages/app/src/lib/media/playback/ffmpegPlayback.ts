@@ -1,7 +1,7 @@
 import { toClientPlayableUrl } from "../localSource";
-import { MsePlayback } from "./msePlayback";
-import { pickMseMimeType } from "./msePump";
-import type { MseTimeline } from "./mseTimeline";
+import { MsePlayback } from "./mse/msePlayback";
+import { pickMseMimeType } from "./mse/msePump";
+import type { MseTimeline } from "./mse/mseTimeline";
 import { ensureAudioTracks, preferredAudioIndex, type ProbedStream } from "../probe/probe";
 import type { PlaybackAttachOptions, PlaybackAttachResult } from "./playbackController";
 import { acquireStreamInput } from "../probe/streamInput";

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { pumpStreamToSourceBuffer } from "../../src/lib/media/playback/msePump";
+import { FragmentKeyframes } from "../../src/lib/media/playback/mse/fragmentKeyframes";
+import { pumpStreamToSourceBuffer } from "../../src/lib/media/playback/mse/msePump";
 
 const limits = () => ({ aheadSeconds: null, behindSeconds: 30 });
 
@@ -55,6 +56,7 @@ describe("MSE stream pumping", () => {
 			new AbortController().signal,
 			createVideo(buffered, 0),
 			limits,
+			new FragmentKeyframes(),
 		);
 		await appended;
 		closeStream();
@@ -99,6 +101,7 @@ describe("MSE stream pumping", () => {
 				new AbortController().signal,
 				video,
 				limits,
+				new FragmentKeyframes(),
 			),
 		).resolves.toBe("complete");
 		expect(appendAttempts).toBe(2);

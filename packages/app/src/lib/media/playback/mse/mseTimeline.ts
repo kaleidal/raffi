@@ -1,4 +1,5 @@
 import type { Input } from "mediabunny";
+import { FragmentKeyframes } from "./fragmentKeyframes";
 import {
 	getBufferedAheadSeconds,
 	pumpStreamToSourceBuffer,
@@ -84,6 +85,7 @@ export class MseTimeline {
 	) {}
 
 	private prefetching = false;
+	private readonly keyframes = new FragmentKeyframes();
 
 	/** Buffers only a short lead while this timeline is a prefetch nobody watches yet. */
 	setPrefetching(prefetching: boolean) {
@@ -126,10 +128,17 @@ export class MseTimeline {
 	}
 
 	pump(readable: ReadableStream<Uint8Array>, signal: AbortSignal, limitAhead: boolean) {
-		return pumpStreamToSourceBuffer(readable, this.sourceBuffer, signal, this.video, () => ({
-			aheadSeconds: limitAhead ? this.policy.aheadSeconds : null,
-			behindSeconds: this.policy.behindSeconds,
-		}));
+		return pumpStreamToSourceBuffer(
+			readable,
+			this.sourceBuffer,
+			signal,
+			this.video,
+			() => ({
+				aheadSeconds: limitAhead ? this.policy.aheadSeconds : null,
+				behindSeconds: this.policy.behindSeconds,
+			}),
+			this.keyframes,
+		);
 	}
 
 	/** Resolves once there is enough media at `time` to start playing from it. */
@@ -198,6 +207,7 @@ export class MseTimeline {
 		for (const [start, end] of removals) {
 			await waitForSourceBufferIdle(this.sourceBuffer);
 			this.sourceBuffer.remove(start, end);
+			this.keyframes.forget(start, end);
 		}
 		await waitForSourceBufferIdle(this.sourceBuffer);
 	}

@@ -8,9 +8,9 @@ import {
 	type VideoCodec,
 } from "mediabunny";
 import { ensureAudioTracks, probeRemoteStream } from "../probe/probe";
-import { MsePlayback } from "./msePlayback";
-import { pickMseMimeType } from "./msePump";
-import type { MseTimeline } from "./mseTimeline";
+import { MsePlayback } from "./mse/msePlayback";
+import { pickMseMimeType } from "./mse/msePump";
+import type { MseTimeline } from "./mse/mseTimeline";
 import { ensureMediaCodersRegistered } from "../registerCoders";
 import {
 	createPlaybackConversion,
