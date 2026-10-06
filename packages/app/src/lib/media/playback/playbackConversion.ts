@@ -7,7 +7,7 @@ import {
 	type Output,
 	type VideoCodec,
 } from "mediabunny";
-import { ensureAudioDecoderRegistered } from "./registerCoders";
+import { ensureAudioDecoderRegistered } from "../registerCoders";
 
 const MSE_COPYABLE_AUDIO = new Set<AudioCodec | null>(["aac"]);
 
@@ -111,96 +111,4 @@ async function audioConversionOptions(track: InputAudioTrack) {
 		sampleRate: 48000,
 		bitrate: 160e3,
 	};
-}
-
-export function waitForFirstBuffer(
-	sourceBuffer: SourceBuffer,
-	signal: AbortSignal,
-): Promise<void> {
-	if (sourceBuffer.buffered.length > 0) return Promise.resolve();
-
-	return new Promise((resolve, reject) => {
-		let timeout = 0;
-		const armTimeout = () => {
-			window.clearTimeout(timeout);
-			timeout = window.setTimeout(() => {
-				cleanup();
-				reject(new Error("Timed out waiting for playable remux output"));
-			}, 20_000);
-		};
-		const onUpdate = () => {
-			if (sourceBuffer.buffered.length > 0) {
-				cleanup();
-				resolve();
-				return;
-			}
-			armTimeout();
-		};
-		const onAbort = () => {
-			cleanup();
-			reject(new DOMException("Aborted", "AbortError"));
-		};
-		const cleanup = () => {
-			window.clearTimeout(timeout);
-			sourceBuffer.removeEventListener("updateend", onUpdate);
-			signal.removeEventListener("abort", onAbort);
-		};
-		sourceBuffer.addEventListener("updateend", onUpdate);
-		signal.addEventListener("abort", onAbort, { once: true });
-		armTimeout();
-	});
-}
-
-function bufferedEndAtOrAfter(
-	sourceBuffer: SourceBuffer,
-	video: HTMLVideoElement | null,
-	time: number,
-): boolean {
-	try {
-		const buffered =
-			video && video.buffered.length > 0 ? video.buffered : sourceBuffer.buffered;
-		if (buffered.length === 0) return time <= 0;
-		for (let i = 0; i < buffered.length; i++) {
-			const start = buffered.start(i);
-			const end = buffered.end(i);
-			if (time <= 0 && end > start) return true;
-			if (time >= start - 0.05 && end >= time) return true;
-		}
-		return false;
-	} catch {
-		return false;
-	}
-}
-
-export function waitForBufferedThrough(
-	sourceBuffer: SourceBuffer,
-	video: HTMLVideoElement | null,
-	time: number,
-	signal?: AbortSignal,
-): Promise<void> {
-	if (bufferedEndAtOrAfter(sourceBuffer, video, time)) return Promise.resolve();
-
-	return new Promise((resolve, reject) => {
-		const onUpdate = () => {
-			if (bufferedEndAtOrAfter(sourceBuffer, video, time)) {
-				cleanup();
-				resolve();
-			}
-		};
-		const onAbort = () => {
-			cleanup();
-			reject(new DOMException("Aborted", "AbortError"));
-		};
-		const timeout = window.setTimeout(() => {
-			cleanup();
-			resolve();
-		}, 8_000);
-		const cleanup = () => {
-			window.clearTimeout(timeout);
-			sourceBuffer.removeEventListener("updateend", onUpdate);
-			signal?.removeEventListener("abort", onAbort);
-		};
-		sourceBuffer.addEventListener("updateend", onUpdate);
-		signal?.addEventListener("abort", onAbort, { once: true });
-	});
 }

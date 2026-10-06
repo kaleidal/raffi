@@ -1,8 +1,6 @@
 import {
-	ALL_FORMATS,
-	Input,
-	UrlSource,
 	type AudioCodec,
+	type Input,
 	type InputAudioTrack,
 	type InputVideoTrack,
 	type VideoCodec,
@@ -14,7 +12,8 @@ import {
 import {
 	ensureAudioDecoderRegistered,
 	ensureMediaCodersRegistered,
-} from "./registerCoders";
+} from "../registerCoders";
+import { acquireStreamInput } from "./streamInput";
 import {
 	codecsCompatible,
 	isMseFriendlyVideo,
@@ -108,42 +107,6 @@ const LANGUAGE_LABELS: Record<string, string> = {
 	und: "Unknown",
 };
 
-export function createRemoteUrlSource(
-	src: string,
-	opts?: {
-		parallelism?: number;
-		maxCacheSize?: number;
-		signal?: AbortSignal;
-		fetchFn?: typeof fetch;
-	},
-) {
-	const externalSignal = opts?.signal;
-	const baseFetch = opts?.fetchFn ?? globalThis.fetch;
-	const fetchFn = externalSignal
-		? ((input: RequestInfo | URL, init?: RequestInit) => {
-				const internalSignal = init?.signal;
-				const signal = internalSignal
-					? AbortSignal.any([externalSignal, internalSignal])
-					: externalSignal;
-				return baseFetch(input, { ...init, signal });
-			}) as typeof fetch
-		: undefined;
-
-	return new UrlSource(src, {
-		parallelism: opts?.parallelism ?? 2,
-		maxCacheSize: opts?.maxCacheSize ?? 48 * 1024 * 1024,
-		fetchFn,
-	});
-}
-
-function createProbeUrlSource(src: string, signal: AbortSignal) {
-	return createRemoteUrlSource(src, {
-		parallelism: 2,
-		maxCacheSize: 8 * 1024 * 1024,
-		signal,
-	});
-}
-
 export function normalizeLang(lang: string | null | undefined): string {
 	const value = (lang || "").trim().toLowerCase();
 	if (!value || value === "und" || value === "null") return "";
@@ -192,6 +155,14 @@ async function canPrepareAudioTrack(track: InputAudioTrack, codec: AudioCodec | 
 	return canRemuxOrTranscodeAudio(codec, await track.canDecode());
 }
 
+function rejectOnAbort(signal: AbortSignal | undefined) {
+	return new Promise<never>((_resolve, reject) => {
+		const fail = () => reject(new DOMException("Aborted", "AbortError"));
+		if (signal?.aborted) fail();
+		else signal?.addEventListener("abort", fail, { once: true });
+	});
+}
+
 export async function probeRemoteStream(
 	src: string,
 	signal?: AbortSignal,
@@ -199,88 +170,83 @@ export async function probeRemoteStream(
 	signal?.throwIfAborted();
 	await ensureMediaCodersRegistered();
 	signal?.throwIfAborted();
-	const networkAbort = new AbortController();
 
-	const input = new Input({
-		source: createProbeUrlSource(src, networkAbort.signal),
-		formats: ALL_FORMATS,
+	const stream = acquireStreamInput(src);
+	try {
+		const meta = await Promise.race([probeInput(stream.input), rejectOnAbort(signal)]);
+		stream.release();
+		return meta;
+	} catch (error) {
+		if (signal?.aborted) stream.release();
+		else stream.discard();
+		throw error;
+	}
+}
+
+async function probeInput(input: Input): Promise<ProbedStream> {
+	// Never scan the whole file for duration — that downloads the episode.
+	const durationFromMeta = await input.getDurationFromMetadata();
+	const durationSeconds =
+		durationFromMeta != null &&
+		Number.isFinite(durationFromMeta) &&
+		durationFromMeta > 0
+			? durationFromMeta
+			: 0;
+
+	const [videoTrack, audioTracks, primaryAudio] = await Promise.all([
+		input.getPrimaryVideoTrack(),
+		input.getAudioTracks(),
+		input.getPrimaryAudioTrack(),
+	]);
+
+	const video = videoTrack ? await describeVideo(videoTrack) : null;
+	const audio = primaryAudio ? await describeAudio(primaryAudio) : null;
+
+	let listedAudio: ProbedAudioTrack[] = await Promise.all(
+		audioTracks.map(async (track, index) => {
+			const codec = await track.getCodec();
+			const internalId = await track.getInternalCodecId();
+			const playable = await canPrepareAudioTrack(track, codec);
+			return {
+				index,
+				codec,
+				codecName: codec || (typeof internalId === "string" ? internalId : null),
+				language: (await track.getLanguageCode()) || null,
+				title: (await track.getName()) || null,
+				channels: await track.getNumberOfChannels(),
+				playable,
+				bunnyIndex: index,
+			};
+		}),
+	);
+
+	if (listedAudio.length === 0 && primaryAudio) {
+		const codec = await primaryAudio.getCodec();
+		const internalId = await primaryAudio.getInternalCodecId();
+		const playable = await canPrepareAudioTrack(primaryAudio, codec);
+		listedAudio = [
+			{
+				index: 0,
+				codec,
+				codecName: codec || (typeof internalId === "string" ? internalId : null),
+				language: (await primaryAudio.getLanguageCode()) || null,
+				title: (await primaryAudio.getName()) || null,
+				channels: await primaryAudio.getNumberOfChannels(),
+				playable,
+				bunnyIndex: 0,
+			},
+		];
+	}
+
+	const meta = ensureAudioTracks({
+		durationSeconds: Number.isFinite(durationSeconds) ? durationSeconds : 0,
+		video,
+		audio,
+		audioTracks: listedAudio,
+		preferredAudioIndex: preferredAudioIndex(listedAudio),
 	});
 
-	const onAbort = () => {
-		networkAbort.abort();
-		input.dispose();
-	};
-	signal?.addEventListener("abort", onAbort, { once: true });
-
-	try {
-		// Never scan the whole file for duration — that downloads the episode.
-		const durationFromMeta = await input.getDurationFromMetadata();
-		const durationSeconds =
-			durationFromMeta != null &&
-			Number.isFinite(durationFromMeta) &&
-			durationFromMeta > 0
-				? durationFromMeta
-				: 0;
-
-		const [videoTrack, audioTracks, primaryAudio] = await Promise.all([
-			input.getPrimaryVideoTrack(),
-			input.getAudioTracks(),
-			input.getPrimaryAudioTrack(),
-		]);
-
-		const video = videoTrack ? await describeVideo(videoTrack) : null;
-		const audio = primaryAudio ? await describeAudio(primaryAudio) : null;
-
-		let listedAudio: ProbedAudioTrack[] = await Promise.all(
-			audioTracks.map(async (track, index) => {
-				const codec = await track.getCodec();
-				const internalId = await track.getInternalCodecId();
-				const playable = await canPrepareAudioTrack(track, codec);
-				return {
-					index,
-					codec,
-					codecName: codec || (typeof internalId === "string" ? internalId : null),
-					language: (await track.getLanguageCode()) || null,
-					title: (await track.getName()) || null,
-					channels: await track.getNumberOfChannels(),
-					playable,
-					bunnyIndex: index,
-				};
-			}),
-		);
-
-		if (listedAudio.length === 0 && primaryAudio) {
-			const codec = await primaryAudio.getCodec();
-			const internalId = await primaryAudio.getInternalCodecId();
-			const playable = await canPrepareAudioTrack(primaryAudio, codec);
-			listedAudio = [
-				{
-					index: 0,
-					codec,
-					codecName: codec || (typeof internalId === "string" ? internalId : null),
-					language: (await primaryAudio.getLanguageCode()) || null,
-					title: (await primaryAudio.getName()) || null,
-					channels: await primaryAudio.getNumberOfChannels(),
-					playable,
-					bunnyIndex: 0,
-				},
-			];
-		}
-
-		const meta = ensureAudioTracks({
-			durationSeconds: Number.isFinite(durationSeconds) ? durationSeconds : 0,
-			video,
-			audio,
-			audioTracks: listedAudio,
-			preferredAudioIndex: preferredAudioIndex(listedAudio),
-		});
-
-		return meta;
-	} finally {
-		signal?.removeEventListener("abort", onAbort);
-		networkAbort.abort();
-		input.dispose();
-	}
+	return meta;
 }
 
 /** Enrich track list from container headers without blocking first playback. */

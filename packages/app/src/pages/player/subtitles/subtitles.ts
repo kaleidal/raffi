@@ -1,7 +1,7 @@
 // Subtitle handling and parsing
-import { getAddons } from "../../lib/db/db";
-import type { ShowResponse } from "../../lib/library/types/meta_types";
-import type { Track, ParsedCue } from "./types";
+import { getAddons } from "../../../lib/db/db";
+import type { ShowResponse } from "../../../lib/library/types/meta_types";
+import type { Track, ParsedCue } from "../types";
 
 let currentSubtitleAbort: AbortController | null = null;
 let parsedCues: ParsedCue[] = [];
@@ -173,7 +173,6 @@ export function parseAndAddCue(track: TextTrack, block: string, getCurrentCueLin
 export function parseAndAddSRTCue(
     track: TextTrack,
     block: string,
-    offset: number = 0,
     getCurrentCueLine: () => number
 ) {
     const lines = block
@@ -206,8 +205,8 @@ export function parseAndAddSRTCue(
     const end = parseSRTTime(endStr);
 
     if (start !== null && end !== null) {
-        const adjustedStart = start - offset + subtitleDelaySeconds;
-        const adjustedEnd = end - offset + subtitleDelaySeconds;
+        const adjustedStart = start + subtitleDelaySeconds;
+        const adjustedEnd = end + subtitleDelaySeconds;
 
         if (adjustedEnd < 0) return;
 
@@ -232,8 +231,6 @@ export function parseAndAddSRTCue(
 export async function handleSubtitleSelect(
     track: Track,
     videoElem: HTMLVideoElement | null,
-    currentTime: number,
-    playbackOffset: number,
     getCurrentCueLine: () => number
 ) {
     if (currentSubtitleAbort) {
@@ -319,7 +316,7 @@ export async function handleSubtitleSelect(
 
                 for (const part of parts) {
                     if (isSrt) {
-                        parseAndAddSRTCue(textTrack, part, playbackOffset, getCurrentCueLine);
+                        parseAndAddSRTCue(textTrack, part, getCurrentCueLine);
                     } else {
                         parseAndAddCue(textTrack, part, getCurrentCueLine);
                     }
@@ -327,7 +324,7 @@ export async function handleSubtitleSelect(
             }
             if (buffer.trim()) {
                 if (isSrt) {
-                    parseAndAddSRTCue(textTrack, buffer, playbackOffset, getCurrentCueLine);
+                    parseAndAddSRTCue(textTrack, buffer, getCurrentCueLine);
                 } else {
                     parseAndAddCue(textTrack, buffer, getCurrentCueLine);
                 }

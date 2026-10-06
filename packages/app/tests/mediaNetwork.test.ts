@@ -1,19 +1,18 @@
 import { describe, expect, test } from "bun:test";
 import { ALL_FORMATS, BufferSource, Input } from "mediabunny";
-import { listMatroskaAudioTracks } from "../src/lib/media/containerTracks";
-import { mapContainerCodec } from "../src/lib/media/codecSupport";
+import { listMatroskaAudioTracks } from "../src/lib/media/probe/containerTracks";
+import { mapContainerCodec } from "../src/lib/media/probe/codecSupport";
 import {
 	canRemuxOrTranscodeAudio,
-	createRemoteUrlSource,
 	formatAudioTrackLabel,
 	preferredAudioIndex,
 	probeRemoteStream,
-} from "../src/lib/media/probe";
+} from "../src/lib/media/probe/probe";
 import {
 	ensureAudioDecoderRegistered,
 	ensureMediaCodersRegistered,
 } from "../src/lib/media/registerCoders";
-import { needsFfmpegAudio } from "../src/lib/media/ffmpegPlayback";
+import { needsFfmpegAudio } from "../src/lib/media/playback/ffmpegPlayback";
 
 describe("MediaBunny network lifecycle", () => {
 	test("rejects a probe whose signal was already canceled", async () => {
@@ -23,61 +22,6 @@ describe("MediaBunny network lifecycle", () => {
 		await expect(
 			probeRemoteStream("https://media.example/video.mkv", abortController.signal),
 		).rejects.toMatchObject({ name: "AbortError" });
-	});
-
-	test("aborts active UrlSource fetches with the owning pipeline", async () => {
-		const pipelineAbort = new AbortController();
-		let requestSignal: AbortSignal | null = null;
-		const source = createRemoteUrlSource("https://media.example/video.mkv", {
-			signal: pipelineAbort.signal,
-			fetchFn: ((_input, init) =>
-				new Promise<Response>((_resolve, reject) => {
-					requestSignal = init?.signal ?? null;
-					requestSignal?.addEventListener(
-						"abort",
-						() => reject(new DOMException("Aborted", "AbortError")),
-						{ once: true },
-					);
-				})) as typeof fetch,
-		});
-		const sourceFetch = (
-			source as unknown as {
-				_options: { fetchFn: typeof fetch };
-			}
-		)._options.fetchFn;
-
-		const request = sourceFetch("https://media.example/video.mkv", {
-			signal: new AbortController().signal,
-		});
-		pipelineAbort.abort();
-
-		expect(requestSignal?.aborted).toBe(true);
-		await expect(request).rejects.toMatchObject({ name: "AbortError" });
-	});
-
-	test("keeps MediaBunny cancellation connected after response headers arrive", async () => {
-		const pipelineAbort = new AbortController();
-		const requestAbort = new AbortController();
-		let requestSignal: AbortSignal | null = null;
-		const source = createRemoteUrlSource("https://media.example/video.mkv", {
-			signal: pipelineAbort.signal,
-			fetchFn: (async (_input, init) => {
-				requestSignal = init?.signal ?? null;
-				return new Response(new Uint8Array(64), { status: 206 });
-			}) as typeof fetch,
-		});
-		const sourceFetch = (
-			source as unknown as {
-				_options: { fetchFn: typeof fetch };
-			}
-		)._options.fetchFn;
-
-		await sourceFetch("https://media.example/video.mkv", {
-			signal: requestAbort.signal,
-		});
-		requestAbort.abort();
-
-		expect(requestSignal?.aborted).toBe(true);
 	});
 
 	test("uses the first range response for size instead of issuing HEAD", async () => {

@@ -4,7 +4,7 @@ import {
     updatePlaybackState,
     leaveWatchParty,
     setPartyEndCallback,
-} from "../../lib/stores/watchPartyStore";
+} from "../../../lib/stores/watchPartyStore";
 
 
 export function setupWatchPartySync(

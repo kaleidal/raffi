@@ -1,9 +1,9 @@
 import type { AudioCodec } from "mediabunny";
-import { isDesktopPlatform } from "../platform";
+import { isDesktopPlatform } from "../../platform";
 import { canUseFfmpegPlayback } from "./ffmpegPlayback";
-import { isLocalFilesystemPath, isLocalMediaUrl, toClientPlayableUrl } from "./localSource";
-import { getDirectMediaSupport, supportsEac3Playback } from "./nativeSupport";
-import { ensureAudioTracks, isMseFriendlyVideo, isNativeFriendlyAudio, probeRemoteStream, type ProbedStream } from "./probe";
+import { isLocalFilesystemPath, isLocalMediaUrl, toClientPlayableUrl } from "../localSource";
+import { getDirectMediaSupport, supportsEac3Playback } from "../probe/nativeSupport";
+import { ensureAudioTracks, isMseFriendlyVideo, isNativeFriendlyAudio, probeRemoteStream, type ProbedStream } from "../probe/probe";
 
 export type HttpPlaybackMode = "direct" | "mediabunny" | "ffmpeg" | "addon-hls" | "unsupported";
 

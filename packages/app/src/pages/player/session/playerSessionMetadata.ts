@@ -1,6 +1,6 @@
-import { formatAudioTrackLabel, type ProbedStream } from "../../lib/media";
-import { audioTracks, currentAudioLabel } from "./playerState";
-import type { Track } from "./types";
+import { formatAudioTrackLabel, type ProbedStream } from "../../../lib/media";
+import { audioTracks, currentAudioLabel } from "../playerState";
+import type { Track } from "../types";
 
 export function sessionFromProbe(meta: ProbedStream | null, src: string) {
 	const availableStreams =

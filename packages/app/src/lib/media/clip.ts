@@ -1,19 +1,17 @@
 import {
-	ALL_FORMATS,
 	BufferTarget,
 	Conversion,
-	Input,
 	Mp4OutputFormat,
 	Output,
 	type AudioCodec,
 	type VideoCodec,
 } from "mediabunny";
-import { createRemoteUrlSource } from "./probe";
 import {
 	ensureAudioDecoderRegistered,
 	ensureMediaCodersRegistered,
 } from "./registerCoders";
 import { toClientPlayableUrl } from "./localSource";
+import { acquireStreamInput } from "./probe/streamInput";
 
 const MAX_CLIP_SECONDS = 15 * 60;
 
@@ -49,23 +47,15 @@ export async function exportClipWithMediaBunny(
 		throw new Error("This source cannot be clipped in-app yet");
 	}
 
-	const networkAbort = new AbortController();
 	let conversion: Conversion | null = null;
 	const abort = () => {
-		networkAbort.abort();
 		void conversion?.cancel().catch(() => {});
 	};
 	req.signal?.addEventListener("abort", abort, { once: true });
 	if (req.signal?.aborted) abort();
 
-	const input = new Input({
-		source: createRemoteUrlSource(playable, {
-			parallelism: 2,
-			maxCacheSize: 48 * 1024 * 1024,
-			signal: networkAbort.signal,
-		}),
-		formats: ALL_FORMATS,
-	});
+	const stream = acquireStreamInput(playable);
+	const input = stream.input;
 
 	try {
 		const target = new BufferTarget();
@@ -161,7 +151,6 @@ export async function exportClipWithMediaBunny(
 		};
 	} finally {
 		req.signal?.removeEventListener("abort", abort);
-		networkAbort.abort();
-		input.dispose();
+		stream.release();
 	}
 }

@@ -1,8 +1,3 @@
-/** How far ahead of the playhead to remux before pausing the conversion. */
-export const TARGET_BUFFER_AHEAD_SECONDS = 30;
-/** Resume remux once buffered ahead drops to this. */
-export const RESUME_BUFFER_AHEAD_SECONDS = 10;
-
 export function waitForSourceBufferIdle(sourceBuffer: SourceBuffer): Promise<void> {
 	if (!sourceBuffer.updating) return Promise.resolve();
 	return new Promise((resolve, reject) => {
@@ -24,7 +19,6 @@ export function waitForSourceBufferIdle(sourceBuffer: SourceBuffer): Promise<voi
 }
 
 const BATCH_BYTES = 256 * 1024;
-const RETAIN_BUFFER_BEHIND_SECONDS = 30;
 const BUFFER_TRIM_HYSTERESIS_SECONDS = 5;
 const QUOTA_RETAIN_BEHIND_SECONDS = 2;
 const MAX_APPEND_ATTEMPTS = 3;
@@ -43,14 +37,15 @@ function concatChunks(chunks: Uint8Array[], total: number): Uint8Array {
 async function appendBytes(
 	sourceBuffer: SourceBuffer,
 	bytes: Uint8Array,
-	signal?: AbortSignal,
-	video?: HTMLVideoElement | null,
+	signal: AbortSignal,
+	video: HTMLVideoElement,
+	behindSeconds: number,
 ): Promise<void> {
 	await waitForSourceBufferIdle(sourceBuffer);
-	if (signal?.aborted) {
+	if (signal.aborted) {
 		throw new DOMException("Aborted", "AbortError");
 	}
-	await trimOldBuffer(sourceBuffer, video, signal);
+	await trimOldBuffer(sourceBuffer, video, signal, behindSeconds);
 	const buffer = bytes.buffer.slice(
 		bytes.byteOffset,
 		bytes.byteOffset + bytes.byteLength,
@@ -83,10 +78,10 @@ async function removeBufferedRange(
 	sourceBuffer: SourceBuffer,
 	start: number,
 	end: number,
-	signal?: AbortSignal,
+	signal: AbortSignal,
 ): Promise<boolean> {
 	if (end - start < 0.25) return false;
-	if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+	if (signal.aborted) throw new DOMException("Aborted", "AbortError");
 	sourceBuffer.remove(start, end);
 	await waitForSourceBufferIdle(sourceBuffer);
 	return true;
@@ -94,10 +89,10 @@ async function removeBufferedRange(
 
 async function evictConsumedBufferForQuota(
 	sourceBuffer: SourceBuffer,
-	video: HTMLVideoElement | null | undefined,
-	signal?: AbortSignal,
+	video: HTMLVideoElement,
+	signal: AbortSignal,
 ): Promise<boolean> {
-	if (!video || sourceBuffer.buffered.length === 0) return false;
+	if (sourceBuffer.buffered.length === 0) return false;
 	await waitForSourceBufferIdle(sourceBuffer);
 
 	const currentTime = Math.max(0, video.currentTime || 0);
@@ -108,17 +103,16 @@ async function evictConsumedBufferForQuota(
 
 async function waitForQuotaEviction(
 	sourceBuffer: SourceBuffer,
-	video: HTMLVideoElement | null | undefined,
-	signal?: AbortSignal,
+	video: HTMLVideoElement,
+	signal: AbortSignal,
 ): Promise<boolean> {
-	if (!video) return false;
 	if (await evictConsumedBufferForQuota(sourceBuffer, video, signal)) return true;
 
 	return new Promise<boolean>((resolve, reject) => {
 		let checking = false;
 		const cleanup = () => {
 			video.removeEventListener("timeupdate", check);
-			signal?.removeEventListener("abort", handleAbort);
+			signal.removeEventListener("abort", handleAbort);
 		};
 		const finish = (removed: boolean) => {
 			cleanup();
@@ -143,36 +137,34 @@ async function waitForQuotaEviction(
 			reject(new DOMException("Aborted", "AbortError"));
 		};
 		video.addEventListener("timeupdate", check);
-		signal?.addEventListener("abort", handleAbort, { once: true });
-		if (signal?.aborted) handleAbort();
+		signal.addEventListener("abort", handleAbort, { once: true });
+		if (signal.aborted) handleAbort();
 	});
 }
 
 async function trimOldBuffer(
 	sourceBuffer: SourceBuffer,
-	video: HTMLVideoElement | null | undefined,
-	signal?: AbortSignal,
-	retainSeconds = RETAIN_BUFFER_BEHIND_SECONDS,
+	video: HTMLVideoElement,
+	signal: AbortSignal,
+	retainSeconds: number,
 ): Promise<void> {
-	if (!video || sourceBuffer.buffered.length === 0) return;
+	if (sourceBuffer.buffered.length === 0) return;
 	const removeEnd = video.currentTime - retainSeconds;
 	if (removeEnd <= 0) return;
 	const firstStart = sourceBuffer.buffered.start(0);
 	if (removeEnd - firstStart < BUFFER_TRIM_HYSTERESIS_SECONDS) return;
-	if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+	if (signal.aborted) throw new DOMException("Aborted", "AbortError");
 	sourceBuffer.remove(0, removeEnd);
 	await waitForSourceBufferIdle(sourceBuffer);
 }
 
 export function getBufferedAheadSeconds(
 	sourceBuffer: SourceBuffer,
-	video: HTMLVideoElement | null,
+	video: HTMLVideoElement,
 ): number {
 	try {
-		const buffered =
-			video && video.buffered.length > 0 ? video.buffered : sourceBuffer.buffered;
-		if (buffered.length === 0) return 0;
-		const current = video?.currentTime ?? 0;
+		const buffered = video.buffered.length > 0 ? video.buffered : sourceBuffer.buffered;
+		const current = video.currentTime;
 		for (let i = 0; i < buffered.length; i++) {
 			const start = buffered.start(i);
 			const end = buffered.end(i);
@@ -180,7 +172,7 @@ export function getBufferedAheadSeconds(
 				return Math.max(0, end - current);
 			}
 		}
-		return Math.max(0, buffered.end(buffered.length - 1) - current);
+		return 0;
 	} catch {
 		return 0;
 	}
@@ -194,9 +186,9 @@ export function getBufferedAheadSeconds(
 export async function pumpStreamToSourceBuffer(
 	readable: ReadableStream<Uint8Array>,
 	sourceBuffer: SourceBuffer,
-	signal?: AbortSignal,
-	video?: HTMLVideoElement | null,
-	maxBufferAheadSeconds?: number,
+	signal: AbortSignal,
+	video: HTMLVideoElement,
+	limits: { aheadSeconds: number | null; behindSeconds: number },
 ): Promise<"complete"> {
 	const reader = readable.getReader();
 	const pending: Uint8Array[] = [];
@@ -210,19 +202,19 @@ export async function pumpStreamToSourceBuffer(
 		const bytes = concatChunks(pending, pendingSize);
 		pending.length = 0;
 		pendingSize = 0;
-		await appendBytes(sourceBuffer, bytes, signal, video);
+		await appendBytes(sourceBuffer, bytes, signal, video, limits.behindSeconds);
 	};
 
 	try {
 		while (true) {
-			if (signal?.aborted) {
+			if (signal.aborted) {
 				throw new DOMException("Aborted", "AbortError");
 			}
 			if (
-				maxBufferAheadSeconds != null &&
-				getBufferedAheadSeconds(sourceBuffer, video ?? null) >= maxBufferAheadSeconds
+				limits.aheadSeconds != null &&
+				getBufferedAheadSeconds(sourceBuffer, video) >= limits.aheadSeconds
 			) {
-				await waitForBufferCapacity(sourceBuffer, video, maxBufferAheadSeconds, signal);
+				await waitForBufferCapacity(sourceBuffer, video, limits.aheadSeconds, signal);
 			}
 			const { done, value } = await reader.read();
 			if (done) break;
@@ -245,15 +237,14 @@ export async function pumpStreamToSourceBuffer(
 
 function waitForBufferCapacity(
 	sourceBuffer: SourceBuffer,
-	video: HTMLVideoElement | null | undefined,
+	video: HTMLVideoElement,
 	limit: number,
-	signal?: AbortSignal,
+	signal: AbortSignal,
 ) {
-	if (!video) return Promise.resolve();
 	return new Promise<void>((resolve, reject) => {
 		const finish = (error?: unknown) => {
 			video.removeEventListener("timeupdate", check);
-			signal?.removeEventListener("abort", handleAbort);
+			signal.removeEventListener("abort", handleAbort);
 			if (error) reject(error);
 			else resolve();
 		};
@@ -262,8 +253,8 @@ function waitForBufferCapacity(
 		};
 		const handleAbort = () => finish(new DOMException("Aborted", "AbortError"));
 		video.addEventListener("timeupdate", check);
-		signal?.addEventListener("abort", handleAbort, { once: true });
-		if (signal?.aborted) handleAbort();
+		signal.addEventListener("abort", handleAbort, { once: true });
+		if (signal.aborted) handleAbort();
 		else check();
 	});
 }

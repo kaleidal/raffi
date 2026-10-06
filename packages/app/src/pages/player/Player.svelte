@@ -62,7 +62,6 @@
         audioTracks,
         subtitleTracks,
         objectFit,
-        playbackOffset,
         sessionData,
         pendingSeek,
         seekGuard,
@@ -72,44 +71,43 @@
         resetPlayerState,
     } from "./playerState";
 
-    import * as Session from "./videoSession";
-    import * as Controls from "./playerControls";
-    import * as Subtitles from "./subtitles";
-    import * as Chapters from "./chapters";
-    import * as IntroDb from "./introdb";
-    import * as Discord from "./discord";
-    import * as WatchParty from "./watchParty";
+    import * as Session from "./session/videoSession";
+    import * as Controls from "./controls/playerControls";
+    import * as Subtitles from "./subtitles/subtitles";
+    import * as Chapters from "./chapters/chapters";
+    import * as IntroDb from "./chapters/introdb";
+    import * as Discord from "./integrations/discord";
+    import * as WatchParty from "./integrations/watchParty";
     import {
         acknowledgeSeekStyleInfo,
         getSeekBarStyleFromStorage,
         persistSeekBarStyle,
         shouldShowSeekStyleInfoModal,
         type SeekBarStyle,
-    } from "./seekStyle";
+    } from "./controls/seekStyle";
     import {
         createTraktScrobbler,
         TRAKT_COMPLETION_THRESHOLD,
-    } from "./traktScrobbleManager";
-    import { createTorrentStatusPoller } from "./torrentStatusPolling";
-    import { performSeekWithEffects } from "./playerSeek";
-    import { createNextEpisodeHandler } from "./playerNextEpisode";
-    import { createPlayerSessionLoader } from "./playerSessionLoader";
-    import { createBrowserPlaybackGuard } from "./browserPlaybackGuard";
-    import { readEmbedProgress } from "./embedProgress";
-    import { createPlayerModalHandlers } from "./playerModalHandlers";
+    } from "./integrations/traktScrobbleManager";
+    import { createTorrentStatusPoller } from "./session/torrentStatusPolling";
+    import { createNextEpisodeHandler } from "./controls/playerNextEpisode";
+    import { createPlayerSessionLoader } from "./session/playerSessionLoader";
+    import { createBrowserPlaybackGuard } from "./session/browserPlaybackGuard";
+    import { readEmbedProgress } from "./integrations/embedProgress";
+    import { createPlayerModalHandlers } from "./controls/playerModalHandlers";
     import {
         canReuseNextEpisodePrefetch,
         isSamePlaybackSource,
         startNextEpisodePrefetch,
         type NextEpisodePrefetchHandoff,
-    } from "./nextEpisodePrefetch";
+    } from "./session/nextEpisodePrefetch";
     import type { Chapter } from "./types";
     import {
         LONG_PLAYBACK_STALL_MS,
         recordPlaybackStall,
         shouldSuggestAnotherStream,
         type PlaybackStall,
-    } from "./playbackHealth";
+    } from "./session/playbackHealth";
 
     // Props
     export let videoSrc: string | null = null;
@@ -147,9 +145,7 @@
         const progress = ProgressLogic.getProgress(get(metaProgressMap), progressKey);
         if (!progress?.watched) return;
 
-        const playbackTime = videoElem
-            ? $playbackOffset + videoElem.currentTime
-            : $currentTime;
+        const playbackTime = videoElem ? videoElem.currentTime : $currentTime;
         handleProgressInternal(playbackTime, $duration);
     };
 
@@ -182,6 +178,22 @@
     let seekBarStyle: SeekBarStyle = "raffi";
     let pendingStartAfterSeekStyleModal = false;
     let introDbChapters: Chapter[] = [];
+
+    /** Startup only waits this long for intro timings; late results still enable skipping. */
+    const INTRO_DB_STARTUP_BUDGET_MS = 1500;
+
+    const requestIntroDbChapters = (
+        meta: ShowResponse | null,
+        requestedSeason: number | null,
+        requestedEpisode: number | null,
+    ): Promise<Chapter[]> => {
+        if (meta?.meta?.type !== "series") return Promise.resolve([]);
+        return IntroDb.fetchIntroDbChapters(meta.meta.imdb_id, requestedSeason, requestedEpisode)
+            .catch((error) => {
+                console.warn("Failed to fetch IntroDB chapters", error);
+                return [];
+            });
+    };
     let videoSurfaceA: HTMLVideoElement | undefined = undefined;
     let videoSurfaceB: HTMLVideoElement | undefined = undefined;
     let activeVideoSurface: 0 | 1 = 0;
@@ -607,24 +619,29 @@
             showError.set(false);
             return true;
         },
-        resolvePlaybackStart: async ({ sessionData, startTime, metaData, season, episode }) => {
-            let nextIntroDbChapters: Chapter[] = [];
-
-            if (metaData?.meta?.type === "series" && metaData.meta.imdb_id && season != null && episode != null) {
-                try {
-                    nextIntroDbChapters = await IntroDb.fetchIntroDbChapters(
-                        metaData.meta.imdb_id,
-                        season,
-                        episode,
-                    );
-                } catch (error) {
-                    console.warn("Failed to fetch IntroDB chapters", error);
-                }
+        resolvePlaybackStart: async ({
+            sessionData,
+            startTime,
+            metaData: loadMetaData,
+            season: loadSeason,
+            episode: loadEpisode,
+        }) => {
+            const request = requestIntroDbChapters(loadMetaData, loadSeason, loadEpisode);
+            const nextIntroDbChapters = await Promise.race([
+                request,
+                new Promise<null>((resolve) => setTimeout(() => resolve(null), INTRO_DB_STARTUP_BUDGET_MS)),
+            ]);
+            if (nextIntroDbChapters === null) {
+                void request.then((chapters) => {
+                    if (metaData === loadMetaData && season === loadSeason && episode === loadEpisode) {
+                        introDbChapters = chapters;
+                    }
+                });
             }
 
             const effectiveChapters = Chapters.getEffectiveChapterSegments(
                 sessionData,
-                nextIntroDbChapters,
+                nextIntroDbChapters ?? [],
             );
             const effectiveStartTime = Chapters.getStartupSkipTarget(
                 startTime,
@@ -634,7 +651,7 @@
 
             return {
                 effectiveStartTime,
-                introDbChapters: nextIntroDbChapters,
+                introDbChapters: nextIntroDbChapters ?? [],
             };
         },
         startTorrentStatusPolling: torrentStatusPoller.start,
@@ -643,15 +660,17 @@
         awaitDomUpdate: tick,
     });
 
-    const loadVideo = playerSessionLoader.loadVideo;
+    const loadVideo: typeof playerSessionLoader.loadVideo = (src, opts) => {
+        void requestIntroDbChapters(metaData, season, episode);
+        return playerSessionLoader.loadVideo(src, opts);
+    };
 
     const seekToTime = (targetTime: number) => {
         if (!videoElem) return;
         captureLoadingBackdrop();
-        performSeekWithEffects({
+        Session.performSeek({
             targetTime,
             duration: $duration,
-            playbackOffset: $playbackOffset,
             videoElem,
             captureFrame: () => Session.captureFrame(videoElem, canvasElem),
             onAfterSeek: () => {
@@ -671,7 +690,7 @@
             setPendingSeek: pendingSeek.set,
             setCurrentTime: currentTime.set,
             setShowCanvas: showCanvas.set,
-            clientRemuxHardSeek: Boolean(playbackController),
+            hasPlaybackController: Boolean(playbackController),
         });
     };
 
@@ -884,7 +903,7 @@
         if ($pendingSeek != null || $seekGuard) {
             return;
         }
-        const time = $playbackOffset + videoElem.currentTime;
+        const time = videoElem.currentTime;
         currentTime.set(time);
         handleProgressInternal(time, $duration);
 

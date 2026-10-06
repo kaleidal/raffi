@@ -15,7 +15,6 @@ export const hasStarted = writable(false);
 // Time and duration
 export const currentTime = writable(0);
 export const duration = writable(0);
-export const playbackOffset = writable(0);
 
 // Volume and controls
 export const volume = writable(1);
@@ -72,7 +71,6 @@ export function resetPlayerState() {
     hasStarted.set(false);
     currentTime.set(0);
     duration.set(0);
-    playbackOffset.set(0);
     volume.set(1);
     controlsVisible.set(true);
     currentChapter.set(null);

@@ -1,4 +1,4 @@
-import { traktScrobble } from "../../lib/db/db";
+import { traktScrobble } from "../../../lib/db/db";
 
 export const TRAKT_COMPLETION_THRESHOLD = 0.9;
 const TRAKT_FAILURE_COOLDOWN_MS = 60_000;

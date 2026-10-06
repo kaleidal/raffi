@@ -1,5 +1,5 @@
 // Player control handlers and keyboard shortcuts
-import type { SeekFeedback } from "./types";
+import type { SeekFeedback } from "../types";
 
 const IDLE_DELAY = 5000;
 

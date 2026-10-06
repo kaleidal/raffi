@@ -38,8 +38,6 @@ export const autoEnableDefaultSubtitles = async ({
     sessionData,
     subtitleTracksValue,
     videoElem,
-    currentTime,
-    playbackOffset,
     cueLinePercent,
     setSubtitleTracks,
     setCurrentSubtitleLabel,
@@ -48,16 +46,12 @@ export const autoEnableDefaultSubtitles = async ({
     sessionData: any;
     subtitleTracksValue: any[];
     videoElem: HTMLVideoElement | undefined;
-    currentTime: number;
-    playbackOffset: number;
     cueLinePercent: number;
     setSubtitleTracks: (updater: (tracks: any[]) => any[]) => void;
     setCurrentSubtitleLabel: (label: string) => void;
     handleSubtitleSelect: (
         track: any,
         videoElem: HTMLVideoElement,
-        currentTime: number,
-        playbackOffset: number,
         getCueLinePercent: () => number,
     ) => Promise<void> | void;
 }) => {
@@ -87,11 +81,5 @@ export const autoEnableDefaultSubtitles = async ({
     );
     setCurrentSubtitleLabel(picked.label);
 
-    await handleSubtitleSelect(
-        picked,
-        videoElem,
-        currentTime,
-        playbackOffset,
-        () => cueLinePercent,
-    );
+    await handleSubtitleSelect(picked, videoElem, () => cueLinePercent);
 };

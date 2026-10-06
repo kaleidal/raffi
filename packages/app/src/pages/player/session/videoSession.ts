@@ -1,10 +1,10 @@
 // Client playback session helpers (direct / MediaBunny / addon HLS).
 import type Hls from "hls.js";
-import type { Track } from "./types";
+import type { Track } from "../types";
 import {
 	getDirectMediaSupport,
 	supportsEac3Playback,
-} from "../../lib/media/nativeSupport";
+} from "../../../lib/media/probe/nativeSupport";
 
 type SeekingHandler = EventListener & { cancel?: () => void };
 
@@ -81,7 +81,6 @@ export async function loadVideoSession(
 		setErrorDetails: (details: string) => void;
 		setCurrentTime: (time: number) => void;
 		setDuration: (duration: number) => void;
-		setPlaybackOffset: (offset: number) => void;
 		setCurrentChapter: (chapter: any) => void;
 		setShowSkipIntro: (show: boolean) => void;
 		setShowNextEpisode: (show: boolean) => void;
@@ -113,7 +112,6 @@ export async function loadVideoSession(
 		setErrorDetails,
 		setCurrentTime,
 		setDuration,
-		setPlaybackOffset,
 		setCurrentChapter,
 		setShowSkipIntro,
 		setShowNextEpisode,
@@ -148,7 +146,6 @@ export async function loadVideoSession(
 
 		setCurrentTime(0);
 		setDuration(0);
-		setPlaybackOffset(0);
 		setCurrentChapter(null);
 		setShowSkipIntro(false);
 		setShowNextEpisode(false);
@@ -194,87 +191,76 @@ export async function loadVideoSession(
 	}
 }
 
-export function performSeek(
-	targetGlobal: number,
-	duration: number,
-	playbackOffset: number,
-	videoElem: HTMLVideoElement | null,
-	captureFrameFn: () => void,
-	updateDiscordActivity: () => void,
-	isWatchPartyHost: boolean,
-	ignoreNextSeek: boolean,
-	isPlaying: boolean,
-	updatePlaybackState: (time: number, playing: boolean) => void,
-	setStates: {
-		setPendingSeek: (seek: number | null) => void;
-		setCurrentTime: (time: number) => void;
-		setShowCanvas: (show: boolean) => void;
-		setIgnoreNextSeek: (ignore: boolean) => void;
-	},
-	opts?: {
-		/** MediaBunny rebuilds MSE on unbuffered seeks — don't poke the old element. */
-		clientRemuxHardSeek?: boolean;
-	},
-) {
-	const { setPendingSeek, setCurrentTime, setShowCanvas, setIgnoreNextSeek } =
-		setStates;
+export function performSeek({
+	targetTime,
+	duration,
+	videoElem,
+	captureFrame,
+	onAfterSeek,
+	isWatchPartyHost,
+	isPlaying,
+	updatePlaybackState,
+	setPendingSeek,
+	setCurrentTime,
+	setShowCanvas,
+	hasPlaybackController,
+}: {
+	targetTime: number;
+	duration: number;
+	videoElem: HTMLVideoElement;
+	captureFrame: () => void;
+	onAfterSeek: () => void;
+	isWatchPartyHost: boolean;
+	isPlaying: boolean;
+	updatePlaybackState: (time: number, playing: boolean) => void;
+	setPendingSeek: (seek: number | null) => void;
+	setCurrentTime: (time: number) => void;
+	setShowCanvas: (show: boolean) => void;
+	/** In-app playback seeks through its controller, which keeps the buffer fed. */
+	hasPlaybackController: boolean;
+}) {
+	if (duration <= 0) return;
+	const target = Math.max(0, Math.min(duration, targetTime));
+	const buffered = isTimeBuffered(videoElem, target);
 
-	if (!videoElem || duration <= 0) return;
-
-	targetGlobal = Math.max(0, Math.min(duration, targetGlobal));
-
-	setPendingSeek(targetGlobal);
-	const localTarget = targetGlobal - playbackOffset;
-
-	if (isTimeBuffered(videoElem, localTarget)) {
-		videoElem.currentTime = localTarget;
-		setPendingSeek(null);
-	} else if (opts?.clientRemuxHardSeek) {
-		try {
-			videoElem.pause();
-		} catch {
-			// ignore
+	setPendingSeek(target);
+	if (hasPlaybackController) {
+		if (!buffered) {
+			captureFrame();
+			setShowCanvas(true);
 		}
-		captureFrameFn();
-		setShowCanvas(true);
 		videoElem.dispatchEvent(new Event("seeking"));
+	} else if (buffered) {
+		videoElem.currentTime = target;
+		setPendingSeek(null);
 	} else {
-		captureFrameFn();
+		captureFrame();
 		setShowCanvas(true);
-		videoElem.currentTime = Math.max(localTarget, 0);
+		videoElem.currentTime = target;
 	}
-	setCurrentTime(targetGlobal);
-	updateDiscordActivity();
+	setCurrentTime(target);
+	onAfterSeek();
 
-	if (isWatchPartyHost && !ignoreNextSeek) {
-		updatePlaybackState(targetGlobal, isPlaying);
+	if (isWatchPartyHost) {
+		updatePlaybackState(target, isPlaying);
 	}
-	setIgnoreNextSeek(false);
 }
 
 export function createSeekHandler(
 	videoElem: HTMLVideoElement,
 	getPendingSeek: () => number | null,
 	getSeekGuard: () => boolean,
-	getPlaybackOffset: () => number,
-	getSubtitleTracks: () => Track[],
-	getCurrentSubtitleLabel: () => string,
-	handleSubtitleSelect: (track: Track) => void,
 	setStates: {
 		setPendingSeek: (seek: number | null) => void;
 		setSeekGuard: (guard: boolean) => void;
 		setBuffering: (buffering: boolean) => void;
 		setShowCanvas: (show: boolean) => void;
 		setFirstSeekLoad: (load: boolean) => void;
-		setPlaybackOffset: (offset: number) => void;
 		setShowError: (show: boolean) => void;
 		setErrorMessage: (message: string) => void;
 		setErrorDetails: (details: string) => void;
 	},
-	getPlaybackController?: () => {
-		seek: (time: number) => Promise<number>;
-		setAudioTrack?: (index: number, globalTime: number) => Promise<number>;
-	} | null,
+	getPlaybackController?: () => { seek: (time: number) => Promise<void> } | null,
 	getShouldResume?: () => boolean,
 	directSeekTimeoutMs = 15_000,
 ) {
@@ -284,98 +270,97 @@ export function createSeekHandler(
 		setBuffering,
 		setShowCanvas,
 		setFirstSeekLoad,
-		setPlaybackOffset,
 		setShowError,
 		setErrorMessage,
 		setErrorDetails,
 	} = setStates;
 
 	let seekGeneration = 0;
+	let resumeAfterSeek = false;
 	let activeDirectCleanup: (() => void) | null = null;
 
-	const reapplyActiveSubtitle = () => {
-		const currentSubtitleLabel = getCurrentSubtitleLabel();
-		if (currentSubtitleLabel === "Off") return;
-		const track = getSubtitleTracks().find((t) => t.selected);
-		if (track) {
-			handleSubtitleSelect(track);
+	const settle = (generation: number) => {
+		if (generation !== seekGeneration) return false;
+		setSeekGuard(false);
+		setBuffering(false);
+		setShowCanvas(false);
+		return true;
+	};
+
+	const resume = () => {
+		if (resumeAfterSeek && videoElem.paused) {
+			void videoElem.play().catch(() => {
+				// ignore autoplay restrictions
+			});
 		}
 	};
 
-	const handler = async () => {
-		if (!videoElem) return;
-		if (getSeekGuard()) return;
+	const showSeekError = (error: unknown) => {
+		console.error("Failed to prepare seek", error);
+		setShowError(true);
+		setErrorMessage("Failed to seek");
+		setErrorDetails(error instanceof Error ? error.message : String(error));
+	};
 
-		const pending = getPendingSeek();
-		if (pending == null) return;
+	const rememberPlayState = () => {
+		if (!getSeekGuard()) resumeAfterSeek = getShouldResume?.() ?? !videoElem.paused;
+	};
 
-		const desiredGlobal = pending;
-		setPendingSeek(null);
-		const playbackOffset = getPlaybackOffset();
-		const localTarget = desiredGlobal - playbackOffset;
-		const playbackController = getPlaybackController?.() ?? null;
-
-		if (!playbackController && isTimeBuffered(videoElem, localTarget)) {
-			videoElem.currentTime = localTarget;
-			return;
-		}
-		if (playbackController && localTarget >= 0 && isTimeBuffered(videoElem, localTarget)) {
-			videoElem.currentTime = localTarget;
-			return;
-		}
-
-		const generation = ++seekGeneration;
-		const wasPlaying = getShouldResume?.() ?? !videoElem.paused;
+	const beginSeek = () => {
+		rememberPlayState();
 		setSeekGuard(true);
 		setBuffering(true);
 		setShowCanvas(true);
 		setFirstSeekLoad(true);
+		return ++seekGeneration;
+	};
 
-		const finishSuccess = () => {
-			if (generation !== seekGeneration) return;
-			setSeekGuard(false);
-			setBuffering(false);
-			setShowCanvas(false);
-			reapplyActiveSubtitle();
-			void handler();
-		};
+	/** A newer seek replaces one still loading instead of waiting for it. */
+	const seekWithController = async (
+		controller: { seek: (time: number) => Promise<void> },
+		target: number,
+	) => {
+		let generation: number;
+		if (isTimeBuffered(videoElem, target, 0)) {
+			rememberPlayState();
+			generation = ++seekGeneration;
+		} else {
+			generation = beginSeek();
+		}
+		try {
+			await controller.seek(target);
+			if (settle(generation)) resume();
+		} catch (error) {
+			if (!settle(generation)) return;
+			if (error instanceof DOMException && error.name === "AbortError") return;
+			showSeekError(error);
+		}
+	};
 
-		const finishFailure = (error: unknown) => {
-			if (generation !== seekGeneration) return;
-			setSeekGuard(false);
-			setBuffering(false);
-			setShowCanvas(false);
-			if (error instanceof DOMException && error.name === "AbortError") {
-				void handler();
-				return;
-			}
-			console.error("Failed to prepare seek", error);
-			setShowError(true);
-			setErrorMessage("Failed to seek");
-			setErrorDetails(error instanceof Error ? error.message : String(error));
-			void handler();
-		};
+	const handler = async () => {
+		const pending = getPendingSeek();
+		if (pending == null) return;
 
+		const playbackController = getPlaybackController?.() ?? null;
 		if (playbackController) {
-			try {
-				videoElem.pause();
-				setPlaybackOffset(desiredGlobal);
-				const snapped = await playbackController.seek(desiredGlobal);
-				if (generation !== seekGeneration) return;
-				setPlaybackOffset(snapped);
-				if (wasPlaying) {
-					try {
-						await videoElem.play();
-					} catch {
-						// ignore autoplay restrictions
-					}
-				}
-				finishSuccess();
-			} catch (error) {
-				finishFailure(error);
-			}
+			setPendingSeek(null);
+			await seekWithController(playbackController, pending);
 			return;
 		}
+
+		if (getSeekGuard()) return;
+		setPendingSeek(null);
+		if (isTimeBuffered(videoElem, pending)) {
+			videoElem.currentTime = pending;
+			return;
+		}
+
+		const generation = beginSeek();
+		const finishDirect = () => {
+			if (!settle(generation)) return;
+			resume();
+			void handler();
+		};
 
 		let timeout: ReturnType<typeof setTimeout> | null = null;
 		const cleanup = () => {
@@ -393,17 +378,14 @@ export function createSeekHandler(
 		const onSeeked = () => {
 			if (generation !== seekGeneration) return;
 			cleanup();
-			if (wasPlaying) {
-				videoElem.play().catch((err) => {
-					console.warn("play after seek failed:", err);
-				});
-			}
-			finishSuccess();
+			finishDirect();
 		};
 		const onError = () => {
 			if (generation !== seekGeneration) return;
 			cleanup();
-			finishFailure(new Error("Seek failed"));
+			if (!settle(generation)) return;
+			showSeekError(new Error("Seek failed"));
+			void handler();
 		};
 
 		videoElem.addEventListener("seeked", onSeeked);
@@ -411,24 +393,10 @@ export function createSeekHandler(
 		timeout = setTimeout(() => {
 			if (generation !== seekGeneration) return;
 			cleanup();
-			setSeekGuard(false);
-			setBuffering(false);
-			setShowCanvas(false);
-			if (wasPlaying && videoElem.paused) {
-				void videoElem.play().catch(() => {
-					// ignore
-				});
-			}
-			void handler();
+			finishDirect();
 		}, directSeekTimeoutMs);
-		try {
-			const target = Math.max(localTarget, 0);
-			if (Math.abs(videoElem.currentTime - target) > 0.05) {
-				videoElem.currentTime = target;
-			}
-		} catch (error) {
-			cleanup();
-			finishFailure(error);
+		if (Math.abs(videoElem.currentTime - pending) > 0.05) {
+			videoElem.currentTime = pending;
 		}
 	};
 
@@ -464,37 +432,30 @@ export function cleanupSession(
 export async function handleAudioSelect(
 	track: Track,
 	audioTracks: Track[],
-	currentTime: number,
 	videoElem: HTMLVideoElement,
 	setStates: {
 		setAudioTracks: (tracks: Track[]) => void;
 		setCurrentAudioLabel: (label: string) => void;
-		setLoading?: (loading: boolean) => void;
-		setLoadingStage?: (stage: string) => void;
-		setPlaybackOffset?: (offset: number) => void;
+		setLoading: (loading: boolean) => void;
+		setLoadingStage: (stage: string) => void;
 	},
-	getPlaybackController?: () => {
-		seek: (time: number) => Promise<number>;
-		setAudioTrack: (index: number, globalTime: number) => Promise<number>;
+	getPlaybackController: () => {
+		setAudioTrack: (index: number, time: number) => Promise<void>;
 	} | null,
 ) {
-	const { setAudioTracks, setCurrentAudioLabel, setLoading, setLoadingStage, setPlaybackOffset } =
-		setStates;
+	const { setAudioTracks, setCurrentAudioLabel, setLoading, setLoadingStage } = setStates;
 
 	if (track.selected) return;
 
-	const updatedTracks = audioTracks.map((t) => ({
-		...t,
-		selected: t.id === track.id,
-	}));
-	setAudioTracks(updatedTracks);
+	setAudioTracks(audioTracks.map((t) => ({ ...t, selected: t.id === track.id })));
 	setCurrentAudioLabel(track.label);
 
+	const wasPlaying = !videoElem.paused;
 	try {
-		if (setLoading) setLoading(true);
-		if (setLoadingStage) setLoadingStage("Switching audio track");
+		setLoading(true);
+		setLoadingStage("Switching audio track");
 
-		const playbackController = getPlaybackController?.() ?? null;
+		const playbackController = getPlaybackController();
 		if (!playbackController) {
 			throw new Error("Audio track switching needs in-app remux for this stream");
 		}
@@ -503,19 +464,16 @@ export async function handleAudioSelect(
 		if (!Number.isFinite(audioIndex)) {
 			throw new Error("Invalid audio track");
 		}
-		setPlaybackOffset?.(currentTime);
-		const snapped = await playbackController.setAudioTrack(audioIndex, currentTime);
-		setPlaybackOffset?.(snapped);
-		if (!videoElem.paused) {
+		await playbackController.setAudioTrack(audioIndex, videoElem.currentTime);
+		if (wasPlaying) {
 			void videoElem.play().catch(() => {
 				// ignore
 			});
 		}
-		if (setLoading) setLoading(false);
-		if (setLoadingStage) setLoadingStage("");
 	} catch (err) {
 		console.error("Failed to switch audio:", err);
-		if (setLoading) setLoading(false);
-		if (setLoadingStage) setLoadingStage("");
+	} finally {
+		setLoading(false);
+		setLoadingStage("");
 	}
 }

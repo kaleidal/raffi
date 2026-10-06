@@ -2,7 +2,7 @@
     import { fade, scale } from "svelte/transition";
     import { onMount } from "svelte";
 
-    import * as Subtitles from "../../pages/player/subtitles";
+    import * as Subtitles from "../../pages/player/subtitles/subtitles";
 
     const portal = (node: HTMLElement) => {
         if (typeof document === "undefined") {

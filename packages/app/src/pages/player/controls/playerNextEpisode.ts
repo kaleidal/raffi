@@ -1,5 +1,5 @@
 import { get } from "svelte/store";
-import { currentTime, duration, loading } from "./playerState";
+import { currentTime, duration, loading } from "../playerState";
 
 const NEXT_EPISODE_TIMEOUT_MS = 45_000;
 

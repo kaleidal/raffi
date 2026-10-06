@@ -1,4 +1,4 @@
-import type { Chapter, ChapterKind } from "./types";
+import type { Chapter, ChapterKind } from "../types";
 
 type IntroDbSegment = {
     start_sec?: number | string;
@@ -20,7 +20,8 @@ type IntroDbResponse = {
 
 const INTRO_DB_BASE_URL = "https://api.introdb.app";
 const CHAPTER_CACHE_MAX_ENTRIES = 100;
-const chapterCache = new Map<string, Chapter[]>();
+const REQUEST_TIMEOUT_MS = 8_000;
+const chapterRequests = new Map<string, Promise<Chapter[]>>();
 
 const parseTimestamp = (seconds: unknown, milliseconds: unknown): number => {
     if (typeof seconds === "string" && seconds.includes(":")) {
@@ -58,29 +59,11 @@ const toChapter = (kind: ChapterKind, segment: IntroDbSegment | null): Chapter |
     };
 };
 
-export async function fetchIntroDbChapters(
-    imdbId: string | null | undefined,
-    season: number | null | undefined,
-    episode: number | null | undefined,
+async function requestIntroDbChapters(
+    imdbId: string,
+    season: number,
+    episode: number,
 ): Promise<Chapter[]> {
-    if (!imdbId || season == null || episode == null) {
-        return [];
-    }
-
-    const cacheKey = `${imdbId}:${season}:${episode}`;
-    const cached = chapterCache.get(cacheKey);
-    if (cached) {
-        chapterCache.delete(cacheKey);
-        chapterCache.set(cacheKey, cached);
-        return cached;
-    }
-
-    const params = new URLSearchParams({
-        imdb_id: imdbId,
-        season: String(season),
-        episode: String(episode),
-    });
-
     let data: IntroDbResponse;
     const electronApi = typeof window !== "undefined" ? window.electronAPI : undefined;
 
@@ -91,7 +74,14 @@ export async function fetchIntroDbChapters(
         }
         data = result.data as IntroDbResponse;
     } else {
-        const response = await fetch(`${INTRO_DB_BASE_URL}/segments?${params.toString()}`);
+        const params = new URLSearchParams({
+            imdb_id: imdbId,
+            season: String(season),
+            episode: String(episode),
+        });
+        const response = await fetch(`${INTRO_DB_BASE_URL}/segments?${params.toString()}`, {
+            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        });
         if (response.status === 404) {
             return [];
         }
@@ -105,20 +95,40 @@ export async function fetchIntroDbChapters(
         return [];
     }
 
-    const chapters = [
+    return [
         toChapter("recap", data.recap),
         toChapter("intro", data.intro),
         toChapter("outro", data.outro),
     ].filter((chapter): chapter is Chapter => Boolean(chapter));
-    console.info(
-        chapters.length > 0 ? "Loaded IntroDB chapters" : "No IntroDB chapters available",
-        { imdbId, season, episode, chapters },
-    );
-    chapterCache.set(cacheKey, chapters);
-    while (chapterCache.size > CHAPTER_CACHE_MAX_ENTRIES) {
-        const oldestKey = chapterCache.keys().next().value;
-        if (oldestKey === undefined) break;
-        chapterCache.delete(oldestKey);
+}
+
+/** Shares one request per episode, so prefetching early and reading later costs nothing. */
+export function fetchIntroDbChapters(
+    imdbId: string | null | undefined,
+    season: number | null | undefined,
+    episode: number | null | undefined,
+): Promise<Chapter[]> {
+    if (!imdbId || season == null || episode == null) {
+        return Promise.resolve([]);
     }
-    return chapters;
+
+    const cacheKey = `${imdbId}:${season}:${episode}`;
+    const cached = chapterRequests.get(cacheKey);
+    if (cached) {
+        chapterRequests.delete(cacheKey);
+        chapterRequests.set(cacheKey, cached);
+        return cached;
+    }
+
+    const request = requestIntroDbChapters(imdbId, season, episode).catch((error) => {
+        chapterRequests.delete(cacheKey);
+        throw error;
+    });
+    chapterRequests.set(cacheKey, request);
+    while (chapterRequests.size > CHAPTER_CACHE_MAX_ENTRIES) {
+        const oldestKey = chapterRequests.keys().next().value;
+        if (oldestKey === undefined) break;
+        chapterRequests.delete(oldestKey);
+    }
+    return request;
 }

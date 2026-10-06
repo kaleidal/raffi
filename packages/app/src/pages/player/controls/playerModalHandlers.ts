@@ -3,20 +3,18 @@ import {
 	audioTracks,
 	currentAudioLabel,
 	currentSubtitleLabel,
-	currentTime,
 	errorDetails,
 	errorMessage,
 	loading,
 	loadingStage,
-	playbackOffset,
 	showAudioSelection,
 	showError,
 	showSubtitleSelection,
 	showWatchPartyModal,
 	subtitleTracks,
-} from "./playerState";
-import * as Session from "./videoSession";
-import * as Subtitles from "./subtitles";
+} from "../playerState";
+import * as Session from "../session/videoSession";
+import * as Subtitles from "../subtitles/subtitles";
 
 export const createPlayerModalHandlers = ({
 	getVideoElem,
@@ -31,9 +29,8 @@ export const createPlayerModalHandlers = ({
 	getVideoSrc: () => string | null;
 	loadVideo: (src: string) => void | Promise<void>;
 	handleClose: () => void | Promise<void>;
-	getPlaybackController?: () => {
-		seek: (time: number) => Promise<number>;
-		setAudioTrack: (index: number, globalTime: number) => Promise<number>;
+	getPlaybackController: () => {
+		setAudioTrack: (index: number, time: number) => Promise<void>;
 	} | null;
 }) => {
 	const onAudioSelect = (detail: unknown) => {
@@ -42,16 +39,14 @@ export const createPlayerModalHandlers = ({
 		if (!videoElem) return;
 
 		void Session.handleAudioSelect(
-			detail as import("./types").Track,
+			detail as import("../types").Track,
 			get(audioTracks),
-			get(currentTime),
 			videoElem,
 			{
 				setAudioTracks: audioTracks.set,
 				setCurrentAudioLabel: currentAudioLabel.set,
 				setLoading: loading.set,
 				setLoadingStage: loadingStage.set,
-				setPlaybackOffset: playbackOffset.set,
 			},
 			getPlaybackController,
 		);
@@ -62,7 +57,7 @@ export const createPlayerModalHandlers = ({
 		const videoElem = getVideoElem();
 		if (!videoElem) return;
 
-		const track = detail as import("./types").Track;
+		const track = detail as import("../types").Track;
 		subtitleTracks.update((tracks) =>
 			tracks.map((entry) => ({
 				...entry,
@@ -73,8 +68,6 @@ export const createPlayerModalHandlers = ({
 		void Subtitles.handleSubtitleSelect(
 			track,
 			videoElem,
-			get(currentTime),
-			get(playbackOffset),
 			getCueLinePercent,
 		);
 	};
@@ -94,8 +87,6 @@ export const createPlayerModalHandlers = ({
 		await Subtitles.handleSubtitleSelect(
 			track,
 			videoElem,
-			get(currentTime),
-			get(playbackOffset),
 			getCueLinePercent,
 		);
 	};
@@ -111,8 +102,6 @@ export const createPlayerModalHandlers = ({
 		void Subtitles.handleSubtitleSelect(
 			selected,
 			videoElem,
-			get(currentTime),
-			get(playbackOffset),
 			getCueLinePercent,
 		);
 	};

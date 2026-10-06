@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
 	recordPlaybackStall,
 	shouldSuggestAnotherStream,
-} from "../src/pages/player/playbackHealth";
+} from "../src/pages/player/session/playbackHealth";
 
 describe("playback health", () => {
 	test("ignores brief and isolated buffering", () => {

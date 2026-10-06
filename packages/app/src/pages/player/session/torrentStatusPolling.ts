@@ -4,8 +4,8 @@ import {
 	LimboApiError,
 	LimboUnavailableError,
 	type LimboTorrentStatus,
-} from "../../lib/limbo/client";
-import { loading, loadingDetails, loadingProgress, loadingStage } from "./playerState";
+} from "../../../lib/limbo/client";
+import { loading, loadingDetails, loadingProgress, loadingStage } from "../playerState";
 
 function formatBytes(bytes: number): string {
 	if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";

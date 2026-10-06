@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
 	createSeekHandler,
 	performSeek,
-} from "../src/pages/player/videoSession";
+} from "../src/pages/player/session/videoSession";
 
 class SeekableVideo extends EventTarget {
 	paused = true;
@@ -31,24 +31,20 @@ describe("createSeekHandler", () => {
 		const video = new SeekableVideo();
 		video.paused = false;
 
-		performSeek(
-			120,
-			1800,
-			0,
-			video as unknown as HTMLVideoElement,
-			() => {},
-			() => {},
-			false,
-			false,
-			true,
-			() => {},
-			{
-				setPendingSeek: () => {},
-				setCurrentTime: () => {},
-				setShowCanvas: () => {},
-				setIgnoreNextSeek: () => {},
-			},
-		);
+		performSeek({
+			targetTime: 120,
+			duration: 1800,
+			videoElem: video as unknown as HTMLVideoElement,
+			captureFrame: () => {},
+			onAfterSeek: () => {},
+			isWatchPartyHost: false,
+			isPlaying: true,
+			updatePlaybackState: () => {},
+			setPendingSeek: () => {},
+			setCurrentTime: () => {},
+			setShowCanvas: () => {},
+			hasPlaybackController: false,
+		});
 
 		expect(video.currentTime).toBe(120);
 		expect(video.pauseCalls).toBe(0);
@@ -64,10 +60,6 @@ describe("createSeekHandler", () => {
 			video as unknown as HTMLVideoElement,
 			() => pendingSeek,
 			() => false,
-			() => 0,
-			() => [],
-			() => "Off",
-			() => {},
 			{
 				setPendingSeek: (value) => {
 					pendingSeek = value;
@@ -76,7 +68,6 @@ describe("createSeekHandler", () => {
 				setBuffering: (value) => buffering.push(value),
 				setShowCanvas: (value) => heldFrame.push(value),
 				setFirstSeekLoad: () => {},
-				setPlaybackOffset: () => {},
 				setShowError: () => {},
 				setErrorMessage: () => {},
 				setErrorDetails: () => {},
@@ -109,10 +100,6 @@ describe("createSeekHandler", () => {
 			video as unknown as HTMLVideoElement,
 			() => pendingSeek,
 			() => seekGuard,
-			() => 0,
-			() => [],
-			() => "Off",
-			() => {},
 			{
 				setPendingSeek: (value) => {
 					pendingSeek = value;
@@ -127,7 +114,6 @@ describe("createSeekHandler", () => {
 					heldFrame = value;
 				},
 				setFirstSeekLoad: () => {},
-				setPlaybackOffset: () => {},
 				setShowError: (value) => {
 					showedError = value;
 				},

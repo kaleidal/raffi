@@ -1,10 +1,13 @@
-import { FfmpegPlayback, canUseFfmpegPlayback, type ClientPlaybackController } from "./ffmpegPlayback";
-import { MediaBunnyPlayback } from "./playback";
-import { ensureAudioTracks, type ProbedStream } from "./probe";
+import { FfmpegPlayback, canUseFfmpegPlayback } from "./ffmpegPlayback";
+import { MediaBunnyPlayback } from "./mediaBunnyPlayback";
+import type {
+	ClientPlaybackController,
+	PlaybackAttachOptions,
+	PlaybackAttachResult,
+} from "./playbackController";
+import { ensureAudioTracks, type ProbedStream } from "../probe/probe";
 
-type AttachOptions = Parameters<ClientPlaybackController["attach"]>[2];
-type AttachResult = Awaited<ReturnType<ClientPlaybackController["attach"]>>;
-
+/** Picks MediaBunny or FFmpeg per audio track and switches between them when needed. */
 export class AdaptivePlayback implements ClientPlaybackController {
 	private controller: ClientPlaybackController | null = null;
 	private video: HTMLVideoElement | null = null;
@@ -12,9 +15,12 @@ export class AdaptivePlayback implements ClientPlaybackController {
 	private ffmpegSource = "";
 	private meta: ProbedStream | null = null;
 	private audioIndex = 0;
-	onWindowStartChange: ((globalStart: number) => void) | null = null;
 
-	async attach(video: HTMLVideoElement, src: string, opts?: AttachOptions): Promise<AttachResult> {
+	async attach(
+		video: HTMLVideoElement,
+		src: string,
+		opts?: PlaybackAttachOptions,
+	): Promise<PlaybackAttachResult> {
 		await this.destroy();
 		if (!opts?.meta) throw new Error("Adaptive playback requires probed stream metadata");
 		this.video = video;
@@ -25,12 +31,12 @@ export class AdaptivePlayback implements ClientPlaybackController {
 		return this.attachController(this.audioIndex, Math.max(0, opts.startTime ?? 0), opts.signal);
 	}
 
-	seek(globalTime: number) {
+	seek(time: number) {
 		if (!this.controller) throw new Error("Adaptive playback is not attached");
-		return this.controller.seek(globalTime);
+		return this.controller.seek(time);
 	}
 
-	async setAudioTrack(index: number, globalTime: number) {
+	async setAudioTrack(index: number, time: number) {
 		if (!this.video || !this.meta) throw new Error("Adaptive playback is not attached");
 		const track = this.meta.audioTracks.find((entry) => entry.index === index);
 		if (!track) throw new Error(`Audio track ${index} is not available`);
@@ -40,22 +46,14 @@ export class AdaptivePlayback implements ClientPlaybackController {
 			throw new Error("This audio track cannot be converted in-app");
 		}
 		const usingFfmpeg = this.controller instanceof FfmpegPlayback;
+		this.audioIndex = index;
 		if (this.controller && usingFfmpeg === needsFfmpeg) {
-			this.audioIndex = index;
-			return this.controller.setAudioTrack(index, globalTime);
+			return this.controller.setAudioTrack(index, time);
 		}
 
-		const shouldResume = !this.video.paused;
 		await this.controller?.destroy();
 		this.controller = null;
-		this.audioIndex = index;
-		const attached = await this.attachController(index, globalTime);
-		if (shouldResume) void this.video.play().catch(() => {});
-		return attached.remuxOrigin;
-	}
-
-	getRemuxOrigin() {
-		return this.controller?.getRemuxOrigin() ?? 0;
+		await this.attachController(index, time);
 	}
 
 	getAudioIndex() {
@@ -93,7 +91,6 @@ export class AdaptivePlayback implements ClientPlaybackController {
 		const controller: ClientPlaybackController = needsFfmpeg
 			? new FfmpegPlayback()
 			: new MediaBunnyPlayback();
-		controller.onWindowStartChange = (globalStart) => this.onWindowStartChange?.(globalStart);
 		this.controller = controller;
 		try {
 			return await controller.attach(

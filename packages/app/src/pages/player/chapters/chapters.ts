@@ -1,6 +1,6 @@
 // Chapter detection and skip logic
-import type { Chapter, ChapterKind, SessionData } from "./types";
-import type { ShowResponse } from "../../lib/library/types/meta_types";
+import type { Chapter, ChapterKind, SessionData } from "../types";
+import type { ShowResponse } from "../../../lib/library/types/meta_types";
 
 const OUTRO_FALLBACK_SECONDS = 45;
 export const CREDITS_FALLBACK_SECONDS = 60;

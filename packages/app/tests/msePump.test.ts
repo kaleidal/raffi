@@ -1,5 +1,16 @@
 import { describe, expect, test } from "bun:test";
-import { pumpStreamToSourceBuffer } from "../src/lib/media/msePump";
+import { pumpStreamToSourceBuffer } from "../src/lib/media/playback/msePump";
+
+const limits = { aheadSeconds: null, behindSeconds: 30 };
+
+function createVideo(buffered: TimeRanges, currentTime: number) {
+	return {
+		currentTime,
+		buffered,
+		addEventListener: () => undefined,
+		removeEventListener: () => undefined,
+	} as unknown as HTMLVideoElement;
+}
 
 function createTimeRanges(getRange: () => { start: number; end: number }) {
 	return {
@@ -38,7 +49,13 @@ describe("MSE stream pumping", () => {
 			},
 		});
 
-		const pumping = pumpStreamToSourceBuffer(readable, sourceBuffer);
+		const pumping = pumpStreamToSourceBuffer(
+			readable,
+			sourceBuffer,
+			new AbortController().signal,
+			createVideo(buffered, 0),
+			limits,
+		);
 		await appended;
 		closeStream();
 
@@ -67,12 +84,7 @@ describe("MSE stream pumping", () => {
 				else if (start <= range.start) range = { ...range, start: end };
 			},
 		} as unknown as SourceBuffer;
-		const video = {
-			currentTime: 20,
-			buffered,
-			addEventListener: () => undefined,
-			removeEventListener: () => undefined,
-		} as unknown as HTMLVideoElement;
+		const video = createVideo(buffered, 20);
 		const readable = new ReadableStream<Uint8Array>({
 			start(controller) {
 				controller.enqueue(new Uint8Array(256 * 1024));
@@ -81,7 +93,13 @@ describe("MSE stream pumping", () => {
 		});
 
 		await expect(
-			pumpStreamToSourceBuffer(readable, sourceBuffer, undefined, video),
+			pumpStreamToSourceBuffer(
+				readable,
+				sourceBuffer,
+				new AbortController().signal,
+				video,
+				limits,
+			),
 		).resolves.toBe("complete");
 		expect(appendAttempts).toBe(2);
 		expect(removals).toEqual([{ start: 0, end: 18 }]);

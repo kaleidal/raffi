@@ -2,8 +2,8 @@ import {
     clearActivity as clearRPCActivity,
     setActivity,
     type ActivityDetails,
-} from "../../lib/rpc";
-import type { ShowResponse } from "../../lib/library/types/meta_types";
+} from "../../../lib/rpc";
+import type { ShowResponse } from "../../../lib/library/types/meta_types";
 
 const RAFFI_URL = "https://raffi.al";
 

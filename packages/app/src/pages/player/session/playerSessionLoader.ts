@@ -1,31 +1,31 @@
 import { get } from "svelte/store";
-import type { ShowResponse } from "../../lib/library/types/meta_types";
+import type { ShowResponse } from "../../../lib/library/types/meta_types";
 import {
     AdaptivePlayback,
     enrichProbedStreamAudio,
     resolveHttpPlayback,
     type ProbedStream,
     type ClientPlaybackController,
-} from "../../lib/media";
+} from "../../../lib/media";
 import {
     canTryClientPlayback,
     isHttpUrl,
     isMagnetUrl,
     toClientPlayableUrl,
-} from "../../lib/media/localSource";
+} from "../../../lib/media/localSource";
 import {
     addLimboTorrent,
     LimboUnavailableError,
     removeLimboTorrent,
     type LimboTorrentStatus,
-} from "../../lib/limbo/client";
-import { ensureTorrentingAllowed } from "../../lib/stores/torrenting";
-import { selectedStream } from "../meta/metaState";
-import type { Chapter, Track } from "./types";
+} from "../../../lib/limbo/client";
+import { ensureTorrentingAllowed } from "../../../lib/stores/torrenting";
+import { selectedStream } from "../../meta/metaState";
+import type { Chapter, Track } from "../types";
 import * as Session from "./videoSession";
-import * as Subtitles from "./subtitles";
-import * as Discord from "./discord";
-import { autoEnableDefaultSubtitles as applyDefaultSubtitles } from "./subtitleAutoSelect";
+import * as Subtitles from "../subtitles/subtitles";
+import * as Discord from "../integrations/discord";
+import { autoEnableDefaultSubtitles as applyDefaultSubtitles } from "../subtitles/subtitleAutoSelect";
 import { applyClientAudioTracks, sessionFromProbe } from "./playerSessionMetadata";
 import { attachHlsPlayback } from "./hlsPlayback";
 import {
@@ -51,14 +51,13 @@ import {
     errorDetails,
     audioTracks,
     subtitleTracks,
-    playbackOffset,
     sessionData,
     pendingSeek,
     seekGuard,
     firstSeekLoad,
     showSeekStyleModal,
     currentChapter,
-} from "./playerState";
+} from "../playerState";
 
 export type PlayerSessionLoaderDeps = {
     getFileIdx: () => number | null;
@@ -110,24 +109,12 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                 videoElem,
                 () => get(pendingSeek),
                 () => get(seekGuard),
-                () => get(playbackOffset),
-                () => get(subtitleTracks),
-                () => get(currentSubtitleLabel),
-                (track) =>
-                    Subtitles.handleSubtitleSelect(
-                        track,
-                        videoElem,
-                        get(currentTime),
-                        get(playbackOffset),
-                        deps.getCueLinePercent,
-                    ),
                 {
                     setPendingSeek: pendingSeek.set,
                     setSeekGuard: seekGuard.set,
                     setBuffering: playbackBuffering.set,
                     setShowCanvas: showCanvas.set,
                     setFirstSeekLoad: firstSeekLoad.set,
-                    setPlaybackOffset: playbackOffset.set,
                     setShowError: showError.set,
                     setErrorMessage: errorMessage.set,
                     setErrorDetails: errorDetails.set,
@@ -227,7 +214,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
 
         if (signal.aborted) throw new DOMException("Aborted", "AbortError");
 
-        const { getLimboTorrent } = await import("../../lib/limbo/client");
+        const { getLimboTorrent } = await import("../../../lib/limbo/client");
         const ready = await getLimboTorrent(created.id, signal);
         if (!ready.streamUrl) {
             throw new Error("Limbo did not return a stream URL for this torrent");
@@ -303,12 +290,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                     duration.set(durationSeconds);
                 }
 
-                playbackOffset.set(
-                    reused.mode === "mediabunny" || reused.mode === "ffmpeg"
-                        ? (reused.playbackController?.getRemuxOrigin?.() ?? 0)
-                        : 0,
-                );
-                currentTime.set(get(playbackOffset));
+                currentTime.set(videoElem.currentTime);
 
                 subtitleTracks.set([
                     { id: "off", label: "Off", selected: true, group: "None" },
@@ -318,11 +300,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                     (reused.mode === "mediabunny" || reused.mode === "ffmpeg") &&
                     reused.playbackController
                 ) {
-                    const controller = reused.playbackController;
-                    controller.onWindowStartChange = (globalStart) => {
-                        playbackOffset.set(globalStart);
-                    };
-                    deps.setPlaybackController(controller);
+                    deps.setPlaybackController(reused.playbackController);
                 } else if (reused.mode === "addon-hls" && reused.hls) {
                     deps.setHls(reused.hls);
                 } else {
@@ -381,8 +359,6 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                             sessionData: nextSession,
                             subtitleTracksValue: get(subtitleTracks),
                             videoElem,
-                            currentTime: get(currentTime),
-                            playbackOffset: get(playbackOffset),
                             cueLinePercent: deps.getCueLinePercent(),
                             setSubtitleTracks: (updater: (tracks: Track[]) => Track[]) =>
                                 subtitleTracks.update(updater),
@@ -526,7 +502,6 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                     setErrorDetails: errorDetails.set,
                     setCurrentTime: currentTime.set,
                     setDuration: duration.set,
-                    setPlaybackOffset: playbackOffset.set,
                     setCurrentChapter: currentChapter.set,
                     setShowSkipIntro: showSkipIntro.set,
                     setShowNextEpisode: showNextEpisode.set,
@@ -650,18 +625,10 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                     deps.setPlaybackController(null);
                 }
 
-                playbackOffset.set(
-                    clientPlayback.mode === "mediabunny" || clientPlayback.mode === "ffmpeg"
-                        ? Math.max(0, effectiveStartTime)
-                        : 0,
-                );
-
                 void applyDefaultSubtitles({
                     sessionData: result.sessionData,
                     subtitleTracksValue: get(subtitleTracks),
                     videoElem,
-                    currentTime: get(currentTime),
-                    playbackOffset: get(playbackOffset),
                     cueLinePercent: deps.getCueLinePercent(),
                     setSubtitleTracks: (updater: (tracks: Track[]) => Track[]) =>
                         subtitleTracks.update(updater),
@@ -708,9 +675,6 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                     clientPlayback.mode === "ffmpeg"
                 ) {
                     const controller = new AdaptivePlayback();
-                    controller.onWindowStartChange = (globalStart) => {
-                        playbackOffset.set(globalStart);
-                    };
                     deps.setPlaybackController(controller);
                     const attached = await controller.attach(
                         videoElem,
@@ -742,7 +706,6 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                         controller.getAudioIndex(),
                     );
                     sessionData.set(result.sessionData);
-                    playbackOffset.set(attached.remuxOrigin);
 
                     // Fill in disabled/extra container tracks without blocking start.
                     void enrichProbedStreamAudio(
