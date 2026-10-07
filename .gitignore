@@ -31,6 +31,8 @@ target
 coverage
 .nyc_output
 *.lcov
+merged-lcov.info
+cobertura.xml
 
 # Logs
 *.log

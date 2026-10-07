@@ -1,0 +1,79 @@
+name: Coverage
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  coverage-typescript:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        shell: bash
+        run: bun install --frozen-lockfile
+
+      - name: Run tests with coverage
+        shell: bash
+        run: xvfb-run --auto-servernum bun run test
+
+      - name: Merge lcov reports
+        shell: bash
+        run: |
+          cat coverage/lcov.info services/sync/coverage/lcov.info apps/desktop/coverage/lcov.info > merged-lcov.info
+
+      - name: Convert lcov to Cobertura XML
+        shell: bash
+        run: |
+          pip install lcov_cobertura
+          cat > /tmp/lcov_to_cobertura.py <<'PY'
+          from lcov_cobertura import LcovCobertura
+
+          with open("merged-lcov.info") as f:
+              data = f.read()
+
+          xml = LcovCobertura(data, base_dir=".").convert()
+
+          with open("cobertura.xml", "w") as f:
+              f.write(xml)
+          PY
+          python3 /tmp/lcov_to_cobertura.py
+
+      - name: Upload coverage artifact
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report-typescript
+          path: cobertura.xml
+
+  upload-coverage-typescript:
+    needs: coverage-typescript
+    if: ${{ !cancelled() && needs.coverage-typescript.result == 'success' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      code-quality: write
+    steps:
+      - name: Download coverage artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: coverage-report-typescript
+
+      - uses: actions/upload-code-coverage@v1
+        with:
+          file: cobertura.xml
+          language: TypeScript
+          label: code-coverage-agent

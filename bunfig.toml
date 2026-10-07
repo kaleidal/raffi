@@ -5,3 +5,7 @@ linkWorkspacePackages = true
 [install.scopes]
 # If you ever publish scoped packages
 "@raffi" = "https://registry.npmjs.org/"
+
+[test]
+coverage = true
+coverageReporter = ["text", "lcov"]
