@@ -39,6 +39,11 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="0.15.0" date="2026-10-08">
+      <description>
+        <p>Seek bar previews, faster and more accurate seeking, embedded subtitles, instant intro skipping, and automatic recovery from stalled streams.</p>
+      </description>
+    </release>
     <release version="0.14.0" date="2026-10-05">
       <description>
         <p>Sign in with a code sent to your email, profile names and photos, and refreshed home posters.</p>
