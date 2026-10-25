@@ -335,37 +335,3 @@ export const formatAvailability = (label: string | null): string | null => {
     const normalized = label.replace(/[[\]]/g, "").toUpperCase();
     return AVAILABILITY_MAP[normalized] ?? normalized;
 };
-
-export const buildAudioLanguageBadge = (text: string): string | null => {
-    const labels: string[] = [];
-    const seen = new Set<string>();
-    const seenFlags = new Set<string>();
-
-    const flags = text.match(FLAG_EMOJI_REGEX) || [];
-    for (const flag of flags) {
-        const langCode = flagEmojiToLanguageCode(flag);
-        if (!langCode) continue;
-        const label = `${flag} ${langCode}`;
-        if (seen.has(label)) continue;
-        seen.add(label);
-        seenFlags.add(flag);
-        labels.push(label);
-    }
-
-    const tokens = text.toUpperCase().match(/[A-Z]{2,12}/g) || [];
-    for (const token of tokens) {
-        const tag = LANGUAGE_ALIAS_TO_TAG[token];
-        if (!tag) continue;
-        if (tag.flag && seenFlags.has(tag.flag)) continue;
-        const label = tag.flag ? `${tag.flag} ${tag.code}` : tag.code;
-        if (seen.has(label)) continue;
-        seen.add(label);
-        labels.push(label);
-    }
-
-    if (labels.length === 0) return null;
-    const limited = labels.slice(0, 4);
-    const remainder = labels.length - limited.length;
-    const suffix = remainder > 0 ? ` +${remainder}` : "";
-    return `🌐 ${limited.join(" + ")}${suffix}`;
-};

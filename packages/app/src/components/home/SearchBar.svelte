@@ -24,7 +24,6 @@
         HOME_SEARCH_BAR_POSITION_AUTO,
         HOME_SEARCH_BAR_POSITION_BOTTOM,
         HOME_SEARCH_BAR_POSITION_CHANGED_EVENT,
-        HOME_SEARCH_BAR_POSITION_HEADER,
         type HomeSearchBarPosition,
         getStoredHomeSearchBarPosition,
     } from "../../lib/home/searchBarSettings";

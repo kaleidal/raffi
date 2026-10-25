@@ -60,13 +60,6 @@ export interface WatchParty {
     last_update: string;
 }
 
-export interface WatchPartyMember {
-    party_id: string;
-    user_id: string;
-    joined_at: string;
-    last_seen: string;
-}
-
 export interface TraktStatus {
     configured: boolean;
     clientId: string | null;
@@ -104,16 +97,6 @@ export type RemoteState = {
     listItems: ListItem[];
     userMeta: UserMeta | null;
     tombstones: SyncTombstone[];
-};
-
-export type RemoteStateSection = "addons" | "library" | "lists" | "listItems" | "userMeta";
-
-export type RemoteStateChunkResponse<T> = {
-    section: RemoteStateSection;
-    items: T[];
-    total: number;
-    nextOffset: number;
-    done: boolean;
 };
 
 export type SyncSection = "addons" | "library" | "lists" | "listItems" | "userMeta";

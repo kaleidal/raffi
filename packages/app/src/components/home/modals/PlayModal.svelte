@@ -26,8 +26,6 @@
     let error = "";
     let showTorrentWarning = false;
 
-    let fileInput: HTMLInputElement;
-
     const toggleBodyScroll = (active: boolean) => {
         if (typeof document === "undefined") return;
         const body = document.body;
@@ -248,7 +246,6 @@
         id="local-file-input"
         accept="video/*,.mkv,.mp4,.avi,.mov,.webm"
         class="hidden"
-        bind:this={fileInput}
         on:change={onFileSelected}
     />
 

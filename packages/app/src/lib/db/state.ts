@@ -56,7 +56,6 @@ export const DEFAULT_TRAKT_STATUS: TraktStatus = {
 
 let cloudSyncPromise: Promise<{ ok: boolean; error?: unknown }> | null = null;
 let cloudSyncTimer: ReturnType<typeof setTimeout> | null = null;
-let cloudSyncPaused = false;
 let cloudSyncPausedDepth = 0;
 
 const clearCloudSyncTimer = () => {
@@ -67,7 +66,7 @@ const clearCloudSyncTimer = () => {
     }
 };
 
-export const isCloudSyncPaused = () => cloudSyncPaused || cloudSyncPausedDepth > 0;
+export const isCloudSyncPaused = () => cloudSyncPausedDepth > 0;
 
 export const pauseCloudSync = () => {
     cloudSyncPausedDepth += 1;
@@ -77,12 +76,6 @@ export const pauseCloudSync = () => {
 
 export const resumeCloudSync = () => {
     cloudSyncPausedDepth = Math.max(0, cloudSyncPausedDepth - 1);
-    publishCloudSyncStatus();
-};
-
-export const setCloudSyncPaused = (paused: boolean) => {
-    cloudSyncPaused = paused;
-    if (paused) clearCloudSyncTimer();
     publishCloudSyncStatus();
 };
 
@@ -285,13 +278,6 @@ export const markDeleted = (section: SyncSection, key: string) => {
     });
 };
 
-export const clearDirtyMarkers = () => {
-    updateSyncState((state) => ({
-        ...state,
-        dirty: createEmptySyncSectionMap(),
-    }));
-};
-
 export const clearDirtyMarker = (section: SyncSection, key: string) => {
     updateSyncState((state) => {
         const next = { ...state };
@@ -340,10 +326,6 @@ export const setCloudSyncPromise = (value: Promise<{ ok: boolean; error?: unknow
 export const getCloudSyncTimer = () => cloudSyncTimer;
 export const setCloudSyncTimer = (value: ReturnType<typeof setTimeout> | null) => {
     cloudSyncTimer = value;
-};
-export const cancelCloudSyncTimer = () => {
-    clearCloudSyncTimer();
-    publishCloudSyncStatus();
 };
 
 export const readLocalState = (): RemoteState => ({

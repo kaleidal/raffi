@@ -7,7 +7,7 @@
         leaveWatchParty,
         getWatchPartyInfo,
     } from "../../../lib/stores/watchPartyStore";
-    import { fade, scale } from "svelte/transition";
+    import { fade } from "svelte/transition";
 
     import { onDestroy, onMount } from "svelte";
 
@@ -97,13 +97,6 @@
         }
     };
 
-    const getStreamSourceType = (src: string) => {
-        if (!src) return "unknown";
-        if (src.startsWith("magnet:")) return "torrent";
-        if (!src.startsWith("http://") && !src.startsWith("https://")) return "local";
-        return "direct";
-    };
-
     // Join Flow State
 
     let joinStep: "input" | "preview" | "select-file" = "input";
@@ -129,8 +122,6 @@
 
         loading = true;
         error = "";
-
-        const sourceType = getStreamSourceType(streamSource);
 
         try {
             const partyId = await createParty(
@@ -165,9 +156,6 @@
 
             partyPreview = data;
             joinStep = "preview";
-            const sourceType = data?.is_local_source
-                ? "local"
-                : getStreamSourceType(data?.stream_source || "");
         } catch (err: any) {
             console.error("Failed to preview party:", err);
             error = err.message || "Failed to find watch party";
@@ -199,19 +187,11 @@
             }
 
             if (selectedFile) {
-                // Create a file object that matches what the player expects
-                // The player expects a file object with a path property for Electron
-                // Or just the path string if it's handled that way.
-                // But the input file object from browser has 'path' property in Electron?
-                // In Electron, File object has 'path' property.
                 onFileSelected(selectedFile);
             }
 
             onPartyCreated(partyIdInput.trim());
             onClose();
-            const sourceType = partyPreview?.is_local_source
-                ? "local"
-                : getStreamSourceType(partyPreview?.stream_source || "");
         } catch (err: any) {
             console.error("Failed to join party:", err);
             error = err.message || "Failed to join watch party";

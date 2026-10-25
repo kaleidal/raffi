@@ -18,7 +18,7 @@
     "build": "bun scripts/build-electron.mjs && vite build",
     "prepare:ffmpeg": "bun scripts/prepare-ffmpeg.mjs",
     "dist": "bun run prepare:ffmpeg && bun run build && electron-builder",
-    "check": "svelte-check --tsgo --tsconfig ./tsconfig.json",
+    "check": "svelte-check --tsgo --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
     "check:all": "bun run --filter @raffi/app check && bun run check",
     "test": "bun run prepare:ffmpeg && bun test tests",
     "test:playback": "bun run test"
