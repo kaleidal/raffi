@@ -30,10 +30,6 @@
         onClose();
     }
 
-    function selectWithoutClose(track: any) {
-        onSelect(track);
-    }
-
     function close() {
         onClose();
     }

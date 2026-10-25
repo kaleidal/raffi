@@ -546,20 +546,6 @@ async function searchAddonCatalogsByType(
     return Promise.race([searchPromise, timeout]);
 }
 
-function mergeSearchResults(
-    primary: SearchTitleResult[],
-    secondary: SearchTitleResult[],
-) {
-    const merged = new Map<string, SearchTitleResult>();
-    for (const item of primary) {
-        if (!merged.has(item.id)) merged.set(item.id, item);
-    }
-    for (const item of secondary) {
-        if (!merged.has(item.id)) merged.set(item.id, item);
-    }
-    return Array.from(merged.values()).slice(0, SEARCH_LIMIT);
-}
-
 export const searchTitlesSplit = async (query: string): Promise<SplitSearchResults> => {
     const trimmed = (query || "").trim();
     if (!trimmed) return { movies: [], series: [] };

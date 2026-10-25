@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { bearer, emailOTP, jwt } from "better-auth/plugins";
+import { emailScreening } from "./emailScreening";
 import { aveHandoff } from "./legacyAve";
 import { OTP_LIFETIME_SECONDS, sendSignInCode } from "./otpEmail";
 
@@ -33,6 +34,7 @@ const createAuth = (env: Env) => betterAuth({
       storeOTP: "hashed",
       sendVerificationOTP: ({ email, otp }) => sendSignInCode(env, email, otp),
     }),
+    emailScreening(env),
     bearer(),
     jwt({
       jwt: {

@@ -70,14 +70,6 @@
         }
     };
 
-    const setViewAround = (centerSlider: number, span: number) => {
-        if (!isFinite(clipMax) || clipMax <= 0) return;
-        const s = clamp(span, Math.min(clipMax, 5), clipMax);
-        viewMinSlider = clamp(centerSlider - s / 2, 0, clipMax - s);
-        viewMaxSlider = viewMinSlider + s;
-        normalizeView();
-    };
-
     const normalizeRange = () => {
         if (!isFinite(clipMax) || clipMax <= 0) return;
         clipStart = clamp(clipStart, 0, clipMax);

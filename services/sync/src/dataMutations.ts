@@ -49,9 +49,6 @@ const parseStoredJson = (value: string | null | undefined, fallback: JsonValue):
 const toJsonValue = (value: unknown, fallback: JsonValue = null): JsonValue =>
   value === undefined ? fallback : value as JsonValue;
 
-const storedJson = (value: unknown, fallback: unknown = null) =>
-  JSON.stringify(value === undefined ? fallback : value);
-
 const toInteger = (value: unknown, fallback = 0) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.trunc(parsed) : fallback;

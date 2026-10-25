@@ -19,18 +19,13 @@
     "checkJs": true,
     "moduleDetection": "force",
     "moduleResolution": "bundler",
-    "composite": true,
+    "noEmit": true,
     "paths": {
       "@raffi/app/*": ["../../packages/app/src/*"],
       "@raffi/app": ["../../packages/app/src"]
     }
   },
   "include": [
-    "../../packages/app/src/**/*.ts",
-    "../../packages/app/src/**/*.js",
-    "../../packages/app/src/**/*.svelte",
-    "src/**/*.ts",
-    "src/**/*.js",
-    "src/**/*.svelte"
+    "main.ts"
   ]
 }

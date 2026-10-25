@@ -9,8 +9,6 @@
     import type { SeekPreview } from "../../lib/media/preview/seekPreview";
     import { formatTime } from "../../lib/utils/time";
     import {
-        CirclePause,
-        CirclePlay,
         Maximize,
         ZoomIn,
         ZoomOut,

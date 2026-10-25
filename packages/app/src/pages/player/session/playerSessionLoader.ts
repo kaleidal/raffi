@@ -24,7 +24,6 @@ import { selectedStream } from "../../meta/metaState";
 import type { Chapter, Track } from "../types";
 import * as Session from "./videoSession";
 import * as Subtitles from "../subtitles/subtitles";
-import * as Discord from "../integrations/discord";
 import { autoEnableDefaultSubtitles as applyDefaultSubtitles } from "../subtitles/subtitleAutoSelect";
 import { applyClientAudioTracks, embeddedSubtitleTracks, sessionFromProbe } from "./playerSessionMetadata";
 import { attachHlsPlayback } from "./hlsPlayback";

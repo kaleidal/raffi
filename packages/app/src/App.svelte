@@ -182,8 +182,6 @@
     };
 
     onMount(() => {
-        let disposed = false;
-
         showTitleBar = Boolean((window as any)?.electronAPI?.usesTitleBarOverlay);
 
         try {
@@ -275,7 +273,6 @@
             }) ?? null;
 
         return () => {
-            disposed = true;
             window.removeEventListener("pointerup", handlePointerButtons);
             if (typeof removeUpdateAvailable === "function") {
                 removeUpdateAvailable();

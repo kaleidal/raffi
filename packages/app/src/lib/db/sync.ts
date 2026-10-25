@@ -1,6 +1,5 @@
 import type { CloudSyncState, RemoteState, SyncSection } from "./types";
 import {
-    clearDirtyMarker,
     getCloudSyncPromise,
     getCloudSyncTimer,
     getRequiredUserId,
@@ -13,8 +12,6 @@ import {
     readSyncState,
     setCloudSyncPromise,
     setCloudSyncTimer,
-    clearTombstone,
-    cloudSyncStatus,
     mergeRemoteStateIntoLocal,
     setSyncResult,
     updateSyncState,
@@ -22,7 +19,6 @@ import {
 } from "./state";
 import { syncGet, syncPost } from "./raffiSync";
 import { normalizeRemoteState } from "./reconciliation";
-import { get } from "svelte/store";
 import { getCachedUser } from "../stores/authStore";
 
 const CACHE_TTL_MS = 15_000;
@@ -132,8 +128,6 @@ export const hydrateLocalBackupFromCloud = async () => {
         return { ok: false as const, reason: "offline" as const, error };
     }
 };
-
-export const getCloudSyncStatus = () => get(cloudSyncStatus);
 
 export const scheduleCloudBackupSync = (delayMs = DEFAULT_SYNC_DELAY_MS) => {
     if (!isCloudBackupEnabled()) return;

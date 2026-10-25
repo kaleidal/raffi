@@ -689,43 +689,6 @@ export const importStremioFromPreview = async (
     });
 };
 
-export const importStremioFromAccount = async (
-    email: string,
-    password: string,
-    options: StremioImportOptions & { keepConnected?: boolean } = {},
-): Promise<StremioImportSummary> => {
-    const { keepConnected = false, ...importOptions } = options;
-    const onProgress = importOptions.onProgress;
-    const report = (event: StremioImportProgressEvent) => {
-        if (onProgress) onProgress(event);
-    };
-
-    report({ phase: "fetching" });
-    try {
-        const { authKey, email: resolvedEmail, library, addons } = await fetchStremioLibraryWithLogin(email, password);
-        if (importOptions.signal?.aborted) {
-            throw new Error("Import was cancelled.");
-        }
-
-        if (keepConnected) {
-            saveStremioConnection({ authKey, email: resolvedEmail });
-        }
-
-        return await importStremioLibrary(library, {
-            ...importOptions,
-            addons,
-        });
-    } catch (error) {
-        if (error instanceof StremioApiClientError) {
-            if (error.apiError?.wrongPass) {
-                throw new Error("Wrong email or password.");
-            }
-            throw new Error(error.message);
-        }
-        throw error;
-    }
-};
-
 export const syncStremioLibrary = async (
     options: StremioImportOptions = {},
 ): Promise<StremioImportSummary> => {

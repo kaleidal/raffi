@@ -14,15 +14,9 @@
         getAudioLanguageFilterOptions,
         getAvailableStreamFilterOptions,
         getFilteredAddons,
-        RESOLUTION_FILTERS,
-        VIDEO_CODEC_FILTERS,
-        DYNAMIC_RANGE_FILTERS,
-        AVAILABILITY_FILTERS,
-        SIZE_FILTERS,
         splitStreamsBySource,
         STREAM_SORT_OPTIONS,
         applyStreamFilters,
-        areFiltersActive,
         buildEnrichedStreams,
     } from "./streams/streamFilters";
     import { computeProgressDetails, getProgressEntry, getReleaseInfo } from "./streams/episodeDetails";
@@ -177,7 +171,6 @@
 
     $: filteredStreams = applyStreamFilters(enrichedStreams, filterState);
     $: ({ localFilteredStreams, addonFilteredStreams } = splitStreamsBySource(filteredStreams));
-    $: filtersActive = areFiltersActive(filterState);
     $: hasDirectStream = visibleStreams.some((stream) => stream?.raffiSource === "direct");
     $: showAddonSetupGuide =
         visibleStreams.length === 0 &&

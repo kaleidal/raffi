@@ -7,7 +7,7 @@
     "allowJs": true,
     "checkJs": true,
     "strict": true,
-    "noUnusedLocals": false,
+    "noUnusedLocals": true,
     "noUnusedParameters": false,
     "types": [
       "svelte",

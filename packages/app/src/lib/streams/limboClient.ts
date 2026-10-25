@@ -302,17 +302,6 @@ export async function removeLimboTorrent(id: string, deleteFiles = false): Promi
 	}
 }
 
-export async function openLimboInstallPage(): Promise<void> {
-	const api = getElectronApi();
-	if (api?.openExternal) {
-		await api.openExternal(LIMBO_INSTALL_URL);
-		return;
-	}
-	if (typeof window !== "undefined") {
-		window.open(LIMBO_INSTALL_URL, "_blank", "noopener,noreferrer");
-	}
-}
-
 function apiError(status: number, text: string, fallback: string): LimboApiError {
 	let code: string | undefined;
 	let message = text;

@@ -259,9 +259,9 @@ function registerMainIpcHandlers({
     return { ok: true };
   });
 
-  ipcMain.handle("SAVE_CLIP_DIALOG", async (_event, suggestedName) => {
+  ipcMain.handle("SAVE_CLIP_DIALOG", async (event, suggestedName) => {
     try {
-      const mainWindow = getMainWindow();
+      const mainWindow = requireMainFrame(event);
       const defaultName =
         suggestedName && typeof suggestedName === "string"
           ? suggestedName
@@ -286,8 +286,9 @@ function registerMainIpcHandlers({
     }
   });
 
-  ipcMain.handle("WRITE_CLIP_FILE", async (_event, payload) => {
+  ipcMain.handle("WRITE_CLIP_FILE", async (event, payload) => {
     try {
+      requireMainFrame(event);
       const targetPath = typeof payload?.targetPath === "string" ? payload.targetPath.trim() : "";
       const data = payload?.data;
       if (!targetPath) {
@@ -388,8 +389,9 @@ function registerMainIpcHandlers({
     return { ok: true, addons: deduped, error: null };
   });
 
-  ipcMain.handle("PERSIST_CLIP_FILE", async (_event, payload) => {
+  ipcMain.handle("PERSIST_CLIP_FILE", async (event, payload) => {
     try {
+      requireMainFrame(event);
       const sourcePath = typeof payload?.sourcePath === "string" ? payload.sourcePath.trim() : "";
       const targetPath = typeof payload?.targetPath === "string" ? payload.targetPath.trim() : "";
 

@@ -29,15 +29,6 @@ export class StremioApiClientError extends Error {
     }
 }
 
-const parseApiError = (body: unknown): StremioApiError | null => {
-    if (!body || typeof body !== "object") return null;
-    const record = body as Record<string, unknown>;
-    if (record.error && typeof record.error === "object") {
-        return record.error as StremioApiError;
-    }
-    return null;
-};
-
 const request = async <T>(
     endpoint: string,
     method: string,

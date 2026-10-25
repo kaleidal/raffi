@@ -4,6 +4,13 @@ const path = require("path");
 
 const SCHEME = "raffi-media";
 
+// Capabilities only ever point at media, so a compromised renderer can't use one to read
+// arbitrary files through the protocol handler.
+const MEDIA_EXTENSIONS = new Set([
+  ".3gp", ".avi", ".flv", ".m2ts", ".m4v", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".mts", ".ogv", ".ts", ".webm",
+  ".wmv",
+]);
+
 function isPathInside(candidate, root) {
   const relative = path.relative(root, candidate);
   return relative === "" || (Boolean(relative) && !relative.startsWith("..") && !path.isAbsolute(relative));
@@ -19,6 +26,7 @@ function createLocalMediaAccess({ maxCapabilities = 512, logToFile } = {}) {
     if (typeof candidate !== "string" || !path.isAbsolute(candidate)) throw new Error("Expected an absolute local media path");
     const canonical = await fs.promises.realpath(candidate);
     if (!(await fs.promises.stat(canonical)).isFile()) throw new Error("Local media path is not a file");
+    if (!MEDIA_EXTENSIONS.has(path.extname(canonical).toLowerCase())) throw new Error("Local media path is not a video file");
     return canonical;
   }
 

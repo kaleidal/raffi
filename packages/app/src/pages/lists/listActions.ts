@@ -1,4 +1,4 @@
-import { deleteList, removeFromList as dbRemoveFromList, updateList, updateListItemPosition } from "../../lib/db/db";
+import { deleteList, removeFromList as dbRemoveFromList, updateList } from "../../lib/db/db";
 import { loadLists, loadListItems, selectItem } from "./dataLoader";
 import { lists, selectedListId, selectedItem, editingState, listItemsMap } from "./listsState";
 import { get } from "svelte/store";

@@ -152,7 +152,6 @@ const buildProgressEntry = (
 ): StremioImportProgressEntry => {
     const safeTime = Math.max(0, toFiniteNumber(timeWatched, 0));
     const safeDuration = Math.max(0, toFiniteNumber(duration, 0));
-    const ratio = safeDuration > 0 ? safeTime / safeDuration : 0;
     const completionThreshold = safeDuration > 0 ? safeDuration * 0.9 : 0;
     const watched = Boolean(watchedFlag) || (safeDuration > 0 && safeTime >= completionThreshold) || (safeDuration === 0 && safeTime === 0 && watchedFlag);
     const updatedAt = lastWatchedIso ? Date.parse(lastWatchedIso) || Date.now() : Date.now();

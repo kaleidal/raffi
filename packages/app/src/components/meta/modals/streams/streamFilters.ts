@@ -484,45 +484,4 @@ export function getAvailableStreamFilterOptions(enrichedStreams: EnrichedStream[
     };
 }
 
-export function areFiltersActive(state: StreamFilterState): boolean {
-    return (
-        state.resolutionFilter !== "all" ||
-        state.audioLanguageFilter !== "all" ||
-        state.sortOption !== "recommended" ||
-        state.videoCodecFilter !== "all"
-        || state.dynamicRangeFilter !== "all"
-        || state.availabilityFilter !== "all"
-        || state.sizeFilter !== "all"
-    );
-}
-
-export function getActiveFilterLabels(state: StreamFilterState): string[] {
-    const labels: string[] = [];
-
-    if (state.audioLanguageFilter !== "all") labels.push(`Language ${state.audioLanguageFilter}`);
-    if (state.resolutionFilter !== "all") {
-        labels.push(state.resolutionFilter === "other" ? "Other quality" : state.resolutionFilter.toUpperCase());
-    }
-    if (state.videoCodecFilter !== "all") labels.push(state.videoCodecFilter.toUpperCase());
-    if (state.dynamicRangeFilter !== "all") labels.push(state.dynamicRangeFilter.toUpperCase());
-    if (state.availabilityFilter === "cached") labels.push("Cached only");
-    if (state.sizeFilter !== "all") labels.push(`Under ${state.sizeFilter.toUpperCase()}`);
-    if (state.sortOption !== "recommended") {
-        labels.push(STREAM_SORT_OPTIONS.find((option) => option.value === state.sortOption)?.label ?? state.sortOption);
-    }
-
-    return labels;
-}
-
-export function getStreamCounts(streams: any[]) {
-    const localCount = streams.filter((stream) => stream?.raffiSource === "local").length;
-    const directCount = streams.filter((stream) => stream?.raffiSource === "direct").length;
-    return {
-        total: streams.length,
-        local: localCount,
-        addon: Math.max(0, streams.length - localCount - directCount),
-        direct: directCount,
-    };
-}
-
 export type { ResolutionFilter, StreamSortOption };

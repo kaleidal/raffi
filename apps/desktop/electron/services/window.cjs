@@ -23,11 +23,9 @@ function createMainWindow({
   pendingTraktAuthPayload,
   setFileToOpen,
   setPendingTraktAuthPayload,
-  setPendingUpdateInfo,
 }) {
   const isWindows = process.platform === "win32";
   const isMac = process.platform === "darwin";
-  const isLinux = process.platform === "linux";
   const MINI_PLAYER_WIDTH = 480;
   const MINI_PLAYER_HEIGHT = 270;
   const MINI_PLAYER_MARGIN = 24;
@@ -394,7 +392,6 @@ function createMainWindow({
       autoUpdater.on("update-downloaded", (info) => {
         logToFile("Update downloaded", info);
         const payload = serializeUpdateInfo(info);
-        setPendingUpdateInfo(payload);
         if (payload && mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send("UPDATE_DOWNLOADED", payload);
         }

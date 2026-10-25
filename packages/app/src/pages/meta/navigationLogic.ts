@@ -2,7 +2,7 @@ import { get } from "svelte/store";
 import {
     metaData, selectedEpisode, currentSeason, selectedStream,
     showTorrentWarning,
-    pendingTorrentStream, progressMap as progressMapStore
+    pendingTorrentStream
 } from "./metaState";
 import { router } from "../../lib/stores/router";
 import { fetchStreams, fetchStreamListForEpisodeOnly, playStream } from "./streamLogic";

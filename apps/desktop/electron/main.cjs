@@ -67,7 +67,6 @@ app.on("child-process-gone", (_event, details) => {
 let mainWindow;
 let fileToOpen = null;
 let pendingTraktAuthPayload = null;
-let pendingUpdateInfo = null;
 let ffmpegPlaybackService = null;
 const localMediaAccess = createLocalMediaAccess({ logToFile });
 const handleProtocolUrl = createProtocolUrlHandler({
@@ -208,9 +207,6 @@ function createWindow() {
     },
     setPendingTraktAuthPayload: (value) => {
       pendingTraktAuthPayload = value;
-    },
-    setPendingUpdateInfo: (value) => {
-      pendingUpdateInfo = value;
     },
   });
 }

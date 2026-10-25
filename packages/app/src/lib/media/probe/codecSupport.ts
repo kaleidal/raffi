@@ -30,20 +30,6 @@ export function mapContainerCodec(codecId: string | null): AudioCodec | null {
 	return null;
 }
 
-export function friendlyCodecName(codecName: string | null | undefined): string {
-	if (!codecName) return "";
-	const id = codecName.toUpperCase();
-	if (id.includes("EAC3") || id.includes("EC-3")) return "E-AC-3";
-	if (id.includes("AC3") || id.includes("AC-3")) return "AC-3";
-	if (id.includes("TRUEHD") || id.includes("MLP")) return "TrueHD";
-	if (id.includes("DTS")) return "DTS";
-	if (id.includes("AAC") || id === "MP4A") return "AAC";
-	if (id.includes("OPUS")) return "Opus";
-	if (id.includes("FLAC")) return "FLAC";
-	if (id.includes("MPEG/L3") || id === "MP3") return "MP3";
-	return codecName;
-}
-
 export function isNativeFriendlyAudio(codec: AudioCodec | null, supportsEac3: boolean): boolean {
 	return NATIVE_AUDIO.has(codec) || Boolean(supportsEac3 && (codec === "eac3" || codec === "ac3"));
 }
