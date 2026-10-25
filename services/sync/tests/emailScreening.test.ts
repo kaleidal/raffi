@@ -11,7 +11,7 @@ describe("screenEmail", () => {
   });
 
   test("rejects malformed addresses", () => {
-    for (const email of ["", "plain", "a@b", "a@@b.com", "a b@c.com", "a@-bad.com", "a@bad.c0m"]) {
+    for (const email of ["", "plain", "a@b", "a@@b.com", "a b@c.com", "a@-bad.com", "a@bad.c0m", `a@${"x".repeat(64)}.com`]) {
       expect(screenEmail(email)).toEqual({ ok: false, reason: "invalid" });
     }
   });
@@ -71,7 +71,7 @@ describe("verifyWithDebounce", () => {
 
   test("sends the key and address", async () => {
     const fetchMock = respond(200, result("5"));
-    expect(await verifyWithDebounce("key", "a@example.com")).toEqual({ ok: true });
+    expect(await verifyWithDebounce("key", "a@example.com")).toEqual({ ok: true, checked: true });
     const url = new URL(String(fetchMock.mock.calls[0]![0]));
     expect(url.origin + url.pathname).toBe("https://api.debounce.io/v1/");
     expect(url.searchParams.get("api")).toBe("key");
@@ -91,9 +91,9 @@ describe("verifyWithDebounce", () => {
 
   test("lets accept-all and unknown results through", async () => {
     respond(200, result("4"));
-    expect(await verifyWithDebounce("key", "a@example.com")).toEqual({ ok: true });
+    expect(await verifyWithDebounce("key", "a@example.com")).toEqual({ ok: true, checked: true });
     respond(200, result("7"));
-    expect(await verifyWithDebounce("key", "a@example.com")).toEqual({ ok: true });
+    expect(await verifyWithDebounce("key", "a@example.com")).toEqual({ ok: true, checked: true });
   });
 
   test("fails open when DeBounce can't answer", async () => {
@@ -101,11 +101,11 @@ describe("verifyWithDebounce", () => {
     console.warn = () => {};
     try {
       respond(402, { success: "0", debounce: { error: "Credits Low", code: "0" } });
-      expect(await verifyWithDebounce("key", "a@example.com")).toEqual({ ok: true });
+      expect(await verifyWithDebounce("key", "a@example.com")).toEqual({ ok: true, checked: false });
       globalThis.fetch = (async () => {
         throw new Error("network down");
       }) as unknown as typeof fetch;
-      expect(await verifyWithDebounce("key", "a@example.com")).toEqual({ ok: true });
+      expect(await verifyWithDebounce("key", "a@example.com")).toEqual({ ok: true, checked: false });
     } finally {
       console.warn = warn;
     }

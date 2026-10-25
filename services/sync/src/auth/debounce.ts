@@ -20,7 +20,7 @@ type DebounceResponse = {
 };
 
 export type DebounceVerdict =
-  | { ok: true }
+  | { ok: true; checked: boolean }
   | { ok: false; reason: "invalid" | "disposable"; suggestion: string | null };
 
 /**
@@ -42,11 +42,11 @@ export const verifyWithDebounce = async (apiKey: string, email: string): Promise
         status: response.status,
         error: payload.debounce?.error,
       }));
-      return { ok: true };
+      return { ok: true, checked: false };
     }
 
     const reason = REJECTED_CODES[payload.debounce?.code ?? ""];
-    if (!reason) return { ok: true };
+    if (!reason) return { ok: true, checked: true };
     return { ok: false, reason, suggestion: payload.debounce?.did_you_mean || null };
   } catch (error) {
     console.warn(JSON.stringify({
@@ -54,6 +54,6 @@ export const verifyWithDebounce = async (apiKey: string, email: string): Promise
       message: "DeBounce verification failed",
       error: error instanceof Error ? error.message : String(error),
     }));
-    return { ok: true };
+    return { ok: true, checked: false };
   }
 };

@@ -51,7 +51,7 @@ Clients sign in in three steps:
 2. `POST /auth/sign-in/email-otp` with `{ "email", "otp" }` returns a long-lived session token. A new email creates an account.
 3. `GET /auth/token` with `Authorization: Bearer <session token>` returns a JWT that expires after 15 minutes.
 
-Before step 1 sends a code to an address with no account yet, the Worker screens it. Malformed addresses, disposable domains, and likely typos of big providers (`gmial.com`, `hotmail.con`) are refused with a `400` whose `message` says what's wrong, including a "Did you mean" suggestion for typos. Addresses that pass are checked with [DeBounce](https://debounce.com) when `DEBOUNCE_API_KEY` is set; invalid, spam trap, and disposable results are refused, while accept-all and unknown results go through. If DeBounce errors, times out, or runs out of credits, the address goes through and a warning is logged, so sign-in never depends on it. Existing accounts skip screening entirely.
+Before step 1 sends a code to an address with no account yet, the Worker screens it. Malformed addresses, disposable domains, and likely typos of big providers (`gmial.com`, `hotmail.con`) are refused with a `400` whose `message` says what's wrong, including a "Did you mean" suggestion for typos. Addresses that pass are checked with [DeBounce](https://debounce.com) when `DEBOUNCE_API_KEY` is set; invalid, spam trap, and disposable results are refused, while accept-all and unknown results go through. Accepted addresses are remembered in D1 for 30 days, and at most `DEBOUNCE_DAILY_LIMIT` lookups (default 100) run per UTC day, so nobody can drain credits by spreading requests across IPs. Past the limit, or if DeBounce errors, times out, or runs out of credits, the address goes through on the local checks alone and a warning is logged, so sign-in never depends on DeBounce. Existing accounts skip screening entirely.
 
 Every other endpoint expects `Authorization: Bearer <jwt>`. The Worker verifies JWTs against the signing keys in D1 and keeps them in memory, so authenticated requests don't need a database lookup. `GET /auth/get-session` returns the profile and also sends a fresh JWT in the `set-auth-jwt` response header. Names are updated with `POST /auth/update-user`, photos with `PUT` and `DELETE /profile/avatar`.
 
@@ -76,7 +76,7 @@ bunx wrangler secret put TRAKT_CLIENT_SECRET
 bunx wrangler secret put DEBOUNCE_API_KEY
 ```
 
-`DEBOUNCE_API_KEY` is optional. Without it, only the local checks run.
+`DEBOUNCE_API_KEY` is optional. Without it, only the local checks run. Set `DEBOUNCE_DAILY_LIMIT` as a variable to change the daily lookup cap.
 
 For local development, create `.dev.vars`:
 

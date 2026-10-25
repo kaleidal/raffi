@@ -1,31 +1,13 @@
 import type { BetterAuthPlugin } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
-import { verifyWithDebounce } from "./debounce";
+import { checkWithDebounce } from "./debounceGate";
 import { normalizeEmail, screenEmail } from "./emailPolicy";
 
 const SEND_CODE_PATH = "/email-otp/send-verification-otp";
-const VERIFIED_CACHE_MS = 60 * 60 * 1000;
-const VERIFIED_CACHE_LIMIT = 500;
 
 const MESSAGES = {
   invalid: "That email address can't receive mail. Check it and try again.",
   disposable: "Temporary email addresses can't be used with Raffi. Use your regular email.",
-};
-
-// Lets "send a new code" skip a second paid lookup while the isolate is warm.
-const verified = new Map<string, number>();
-
-const rememberVerified = (email: string) => {
-  if (verified.size >= VERIFIED_CACHE_LIMIT) verified.delete(verified.keys().next().value!);
-  verified.set(email, Date.now() + VERIFIED_CACHE_MS);
-};
-
-const wasVerified = (email: string) => {
-  const expiresAt = verified.get(email);
-  if (expiresAt === undefined) return false;
-  if (expiresAt > Date.now()) return true;
-  verified.delete(email);
-  return false;
 };
 
 function reject(code: string, message: string): never {
@@ -50,7 +32,6 @@ export const emailScreening = (env: Env) => ({
         if (typeof rawEmail !== "string") return;
 
         const email = normalizeEmail(rawEmail);
-        if (wasVerified(email)) return;
         if (await ctx.context.internalAdapter.findUserByEmail(email)) return;
 
         const screening = screenEmail(email);
@@ -59,14 +40,15 @@ export const emailScreening = (env: Env) => ({
           reject(screening.reason === "disposable" ? "DISPOSABLE_EMAIL" : "INVALID_EMAIL", MESSAGES[screening.reason]);
         }
 
-        if (env.DEBOUNCE_API_KEY) {
-          const verdict = await verifyWithDebounce(env.DEBOUNCE_API_KEY, email);
-          if (!verdict.ok) {
-            if (verdict.suggestion) reject("EMAIL_TYPO", typoMessage(verdict.suggestion));
-            reject(verdict.reason === "disposable" ? "DISPOSABLE_EMAIL" : "UNDELIVERABLE_EMAIL", MESSAGES[verdict.reason]);
-          }
-        }
-        rememberVerified(email);
+        if (!env.DEBOUNCE_API_KEY) return;
+        const verdict = await checkWithDebounce({
+          db: env.DB,
+          apiKey: env.DEBOUNCE_API_KEY,
+          dailyLimit: env.DEBOUNCE_DAILY_LIMIT,
+        }, email);
+        if (verdict.ok) return;
+        if (verdict.suggestion) reject("EMAIL_TYPO", typoMessage(verdict.suggestion));
+        reject(verdict.reason === "disposable" ? "DISPOSABLE_EMAIL" : "UNDELIVERABLE_EMAIL", MESSAGES[verdict.reason]);
       }),
     }],
   },

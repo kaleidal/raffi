@@ -58,7 +58,10 @@ export const normalizeEmail = (value: string) => value.trim().toLowerCase();
 
 const isValidDomain = (domain: string) => {
   const labels = domain.split(".");
-  return labels.length >= 2 && labels.every((label) => DOMAIN_LABEL.test(label)) && /^[a-z]{2,}$/.test(labels.at(-1)!);
+  return domain.length <= 253
+    && labels.length >= 2
+    && labels.every((label) => label.length <= 63 && DOMAIN_LABEL.test(label))
+    && /^[a-z]{2,}$/.test(labels.at(-1)!);
 };
 
 // Optimal string alignment distance, so swapped neighbours (gmial) count as one edit.
