@@ -12,6 +12,7 @@
   "dependencies": {
     "@ave-id/sdk": "^0.12.0",
     "better-auth": "^1.7.12",
+    "disposable-email-domains-js": "^1.26.0",
     "jose": "^6.2.13",
     "zod": "^4.6.7"
   },
