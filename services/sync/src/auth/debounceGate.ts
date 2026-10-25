@@ -57,12 +57,22 @@ const lookup = async ({ db, apiKey, dailyLimit, now = Date.now() }: GateOptions,
 /**
  * DeBounce lookup with the cost controls around it: accepted addresses are remembered in
  * D1 for 30 days, and at most DEBOUNCE_DAILY_LIMIT (default 100) paid lookups run per
- * UTC day. Past the limit addresses go through on the local checks alone.
+ * UTC day. Past the limit, or if D1 can't be reached (say the migration hasn't run yet),
+ * addresses go through on the local checks alone.
  */
 export const checkWithDebounce = (options: GateOptions, email: string) => {
   const pending = inFlight.get(email);
   if (pending) return pending;
-  const request = lookup(options, email).finally(() => inFlight.delete(email));
+  const request = lookup(options, email)
+    .catch((error): DebounceVerdict => {
+      console.error(JSON.stringify({
+        level: "error",
+        message: "DeBounce gate failed, skipping lookup",
+        error: error instanceof Error ? error.message : String(error),
+      }));
+      return { ok: true, checked: false };
+    })
+    .finally(() => inFlight.delete(email));
   inFlight.set(email, request);
   return request;
 };

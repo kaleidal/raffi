@@ -39,6 +39,11 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="0.15.1" date="2026-10-25">
+      <description>
+        <p>Catches typos and temporary addresses at sign-up, safer local file playback, Electron 45, and more reliable seeking.</p>
+      </description>
+    </release>
     <release version="0.15.0" date="2026-10-08">
       <description>
         <p>Seek bar previews, faster and more accurate seeking, embedded subtitles, instant intro skipping, and automatic recovery from stalled streams.</p>
