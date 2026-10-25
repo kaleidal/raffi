@@ -15,9 +15,10 @@ async function makeFixture() {
 	const outside = join(directory, "outside");
 	await Promise.all([mkdir(library), mkdir(outside)]);
 	const libraryFile = join(library, "episode.mkv");
-	const outsideFile = join(outside, "private.txt");
-	await Promise.all([writeFile(libraryFile, "media"), writeFile(outsideFile, "private")]);
-	return { directory, library, libraryFile, outsideFile };
+	const outsideFile = join(outside, "movie.mp4");
+	const privateFile = join(outside, "private.txt");
+	await Promise.all([writeFile(libraryFile, "media"), writeFile(outsideFile, "media"), writeFile(privateFile, "private")]);
+	return { directory, library, libraryFile, outsideFile, privateFile };
 }
 
 afterEach(async () => {
@@ -42,6 +43,13 @@ describe("local media capabilities", () => {
 		expect(access.resolveRequestUrl(`raffi-media://local/?path=${encodeURIComponent(outsideFile)}`)).toBeNull();
 		expect(access.resolveRequestUrl(`raffi-media://local/${encodeURIComponent(outsideFile)}`)).toBeNull();
 		expect(access.resolveRequestUrl("raffi-media://local/00000000-0000-0000-0000-000000000000")).toBeNull();
+	});
+
+	test("refuses to authorize files that aren't video", async () => {
+		const { privateFile } = await makeFixture();
+		const access = createLocalMediaAccess();
+
+		await expect(access.authorizeTrustedFile(privateFile)).rejects.toThrow("not a video file");
 	});
 
 	test("only authorizes library files below a picker-approved root", async () => {
