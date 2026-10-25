@@ -72,6 +72,20 @@ describe("checkWithDebounce", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  test("lets addresses through without a lookup when D1 isn't ready", async () => {
+    const error = console.error;
+    console.error = () => {};
+    try {
+      const missingTables = new Database(":memory:");
+      const unmigrated = { prepare: (sql: string) => new TestStatement(missingTables, sql) } as unknown as D1Database;
+      expect(await checkWithDebounce({ db: unmigrated, apiKey: "key" }, "a@example.com")).toEqual({ ok: true, checked: false });
+      expect(fetchMock).not.toHaveBeenCalled();
+      missingTables.close();
+    } finally {
+      console.error = error;
+    }
+  });
+
   test("stops paying for lookups once the daily limit is spent", async () => {
     const warn = console.warn;
     console.warn = () => {};

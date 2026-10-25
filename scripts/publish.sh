@@ -19,7 +19,8 @@ Options:
   --notes FILE      Markdown release notes. Without it, $EDITOR opens a template.
   --summary TEXT    One-line summary for the Flatpak metainfo. Asked for when needed.
   --draft           Leave the GitHub release as a draft instead of publishing it.
-  --yes             Don't ask for confirmation.
+  --yes             Skip the script's confirmation. Wrangler still asks before
+                    applying migrations, so a database change is never silent.
   -h, --help        Show this help.
 EOF
 }
@@ -70,14 +71,31 @@ step "Checking main"
 git fetch --quiet origin main
 [[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" ]] || fail "main isn't in sync with origin/main. Pull or push first"
 
-if [[ "$(gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null)" == "false" ]]; then
-  fail "$TAG is already published"
+if RELEASE_STATE="$(gh release view "$TAG" --json isDraft --jq .isDraft 2>&1)"; then
+  [[ "$RELEASE_STATE" == "true" ]] || fail "$TAG is already published"
+elif [[ "$RELEASE_STATE" != *"release not found"* ]]; then
+  fail "Couldn't check for an existing $TAG release: $RELEASE_STATE"
 fi
 
 CURRENT="$(bun -e "console.log(require('./apps/desktop/package.json').version)")"
 NEEDS_BUMP=false
 [[ "$CURRENT" == "$VERSION" ]] || NEEDS_BUMP=true
 echo "Current version: $CURRENT → releasing $VERSION"
+
+if $NEEDS_BUMP; then
+  RAFFI_CURRENT="$CURRENT" RAFFI_VERSION="$VERSION" bun -e '
+    const parts = (version) => version.split(".").map(Number);
+    const [current, next] = [parts(process.env.RAFFI_CURRENT), parts(process.env.RAFFI_VERSION)];
+    const order = next.map((part, i) => part - current[i]).find((difference) => difference !== 0) ?? 0;
+    process.exit(order > 0 ? 0 : 1);
+  ' || fail "$VERSION is lower than the current version $CURRENT"
+fi
+
+# The release gets attached to this tag, so it can't already point at other code.
+TAG_SHA="$(git ls-remote origin "refs/tags/$TAG" "refs/tags/$TAG^{}" | sort -k2 | tail -n 1 | cut -f1)"
+if [[ -n "$TAG_SHA" ]] && { $NEEDS_BUMP || [[ "$TAG_SHA" != "$(git rev-parse HEAD)" ]]; }; then
+  fail "Tag $TAG already exists on another commit ($TAG_SHA). Delete it or pick another version"
+fi
 
 # Gather everything interactive up front so the rest can run unattended.
 if [[ -z "$NOTES_FILE" ]]; then
@@ -156,13 +174,19 @@ fi
 
 step "Starting the $WORKFLOW workflow"
 HEAD_SHA="$(git rev-parse HEAD)"
+# Run IDs only grow, so anything above the newest existing run came from this dispatch.
+LAST_RUN_ID="$(gh run list --workflow "$WORKFLOW" --limit 1 --json databaseId --jq '.[0].databaseId // 0')"
 gh workflow run "$WORKFLOW" --ref main
 
 RUN_ID=""
 for _ in $(seq 1 30); do
-  RUN_ID="$(gh run list --workflow "$WORKFLOW" --branch main --event workflow_dispatch --limit 5 \
-    --json databaseId,headSha --jq "map(select(.headSha == \"$HEAD_SHA\")) | .[0].databaseId // empty")"
-  [[ -n "$RUN_ID" ]] && break
+  RUN="$(gh run list --workflow "$WORKFLOW" --event workflow_dispatch --limit 5 --json databaseId,headSha \
+    --jq "map(select(.databaseId > $LAST_RUN_ID)) | last // empty | \"\\(.databaseId) \\(.headSha)\"")"
+  if [[ -n "$RUN" ]]; then
+    RUN_ID="${RUN%% *}"
+    [[ "${RUN#* }" == "$HEAD_SHA" ]] || fail "main moved to ${RUN#* } before the build started. Re-run once it settles"
+    break
+  fi
   sleep 2
 done
 [[ -n "$RUN_ID" ]] || fail "Couldn't find the workflow run. Check the Actions tab"
