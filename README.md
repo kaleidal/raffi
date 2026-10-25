@@ -295,6 +295,22 @@ bun --filter @raffi/desktop dist
 
 Output will be in `apps/desktop/release/`
 
+### Publishing a Release
+
+From an up-to-date `main`, with `gh` signed in and Wrangler able to reach the Cloudflare account:
+
+```bash
+scripts/publish.sh 0.15.1
+```
+
+The script opens your editor for the release notes and asks for a one-line Flatpak summary. It then:
+- applies pending sync D1 migrations;
+- bumps the version, lockfile and Flatpak metainfo, commits `Release <version>`, and pushes `main`;
+- runs the **Manual Build and Release** workflow and waits for it;
+- puts the notes on the release and publishes it.
+
+If `main` is already at that version, the bump is skipped. Pass `--notes FILE` and `--summary TEXT` to skip the prompts, `--draft` to leave the release unpublished, and `--yes` to skip the confirmation.
+
 ### Build Configuration
 
 **Desktop** (`apps/desktop/package.json`):
