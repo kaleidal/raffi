@@ -14,17 +14,17 @@
   },
   "devDependencies": {
     "@typescript/native": "npm:typescript@^7.0.2",
-    "@sveltejs/adapter-cloudflare": "^8.0.0",
-    "@sveltejs/kit": "^3.0.0",
+    "@sveltejs/adapter-cloudflare": "^8.0.1",
+    "@sveltejs/kit": "^3.1.0",
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@tailwindcss/vite": "^4.3.3",
-    "@types/node": "^26.6.4",
-    "svelte": "^5.57.1",
-    "svelte-check": "^4.7.6",
+    "@types/node": "^26.6.5",
+    "svelte": "^5.57.2",
+    "svelte-check": "^4.7.7",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
-    "vite": "^8.3.2",
-    "wrangler": "^4.147.0"
+    "vite": "^8.3.5",
+    "wrangler": "^4.152.0"
   },
   "dependencies": {
     "@raffi/app": "workspace:*"
