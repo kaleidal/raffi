@@ -7,6 +7,7 @@
     import SeekBar from "./seek/SeekBar.svelte";
     import type { TimeRange } from "./seek/seekTrack";
     import type { SeekPreview } from "../../lib/media/preview/seekPreview";
+    import { isTvPlatform } from "../../lib/shell/platform";
     import { formatTime } from "../../lib/utils/time";
     import {
         Maximize,
@@ -64,14 +65,14 @@
 <div
     class="player-controls relative z-10 items-center flex flex-col text-white overflow-hidden"
 >
-    <div class="absolute inset-0 rounded-[inherit] bg-[#000000]/10 backdrop-blur-xl pointer-events-none"></div>
+    <div class="player-controls-surface absolute inset-0 rounded-[inherit] bg-[#000000]/10 backdrop-blur-xl pointer-events-none"></div>
 
     <div class="relative z-10 flex flex-col gap-2 w-full">
         <div class="player-seek-row flex flex-row items-center w-full">
             {#if !isWatchPartyMember}
                 <button
                     on:click={togglePlay}
-                    class="player-play-button cursor-pointer hover:opacity-80"
+                    class="player-play-button rounded-full cursor-pointer hover:opacity-80"
                     aria-label={isPlaying ? "Pause" : "Play"}
                 >
                     {#if isPlaying}
@@ -112,18 +113,20 @@
             >
 
             <div class="min-w-0 flex-1">
-                <SeekBar
-                    {duration}
-                    time={displayedTime}
-                    inverted={seekBarStyle !== "normal"}
-                    chapters={chapterMarkers}
-                    {buffered}
-                    {seekPreview}
-                    disabled={isWatchPartyMember}
-                    {visible}
-                    onScrub={onSeekInput}
-                    onCommit={onSeekChange}
-                />
+                <slot name="seek">
+                    <SeekBar
+                        {duration}
+                        time={displayedTime}
+                        inverted={seekBarStyle !== "normal"}
+                        chapters={chapterMarkers}
+                        {buffered}
+                        {seekPreview}
+                        disabled={isWatchPartyMember}
+                        {visible}
+                        onScrub={onSeekInput}
+                        onCommit={onSeekChange}
+                    />
+                </slot>
             </div>
             {#if seekBarStyle === "normal"}
                 <span
@@ -134,14 +137,16 @@
         </div>
 
         <div class="player-actions flex items-center w-full justify-center">
-            <IconButton
-                label="Fullscreen"
-                onClick={() => {
-                    toggleFullscreen();
-                }}
-            >
-                <Maximize size={22} color="#E9E9E9" strokeWidth={2} />
-            </IconButton>
+            {#if !isTvPlatform}
+                <IconButton
+                    label="Fullscreen"
+                    onClick={() => {
+                        toggleFullscreen();
+                    }}
+                >
+                    <Maximize size={22} color="#E9E9E9" strokeWidth={2} />
+                </IconButton>
+            {/if}
 
             <IconButton
                 label={objectFit === "contain" ? "Zoom" : "Fit"}
@@ -179,7 +184,7 @@
                 </IconButton>
             {/if}
 
-            {#if metaData}
+            {#if metaData && !isTvPlatform}
             <IconButton
                 label="Download"
                 onClick={() => {
@@ -190,7 +195,7 @@
             </IconButton>
             {/if}
 
-            {#if !isWatchPartyMember}
+            {#if !isWatchPartyMember && !isTvPlatform}
                 <IconButton
                     label="Clip"
                     onClick={() => setClipPanelOpen(!showClipPanel)}
@@ -199,13 +204,15 @@
                 </IconButton>
             {/if}
 
-            <div class="player-volume">
-                <Slider
-                    onInput={onVolumeChange}
-                    value={volume}
-                    label="Volume"
-                />
-            </div>
+            {#if !isTvPlatform}
+                <div class="player-volume">
+                    <Slider
+                        onInput={onVolumeChange}
+                        value={volume}
+                        label="Volume"
+                    />
+                </div>
+            {/if}
         </div>
 
         <ClipPanel

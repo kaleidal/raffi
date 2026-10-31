@@ -1,7 +1,7 @@
 import { AUTOFOCUS, firstCandidate, isNavigable, nearest, type Direction } from "./focusTargets";
 import { isClaimed } from "./keyClaims";
 import { activeLayer, isModalLayer } from "./layers";
-import { focusWithoutKeyboard, isKeyboardHeldBack, isTextField, raiseKeyboard } from "./textFields";
+import { focusWithoutKeyboard, isQuiet, isTextField, raiseKeyboard } from "./textFields";
 
 const DIRECTIONS: Record<string, Direction> = {
 	ArrowUp: "up",
@@ -29,7 +29,7 @@ function focusedWithin(layer: HTMLElement) {
 
 /** While typing, left and right move the caret until it reaches the edge of the text. */
 function keepsArrowKey(element: HTMLElement, direction: Direction) {
-	if (!isTextField(element) || isKeyboardHeldBack(element)) return false;
+	if (!isTextField(element) || isQuiet(element)) return false;
 	const { selectionStart, selectionEnd, value } = element;
 	if (selectionStart === null || selectionEnd === null) return false;
 	if (direction === "left") return selectionStart > 0;
@@ -37,9 +37,10 @@ function keepsArrowKey(element: HTMLElement, direction: Direction) {
 	return false;
 }
 
+/** OK on a resting text field raises its keyboard; buttons, links and inputs act on Enter themselves; anything else needs a click. */
 function activate(element: HTMLElement) {
 	if (isTextField(element)) {
-		if (!isKeyboardHeldBack(element)) return false;
+		if (!isQuiet(element)) return false;
 		raiseKeyboard(element);
 		return true;
 	}

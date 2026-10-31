@@ -6,6 +6,7 @@ import android.net.nsd.NsdServiceInfo
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import androidx.annotation.RequiresApi
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.Inet4Address
@@ -45,12 +46,15 @@ class LimboDiscovery(context: Context, private val reply: (JSONObject) -> Unit) 
         nsd.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, listener)
         main.postDelayed({
             if (started.get()) nsd.stopServiceDiscovery(listener)
-            watching.forEach { callback -> runCatching { nsd.unregisterServiceInfoCallback(callback) } }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                watching.forEach { callback -> runCatching { nsd.unregisterServiceInfoCallback(callback) } }
+            }
             reply(JSONObject().put("type", "response").put("id", id).put("services", JSONArray(found.values)))
         }, DISCOVERY_WINDOW_MS)
     }
 
     /** Follows a service's addresses as they arrive, until discovery ends; registration can fail, so unregistering may too. */
+    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     private fun watch(info: NsdServiceInfo, onUpdated: (NsdServiceInfo) -> Unit): NsdManager.ServiceInfoCallback {
         val callback = object : NsdManager.ServiceInfoCallback {
             override fun onServiceUpdated(resolved: NsdServiceInfo) = onUpdated(resolved)

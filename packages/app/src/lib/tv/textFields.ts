@@ -1,6 +1,7 @@
 /**
  * On a TV, focusing a text field pops the on-screen keyboard over half the screen.
- * Fields reached with the remote stay quiet until OK is pressed on them.
+ * Fields reached with the remote stay read-only, so they neither raise the keyboard
+ * nor swallow OK, until OK is pressed on them.
  */
 
 type TextField = HTMLInputElement | HTMLTextAreaElement;
@@ -11,25 +12,27 @@ export const isTextField = (element: Element): element is TextField =>
 	element instanceof HTMLTextAreaElement ||
 	(element instanceof HTMLInputElement && TEXT_INPUT_TYPES.has(element.type));
 
-export const isKeyboardHeldBack = (field: TextField) => field.dataset.tvInputMode !== undefined;
+/** True while the field has focus from the remote but its keyboard hasn't been raised. */
+export const isQuiet = (field: TextField) => field.dataset.tvQuiet !== undefined;
 
-function releaseKeyboard(field: TextField) {
-	const original = field.dataset.tvInputMode;
-	if (original === undefined) return;
-	delete field.dataset.tvInputMode;
-	if (original) field.setAttribute("inputmode", original);
-	else field.removeAttribute("inputmode");
+function wake(field: TextField) {
+	if (!isQuiet(field)) return;
+	delete field.dataset.tvQuiet;
+	field.readOnly = false;
 }
 
 export function focusWithoutKeyboard(field: TextField) {
-	field.dataset.tvInputMode = field.getAttribute("inputmode") ?? "";
-	field.setAttribute("inputmode", "none");
-	field.addEventListener("blur", () => releaseKeyboard(field), { once: true });
+	if (!field.readOnly) {
+		field.readOnly = true;
+		field.dataset.tvQuiet = "";
+		field.addEventListener("blur", () => wake(field), { once: true });
+	}
 	field.focus({ preventScroll: true });
 }
 
+/** Refocusing an editable field during the OK key press counts as a user gesture, which raises the keyboard. */
 export function raiseKeyboard(field: TextField) {
-	releaseKeyboard(field);
+	wake(field);
 	field.blur();
 	field.focus({ preventScroll: true });
 }

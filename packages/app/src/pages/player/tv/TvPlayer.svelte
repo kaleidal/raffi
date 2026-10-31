@@ -43,7 +43,7 @@
     const playback = createNativePlayback();
     const torrent = createTvTorrentStream();
     const { state: playbackState, tracks, error } = playback;
-    const invertedSeek = getSeekBarStyleFromStorage() === "raffi";
+    const seekBarStyle = getSeekBarStyleFromStorage();
 
     let sessionKey: string | null = null;
     let sessionRun = 0;
@@ -62,7 +62,7 @@
     let hideTimer: ReturnType<typeof setTimeout> | null = null;
     let seekBar: TvSeekBar | null = null;
     let seekElement: HTMLDivElement | null = null;
-    let playButton: HTMLButtonElement | null = null;
+    let controls: TvPlayerControls | null = null;
     let controlsPanel: HTMLDivElement | null = null;
 
     $: imdbID = metaData?.meta?.imdb_id ?? null;
@@ -74,10 +74,16 @@
     $: subtitle = isSeries && season != null && episode != null
         ? [`S${season} E${episode}`, episodeInfo?.name].filter(Boolean).join(" · ")
         : null;
+    $: nowPlaying = metaData?.meta?.name
+        ? isSeries && season != null && episode != null
+            ? `${metaData.meta.name} S${season} E${episode}`
+            : metaData.meta.name
+        : null;
 
     $: chapterState = Chapters.checkChapters($playbackState.position, null, $playbackState.duration, metaData, introDbChapters);
     $: hasNextEpisode = isSeries && Boolean(episodeInfo) && metaData?.meta?.videos?.at(-1) !== episodeInfo;
     $: nextEpisodeOffered = hasNextEpisode && chapterState.showNextEpisode;
+    $: nextEpisodeHighlighted = hasNextEpisode && chapterState.currentChapter?.kind === "outro";
     $: skipLabel = chapterState.showSkipIntro ? chapterState.skipButtonLabel : null;
     $: if (hasStarted) autoSkip(chapterState.currentChapter);
 
@@ -90,7 +96,9 @@
         : sourceError ??
           ($error ? { message: "Playback stopped", details: explainNativeError($error) } : null);
 
-    $: playback.setCaptionInset(controlsPanel ? 1 - controlsPanel.getBoundingClientRect().top / innerHeight : 0);
+    $: playback.setCaptionInset(
+        controlsVisible && controlsPanel ? 1 - controlsPanel.getBoundingClientRect().top / innerHeight : 0,
+    );
 
     $: void startSession(videoSrc, embedSrc);
     $: followPlayback($playbackState);
@@ -198,7 +206,7 @@
         if (current.playWhenReady !== playRequested) {
             playRequested = current.playWhenReady;
             void traktScrobbler.send(playRequested ? "start" : "pause");
-            if (!playRequested) showControls(() => playButton);
+            if (!playRequested) showControls(() => controls?.playButton() ?? null);
         }
         if (current.ended && !ended) {
             ended = true;
@@ -294,12 +302,12 @@
                 else if (nextEpisodeOffered) void playNextEpisode();
                 else {
                     playback.toggle();
-                    void showControls(() => playButton);
+                    void showControls(() => controls?.playButton() ?? null);
                 }
                 return true;
             case "ArrowUp":
             case "ArrowDown":
-                void showControls(() => playButton);
+                void showControls(() => controls?.playButton() ?? null);
                 return true;
             default:
                 return false;
@@ -358,31 +366,28 @@
         </div>
     {/if}
 
-    {#if hasStarted && !controlsVisible && !blockingError && (skipLabel || nextEpisodeOffered)}
-        <div class="absolute bottom-[var(--raffi-page-gutter)] right-[var(--raffi-page-gutter)] rounded-full bg-white px-7 py-3.5 font-poppins text-lg font-semibold text-black">
-            {skipLabel ?? "Next Episode"}
-        </div>
-    {/if}
-
-    {#if controlsVisible && hasStarted && !blockingError}
+    {#if hasStarted && !blockingError}
         <TvPlayerControls
+            bind:this={controls}
             bind:seekBar
             bind:seekElement
-            bind:playButton
             bind:panel={controlsPanel}
-            {title}
-            {subtitle}
+            visible={controlsVisible}
             state={$playbackState}
+            {metaData}
+            {nowPlaying}
             chapters={Chapters.getEffectiveChapterSegments(null, introDbChapters)}
-            {invertedSeek}
+            {seekBarStyle}
             audioLabel={selectedLabel(audioOptions, "Audio")}
             subtitleLabel={selectedLabel(subtitleOptions, "Off")}
             {skipLabel}
-            hasNextEpisode={nextEpisodeOffered}
+            {hasNextEpisode}
+            {nextEpisodeHighlighted}
             {fit}
             onToggle={playback.toggle}
             onSeek={playback.seek}
             onScrubbingChange={(value) => (scrubbing = value)}
+            onClose={close}
             onSkip={skipChapter}
             onNextEpisode={() => void playNextEpisode()}
             onAudio={() => (trackModal = "audio")}

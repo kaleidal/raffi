@@ -3,6 +3,7 @@ package al.kaleid.raffi.player
 import android.app.Activity
 import android.net.Uri
 import android.os.Handler
+import android.os.LocaleList
 import android.os.Looper
 import android.view.View
 import androidx.annotation.OptIn
@@ -132,12 +133,18 @@ class NativePlayer(
             .setUsage(C.USAGE_MEDIA)
             .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
             .build()
+        val renderers = DefaultRenderersFactory(activity)
+            .setEnableDecoderFallback(true)
+            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
         return ExoPlayer.Builder(activity)
-            .setRenderersFactory(DefaultRenderersFactory(activity).setEnableDecoderFallback(true))
+            .setRenderersFactory(renderers)
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(activity, http)))
             .setAudioAttributes(movieAudio, true)
             .build()
             .also {
+                it.trackSelectionParameters = it.trackSelectionParameters.buildUpon()
+                    .setPreferredAudioLanguages(*preferredLanguages())
+                    .build()
                 it.addListener(listener)
                 view.player = it
             }
@@ -166,6 +173,12 @@ class NativePlayer(
         addonSubtitlePending = true
         exo.setMediaItem(item, false)
         exo.prepare()
+    }
+
+    /** The TV's own languages first, then English, rather than whichever track a release lists first. */
+    private fun preferredLanguages(): Array<String> {
+        val locales = LocaleList.getDefault()
+        return ((0 until locales.size()).map { locales[it].language } + "en").distinct().toTypedArray()
     }
 
     private fun subtitleMimeType(url: String) = when {

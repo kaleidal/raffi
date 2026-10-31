@@ -10,6 +10,7 @@ import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.activity.addCallback
 import androidx.media3.ui.PlayerView
+import al.kaleid.raffi.input.VoiceInput
 import al.kaleid.raffi.lan.LimboDiscovery
 import al.kaleid.raffi.lan.LocalNetworkAccess
 import al.kaleid.raffi.player.NativePlayer
@@ -25,6 +26,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var http: HostHttp
     private lateinit var localNetwork: LocalNetworkAccess
     private lateinit var limboDiscovery: LimboDiscovery
+    private lateinit var voice: VoiceInput
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,6 +46,7 @@ class MainActivity : ComponentActivity() {
         http = HostHttp(bridge::send)
         localNetwork = LocalNetworkAccess(this, bridge::send)
         limboDiscovery = LimboDiscovery(this, bridge::send)
+        voice = VoiceInput(this, bridge::send)
 
         AppWebView.configure(webView, onRendererGone = ::recreate)
         bridge.install()
@@ -61,6 +64,7 @@ class MainActivity : ComponentActivity() {
             type == "http.request" -> http.handle(message)
             type == "lan.permit" -> localNetwork.request(message)
             type == "limbo.discover" -> limboDiscovery.discover(message)
+            type == "voice.listen" -> voice.listen(message)
             type == "device.info" -> bridge.send(
                 JSONObject().put("type", "response").put("id", message.getInt("id")).put("name", deviceName()),
             )

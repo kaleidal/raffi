@@ -138,10 +138,18 @@ summary:focus-visible {
   font-size: 16px;
 }
 
-:root[data-platform="tv"] :focus:not([data-own-focus]),
-:root[data-platform="tv"] [data-focus-ring]:has(:focus) {
-  outline: 3px solid #ffffff !important;
-  outline-offset: 4px;
+.tv-focus-ring {
+  position: fixed;
+  position-anchor: --tv-focus;
+  position-visibility: anchors-visible;
+  top: calc(anchor(top) - 4px);
+  left: calc(anchor(left) - 4px);
+  right: calc(anchor(right) - 4px);
+  bottom: calc(anchor(bottom) - 4px);
+  z-index: 2147483647;
+  box-sizing: border-box;
+  border: 3px solid #ffffff;
+  pointer-events: none;
 }
 
 /* Backdrop blur re-renders everything beneath it every frame, more than TV GPUs can keep up with. */
@@ -150,15 +158,14 @@ summary:focus-visible {
   backdrop-filter: none !important;
 }
 
+/* Blur can't see the native video beneath the page, so the player panel needs real contrast. */
+:root[data-platform="tv"] .player-controls-surface {
+  background-color: rgb(0 0 0 / 0.55);
+}
+
 /* Without the blur, a darker backdrop keeps dialogs readable over the page. */
 :root[data-platform="tv"] [data-tv-modal] {
   background-color: rgb(9 9 9 / 0.96);
-}
-
-:root[data-platform="tv"] [data-scroll-row] {
-  width: calc(100% + 16px);
-  padding-inline: 8px;
-  margin-inline: -8px;
 }
 
 body.native-video {

@@ -1,118 +1,128 @@
 <script lang="ts">
-    import { fade } from "svelte/transition";
-    import { AudioWaveform, Pause, Play, SkipForward, Subtitles, ZoomIn, ZoomOut } from "@lucide/svelte";
-    import TvSeekBar from "./TvSeekBar.svelte";
+    import { ChevronLeft, SkipForward } from "@lucide/svelte";
+    import PlayerControls from "../../../components/player/PlayerControls.svelte";
+    import PlayerOverlays from "../../../components/player/PlayerOverlays.svelte";
+    import type { ShowResponse } from "../../../lib/library/types/meta_types";
+    import type { SeekBarStyle } from "../controls/seekStyle";
     import type { Chapter } from "../types";
+    import TvSeekBar from "./TvSeekBar.svelte";
     import type { NativePlaybackState } from "./nativePlayback";
 
-    export let title: string;
-    export let subtitle: string | null = null;
+    export let visible = false;
     export let state: NativePlaybackState;
+    export let metaData: ShowResponse | null;
+    export let nowPlaying: string | null;
     export let chapters: Chapter[] = [];
-    export let invertedSeek = false;
-    export let audioLabel = "";
-    export let subtitleLabel = "";
-    export let skipLabel: string | null = null;
+    export let seekBarStyle: SeekBarStyle;
+    export let audioLabel: string;
+    export let subtitleLabel: string;
+    export let skipLabel: string | null;
     export let hasNextEpisode = false;
-    export let fit: "contain" | "cover" = "contain";
+    export let nextEpisodeHighlighted = false;
+    export let fit: "contain" | "cover";
+    export let panel: HTMLDivElement | null = null;
     export let seekBar: TvSeekBar | null = null;
     export let seekElement: HTMLDivElement | null = null;
-    export let playButton: HTMLButtonElement | null = null;
-    export let panel: HTMLDivElement | null = null;
 
     export let onToggle: () => void;
     export let onSeek: (time: number) => void;
     export let onScrubbingChange: (scrubbing: boolean) => void;
+    export let onClose: () => void;
     export let onSkip: () => void;
     export let onNextEpisode: () => void;
     export let onAudio: () => void;
     export let onSubtitles: () => void;
     export let onToggleFit: () => void;
 
-    const control =
-        "flex h-13 shrink-0 items-center gap-2.5 rounded-full bg-white/10 px-6 font-poppins text-[17px] font-medium text-white transition-colors focus:bg-white focus:text-black";
+    let scrubTime: number | null = null;
+
+    export const playButton = () => panel?.querySelector<HTMLElement>(".player-play-button") ?? null;
 
     $: buffered = state.duration > 0 ? [{ start: 0, end: state.buffered }] : [];
+
+    const slide = (shown: boolean, from: "top" | "bottom") =>
+        shown ? "translate-y-0 opacity-100" : `${from === "top" ? "-translate-y-10" : "translate-y-10"} opacity-0`;
+
+    const navButton = "flex size-[54px] items-center justify-center rounded-full transition-colors duration-200";
+
+    function handleScrub(time: number | null) {
+        scrubTime = time;
+        onScrubbingChange(time !== null);
+    }
 </script>
 
-<div
-    class="pointer-events-none fixed inset-x-0 bottom-0 z-20 flex justify-center pb-[var(--raffi-page-gutter)]"
-    transition:fade={{ duration: 160 }}
->
+<div class="absolute left-0 top-0 z-50 p-10 transition-all duration-300 ease-in-out {slide(visible, 'top')}" inert={!visible}>
+    <button class="{navButton} bg-[#000000]/45" on:click={onClose} aria-label="Close player">
+        <ChevronLeft size={26} color="white" strokeWidth={2} />
+    </button>
+</div>
+
+{#if hasNextEpisode}
     <div
-        bind:this={panel}
-        class="pointer-events-auto flex w-[min(1180px,calc(100vw-2*var(--raffi-page-gutter)))] flex-col gap-6 rounded-[32px] bg-[#0d0d0d]/85 px-9 py-7 text-white"
+        class="absolute right-0 top-0 z-50 p-10 transition-all duration-300 ease-in-out {slide(visible || nextEpisodeHighlighted, 'top')}"
+        inert={!visible}
     >
-        <div class="flex min-w-0 items-baseline gap-4">
-            <h2 class="truncate font-poppins text-2xl font-semibold">{title}</h2>
-            {#if subtitle}
-                <span class="truncate text-lg text-white/55">{subtitle}</span>
-            {/if}
-        </div>
+        <button
+            class="{navButton} {nextEpisodeHighlighted
+                ? 'scale-105 bg-white shadow-[0_0_0_4px_rgba(255,255,255,0.22),0_0_32px_rgba(255,255,255,0.5)]'
+                : 'bg-[#000000]/45'}"
+            on:click={onNextEpisode}
+            aria-label="Next episode"
+        >
+            <SkipForward size={26} color={nextEpisodeHighlighted ? "black" : "white"} strokeWidth={2} />
+        </button>
+    </div>
+{/if}
 
-        <TvSeekBar
-            bind:this={seekBar}
-            bind:element={seekElement}
-            time={state.position}
+{#if nowPlaying}
+    <div
+        class="pointer-events-none absolute inset-x-28 top-10 z-50 flex h-[62px] items-center justify-center transition-all duration-300 ease-in-out {slide(visible, 'top')}"
+    >
+        <span class="inline-flex min-h-[62px] max-w-[40rem] items-center truncate rounded-full bg-[#000000]/45 px-8 text-[1.125rem] font-medium leading-6 text-white">
+            {nowPlaying}
+        </span>
+    </div>
+{/if}
+
+<div class="absolute bottom-8 left-1/2 z-50 flex max-w-full -translate-x-1/2 flex-col gap-2.5">
+    <PlayerOverlays showSkipIntro={Boolean(skipLabel)} skipLabel={skipLabel ?? ""} skipChapter={onSkip} />
+
+    <div bind:this={panel} class="transition-all duration-300 ease-in-out {slide(visible, 'bottom')}" inert={!visible}>
+        <PlayerControls
+            isPlaying={state.playWhenReady}
             duration={state.duration}
+            currentTime={state.position}
+            pendingSeek={scrubTime}
+            {seekBarStyle}
+            chapterMarkers={chapters}
             {buffered}
-            {chapters}
-            inverted={invertedSeek}
-            onCommit={onSeek}
-            {onScrubbingChange}
-        />
-
-        <div class="flex items-center gap-3">
-            <button
-                bind:this={playButton}
-                class="{control} px-5"
-                data-own-focus
-                aria-label={state.playWhenReady ? "Pause" : "Play"}
-                on:click={onToggle}
-            >
-                {#if state.playWhenReady}
-                    <Pause size={24} fill="currentColor" strokeWidth={0} />
-                {:else}
-                    <Play size={24} fill="currentColor" strokeWidth={0} />
-                {/if}
-            </button>
-
-            {#if skipLabel}
-                <button class={control} data-own-focus on:click={onSkip}>
-                    <SkipForward size={20} strokeWidth={2} />
-                    {skipLabel}
-                </button>
-            {/if}
-
-            {#if hasNextEpisode}
-                <button class={control} data-own-focus on:click={onNextEpisode}>
-                    <SkipForward size={20} strokeWidth={2} />
-                    Next Episode
-                </button>
-            {/if}
-
-            <div class="flex-1"></div>
-
-            <button class={control} data-own-focus on:click={onAudio}>
-                <AudioWaveform size={20} strokeWidth={2} />
-                <span class="max-w-56 truncate">{audioLabel || "Audio"}</span>
-            </button>
-            <button class={control} data-own-focus on:click={onSubtitles}>
-                <Subtitles size={20} strokeWidth={2} />
-                <span class="max-w-56 truncate">{subtitleLabel}</span>
-            </button>
-            <button
-                class="{control} px-5"
-                data-own-focus
-                aria-label={fit === "contain" ? "Fill screen" : "Fit to screen"}
-                on:click={onToggleFit}
-            >
-                {#if fit === "contain"}
-                    <ZoomIn size={22} strokeWidth={2} />
-                {:else}
-                    <ZoomOut size={22} strokeWidth={2} />
-                {/if}
-            </button>
-        </div>
+            {visible}
+            {metaData}
+            currentAudioLabel={audioLabel}
+            currentSubtitleLabel={subtitleLabel}
+            objectFit={fit}
+            showWatchParty={false}
+            togglePlay={onToggle}
+            onSeekInput={() => {}}
+            onSeekChange={onSeek}
+            onVolumeChange={() => {}}
+            toggleFullscreen={() => {}}
+            toggleObjectFit={onToggleFit}
+            onAudioClick={onAudio}
+            onSubtitleClick={onSubtitles}
+        >
+            <TvSeekBar
+                slot="seek"
+                bind:this={seekBar}
+                bind:element={seekElement}
+                time={state.position}
+                duration={state.duration}
+                {buffered}
+                {chapters}
+                inverted={seekBarStyle !== "normal"}
+                onCommit={onSeek}
+                onScrub={handleScrub}
+            />
+        </PlayerControls>
     </div>
 </div>

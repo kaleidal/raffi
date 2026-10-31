@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { Search, Link, Blocks, Library, Settings } from "@lucide/svelte";
+    import { Search, Link, Blocks, Library, Settings, Mic } from "@lucide/svelte";
     import {
         searchAddonTitlesSplit,
         searchTitlesSplit,
@@ -9,6 +9,8 @@
     } from "../../lib/library/library";
     import { getCachedMetaData } from "../../lib/library/metaCache";
     import { router } from "../../lib/stores/router";
+    import { isTvPlatform } from "../../lib/shell/platform";
+    import { listenForSpeech } from "../../lib/tv/voice";
     import Skeleton from "../common/Skeleton.svelte";
     import { fade } from "svelte/transition";
 	import TitleContextMenu from "./context_menus/TitleContextMenu.svelte";
@@ -35,6 +37,7 @@
     let searchQuery = "";
     let searchResults: SplitSearchResults = { movies: [], series: [] };
 	let searchTimeout: any;
+	let searchArea: HTMLDivElement | null = null;
 	let showSearchResults = false;
 	let loading = false;
 	let commandHint = "";
@@ -185,7 +188,15 @@
 	};
 
 	function handleSearch(e: Event) {
-		const query = (e.target as HTMLInputElement).value;
+		runSearch((e.target as HTMLInputElement).value);
+	}
+
+	async function searchByVoice() {
+		const spoken = await listenForSpeech();
+		if (spoken) runSearch(spoken);
+	}
+
+	function runSearch(query: string) {
 		searchQuery = query;
 		commandHint = "";
 
@@ -269,7 +280,7 @@
         // Delay closing to allow clicks on results or context menu
         setTimeout(() => {
             // Only close if we're not interacting with context menu or popup
-            if (!showContextMenu && !showListsPopup) {
+            if (!showContextMenu && !showListsPopup && !searchArea?.contains(document.activeElement)) {
                 showSearchResults = false;
             }
         }, 200);
@@ -459,13 +470,14 @@
                 : "absolute"
         }`}
     >
-        <div>
+        <div bind:this={searchArea}>
             {#if portraitLayout || searchDockBottom}
                 <div
                     class="pointer-events-none absolute -inset-x-6 -inset-y-4 -z-10 rounded-[48px] bg-white/[0.09] blur-2xl opacity-35"
                 ></div>
             {/if}
             <div
+                data-focus-ring
                 class={`search-shell flex h-[clamp(56px,4vw,80px)] flex-row gap-0 rounded-full overflow-clip backdrop-blur-md z-20 transition-[width,height,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
                     portraitLayout
                         ? "w-[calc(100vw-clamp(32px,8vw,72px))] max-w-[720px]"
@@ -493,6 +505,16 @@
                     value={searchQuery}
                 />
 
+                {#if isTvPlatform}
+                    <button
+                        data-own-focus
+                        class="search-icon flex w-[clamp(56px,4vw,80px)] shrink-0 items-center justify-center bg-[#181818]/50 text-[#C3C3C3] transition-colors focus:bg-white focus:text-black"
+                        aria-label="Search by voice"
+                        onclick={searchByVoice}
+                    >
+                        <Mic size={36} strokeWidth={2} />
+                    </button>
+                {/if}
             </div>
 
             {#if commandHint}

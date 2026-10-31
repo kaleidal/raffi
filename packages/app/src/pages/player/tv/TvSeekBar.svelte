@@ -13,7 +13,8 @@
     export let inverted = false;
     export let element: HTMLDivElement | null = null;
     export let onCommit: (time: number) => void;
-    export let onScrubbingChange: (scrubbing: boolean) => void = () => {};
+    /** The time being scrubbed to, or null once the scrub is committed. */
+    export let onScrub: (time: number | null) => void = () => {};
 
     const STEP_SECONDS = 10;
     const MAX_STEP_MULTIPLIER = 6;
@@ -35,7 +36,7 @@
         onCommit(scrubTime);
         scrubTime = null;
         presses = 0;
-        onScrubbingChange(false);
+        onScrub(null);
     }
 
     /** Moves the knob one step left or right, speeding up while the button is held. */
@@ -45,7 +46,7 @@
         presses += 1;
         const target = (scrubTime ?? time) + (forward ? 1 : -1) * STEP_SECONDS * multiplier;
         scrubTime = Math.max(0, Math.min(duration, target));
-        onScrubbingChange(true);
+        onScrub(scrubTime);
         if (commitTimer) clearTimeout(commitTimer);
         commitTimer = setTimeout(commit, COMMIT_DELAY_MS);
     }
@@ -79,7 +80,7 @@
 
 <div
     bind:this={element}
-    class="flex items-center gap-6"
+    class="rounded-full"
     role="slider"
     tabindex="0"
     aria-label="Seek"
@@ -91,24 +92,16 @@
     on:focus={handleFocus}
     on:blur={handleBlur}
 >
-    <span class="w-24 text-lg tabular-nums {scrubTime === null ? 'text-white/80' : 'text-white'}">
-        {formatTime(shownTime)}
-    </span>
-    <div class="flex-1">
-        <SeekBar
-            {duration}
-            time={shownTime}
-            {inverted}
-            {chapters}
-            {buffered}
-            disabled
-            visible={false}
-            emphasized={focused}
-            onScrub={() => {}}
-            onCommit={() => {}}
-        />
-    </div>
-    <span class="w-24 text-right text-lg tabular-nums text-white/50">
-        -{formatTime(Math.max(0, duration - shownTime))}
-    </span>
+    <SeekBar
+        {duration}
+        time={shownTime}
+        {inverted}
+        {chapters}
+        {buffered}
+        disabled
+        visible={false}
+        emphasized={focused}
+        onScrub={() => {}}
+        onCommit={() => {}}
+    />
 </div>
