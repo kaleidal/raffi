@@ -12,15 +12,15 @@
   },
   "devDependencies": {
     "@typescript/native": "npm:typescript@^7.0.2",
-    "@cloudflare/vite-plugin": "^1.65.0",
+    "@cloudflare/vite-plugin": "^1.66.0",
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@tsconfig/svelte": "^5.0.8",
-    "@types/node": "^26.6.5",
-    "svelte": "^5.57.2",
+    "@types/node": "^26.6.6",
+    "svelte": "^5.57.3",
     "svelte-check": "^4.7.7",
     "typescript": "^6.0.3",
     "vite": "^8.3.5",
-    "wrangler": "^4.152.0"
+    "wrangler": "^4.156.0"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",

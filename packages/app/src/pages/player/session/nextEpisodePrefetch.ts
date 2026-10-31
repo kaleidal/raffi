@@ -4,7 +4,7 @@ import {
 	isMagnetUrl,
 } from "../../../lib/media/localSource";
 import {
-	AdaptivePlayback,
+	MediaBunnyPlayback,
 	resolveHttpPlayback,
 	type HttpPlaybackMode,
 	type ProbedStream,
@@ -274,8 +274,8 @@ export async function startNextEpisodePrefetch(
 			};
 		}
 
-		if (resolved.mode === "mediabunny" || resolved.mode === "ffmpeg") {
-			const controller = new AdaptivePlayback();
+		if (resolved.mode === "mediabunny") {
+			const controller = new MediaBunnyPlayback();
 			playbackController = controller;
 			await controller.attach(videoElem, src, {
 				startTime: 0,

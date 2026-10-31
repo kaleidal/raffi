@@ -1,7 +1,7 @@
 import { get } from "svelte/store";
 import type { ShowResponse } from "../../../lib/library/types/meta_types";
 import {
-    AdaptivePlayback,
+    MediaBunnyPlayback,
     enrichProbedStreamAudio,
     resolveHttpPlayback,
     type ProbedStream,
@@ -224,7 +224,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
         opts?: {
             reuseSession?: {
                 sessionData: any;
-                mode?: "direct" | "mediabunny" | "ffmpeg" | "addon-hls" | "unsupported";
+                mode?: "direct" | "mediabunny" | "addon-hls" | "unsupported";
                 meta?: ProbedStream | null;
                 playbackController?: ClientPlaybackController | null;
                 hls?: any;
@@ -252,7 +252,6 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                 reused &&
                 (reused.mode === "direct" ||
                     reused.mode === "mediabunny" ||
-                    reused.mode === "ffmpeg" ||
                     reused.mode === "addon-hls")
             ) {
                 loadingStage.set("Continuing");
@@ -297,7 +296,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                 ]);
 
                 if (
-                    (reused.mode === "mediabunny" || reused.mode === "ffmpeg") &&
+                    reused.mode === "mediabunny" &&
                     reused.playbackController
                 ) {
                     reused.playbackController.setPrefetching(false);
@@ -455,7 +454,6 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
             const useClientPlayback =
                 clientPlayback?.mode === "direct" ||
                 clientPlayback?.mode === "mediabunny" ||
-                clientPlayback?.mode === "ffmpeg" ||
                 clientPlayback?.mode === "addon-hls";
 
             if (limboStatus && !useClientPlayback) {
@@ -601,14 +599,12 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
 
             if (useClientPlayback && clientPlayback) {
                 loadingStage.set(
-                    clientPlayback.mode === "mediabunny" || clientPlayback.mode === "ffmpeg"
-                        ? clientPlayback.mode === "ffmpeg"
-                            ? "Converting audio"
-                            : "Remuxing in the app"
+                    clientPlayback.mode === "mediabunny"
+                        ? "Remuxing in the app"
                         : "Loading stream directly",
                 );
                 loadingDetails.set(
-                    clientPlayback.mode === "mediabunny" || clientPlayback.mode === "ffmpeg"
+                    clientPlayback.mode === "mediabunny"
                         ? "Preparing a browser-compatible stream"
                         : "Starting playback",
                 );
@@ -675,11 +671,8 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                     return;
                 }
 
-                if (
-                    clientPlayback.mode === "mediabunny" ||
-                    clientPlayback.mode === "ffmpeg"
-                ) {
-                    const controller = new AdaptivePlayback();
+                if (clientPlayback.mode === "mediabunny") {
+                    const controller = new MediaBunnyPlayback();
                     deps.setPlaybackController(controller);
                     const attached = await controller.attach(
                         videoElem,
@@ -692,7 +685,6 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                                 result.sessionData?.audioIndex ??
                                 clientPlayback.meta?.preferredAudioIndex ??
                                 0,
-                            ffmpegSource: playbackSrc,
                         },
                     );
                     if (isStale()) {

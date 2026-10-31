@@ -45,10 +45,10 @@ describe("canReuseNextEpisodePrefetch", () => {
 		).toBe(false);
 	});
 
-	test("hands off a prefetched FFmpeg stream at the episode start", () => {
+	test("hands off a prefetched MediaBunny stream at the episode start", () => {
 		expect(
 			canReuseNextEpisodePrefetch(
-				handoff("ffmpeg"),
+				handoff("mediabunny"),
 				"https://media.example/episode.mp4",
 				null,
 				0,

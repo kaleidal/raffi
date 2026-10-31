@@ -1,7 +1,6 @@
 import type { AudioCodec } from "mediabunny";
 
 let commonRegistration: Promise<void> | null = null;
-let dtsRegistration: Promise<void> | null = null;
 
 export function ensureMediaCodersRegistered() {
 	commonRegistration ??= Promise.all([
@@ -19,15 +18,24 @@ export function ensureMediaCodersRegistered() {
 	return commonRegistration;
 }
 
+/** DTS and TrueHD decoders are large, so they only load for streams that need them. */
+const extensionDecoders: Partial<Record<AudioCodec, () => Promise<void>>> = {
+	dts: () => import("@mediabunny/dts").then(({ registerDtsDecoder }) => registerDtsDecoder()),
+	truehd: () => import("@mediabunny/truehd").then(({ registerTrueHdDecoder }) => registerTrueHdDecoder()),
+};
+
+const extensionRegistrations = new Map<AudioCodec, Promise<void>>();
+
 export function ensureAudioDecoderRegistered(codec: AudioCodec | null) {
-	if (codec !== "dts") return Promise.resolve();
-	dtsRegistration ??= import("@mediabunny/dts")
-		.then(({ registerDtsDecoder }) => {
-			registerDtsDecoder();
-		})
-		.catch((error) => {
-			dtsRegistration = null;
+	const load = codec ? extensionDecoders[codec] : undefined;
+	if (!codec || !load) return Promise.resolve();
+	let registration = extensionRegistrations.get(codec);
+	if (!registration) {
+		registration = load().catch((error) => {
+			extensionRegistrations.delete(codec);
 			throw error;
 		});
-	return dtsRegistration;
+		extensionRegistrations.set(codec, registration);
+	}
+	return registration;
 }

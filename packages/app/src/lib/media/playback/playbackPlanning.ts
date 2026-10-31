@@ -1,11 +1,10 @@
 import type { AudioCodec } from "mediabunny";
 import { isDesktopPlatform } from "../../shell/platform";
-import { canUseFfmpegPlayback } from "./ffmpegPlayback";
 import { isLocalFilesystemPath, isLocalMediaUrl, toClientPlayableUrl } from "../localSource";
 import { getDirectMediaSupport, supportsEac3Playback } from "../probe/nativeSupport";
 import { ensureAudioTracks, isMseFriendlyVideo, isNativeFriendlyAudio, probeRemoteStream, type ProbedStream } from "../probe/probe";
 
-export type HttpPlaybackMode = "direct" | "mediabunny" | "ffmpeg" | "addon-hls" | "unsupported";
+export type HttpPlaybackMode = "direct" | "mediabunny" | "addon-hls" | "unsupported";
 
 export type ResolvedHttpPlayback = {
 	mode: HttpPlaybackMode;
@@ -88,16 +87,6 @@ export async function resolveHttpPlayback(
 				: probeRemoteStream(playable, signal)),
 		);
 		if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
-		if (canUseFfmpegPlayback(meta, meta.preferredAudioIndex)) {
-			return { mode: "ffmpeg", meta, reason: "selected-audio-transcode" };
-		}
-		if (
-			meta.audioTracks.some((track) => track.playable) &&
-			meta.audioTracks.some((track) => !track.playable) &&
-			meta.audioTracks.some((track) => canUseFfmpegPlayback(meta, track.index))
-		) {
-			return { mode: "mediabunny", meta, reason: "adaptive-audio-playback" };
-		}
 		if (localSource) {
 			return canUseMediaBunnyRemux(meta)
 				? { mode: "mediabunny", meta, reason: "local-remux" }

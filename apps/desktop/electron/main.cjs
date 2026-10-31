@@ -1,5 +1,4 @@
 const { app, BrowserWindow, dialog, screen, ipcMain, shell, protocol, net } = require("electron");
-const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 const { createLogger } = require("./services/logging.cjs");
@@ -21,12 +20,8 @@ const { registerMainIpcHandlers } = require("./services/mainIpc.cjs");
 const { registerDiscordRpcHandlers } = require("./services/integrations/rpc.cjs");
 const { createMainWindow } = require("./services/window.cjs");
 const { createDefenderService } = require("./services/integrations/defender.cjs");
-const {
-  ffmpegPrivilegedScheme,
-  createFfmpegPlaybackService,
-} = require("./services/media/ffmpegPlayback.cjs");
 
-registerPrivilegedSchemes(protocol, [appPrivilegedScheme, ffmpegPrivilegedScheme]);
+registerPrivilegedSchemes(protocol, [appPrivilegedScheme]);
 
 const { logFallback, logToFile } = createLogger(app);
 
@@ -51,13 +46,8 @@ app.on("ready", () => {
   logToFile("App ready");
 });
 
-app.on("window-all-closed", () => {
-  logToFile("All windows closed");
-});
-
 app.on("render-process-gone", (_event, details) => {
   logToFile("Render process gone", details);
-  ffmpegPlaybackService?.cleanup();
 });
 
 app.on("child-process-gone", (_event, details) => {
@@ -67,7 +57,6 @@ app.on("child-process-gone", (_event, details) => {
 let mainWindow;
 let fileToOpen = null;
 let pendingTraktAuthPayload = null;
-let ffmpegPlaybackService = null;
 const localMediaAccess = createLocalMediaAccess({ logToFile });
 const handleProtocolUrl = createProtocolUrlHandler({
   logToFile,
@@ -231,21 +220,6 @@ app.whenReady().then(async () => {
   } catch (error) {
     logToFile("Failed to register raffi-media protocol", error);
   }
-  try {
-    ffmpegPlaybackService = createFfmpegPlaybackService({
-      app,
-      protocol,
-      ipcMain,
-      spawn,
-      baseDir: electronRuntimeDir,
-      resourcesPath: process.resourcesPath,
-      logToFile,
-      localMediaAccess,
-      getMainWindow: () => mainWindow,
-    });
-  } catch (error) {
-    logToFile("Failed to register FFmpeg playback", error);
-  }
   if (pendingAppUserModelId) {
     app.setAppUserModelId(pendingAppUserModelId);
   }
@@ -297,10 +271,6 @@ app.on("activate", () => {
   mainWindow.focus();
 });
 
-function cleanup() {
-  ffmpegPlaybackService?.cleanup();
-}
-
 registerMainIpcHandlers({
   ipcMain,
   dialog,
@@ -308,7 +278,6 @@ registerMainIpcHandlers({
   fs,
   autoUpdater,
   isAllowedExternalUrl,
-  cleanup,
   logToFile,
   getMainWindow: () => mainWindow,
   getDefenderExclusionStatus: () => defenderService.getExclusionStatus(),
@@ -318,26 +287,11 @@ registerMainIpcHandlers({
   net,
 });
 
-app.on("before-quit", cleanup);
-app.on("will-quit", cleanup);
-app.on("quit", cleanup);
-
 app.on("window-all-closed", () => {
   logToFile("All windows closed");
-  cleanup();
   if (process.platform !== "darwin") {
     app.quit();
   }
-});
-
-process.on("SIGINT", () => {
-  cleanup();
-  process.exit(0);
-});
-
-process.on("SIGTERM", () => {
-  cleanup();
-  process.exit(0);
 });
 
 const rpcService = registerDiscordRpcHandlers({ ipcMain });

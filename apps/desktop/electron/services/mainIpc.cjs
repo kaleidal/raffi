@@ -5,7 +5,6 @@ function registerMainIpcHandlers({
   fs,
   autoUpdater,
   isAllowedExternalUrl,
-  cleanup,
   logToFile,
   getMainWindow,
   getDefenderExclusionStatus,
@@ -248,7 +247,6 @@ function registerMainIpcHandlers({
   ipcMain.handle("UPDATE_INSTALL", async () => {
     if (!autoUpdater) return { ok: false, reason: "autoUpdater unavailable" };
     logToFile("Update install requested");
-    cleanup();
     setTimeout(() => {
       try {
         autoUpdater.quitAndInstall(false, true);

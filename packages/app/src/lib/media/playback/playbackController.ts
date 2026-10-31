@@ -5,7 +5,6 @@ export type PlaybackAttachOptions = {
 	signal?: AbortSignal;
 	meta?: ProbedStream | null;
 	audioIndex?: number;
-	ffmpegSource?: string;
 	/** Buffers only a short lead until the player takes the stream over. */
 	prefetch?: boolean;
 };

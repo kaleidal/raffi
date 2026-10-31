@@ -30,15 +30,6 @@ declare global {
                 resolve: (filePath: string) => Promise<string>;
                 scan: () => Promise<unknown[]>;
             };
-            ffmpegPlayback?: {
-                start: (request: {
-                    source: string;
-                    startTime: number;
-                    audioIndex: number;
-                    audioChannels: number | null;
-                }) => Promise<{ sessionId: string; streamUrl: string; startTime: number }>;
-                stop: (sessionId: string) => Promise<boolean>;
-            };
             saveClipPath?: (suggestedName?: string) => Promise<{ canceled: boolean; filePath: string | null; error?: string }>;
             writeClipFile?: (
                 targetPath: string,

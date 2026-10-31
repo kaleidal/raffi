@@ -73,14 +73,9 @@ decoder-*
 
 # App-specific build outputs
 apps/desktop/electron/decoder-*
-apps/desktop/electron/ffmpeg
-apps/desktop/electron/ffmpeg.exe
-apps/desktop/electron/ffprobe
-apps/desktop/electron/ffprobe.exe
 apps/desktop/electron/main
 apps/desktop/electron/raffi
 apps/desktop/release/
-apps/desktop/vendor/ffmpeg/
 apps/desktop/electron-dist/
 
 # Legacy / stale paths from pre-refactor layouts

@@ -18,7 +18,7 @@
   "devDependencies": {
     "@typescript/native": "npm:typescript@^7.0.2",
     "@tsconfig/svelte": "^5.0.8",
-    "svelte": "^5.57.2",
+    "svelte": "^5.57.3",
     "svelte-check": "^4.7.7",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
@@ -27,12 +27,13 @@
   "dependencies": {
     "@fontsource/poppins": "5.3.0",
     "@fontsource/roboto": "5.3.0",
-    "@lucide/svelte": "^1.61.0",
-    "@mediabunny/aac-encoder": "^1.62.1",
-    "@mediabunny/ac3": "^1.62.1",
-    "@mediabunny/dts": "^1.62.1",
-    "hls.js": "^1.7.3",
-    "mediabunny": "^1.62.1"
+    "@lucide/svelte": "^1.66.0",
+    "@mediabunny/aac-encoder": "^1.65.0",
+    "@mediabunny/ac3": "^1.65.0",
+    "@mediabunny/dts": "^1.65.0",
+    "@mediabunny/truehd": "^1.65.0",
+    "hls.js": "^1.7.4",
+    "mediabunny": "^1.65.0"
   },
   "peerDependencies": {
     "svelte": "^5.0.0"

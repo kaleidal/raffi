@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const { createLocalMediaAccess } = require("../electron/services/media/localMediaAccess.cjs");
-const { validateSource } = require("../electron/services/media/ffmpegPlayback.cjs");
 
 const temporaryDirectories: string[] = [];
 
@@ -61,14 +60,5 @@ describe("local media capabilities", () => {
 		await expect(access.authorizeLibraryFile(outsideFile)).rejects.toThrow("outside the approved local library");
 		const url = await access.authorizeLibraryFile(libraryFile);
 		expect(access.resolveRequestUrl(url)).toBe(libraryFile);
-	});
-
-	test("prevents FFmpeg from bypassing the local media capability boundary", async () => {
-		const { outsideFile } = await makeFixture();
-		const access = createLocalMediaAccess();
-
-		expect(() => validateSource(outsideFile, access)).toThrow("authorized local media");
-		const url = await access.authorizeTrustedFile(outsideFile);
-		expect(validateSource(url, access)).toBe(outsideFile);
 	});
 });

@@ -127,11 +127,9 @@ raffi/
 - **Platforms**: Windows, macOS, Linux
 - **Features**: Full desktop experience with watch parties, Discord integration, local file playback
 - **Build**: Bun bundles the Electron main/preload processes and electron-builder creates multi-platform releases. Production packages exclude source files, development dependencies, and unused Chromium locales.
-- **Playback**: MediaBunny remuxes compatible streams in the renderer. DTS and other unsupported audio streams use a bundled FFmpeg process that copies video and converts only audio to browser-safe multichannel Opus.
+- **Playback**: MediaBunny remuxes streams in the renderer and decodes the audio browsers can't play themselves, including Dolby Digital, Dolby Digital Plus, DTS, and Dolby TrueHD, converting it to AAC on the fly.
 
-Desktop packages pin checksummed Linux x64, Windows x64, and universal macOS binaries from the public [kaleidal/ffmpeg-builds](https://github.com/kaleidal/ffmpeg-builds) repository. `bun --filter @raffi/desktop prepare:ffmpeg` downloads and verifies the artifact for the current platform; `dist` runs this automatically and bundles the executable plus its license and build metadata outside the app ASAR.
-
-Run `bun run validate` from the repository root to typecheck every workspace and run the app and desktop playback suites. The playback fixture verifies Chromium MSE support plus local and HTTP-range playback for stereo AAC and non-default multichannel DTS tracks, including audio switching and playback from a non-zero seek.
+Run `bun run validate` from the repository root to typecheck every workspace and run the app and desktop playback suites. The desktop suite checks that Chromium accepts the remuxed AAC stream and that DTS and TrueHD audio decode inside Electron.
 
 #### Web App (`apps/web/`)
 - **Framework**: SvelteKit with Cloudflare adapter
@@ -237,7 +235,7 @@ bun --filter @raffi/marketing build
 #### Desktop App
 - **Frontend**: Svelte 5, TypeScript, Tailwind CSS
 - **Desktop Runtime**: Electron
-- **Video Player**: native media playback, HLS.js, MediaBunny, and bundled FFmpeg audio conversion
+- **Video Player**: native media playback, HLS.js, and MediaBunny with Dolby and DTS decoders
 - **Storage**: Local app data with Raffi Sync cloud backup
 - **Build**: Vite + electron-builder
 - **Key Libraries**: `@lucide/svelte`, MediaBunny, and HLS.js
@@ -276,7 +274,7 @@ bun --filter @raffi/marketing build
 - Local files and clip export use MediaBunny on desktop (`raffi-media://` for disk access)
 - Torrents stream through Limbo, on the same computer or, for Android TV, on a paired computer on the network
 - Community addon catalog is fetched from Electron main
-- Text subtitles embedded in MKV files (SRT, ASS/SSA, WebVTT) are read from the stream as it plays, with no extra downloads. Image-based subtitles such as PGS aren't supported, and streams whose audio is converted by the bundled FFmpeg don't show embedded subtitles.
+- Text subtitles embedded in MKV files (SRT, ASS/SSA, WebVTT) are read from the stream as it plays, with no extra downloads. Image-based subtitles such as PGS aren't supported.
 - Multiple quality selection
 - Subtitle parsing (SRT/VTT)
 - Audio track switching
