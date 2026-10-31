@@ -102,11 +102,7 @@ export const fetchStreams = async (
         const localStreams = getLocalStreamsFor(imdbID, type as any, episode);
         if (!addonUrl) {
             streams.set(localStreams as any);
-            if (localStreams.length === 0) {
-                streamFailureMessage.set("Install a stream addon to find online sources.");
-            } else {
-                clearStreamFailureMessage();
-            }
+            clearStreamFailureMessage();
             return localStreams as any;
         }
         const response = await fetch(

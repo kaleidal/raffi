@@ -1,12 +1,13 @@
 <script lang="ts">
     import { onMount } from "svelte";
+    import { fade } from "svelte/transition";
     import { Info, Play, Pause, VolumeX, Volume2 } from "@lucide/svelte";
     import type { PopularTitleMeta } from "../../lib/library/types/popular_types";
     import { isTvPlatform } from "../../lib/shell/platform";
     import { router } from "../../lib/stores/router";
     import IconButton from "../common/IconButton.svelte";
 
-    export let showcasedTitle: PopularTitleMeta;
+    export let showcasedTitle: PopularTitleMeta | null;
 
     export let onLogoError: () => void = () => {};
 
@@ -150,76 +151,80 @@
     class="hero-shell w-full relative overflow-hidden bg-[#090909] isolate"
     bind:this={container}
 >
-    <div
-        class="absolute bottom-[clamp(48px,6vw,100px)] left-[clamp(24px,5.2vw,100px)] z-10 flex max-w-[min(760px,72vw)] flex-col gap-[clamp(28px,3vw,50px)]"
-    >
-        {#if showcasedTitle.logo}
-            <img
-                src={showcasedTitle.logo}
-                alt="Logo"
-                class="w-[clamp(300px,38vw,600px)] h-auto max-h-[clamp(130px,14vw,220px)] object-contain object-left"
-                on:error={onLogoError}
-            />
-        {:else}
-            <h1 class="text-white text-[clamp(40px,4vw,64px)] font-poppins font-bold max-w-[700px] leading-[1.05]">
-                {showcasedTitle.name}
-            </h1>
-        {/if}
+    {#if showcasedTitle}
+        <div
+            in:fade={{ duration: 400 }}
+            class="absolute bottom-[clamp(48px,6vw,100px)] left-[clamp(24px,5.2vw,100px)] z-10 flex max-w-[min(760px,72vw)] flex-col gap-[clamp(28px,3vw,50px)]"
+        >
+            {#if showcasedTitle.logo}
+                <img
+                    src={showcasedTitle.logo}
+                    alt="Logo"
+                    class="w-[clamp(300px,38vw,600px)] h-auto max-h-[clamp(130px,14vw,220px)] object-contain object-left"
+                    on:error={onLogoError}
+                />
+            {:else}
+                <h1 class="text-white text-[clamp(40px,4vw,64px)] font-poppins font-bold max-w-[700px] leading-[1.05]">
+                    {showcasedTitle.name}
+                </h1>
+            {/if}
 
 
-        <div class="flex flex-row gap-[10px] items-center">
-            <button
-                data-tv-autofocus
-                class="details-button bg-[#FFFFFF]/80 hover:bg-[#D3D3D3]/80 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-[clamp(10px,1vw,16px)] text-black text-[clamp(20px,1.8vw,32px)] font-poppins font-medium px-[clamp(36px,4.4vw,84px)] py-[clamp(12px,1vw,18px)] w-fit rounded-full transition-colors duration-200"
-                on:click={() =>
-                    navigateToMeta(showcasedTitle.imdb_id, showcasedTitle.type)}
-            >
-                <Info size={48} strokeWidth={3} color="black" />
+            <div class="flex flex-row gap-[10px] items-center">
+                <button
+                    data-tv-autofocus
+                    class="details-button bg-[#FFFFFF]/80 hover:bg-[#D3D3D3]/80 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-[clamp(10px,1vw,16px)] text-black text-[clamp(20px,1.8vw,32px)] font-poppins font-medium px-[clamp(36px,4.4vw,84px)] py-[clamp(12px,1vw,18px)] w-fit rounded-full transition-colors duration-200"
+                    on:click={() =>
+                        navigateToMeta(showcasedTitle.imdb_id, showcasedTitle.type)}
+                >
+                    <Info size={48} strokeWidth={3} color="black" />
 
-                Details
-            </button>
+                    Details
+                </button>
 
+                {#if trailerSrc}
+                    <IconButton
+                        label={isPaused ? "Play" : "Pause"}
+                        onClick={togglePlay}
+                    >
+                        {#if isPaused}
+                            <Play size={24} strokeWidth={2} color="#E9E9E9" />
+                        {:else}
+                            <Pause size={24} strokeWidth={2} color="#E9E9E9" />
+                        {/if}
+                    </IconButton>
+
+                    <IconButton
+                        label={isMuted ? "Unmute" : "Mute"}
+                        onClick={toggleMute}
+                    >
+                        {#if isMuted}
+                            <VolumeX size={24} strokeWidth={2} color="#E9E9E9" />
+                        {:else}
+                            <Volume2 size={24} strokeWidth={2} color="#E9E9E9" />
+                        {/if}
+                    </IconButton>
+                {/if}
+            </div>
+        </div>
+
+        <div in:fade={{ duration: 400 }} class="hero-media absolute inset-0 overflow-hidden pointer-events-none">
             {#if trailerSrc}
-                <IconButton
-                    label={isPaused ? "Play" : "Pause"}
-                    onClick={togglePlay}
-                >
-                    {#if isPaused}
-                        <Play size={24} strokeWidth={2} color="#E9E9E9" />
-                    {:else}
-                        <Pause size={24} strokeWidth={2} color="#E9E9E9" />
-                    {/if}
-                </IconButton>
-
-                <IconButton
-                    label={isMuted ? "Unmute" : "Mute"}
-                    onClick={toggleMute}
-                >
-                    {#if isMuted}
-                        <VolumeX size={24} strokeWidth={2} color="#E9E9E9" />
-                    {:else}
-                        <Volume2 size={24} strokeWidth={2} color="#E9E9E9" />
-                    {/if}
-                </IconButton>
+                <iframe
+                    bind:this={playerIframe}
+                    frameborder="0"
+                    referrerpolicy="strict-origin-when-cross-origin"
+                    src={trailerSrc}
+                    class="hero-frame"
+                    title="Trailer"
+                    on:load={handleTrailerLoad}
+                ></iframe>
+            {:else if showcasedTitle.background}
+                <img src={showcasedTitle.background} alt="" class="hero-still" />
             {/if}
         </div>
-    </div>
+    {/if}
 
-    <div class="hero-media absolute inset-0 overflow-hidden pointer-events-none">
-        {#if trailerSrc}
-            <iframe
-                bind:this={playerIframe}
-                frameborder="0"
-                referrerpolicy="strict-origin-when-cross-origin"
-                src={trailerSrc}
-                class="hero-frame"
-                title="Trailer"
-                on:load={handleTrailerLoad}
-            ></iframe>
-        {:else if showcasedTitle.background}
-            <img src={showcasedTitle.background} alt="" class="hero-still" />
-        {/if}
-    </div>
     <div
         class="absolute inset-0 z-[1] bg-gradient-to-t from-[#090909] via-[#090909]/80 to-transparent"
     ></div>

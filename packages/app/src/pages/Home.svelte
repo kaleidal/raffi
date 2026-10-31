@@ -38,7 +38,7 @@
     import LoadingSpinner from "../components/common/LoadingSpinner.svelte";
     import Skeleton from "../components/common/Skeleton.svelte";
 
-    let showcasedTitle: PopularTitleMeta;
+    let showcasedTitle: PopularTitleMeta | null = null;
     let fetchedTitles = false;
     let continueWatchingMeta: (ShowResponse & { libraryItem: any })[] = [];
     let popularMeta: PopularTitleMeta[] = [];
@@ -200,7 +200,7 @@
         return items[Math.floor(Math.random() * items.length)];
     }
 
-    const getTitleKey = (title: PopularTitleMeta | undefined) =>
+    const getTitleKey = (title: PopularTitleMeta | null | undefined) =>
         title ? `${title.type}:${title.imdb_id || title.id}` : "";
 
     function keepCurrentFeaturedIfPresent(items: PopularTitleMeta[]) {
@@ -480,8 +480,6 @@
 
             absolutePopularTitles = absolutePopularTitles.slice(0, 20);
             popularMeta = absolutePopularTitles;
-            heroPoolTitles = absolutePopularTitles;
-            setFeaturedFromPool();
         }
 
         const allTitlesForGenres = [...sanitizedMovies, ...sanitizedSeries];
@@ -516,10 +514,11 @@
         void loadContinueWatching();
         void refreshAddonSections(installedAddons);
         const heroOptions = { preserveCurrent: options.preserveHero };
-        void loadTraktRecommendations().then(() => refreshHeroSourcePool(installedAddons, heroOptions));
-        if (selectedSourceId !== HOME_HERO_SOURCE_TRAKT_RECOMMENDATIONS) {
-            void refreshHeroSourcePool(installedAddons, heroOptions);
-        }
+        const heroWaitsForTrakt = selectedSourceId === HOME_HERO_SOURCE_TRAKT_RECOMMENDATIONS;
+        void loadTraktRecommendations().then(() => {
+            if (heroWaitsForTrakt) void refreshHeroSourcePool(installedAddons, heroOptions);
+        });
+        if (!heroWaitsForTrakt) void refreshHeroSourcePool(installedAddons, heroOptions);
     }
 
     onMount(() => {
@@ -572,10 +571,8 @@
 <div class="bg-[#090909] h-fit min-h-screen flex flex-col pb-[clamp(64px,7vw,100px)]">
     {#if fetchedTitles}
         <div in:fade={{ duration: 300 }}>
-            {#if showcasedTitle}
-                <Hero {showcasedTitle} onLogoError={refreshFeatured} />
-                <div class="w-full h-[6px] -mt-[3px] bg-[#090909] relative z-20"></div>
-            {/if}
+            <Hero {showcasedTitle} onLogoError={refreshFeatured} />
+            <div class="w-full h-[6px] -mt-[3px] bg-[#090909] relative z-20"></div>
 
             <SearchBar
                 onOpenAddons={handleOpenAddons}

@@ -36,6 +36,7 @@
                 </div>
                 <button
                     type="button"
+                    data-tv-autofocus
                     class="rounded-full bg-white px-5 py-3 text-sm font-semibold text-black transition-colors hover:bg-white/90 cursor-pointer"
                     on:click={onOpenAddons}
                 >
