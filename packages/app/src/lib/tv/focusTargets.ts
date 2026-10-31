@@ -40,38 +40,50 @@ function distance(from: DOMRect, to: DOMRect, direction: Direction): number | nu
 	return Math.max(gap, 0) + crossGap * CROSS_AXIS_WEIGHT + crossCenter * CROSS_CENTER_WEIGHT;
 }
 
-export function isNavigable(element: HTMLElement) {
-	const rect = element.getBoundingClientRect();
-	if (rect.width === 0 || rect.height === 0) return false;
-	return getComputedStyle(element).visibility !== "hidden" && !element.closest("[inert]");
-}
+const ROW = "[data-scroll-row]";
 
-const candidates = (layer: HTMLElement) =>
-	Array.from(layer.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(isNavigable);
+const hasSize = (rect: DOMRect) => rect.width > 0 && rect.height > 0;
 
-function isInViewport(element: HTMLElement) {
-	const rect = element.getBoundingClientRect();
-	return rect.bottom > 0 && rect.right > 0 && rect.top < innerHeight && rect.left < innerWidth;
-}
+const isShown = (element: HTMLElement) =>
+	getComputedStyle(element).visibility !== "hidden" && !element.closest("[inert]");
+
+export const isNavigable = (element: HTMLElement) => hasSize(element.getBoundingClientRect()) && isShown(element);
+
+const isInViewport = (rect: DOMRect) =>
+	rect.bottom > 0 && rect.right > 0 && rect.top < innerHeight && rect.left < innerWidth;
+
+const focusables = (scope: HTMLElement) => scope.querySelectorAll<HTMLElement>(FOCUSABLE);
 
 export function firstCandidate(layer: HTMLElement) {
 	const preferred = layer.querySelector<HTMLElement>(AUTOFOCUS);
 	if (preferred && isNavigable(preferred)) return preferred;
-	const all = candidates(layer);
-	return all.find(isInViewport) ?? all[0] ?? null;
+	let offscreen: HTMLElement | null = null;
+	for (const element of focusables(layer)) {
+		const rect = element.getBoundingClientRect();
+		if (!hasSize(rect) || !isShown(element)) continue;
+		if (isInViewport(rect)) return element;
+		offscreen ??= element;
+	}
+	return offscreen;
 }
 
-export function nearest(from: HTMLElement, direction: Direction, layer: HTMLElement) {
+/** Scores by geometry alone and only checks styles on the winner, which keeps a key press cheap on slow TVs. */
+function closestIn(scope: HTMLElement, from: HTMLElement, direction: Direction) {
 	const origin = from.getBoundingClientRect();
-	let best: HTMLElement | null = null;
-	let bestDistance = Infinity;
-	for (const candidate of candidates(layer)) {
+	const scored: Array<[number, HTMLElement]> = [];
+	for (const candidate of focusables(scope)) {
 		if (candidate === from || candidate.contains(from)) continue;
-		const score = distance(origin, candidate.getBoundingClientRect(), direction);
-		if (score !== null && score < bestDistance) {
-			best = candidate;
-			bestDistance = score;
-		}
+		const rect = candidate.getBoundingClientRect();
+		if (!hasSize(rect)) continue;
+		const score = distance(origin, rect, direction);
+		if (score !== null) scored.push([score, candidate]);
 	}
-	return best;
+	scored.sort((a, b) => a[0] - b[0]);
+	return scored.find(([, candidate]) => isShown(candidate))?.[1] ?? null;
+}
+
+/** Moving sideways stays inside the current row of cards when it can, so most presses never scan the whole page. */
+export function nearest(from: HTMLElement, direction: Direction, layer: HTMLElement) {
+	const row = direction === "left" || direction === "right" ? from.closest<HTMLElement>(ROW) : null;
+	return (row && closestIn(row, from, direction)) ?? closestIn(layer, from, direction);
 }

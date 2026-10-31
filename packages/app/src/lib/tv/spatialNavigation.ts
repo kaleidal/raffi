@@ -108,6 +108,7 @@ function trackModals() {
 		for (const mutation of mutations) {
 			mutation.addedNodes.forEach((node) => {
 				if (!isModalLayer(node)) return;
+				node.dataset.tvModal = "";
 				const previous = document.activeElement;
 				returnFocus.set(node, previous instanceof HTMLElement && previous !== document.body ? previous : null);
 				focusWhenReady(node);

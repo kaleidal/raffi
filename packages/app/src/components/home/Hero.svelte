@@ -2,6 +2,7 @@
     import { onMount } from "svelte";
     import { Info, Play, Pause, VolumeX, Volume2 } from "@lucide/svelte";
     import type { PopularTitleMeta } from "../../lib/library/types/popular_types";
+    import { isTvPlatform } from "../../lib/shell/platform";
     import { router } from "../../lib/stores/router";
     import IconButton from "../common/IconButton.svelte";
 
@@ -23,7 +24,7 @@
         isPaused = false;
         wasPlayingBeforeHidden = false;
         canControlTrailer = false;
-        const trailerId = showcasedTitle.trailerStreams?.at(-1)?.ytId;
+        const trailerId = isTvPlatform ? undefined : showcasedTitle.trailerStreams?.at(-1)?.ytId;
         const origin = typeof window !== "undefined" ? window.location.origin : "";
         const originParam = origin && origin !== "null" ? `&origin=${encodeURIComponent(origin)}` : "";
         trailerSrc = trailerId
@@ -178,27 +179,29 @@
                 Details
             </button>
 
-            <IconButton
-                label={isPaused ? "Play" : "Pause"}
-                onClick={togglePlay}
-            >
-                {#if isPaused}
-                    <Play size={24} strokeWidth={2} color="#E9E9E9" />
-                {:else}
-                    <Pause size={24} strokeWidth={2} color="#E9E9E9" />
-                {/if}
-            </IconButton>
+            {#if trailerSrc}
+                <IconButton
+                    label={isPaused ? "Play" : "Pause"}
+                    onClick={togglePlay}
+                >
+                    {#if isPaused}
+                        <Play size={24} strokeWidth={2} color="#E9E9E9" />
+                    {:else}
+                        <Pause size={24} strokeWidth={2} color="#E9E9E9" />
+                    {/if}
+                </IconButton>
 
-            <IconButton
-                label={isMuted ? "Unmute" : "Mute"}
-                onClick={toggleMute}
-            >
-                {#if isMuted}
-                    <VolumeX size={24} strokeWidth={2} color="#E9E9E9" />
-                {:else}
-                    <Volume2 size={24} strokeWidth={2} color="#E9E9E9" />
-                {/if}
-            </IconButton>
+                <IconButton
+                    label={isMuted ? "Unmute" : "Mute"}
+                    onClick={toggleMute}
+                >
+                    {#if isMuted}
+                        <VolumeX size={24} strokeWidth={2} color="#E9E9E9" />
+                    {:else}
+                        <Volume2 size={24} strokeWidth={2} color="#E9E9E9" />
+                    {/if}
+                </IconButton>
+            {/if}
         </div>
     </div>
 
@@ -213,6 +216,8 @@
                 title="Trailer"
                 on:load={handleTrailerLoad}
             ></iframe>
+        {:else if showcasedTitle.background}
+            <img src={showcasedTitle.background} alt="" class="hero-still" />
         {/if}
     </div>
     <div
@@ -238,6 +243,12 @@
         height: max(100%, 56.25vw);
         border: 0;
         transform: translate(-50%, -50%) scale(1.08);
+    }
+
+    .hero-still {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
     }
 
     .details-button :global(svg) {

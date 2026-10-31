@@ -144,8 +144,15 @@ summary:focus-visible {
   outline-offset: 4px;
 }
 
+/* Backdrop blur re-renders everything beneath it every frame, more than TV GPUs can keep up with. */
 :root[data-platform="tv"] * {
   scroll-margin-inline: var(--raffi-page-gutter);
+  backdrop-filter: none !important;
+}
+
+/* Without the blur, a darker backdrop keeps dialogs readable over the page. */
+:root[data-platform="tv"] [data-tv-modal] {
+  background-color: rgb(9 9 9 / 0.96);
 }
 
 :root[data-platform="tv"] [data-scroll-row] {
