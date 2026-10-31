@@ -1,7 +1,7 @@
 <script lang="ts">
     import { fullscreenPortal } from "../../common/portal";
     import { fade, scale } from "svelte/transition";
-    import { isDesktopPlatform } from "../../../lib/shell/platform";
+    import { isWeb } from "../../../lib/shell/platform";
     import { MonitorDown } from "@lucide/svelte";
 
     export let errorMessage: string = "Stream failed to load";
@@ -76,7 +76,7 @@
             >
                 Back to Streams
             </button>
-            {#if !isDesktopPlatform}
+            {#if isWeb}
                 <button
                     class="w-full py-3 px-4 bg-white/8 text-white text-[15px] font-semibold rounded-xl hover:bg-white/14 transition-colors cursor-pointer flex items-center justify-center gap-2"
                     on:click={downloadDesktop}

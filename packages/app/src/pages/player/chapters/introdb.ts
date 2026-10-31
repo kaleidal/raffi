@@ -1,3 +1,4 @@
+import { hostFetch } from "../../../lib/shell/hostFetch";
 import type { Chapter, ChapterKind } from "../types";
 
 type IntroDbSegment = {
@@ -79,7 +80,7 @@ async function requestIntroDbChapters(
             season: String(season),
             episode: String(episode),
         });
-        const response = await fetch(`${INTRO_DB_BASE_URL}/segments?${params.toString()}`, {
+        const response = await hostFetch(`${INTRO_DB_BASE_URL}/segments?${params.toString()}`, {
             signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         });
         if (response.status === 404) {

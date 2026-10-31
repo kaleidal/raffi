@@ -15,12 +15,17 @@
     } from "./lib/stores/authStore";
     import { formatReleaseNotes } from "./lib/shell/updateNotes";
     import { warmTraktClientAuth } from "./lib/db/db";
+    import { isTvPlatform } from "./lib/shell/platform";
+    import { nativeVideoVisible } from "./lib/tv/nativeVideo";
 
     type PageComponent = typeof Home | any;
 
     const pageLoaders: Record<string, () => Promise<{ default: PageComponent }>> = {
         meta: () => import("./pages/meta/Meta.svelte") as Promise<{ default: PageComponent }>,
-        player: () => import("./pages/player/Player.svelte") as Promise<{ default: PageComponent }>,
+        player: () =>
+            (isTvPlatform
+                ? import("./pages/player/tv/TvPlayer.svelte")
+                : import("./pages/player/Player.svelte")) as Promise<{ default: PageComponent }>,
         lists: () => import("./pages/lists/Lists.svelte") as Promise<{ default: PageComponent }>,
     };
 
@@ -297,6 +302,10 @@
         };
     });
 
+    $: if (typeof document !== "undefined") {
+        document.body.classList.toggle("native-video", $nativeVideoVisible);
+    }
+
     $: {
         const nextRouteKey = `${$router.page}:${JSON.stringify($router.params)}`;
         if (nextRouteKey !== lastRouteKey) {
@@ -306,7 +315,7 @@
     }
 </script>
 
-<div class="w-screen h-screen bg-[#090909] overflow-hidden flex flex-col">
+<div class="w-screen h-screen overflow-hidden flex flex-col {$nativeVideoVisible ? '' : 'bg-[#090909]'}">
     {#if showTitleBar}
         <div
             class="fixed top-0 left-0 right-0 h-[32px] z-[1000]"

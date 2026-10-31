@@ -168,6 +168,7 @@
 
         <div class="flex flex-row gap-[10px] items-center">
             <button
+                data-tv-autofocus
                 class="details-button bg-[#FFFFFF]/80 hover:bg-[#D3D3D3]/80 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-[clamp(10px,1vw,16px)] text-black text-[clamp(20px,1.8vw,32px)] font-poppins font-medium px-[clamp(36px,4.4vw,84px)] py-[clamp(12px,1vw,18px)] w-fit rounded-full transition-colors duration-200"
                 on:click={() =>
                     navigateToMeta(showcasedTitle.imdb_id, showcasedTitle.type)}

@@ -1,15 +1,18 @@
 /**
- * Platform flags for Raffi shells (desktop Electron vs web).
+ * Platform flags for Raffi shells (desktop Electron, Android TV, and web).
  */
 
-export type PlatformName = "desktop" | "web";
+export type PlatformName = "desktop" | "tv" | "web";
 
-const isDesktop =
-	typeof window !== "undefined" && !!(window as { electronAPI?: unknown }).electronAPI;
+const hasWindow = typeof window !== "undefined";
+const isDesktop = hasWindow && !!(window as { electronAPI?: unknown }).electronAPI;
+const isTv = hasWindow && !!(window as { raffiTv?: unknown }).raffiTv;
 
 export function getPlatformName(): PlatformName {
-	return isDesktop ? "desktop" : "web";
+	if (isDesktop) return "desktop";
+	return isTv ? "tv" : "web";
 }
 
-export const isWeb = !isDesktop;
+export const isWeb = !isDesktop && !isTv;
 export const isDesktopPlatform = isDesktop;
+export const isTvPlatform = isTv;

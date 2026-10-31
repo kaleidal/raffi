@@ -23,6 +23,7 @@
     export let seekPreview: SeekPreview | null = null;
     export let disabled = false;
     export let visible = true;
+    export let emphasized = false;
     export let onScrub: (time: number) => void;
     export let onCommit: (time: number) => void;
 
@@ -39,7 +40,7 @@
     $: segments = trackSegments(chapters, duration, inverted);
     $: cursor = timeToFraction(time, duration, inverted);
     $: bufferedBar = bufferedFractions(buffered, duration, inverted);
-    $: active = hovering || dragging;
+    $: active = hovering || dragging || emphasized;
     $: hoverChapter = chapters.find((chapter) => hoverTime >= chapter.startTime && hoverTime < chapter.endTime) ?? null;
 
     const forgetPreviewFrame = (_source: SeekPreview | null) => {

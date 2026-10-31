@@ -84,7 +84,8 @@ apps/desktop/vendor/ffmpeg/
 apps/desktop/electron-dist/
 
 # Legacy / stale paths from pre-refactor layouts
-Raffi/
+/Raffi/
+apps/desktop/Raffi/
 raffi-desktop/
 services/raffi-desktop/
 
@@ -92,3 +93,9 @@ services/raffi-desktop/
 tmp/
 temp/
 *.local
+
+# Android TV
+apps/tv/android/.gradle/
+apps/tv/android/.kotlin/
+apps/tv/android/local.properties
+apps/tv/android/app/src/main/assets/web/

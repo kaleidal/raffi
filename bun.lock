@@ -28,6 +28,22 @@
         "wait-on": "^9.5.1",
       },
     },
+    "apps/tv": {
+      "name": "@raffi/tv",
+      "version": "0.15.1",
+      "devDependencies": {
+        "@raffi/app": "workspace:*",
+        "@sveltejs/vite-plugin-svelte": "^7.3.1",
+        "@tailwindcss/vite": "^4.3.3",
+        "@tsconfig/svelte": "^5.0.8",
+        "@typescript/native": "npm:typescript@^7.0.2",
+        "svelte": "^5.57.2",
+        "svelte-check": "^4.7.7",
+        "tailwindcss": "^4.3.3",
+        "typescript": "^6.0.3",
+        "vite": "^8.3.5",
+      },
+    },
     "apps/web": {
       "name": "@raffi/web",
       "version": "0.1.0",
@@ -360,6 +376,8 @@
     "@raffi/marketing": ["@raffi/marketing@workspace:marketing"],
 
     "@raffi/sync": ["@raffi/sync@workspace:services/sync"],
+
+    "@raffi/tv": ["@raffi/tv@workspace:apps/tv"],
 
     "@raffi/web": ["@raffi/web@workspace:apps/web"],
 

@@ -35,6 +35,7 @@ Like Stremio, Raffi uses community addons to aggregate streaming sources, but go
 - **Linux** - `.deb`, `.rpm`, and `.AppImage` packages
 - **macOS** - `.dmg` and `.zip` distributions
 - **Web** - Browser app on Cloudflare
+- **Android TV** - Remote-driven app for Google TV devices such as the Chromecast with Google TV
 
 ### 👥 **Watch Together**
 - Real-time watch parties with synchronized playback
@@ -95,6 +96,9 @@ chmod +x Raffi-x.x.x.AppImage
 - **DMG**: Mount and drag to Applications
 - **ZIP**: Extract and move to Applications
 
+#### Android TV
+- **APK**: Build it from source (see [apps/tv](apps/tv/README.md)) and install it with `adb`
+
 ## Development
 
 ### Prerequisites
@@ -109,6 +113,7 @@ chmod +x Raffi-x.x.x.AppImage
 raffi/
 ├── apps/
 │   ├── desktop/       # Electron desktop shell
+│   ├── tv/            # Android TV host (Kotlin, WebView, Media3)
 │   └── web/           # SvelteKit + Cloudflare web app
 ├── packages/
 │   └── app/           # Shared Svelte Raffi UI and app logic
@@ -134,9 +139,15 @@ Run `bun run validate` from the repository root to typecheck every workspace and
 - **UI**: Consumes the same shared Svelte package as desktop
 - **Deploy**: Cloudflare Pages/Workers target
 
+#### Android TV App (`apps/tv/`)
+- **Framework**: Kotlin host with Media3 and AndroidX WebKit
+- **Purpose**: Raffi on Google TV devices, driven by the remote
+- **UI**: The same shared Svelte package, with focus navigation and a TV player page
+- **Build**: Vite bundles the interface into the APK and Gradle builds it
+
 #### Shared App (`packages/app/`)
 - **Framework**: Svelte 5
-- **Purpose**: The reusable Raffi app experience mounted by desktop and web
+- **Purpose**: The reusable Raffi app experience mounted by desktop, web, and Android TV
 - **Playback**: Browser-compatible direct playback where possible, desktop-only gates for local/server-dependent features
 
 #### Sync Service (`services/sync/`)
@@ -197,6 +208,18 @@ bun run check:web
 bun run build:web
 ```
 
+### Android TV Development
+
+```bash
+bun install
+
+# Typecheck the TV shell and build a debug APK
+bun run check:tv
+bun run apk:tv
+```
+
+Building the APK needs JDK 25 and the Android SDK; [apps/tv](apps/tv/README.md) covers setup and installing on a TV.
+
 ### Website Development
 
 ```bash
@@ -224,6 +247,11 @@ bun --filter @raffi/marketing build
 - **Deployment**: Cloudflare Pages/Workers
 - **Playback**: Native video and HLS.js for direct HTTP/debrid streams
 - **Limitations**: Torrent, local file, and clip export stay desktop-only
+
+#### Android TV App
+- **Host**: Kotlin app hosting the shared interface in a WebView, navigated with the remote
+- **Playback**: Media3 (ExoPlayer) beneath the transparent page, with hardware decoding, HDMI audio passthrough, and embedded plus addon subtitles
+- **Limitations**: Torrent streams and provider web players aren't supported yet
 
 #### Sync Service
 - **Runtime**: Cloudflare Workers

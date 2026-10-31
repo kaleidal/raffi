@@ -132,3 +132,28 @@ summary:focus-visible {
 ::-webkit-scrollbar {
   display: none;
 }
+
+/* Android TV: sized for the couch and driven by a remote. */
+:root[data-platform="tv"] {
+  font-size: 16px;
+}
+
+:root[data-platform="tv"] :focus:not([data-own-focus]),
+:root[data-platform="tv"] [data-focus-ring]:has(:focus) {
+  outline: 3px solid #ffffff !important;
+  outline-offset: 4px;
+}
+
+:root[data-platform="tv"] * {
+  scroll-margin-inline: var(--raffi-page-gutter);
+}
+
+:root[data-platform="tv"] [data-scroll-row] {
+  width: calc(100% + 16px);
+  padding-inline: 8px;
+  margin-inline: -8px;
+}
+
+body.native-video {
+  background-color: transparent;
+}

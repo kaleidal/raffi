@@ -1,0 +1,24 @@
+{
+  "name": "@raffi/tv",
+  "private": true,
+  "version": "0.15.1",
+  "type": "module",
+  "scripts": {
+    "build:web": "vite build",
+    "apk": "bun run build:web && cd android && ./gradlew assembleDebug",
+    "install:device": "bun run apk && adb install -r android/app/build/outputs/apk/debug/app-debug.apk",
+    "check": "svelte-check --tsgo --tsconfig ./tsconfig.json"
+  },
+  "devDependencies": {
+    "@typescript/native": "npm:typescript@^7.0.2",
+    "@raffi/app": "workspace:*",
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "@tsconfig/svelte": "^5.0.8",
+    "svelte": "^5.57.2",
+    "svelte-check": "^4.7.7",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.5"
+  }
+}

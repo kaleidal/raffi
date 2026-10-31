@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="raffi_background">#090909</color>
+    <color name="raffi_mark">#D9D9D9</color>
+
+    <style name="Theme.Raffi" parent="android:Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowBackground">@color/raffi_background</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+    </style>
+</resources>

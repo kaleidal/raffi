@@ -171,6 +171,7 @@
             {/if}
 
             <div
+                data-scroll-row
                 class="flex flex-row gap-[20px] overflow-x-auto overflow-y-visible w-full pb-6 pt-3 no-scrollbar scroll-smooth"
                 bind:this={scrollContainer}
                 on:scroll={scheduleScrollCheck}

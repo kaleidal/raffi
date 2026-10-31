@@ -248,6 +248,7 @@
             {/if}
 
             <div
+                data-scroll-row
                 class="flex gap-[20px] w-full pb-6 pt-3 transition-all duration-300 {isExpanded
                     ? 'flex-wrap'
                     : 'flex-row overflow-x-auto overflow-y-visible no-scrollbar scroll-smooth'}"

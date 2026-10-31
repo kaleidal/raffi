@@ -9,6 +9,8 @@
     "dev:desktop": "bun --filter @raffi/desktop electron:dev",
     "build:desktop": "bun --filter @raffi/desktop build",
     "check:desktop": "bun --filter @raffi/desktop check",
+    "check:tv": "bun --filter @raffi/tv check",
+    "apk:tv": "bun --filter @raffi/tv apk",
     "check:app": "bun --filter @raffi/app check",
     "check:sync": "bun --filter @raffi/sync check",
     "check:marketing": "bun --filter @raffi/marketing check",
@@ -16,7 +18,7 @@
     "test:sync": "bun --filter @raffi/sync test",
     "test:playback": "bun --filter @raffi/desktop test:playback",
     "test": "bun run test:app && bun run test:sync && bun run test:playback",
-    "check": "bun run check:app && bun run check:web && bun run check:desktop && bun run check:sync && bun run check:marketing",
+    "check": "bun run check:app && bun run check:web && bun run check:desktop && bun run check:tv && bun run check:sync && bun run check:marketing",
     "validate": "bun run check && bun run test"
   },
   "workspaces": [

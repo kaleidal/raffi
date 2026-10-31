@@ -358,8 +358,10 @@
                             !lastEpProgress.watched &&
                             lastEpProgress.time > 0}
 
-                        <div class="relative rounded-[50px] resume-button-shell">
+                        <div class="relative rounded-[50px] resume-button-shell" data-focus-ring>
                             <button
+                                data-tv-autofocus
+                                data-own-focus
                                 class="bg-[#FFFFFF]/80 hover:bg-[#D3D3D3]/80 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-5 text-black font-poppins font-medium w-full transition-colors duration-200 relative z-10 resume-button"
                                 on:click={() =>
                                     StreamLogic.episodeClicked(
@@ -396,8 +398,10 @@
                             !movieProgress.watched &&
                             movieProgress.time > 0}
 
-                        <div class="relative rounded-[50px] resume-button-shell">
+                        <div class="relative rounded-[50px] resume-button-shell" data-focus-ring>
                             <button
+                                data-tv-autofocus
+                                data-own-focus
                                 class="bg-[#FFFFFF]/80 hover:bg-[#D3D3D3]/80 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-5 text-black font-poppins font-medium w-full transition-colors duration-200 relative z-10 resume-button"
                                 on:click={() =>
                                     StreamLogic.episodeClicked(

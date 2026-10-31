@@ -162,6 +162,7 @@
     <div
         bind:this={scrollContainer}
         on:scroll={scheduleScrollCheck}
+        data-scroll-row
         class="flex flex-row gap-[20px] overflow-x-scroll overflow-y-visible pt-3 pb-6 no-scrollbar scroll-smooth"
     >
             {#each renderedTitles as title (`${title.type}:${title.imdb_id}`)}

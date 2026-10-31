@@ -24,6 +24,7 @@
     export let onUpload: (file: File) => void | Promise<void> = () => {};
     export let onClose: () => void = () => {};
     export let onDelayChange: (detail: { seconds: number }) => void = () => {};
+    export let subtitleTools = true;
 
     function select(track: any) {
         onSelect(track);
@@ -172,9 +173,11 @@
             <div class="flex flex-col gap-1">
                 <h2 class="text-2xl font-poppins font-bold text-white">{title}</h2>
                 <p class="text-sm text-white/55">
-                    {kind === "subtitles"
-                        ? "Pick a subtitle track, fine-tune timing, or add a local file."
-                        : "Choose the audio track you want to hear."}
+                    {kind === "audio"
+                        ? "Choose the audio track you want to hear."
+                        : subtitleTools
+                          ? "Pick a subtitle track, fine-tune timing, or add a local file."
+                          : "Pick a subtitle track."}
                 </p>
             </div>
             <button
@@ -201,6 +204,7 @@
 
         {#if kind === "subtitles"}
             <div class="flex flex-col gap-4">
+                {#if subtitleTools}
                 <div class="rounded-[24px] bg-white/8 backdrop-blur-2xl p-4 flex items-center justify-between gap-4">
                     <span class="text-sm font-poppins font-medium text-white/60 shrink-0">
                         Delay
@@ -232,6 +236,7 @@
                         </button>
                     </div>
                 </div>
+                {/if}
 
                 <div class="grid gap-3 md:grid-cols-[200px_minmax(0,1fr)] md:h-[440px]">
                         <div class="rounded-[24px] bg-white/6 backdrop-blur-2xl p-3 flex min-h-0 flex-col gap-3">
@@ -267,6 +272,7 @@
                                     </button>
                                 {/each}
                             </div>
+                            {#if subtitleTools}
                             <input
                                 class="hidden"
                                 type="file"
@@ -298,6 +304,7 @@
                                     {uploadError}
                                 </p>
                             {/if}
+                            {/if}
                         </div>
 
                         <div class="rounded-[24px] bg-white/6 backdrop-blur-2xl p-3 flex min-h-0 flex-col gap-3 min-w-0">
@@ -310,6 +317,7 @@
                                         class="flex items-center justify-between p-4 rounded-[20px] transition-all duration-200 cursor-pointer {subtitleOffTrack.selected
                                             ? 'bg-white text-black'
                                             : 'bg-white/8 text-white hover:bg-white/14'}"
+                                        data-tv-autofocus={subtitleOffTrack.selected || undefined}
                                         on:click={() => select(subtitleOffTrack)}
                                     >
                                         <span class="font-poppins font-medium truncate" title={subtitleOffTrack.label}>
@@ -346,6 +354,7 @@
                                             class="flex items-center justify-between p-4 rounded-[20px] transition-all duration-200 cursor-pointer {track.selected
                                                 ? 'bg-white text-black'
                                                 : 'bg-white/8 text-white hover:bg-white/14'}"
+                                            data-tv-autofocus={track.selected || undefined}
                                             on:click={() => select(track)}
                                         >
                                             <span
@@ -392,6 +401,7 @@
                                     class="flex items-center justify-between p-4 rounded-[22px] transition-all duration-200 cursor-pointer {track.selected
                                         ? 'bg-white text-black'
                                         : 'bg-white/8 text-white hover:bg-white/14'}"
+                                    data-tv-autofocus={track.selected || undefined}
                                     on:click={() => select(track)}
                                 >
                                     <span class="font-poppins font-medium"
