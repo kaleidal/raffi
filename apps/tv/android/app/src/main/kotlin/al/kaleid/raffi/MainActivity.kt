@@ -1,5 +1,7 @@
 package al.kaleid.raffi
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -65,11 +67,30 @@ class MainActivity : ComponentActivity() {
             type == "lan.permit" -> localNetwork.request(message)
             type == "limbo.discover" -> limboDiscovery.discover(message)
             type == "voice.listen" -> voice.listen(message)
+            type == "youtube.open" -> bridge.send(
+                JSONObject().put("type", "response").put("id", message.getInt("id"))
+                    .put("opened", openYouTube(message.getString("videoId"))),
+            )
             type == "device.info" -> bridge.send(
                 JSONObject().put("type", "response").put("id", message.getInt("id")).put("name", deviceName()),
             )
             type.startsWith("player.") -> player.handle(type, message)
         }
+    }
+
+    /**
+     * The YouTube app plays trailers far better than an embedded player can on TV hardware.
+     * Android TV answers any web link with a placeholder, so this looks for YouTube itself.
+     * finish_on_ended opens YouTube's standalone player, which hands Back to Raffi instead of YouTube's home.
+     */
+    @Suppress("DEPRECATION")
+    private fun openYouTube(videoId: String): Boolean {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=${Uri.encode(videoId)}"))
+            .putExtra("finish_on_ended", true)
+        val youtube = packageManager.queryIntentActivities(intent, 0)
+            .firstOrNull { it.activityInfo.packageName.startsWith(YOUTUBE_PACKAGE) } ?: return false
+        startActivity(intent.setPackage(youtube.activityInfo.packageName))
+        return true
     }
 
     private fun deviceName() =
@@ -86,3 +107,5 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 }
+
+private const val YOUTUBE_PACKAGE = "com.google.android.youtube"

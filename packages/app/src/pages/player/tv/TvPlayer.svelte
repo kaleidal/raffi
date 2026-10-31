@@ -100,7 +100,8 @@
         controlsVisible && controlsPanel ? 1 - controlsPanel.getBoundingClientRect().top / innerHeight : 0,
     );
 
-    $: void startSession(videoSrc, embedSrc);
+    $: playbackKey = [videoSrc, embedSrc, fileIdx, season, episode].join("|");
+    $: void startSession(playbackKey);
     $: followPlayback($playbackState);
 
     function unsupportedSource(source: string | null, embed: string | null) {
@@ -129,8 +130,7 @@
             ? IntroDb.fetchIntroDbChapters(meta.meta.imdb_id, requestedSeason, requestedEpisode).catch(() => [])
             : Promise.resolve([]);
 
-    async function startSession(source: string | null, embed: string | null, resumeAt = startTime) {
-        const key = `${source}|${embed}`;
+    async function startSession(key: string, resumeAt = startTime) {
         if (key === sessionKey) return;
         sessionKey = key;
         const run = ++sessionRun;
@@ -150,7 +150,8 @@
         loadingStage.set("Loading");
         loadingDetails.set("");
         loadingProgress.set(null);
-        if (!source || unsupportedSource(source, embed)) return;
+        const source = videoSrc;
+        if (!source || unsupportedSource(source, embedSrc)) return;
 
         const request = introDbFor(metaData, season, episode);
         const playable = source.startsWith("magnet:") ? await openTorrent(source, run) : source;
@@ -240,7 +241,7 @@
     function retry() {
         const resumeAt = hasStarted ? playback.current().position : startTime;
         sessionKey = null;
-        void startSession(videoSrc, embedSrc, resumeAt);
+        void startSession(playbackKey, resumeAt);
     }
 
     async function playNextEpisode() {

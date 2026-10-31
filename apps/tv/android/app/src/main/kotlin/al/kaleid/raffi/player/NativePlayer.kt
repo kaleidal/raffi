@@ -18,6 +18,7 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -138,6 +139,7 @@ class NativePlayer(
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
         return ExoPlayer.Builder(activity)
             .setRenderersFactory(renderers)
+            .setLoadControl(heapBoundLoadControl())
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(activity, http)))
             .setAudioAttributes(movieAudio, true)
             .build()
@@ -149,6 +151,11 @@ class NativePlayer(
                 view.player = it
             }
     }
+
+    /** The stock buffer is sized for phones and outgrows a TV's heap on high-bitrate releases. */
+    private fun heapBoundLoadControl() = DefaultLoadControl.Builder()
+        .setTargetBufferBytes((Runtime.getRuntime().maxMemory() / 2).toInt())
+        .build()
 
     private fun selectSubtitle(message: JSONObject) {
         val exo = player ?: return

@@ -17,9 +17,14 @@ function focusElement(element: HTMLElement) {
 	else element.focus({ preventScroll: true });
 }
 
-export function moveFocusTo(element: HTMLElement) {
+/**
+ * Moving with the remote centres the new item; focus the app places by itself
+ * (a page's default button, focus handed back after a dialog) only scrolls if
+ * the item isn't already in view.
+ */
+export function moveFocusTo(element: HTMLElement, block: ScrollLogicalPosition = "center") {
 	focusElement(element);
-	element.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+	element.scrollIntoView({ block, inline: "nearest", behavior: "smooth" });
 }
 
 function focusedWithin(layer: HTMLElement) {
@@ -89,7 +94,7 @@ export function focusWhenReady(layer: HTMLElement) {
 		if (focused && focused !== placeholder) return;
 		const preferred = layer.querySelector<HTMLElement>(AUTOFOCUS);
 		if (preferred && isNavigable(preferred)) {
-			moveFocusTo(preferred);
+			moveFocusTo(preferred, "nearest");
 			return;
 		}
 		if (!focused) {
@@ -118,7 +123,7 @@ function trackModals() {
 				if (!returnFocus.has(node)) return;
 				const previous = returnFocus.get(node);
 				returnFocus.delete(node);
-				if (previous?.isConnected && isNavigable(previous)) moveFocusTo(previous);
+				if (previous?.isConnected && isNavigable(previous)) moveFocusTo(previous, "nearest");
 				else focusWhenReady(activeLayer());
 			});
 		}

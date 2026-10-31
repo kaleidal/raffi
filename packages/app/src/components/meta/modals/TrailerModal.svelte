@@ -1,6 +1,8 @@
 <script lang="ts">
     import { portal } from "../../common/portal";
     import { fade, scale } from "svelte/transition";
+    import { isTvPlatform } from "../../../lib/shell/platform";
+    import { openInYouTube } from "../../../lib/tv/youtube";
 
     export let visible = false;
     export let ytId: string;
@@ -11,9 +13,19 @@
         visible = false;
         onClose();
     }
+
+    /** On TV the YouTube app plays the trailer; the embedded player is only for TVs without it. */
+    let embedded = !isTvPlatform;
+
+    $: if (visible && !embedded) void handOff(ytId);
+
+    async function handOff(videoId: string) {
+        if (await openInYouTube(videoId)) close();
+        else embedded = true;
+    }
 </script>
 
-{#if visible}
+{#if visible && embedded}
     <!-- svelte-ignore a11y-click-events-have-key-events -->
     <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div

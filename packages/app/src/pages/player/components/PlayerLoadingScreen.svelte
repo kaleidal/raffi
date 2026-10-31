@@ -75,6 +75,12 @@
     $: fallbackBackdropSrc = backdropSrc
         ? metaData?.meta?.background ?? metaData?.meta?.poster ?? ""
         : "";
+    $: tileBackground = (tile: (typeof mosaicTiles)[number]) => {
+        if (!effectiveBackdropSrc) return "";
+        const sources = fallbackBackdropSrc ? [effectiveBackdropSrc, fallbackBackdropSrc] : [effectiveBackdropSrc];
+        const layers = (value: string) => sources.map(() => value).join(",");
+        return `background-image:${sources.map((src) => `url('${src}')`).join(",")}; background-size:${layers(`${MOSAIC_COLS * 100}% ${MOSAIC_ROWS * 100}%`)}; background-position:${layers(`${tile.bgPosX}% ${tile.bgPosY}%`)};`;
+    };
     $: revealFraction = progress === null ? null : Math.max(0, Math.min(1, progress));
     $: revealCount = revealFraction === null ? 0 : Math.round(revealFraction * MOSAIC_TILE_COUNT);
     $: void backdropMode;
@@ -181,16 +187,8 @@
                         use:registerTile={tile.index}
                         class="mosaic-tile-inner"
                         class:mosaic-tile-inner--spinning={!settled && !blockingState}
-                        style={`--tile-delay:${(tile.wave * 1.4).toFixed(2)}s;${settled ? " transform: rotateY(0deg);" : ""}`}
-                    >
-                        <div
-                            class="mosaic-face mosaic-face-front"
-                            style={effectiveBackdropSrc
-                                ? `background-image:url('${effectiveBackdropSrc}')${fallbackBackdropSrc ? `,url('${fallbackBackdropSrc}')` : ""}; background-size:${MOSAIC_COLS * 100}% ${MOSAIC_ROWS * 100}%${fallbackBackdropSrc ? `,${MOSAIC_COLS * 100}% ${MOSAIC_ROWS * 100}%` : ""}; background-position:${tile.bgPosX}% ${tile.bgPosY}%${fallbackBackdropSrc ? `,${tile.bgPosX}% ${tile.bgPosY}%` : ""};`
-                                : ""}
-                        ></div>
-                        <div class="mosaic-face mosaic-face-back"></div>
-                    </div>
+                        style={`--tile-delay:${(tile.wave * 1.4).toFixed(2)}s;${settled ? " transform: rotateY(0deg);" : ""}${tileBackground(tile)}`}
+                    ></div>
                 </div>
             {/each}
         </div>
@@ -307,13 +305,10 @@
         grid-template-rows: repeat(var(--mosaic-rows), 1fr);
         gap: 2px;
         perspective: 1400px;
-        opacity: 0.6;
-        filter: grayscale(0);
-        transition: opacity 0.7s ease, filter 0.7s ease;
+        transition: filter 0.7s ease;
     }
 
     .mosaic-grid--blocked {
-        opacity: 0.2;
         filter: grayscale(1) brightness(0.62);
     }
 
@@ -325,26 +320,22 @@
     .mosaic-tile-inner {
         position: absolute;
         inset: 0;
-        transform-style: preserve-3d;
-        transition: transform 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+        opacity: 0.6;
+        backface-visibility: hidden;
+        background-color: #1a1a1a;
+        background-repeat: no-repeat;
+        transition:
+            transform 0.7s cubic-bezier(0.4, 0, 0.2, 1),
+            opacity 0.7s ease;
+    }
+
+    .mosaic-grid--blocked .mosaic-tile-inner {
+        opacity: 0.2;
     }
 
     .mosaic-tile-inner--spinning {
         animation: mosaic-flip 3.4s ease-in-out infinite;
         animation-delay: var(--tile-delay);
-    }
-
-    .mosaic-face {
-        position: absolute;
-        inset: 0;
-        backface-visibility: hidden;
-        background-color: #1a1a1a;
-        background-repeat: no-repeat;
-    }
-
-    .mosaic-face-back {
-        transform: rotateY(180deg);
-        background-color: #090909;
     }
 
     @keyframes mosaic-flip {
