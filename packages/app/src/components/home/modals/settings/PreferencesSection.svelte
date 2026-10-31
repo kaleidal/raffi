@@ -3,6 +3,8 @@
 	import SearchBarPositionCard from "./SearchBarPositionCard.svelte";
 	import HeroSourceCard from "./HeroSourceCard.svelte";
 	import DirectSourceSection from "./DirectSourceSection.svelte";
+	import TvTorrentingCard from "./torrenting/TvTorrentingCard.svelte";
+	import { isTvPlatform } from "../../../../lib/shell/platform";
 	import { enableRPC, disableRPC } from "../../../../lib/shell/rpc";
 	import { getAddons, getTraktStatus } from "../../../../lib/db/db";
 	import {
@@ -365,48 +367,52 @@
 		</button>
 	</div>
 
-	<div class="rounded-2xl bg-white/8 p-4 flex flex-wrap items-center gap-4 justify-between">
-		<div>
-			<p class="text-white font-medium">Allow Torrenting</p>
-			<p class="text-white/60 text-sm">
-				Play magnet sources through Limbo. Install and open Limbo, then turn this on.
-			</p>
-			{#if torrentingError}
-				<p class="mt-1 text-red-300 text-xs">{torrentingError}</p>
-			{/if}
-		</div>
-		<div class="flex items-center gap-2">
-				<a
-					href={LIMBO_INSTALL_URL}
-					target="_blank"
-					rel="noreferrer"
-					class="pressable inline-flex min-h-10 items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/16"
-				>
-					<Download size={17} strokeWidth={2} />
-					Download Limbo
-				</a>
-				<button
-					class={`relative w-16 h-9 rounded-full border border-white/10 transition-colors duration-200 cursor-pointer disabled:cursor-wait disabled:opacity-60 ${
-						$allowTorrenting ? "bg-white" : "bg-white/10"
-					}`}
-					on:click={toggleTorrenting}
-					disabled={torrentingSaving}
-					aria-label="Toggle torrenting"
-					role="switch"
-					aria-checked={$allowTorrenting}
-				>
-					<span
-						class={`absolute top-1 left-1 w-7 h-7 rounded-full text-[10px] font-semibold flex items-center justify-center transition-all duration-200 ${
-							$allowTorrenting
-								? "translate-x-7 bg-black text-white/90"
-								: "translate-x-0 bg-white/80 text-black"
-						}`}
+	{#if isTvPlatform}
+		<TvTorrentingCard />
+	{:else}
+		<div class="rounded-2xl bg-white/8 p-4 flex flex-wrap items-center gap-4 justify-between">
+			<div>
+				<p class="text-white font-medium">Allow Torrenting</p>
+				<p class="text-white/60 text-sm">
+					Play magnet sources through Limbo. Install and open Limbo, then turn this on.
+				</p>
+				{#if torrentingError}
+					<p class="mt-1 text-red-300 text-xs">{torrentingError}</p>
+				{/if}
+			</div>
+			<div class="flex items-center gap-2">
+					<a
+						href={LIMBO_INSTALL_URL}
+						target="_blank"
+						rel="noreferrer"
+						class="pressable inline-flex min-h-10 items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/16"
 					>
-						{$allowTorrenting ? "On" : "Off"}
-					</span>
-				</button>
+						<Download size={17} strokeWidth={2} />
+						Download Limbo
+					</a>
+					<button
+						class={`relative w-16 h-9 rounded-full border border-white/10 transition-colors duration-200 cursor-pointer disabled:cursor-wait disabled:opacity-60 ${
+							$allowTorrenting ? "bg-white" : "bg-white/10"
+						}`}
+						on:click={toggleTorrenting}
+						disabled={torrentingSaving}
+						aria-label="Toggle torrenting"
+						role="switch"
+						aria-checked={$allowTorrenting}
+					>
+						<span
+							class={`absolute top-1 left-1 w-7 h-7 rounded-full text-[10px] font-semibold flex items-center justify-center transition-all duration-200 ${
+								$allowTorrenting
+									? "translate-x-7 bg-black text-white/90"
+									: "translate-x-0 bg-white/80 text-black"
+							}`}
+						>
+							{$allowTorrenting ? "On" : "Off"}
+						</span>
+					</button>
+			</div>
 		</div>
-	</div>
+	{/if}
 
 	{#if isWindowsDesktop}
 		<div class="rounded-2xl bg-white/8 p-4 flex flex-col gap-4">

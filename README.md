@@ -251,7 +251,8 @@ bun --filter @raffi/marketing build
 #### Android TV App
 - **Host**: Kotlin app hosting the shared interface in a WebView, navigated with the remote
 - **Playback**: Media3 (ExoPlayer) beneath the transparent page, with hardware decoding, HDMI audio passthrough, and embedded plus addon subtitles
-- **Limitations**: Torrent streams and provider web players aren't supported yet
+- **Torrents**: Stream from Limbo on a computer on the same network, after pairing the TV with it once
+- **Limitations**: Provider web players aren't supported yet
 
 #### Sync Service
 - **Runtime**: Cloudflare Workers
@@ -273,7 +274,7 @@ bun --filter @raffi/marketing build
 - Custom video player with HLS for addon streams
 - HTTP/debrid streams play in-app via MediaBunny (probe + remux) or native `<video>` when compatible
 - Local files and clip export use MediaBunny on desktop (`raffi-media://` for disk access)
-- Torrents stream through Limbo
+- Torrents stream through Limbo, on the same computer or, for Android TV, on a paired computer on the network
 - Community addon catalog is fetched from Electron main
 - Text subtitles embedded in MKV files (SRT, ASS/SSA, WebVTT) are read from the stream as it plays, with no extra downloads. Image-based subtitles such as PGS aren't supported, and streams whose audio is converted by the bundled FFmpeg don't show embedded subtitles.
 - Multiple quality selection

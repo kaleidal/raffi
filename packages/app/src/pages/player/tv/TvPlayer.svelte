@@ -13,10 +13,11 @@
     import { moveFocusTo } from "../../../lib/tv/spatialNavigation";
     import * as NavigationLogic from "../../meta/navigationLogic";
     import * as ProgressLogic from "../../meta/progressLogic";
-    import { progressMap, streamsPopupVisible } from "../../meta/metaState";
+    import { progressMap, selectedStream, streamsPopupVisible } from "../../meta/metaState";
     import * as Chapters from "../chapters/chapters";
     import * as IntroDb from "../chapters/introdb";
     import PlayerLoadingScreen from "../components/PlayerLoadingScreen.svelte";
+    import { loadingDetails, loadingProgress, loadingStage } from "../playerState";
     import { getSeekBarStyleFromStorage } from "../controls/seekStyle";
     import { createTraktScrobbler } from "../integrations/traktScrobbleManager";
     import * as Subtitles from "../subtitles/subtitles";
@@ -24,6 +25,7 @@
     import TvPlayerControls from "./TvPlayerControls.svelte";
     import type TvSeekBar from "./TvSeekBar.svelte";
     import { createNativePlayback, explainNativeError, type NativePlaybackState } from "./nativePlayback";
+    import { createTvTorrentStream } from "./tvTorrent";
     import { audioTrackOptions, selectedLabel, subtitleChoice, subtitleTrackOptions } from "./tvTracks";
 
     export let videoSrc: string | null = null;
@@ -32,17 +34,20 @@
     export let startTime = 0;
     export let season: number | null = null;
     export let episode: number | null = null;
+    export let fileIdx: number | null = null;
 
     const CONTROLS_HIDE_MS = 4000;
     const INTRO_DB_STARTUP_BUDGET_MS = 1500;
     const MEDIA_KEY_SEEK_SECONDS = 30;
 
     const playback = createNativePlayback();
+    const torrent = createTvTorrentStream();
     const { state: playbackState, tracks, error } = playback;
     const invertedSeek = getSeekBarStyleFromStorage() === "raffi";
 
     let sessionKey: string | null = null;
     let sessionRun = 0;
+    let sourceError: { message: string; details: string } | null = null;
     let hasStarted = false;
     let ended = false;
     let playRequested = false;
@@ -82,9 +87,8 @@
     $: unsupportedReason = unsupportedSource(videoSrc, embedSrc);
     $: blockingError = unsupportedReason
         ? { message: "This stream can't play on TV", details: unsupportedReason }
-        : $error
-          ? { message: "Playback stopped", details: explainNativeError($error) }
-          : null;
+        : sourceError ??
+          ($error ? { message: "Playback stopped", details: explainNativeError($error) } : null);
 
     $: playback.setCaptionInset(controlsPanel ? 1 - controlsPanel.getBoundingClientRect().top / innerHeight : 0);
 
@@ -94,7 +98,6 @@
     function unsupportedSource(source: string | null, embed: string | null) {
         if (embed) return "This source opens a provider's web player. Pick another stream.";
         if (!source) return "This stream has no playable link.";
-        if (source.startsWith("magnet:")) return "Torrent streams don't play on TV yet. Pick a debrid or direct link.";
         return null;
     }
 
@@ -133,10 +136,18 @@
         addonSubtitles = [];
         selectedAddonSubtitle = null;
         lastAutoSkip = null;
+        sourceError = null;
         hideControls();
+        torrent.close();
+        loadingStage.set("Loading");
+        loadingDetails.set("");
+        loadingProgress.set(null);
         if (!source || unsupportedSource(source, embed)) return;
 
         const request = introDbFor(metaData, season, episode);
+        const playable = source.startsWith("magnet:") ? await openTorrent(source, run) : source;
+        if (!playable || run !== sessionRun) return;
+
         const early = await Promise.race([
             request,
             new Promise<null>((resolve) => setTimeout(() => resolve(null), INTRO_DB_STARTUP_BUDGET_MS)),
@@ -154,10 +165,26 @@
             Chapters.getEffectiveChapterSegments(null, introDbChapters),
             get(autoSkipIntros),
         );
-        playback.load(source, begin, subtitle ? `${title} ${subtitle}` : title);
+        playback.load(playable, begin, subtitle ? `${title} ${subtitle}` : title);
         void Subtitles.fetchAddonSubtitles(metaData, season, episode).then((list) => {
             if (run === sessionRun) addonSubtitles = list;
         });
+    }
+
+    async function openTorrent(magnet: string, run: number) {
+        const stream = get(selectedStream);
+        const name = stream?.behaviorHints?.filename?.trim() || stream?.title?.trim() || stream?.name?.trim() || null;
+        try {
+            return await torrent.open(magnet, fileIdx, name);
+        } catch (failure) {
+            if (run === sessionRun) {
+                sourceError = {
+                    message: "Couldn't start this torrent",
+                    details: failure instanceof Error ? failure.message : "Limbo couldn't stream this torrent.",
+                };
+            }
+            return null;
+        }
     }
 
     function followPlayback(current: NativePlaybackState) {
@@ -320,6 +347,7 @@
         removeBackHandler();
         if (hideTimer) clearTimeout(hideTimer);
         playback.destroy();
+        torrent.close();
     });
 </script>
 
@@ -368,7 +396,9 @@
     loading={!hasStarted || Boolean(blockingError)}
     onClose={close}
     {metaData}
-    stage="Loading"
+    stage={$loadingStage}
+    details={$loadingDetails}
+    progress={$loadingProgress}
     backdropSrc={episodeInfo?.thumbnail ?? null}
     showError={Boolean(blockingError)}
     errorMessage={blockingError?.message ?? ""}

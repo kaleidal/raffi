@@ -3,6 +3,7 @@
 
     export let value = "";
     export let disabled = false;
+    export let label = "Sign-in code";
 
     const CODE_LENGTH = 6;
     const slots = Array.from({ length: CODE_LENGTH }, (_, index) => index);
@@ -42,7 +43,7 @@
         inputmode="numeric"
         autocomplete="one-time-code"
         maxlength={CODE_LENGTH}
-        aria-label="Sign-in code"
+        aria-label={label}
         class="absolute inset-0 w-full h-full opacity-0 cursor-text"
         on:input={handleInput}
         on:focus={() => (focused = true)}

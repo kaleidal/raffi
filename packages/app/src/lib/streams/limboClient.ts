@@ -1,9 +1,16 @@
-/** Limbo localhost companion client for torrent add/stream. */
+/** Limbo companion client for torrent add/stream: Limbo on this computer, or the paired one on the network for TV. */
+
+import { get } from "svelte/store";
+import { hostFetch } from "../shell/hostFetch";
+import { getPlatformName, isTvPlatform } from "../shell/platform";
+import { allowLocalNetwork, limboPairing, relocateLimbo } from "./limboLan";
 
 export const LIMBO_DEFAULT_PORT = 17890;
 export const LIMBO_INSTALL_URL = "https://limbo.kaleid.al";
 export const LIMBO_MIN_API_VERSION = 2;
 const LIMBO_DEFAULT_BASE_URL = `http://127.0.0.1:${LIMBO_DEFAULT_PORT}`;
+const LIMBO_ADD_TIMEOUT_MS = 120_000;
+const LIMBO_HEALTH_TIMEOUT_MS = 3_000;
 
 const RAFFI_ICON_DATA_URL =
 	"data:image/svg+xml," +
@@ -114,6 +121,11 @@ export function clearLimboDiscoveryCache() {
 }
 
 async function resolveConnection(): Promise<{ baseUrl: string; token: string }> {
+	if (isTvPlatform) {
+		const pairing = get(limboPairing);
+		if (!pairing) throw new LimboUnavailableError(LIMBO_NOT_PAIRED_MESSAGE);
+		return pairing;
+	}
 	if (cachedBaseUrl && cachedToken) {
 		return { baseUrl: cachedBaseUrl, token: cachedToken };
 	}
@@ -134,21 +146,21 @@ async function resolveConnection(): Promise<{ baseUrl: string; token: string }> 
 	return { baseUrl, token };
 }
 
-async function limboFetch(path: string, init: RequestInit = {}): Promise<Response> {
+type LimboRequestInit = {
+	method?: string;
+	body?: string;
+	timeoutMs?: number;
+	signal?: AbortSignal;
+};
+
+async function limboFetch(path: string, init: LimboRequestInit = {}): Promise<Response> {
 	const { baseUrl, token } = await resolveConnection();
-	const headers = new Headers(init.headers);
-	if (token) {
-		headers.set("Authorization", `Bearer ${token}`);
-	}
-	if (init.body && !headers.has("Content-Type")) {
-		headers.set("Content-Type", "application/json");
-	}
+	const headers: Record<string, string> = {};
+	if (token) headers.Authorization = `Bearer ${token}`;
+	if (init.body) headers["Content-Type"] = "application/json";
 
 	try {
-		return await fetch(`${baseUrl}${path}`, {
-			...init,
-			headers,
-		});
+		return await hostFetch(`${baseUrl}${path}`, { ...init, headers });
 	} catch (error) {
 		if (init.signal?.aborted) throw error;
 		clearLimboDiscoveryCache();
@@ -163,8 +175,8 @@ async function fetchLimboHealth(
 	signal?: AbortSignal,
 ): Promise<LimboHealth | null> {
 	try {
-		const response = await fetch(`${baseUrl}/v1/health`, {
-			cache: "no-store",
+		const response = await hostFetch(`${baseUrl}/v1/health`, {
+			timeoutMs: LIMBO_HEALTH_TIMEOUT_MS,
 			signal,
 		});
 		if (!response.ok) return null;
@@ -193,7 +205,37 @@ export async function checkLimboHealth(signal?: AbortSignal): Promise<LimboHealt
 	return null;
 }
 
+const LIMBO_NOT_PAIRED_MESSAGE =
+	"Raffi isn't paired with Limbo yet. Pair it under Allow Torrenting in Settings.";
+
+/** Reaches the paired Limbo, following it if the computer's address changed. */
+async function ensurePairedLimboAvailable(signal?: AbortSignal): Promise<LimboHealth> {
+	const pairing = get(limboPairing);
+	if (!pairing) throw new LimboUnavailableError(LIMBO_NOT_PAIRED_MESSAGE);
+	if (!(await allowLocalNetwork())) {
+		throw new LimboUnavailableError(
+			"Raffi needs access to your local network to play torrents from Limbo.",
+		);
+	}
+	const health =
+		(await fetchLimboHealth(pairing.baseUrl, signal)) ??
+		(await relocateLimbo(pairing).then((moved) =>
+			moved ? fetchLimboHealth(moved.baseUrl, signal) : null,
+		));
+	if (!health) {
+		throw new LimboUnavailableError(
+			`Can't reach Limbo on ${pairing.name}. Make sure Limbo is open there, with Devices on your network turned on, and that both are on the same network.`,
+		);
+	}
+	return health;
+}
+
 export async function ensureLimboAvailable(signal?: AbortSignal): Promise<LimboHealth> {
+	if (isTvPlatform) {
+		const health = await ensurePairedLimboAvailable(signal);
+		assertLimboCompatible(health);
+		return health;
+	}
 	clearLimboDiscoveryCache();
 	const health = await checkLimboHealth(signal);
 	if (!health?.ok) {
@@ -229,6 +271,7 @@ export async function addLimboTorrent(input: {
 	const response = await limboFetch("/v1/torrents", {
 		method: "POST",
 		signal,
+		timeoutMs: LIMBO_ADD_TIMEOUT_MS,
 		body: JSON.stringify({
 			magnet: input.magnet,
 			fileIndex: input.fileIndex ?? undefined,
@@ -236,7 +279,7 @@ export async function addLimboTorrent(input: {
 			name: input.name?.trim() || undefined,
 			clientId: "raffi",
 			clientName: "Raffi",
-			clientVersion: "desktop",
+			clientVersion: getPlatformName(),
 			clientIconDataUrl: RAFFI_ICON_DATA_URL,
 		}),
 	});
@@ -244,6 +287,12 @@ export async function addLimboTorrent(input: {
 	if (!response.ok) {
 		const text = (await response.text().catch(() => "")).trim();
 		if (response.status === 401) {
+			if (isTvPlatform) {
+				limboPairing.set(null);
+				throw new LimboUnavailableError(
+					"Limbo no longer recognizes this TV. Pair it again under Allow Torrenting in Settings.",
+				);
+			}
 			clearLimboDiscoveryCache();
 			throw new LimboUnavailableError(
 				"Limbo rejected Raffi's API token. Open Limbo once so it can refresh api.json.",
