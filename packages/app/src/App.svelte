@@ -15,16 +15,16 @@
     } from "./lib/stores/authStore";
     import { formatReleaseNotes } from "./lib/shell/updateNotes";
     import { warmTraktClientAuth } from "./lib/db/db";
-    import { isTvPlatform } from "./lib/shell/platform";
-    import { nativeVideoVisible } from "./lib/tv/nativeVideo";
+    import { isAndroidPlatform } from "./lib/shell/platform";
+    import { nativeVideoVisible } from "./lib/android/nativeVideo";
 
     type PageComponent = typeof Home | any;
 
     const pageLoaders: Record<string, () => Promise<{ default: PageComponent }>> = {
         meta: () => import("./pages/meta/Meta.svelte") as Promise<{ default: PageComponent }>,
         player: () =>
-            (isTvPlatform
-                ? import("./pages/player/tv/TvPlayer.svelte")
+            (isAndroidPlatform
+                ? import("./pages/player/android/AndroidPlayer.svelte")
                 : import("./pages/player/Player.svelte")) as Promise<{ default: PageComponent }>,
         lists: () => import("./pages/lists/Lists.svelte") as Promise<{ default: PageComponent }>,
     };

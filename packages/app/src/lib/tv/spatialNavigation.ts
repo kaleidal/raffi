@@ -1,6 +1,6 @@
 import { AUTOFOCUS, firstCandidate, isNavigable, nearest, type Direction } from "./focusTargets";
 import { isClaimed } from "./keyClaims";
-import { activeLayer, isModalLayer } from "./layers";
+import { activeLayer, isModalLayer } from "../android/layers";
 import { focusWithoutKeyboard, isQuiet, isTextField, raiseKeyboard } from "./textFields";
 
 const DIRECTIONS: Record<string, Direction> = {

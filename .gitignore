@@ -89,8 +89,8 @@ tmp/
 temp/
 *.local
 
-# Android TV
-apps/tv/android/.gradle/
-apps/tv/android/.kotlin/
-apps/tv/android/local.properties
-apps/tv/android/app/src/main/assets/web/
+# Android
+apps/android/native/.gradle/
+apps/android/native/.kotlin/
+apps/android/native/local.properties
+apps/android/native/app/src/main/assets/web/

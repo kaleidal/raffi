@@ -1,8 +1,8 @@
 <script lang="ts">
     import { portal } from "../../common/portal";
     import { fade, scale } from "svelte/transition";
-    import { isTvPlatform } from "../../../lib/shell/platform";
-    import { openInYouTube } from "../../../lib/tv/youtube";
+    import { isAndroidPlatform } from "../../../lib/shell/platform";
+    import { openInYouTube } from "../../../lib/android/youtube";
 
     export let visible = false;
     export let ytId: string;
@@ -14,8 +14,8 @@
         onClose();
     }
 
-    /** On TV the YouTube app plays the trailer; the embedded player is only for TVs without it. */
-    let embedded = !isTvPlatform;
+    /** In the Android app the YouTube app plays the trailer; the embedded player is only for devices without it. */
+    let embedded = !isAndroidPlatform;
 
     $: if (visible && !embedded) void handOff(ytId);
 

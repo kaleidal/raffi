@@ -35,7 +35,7 @@ Like Stremio, Raffi uses community addons to aggregate streaming sources, but go
 - **Linux** - `.deb`, `.rpm`, and `.AppImage` packages
 - **macOS** - `.dmg` and `.zip` distributions
 - **Web** - Browser app on Cloudflare
-- **Android TV** - Remote-driven app for Google TV devices such as the Chromecast with Google TV
+- **Android** - One app for phones and TVs: touch on phones, the remote on Google TV devices such as the Chromecast with Google TV
 
 ### 👥 **Watch Together**
 - Real-time watch parties with synchronized playback
@@ -96,8 +96,8 @@ chmod +x Raffi-x.x.x.AppImage
 - **DMG**: Mount and drag to Applications
 - **ZIP**: Extract and move to Applications
 
-#### Android TV
-- **APK**: Build it from source (see [apps/tv](apps/tv/README.md)) and install it with `adb`
+#### Android
+- **APK**: Build it from source (see [apps/android](apps/android/README.md)) and install it with `adb` on a phone or TV
 
 ## Development
 
@@ -112,8 +112,8 @@ chmod +x Raffi-x.x.x.AppImage
 ```
 raffi/
 ├── apps/
+│   ├── android/       # Android host for phones and TVs (Kotlin, WebView, Media3)
 │   ├── desktop/       # Electron desktop shell
-│   ├── tv/            # Android TV host (Kotlin, WebView, Media3)
 │   └── web/           # SvelteKit + Cloudflare web app
 ├── packages/
 │   └── app/           # Shared Svelte Raffi UI and app logic
@@ -137,15 +137,15 @@ Run `bun run validate` from the repository root to typecheck every workspace and
 - **UI**: Consumes the same shared Svelte package as desktop
 - **Deploy**: Cloudflare Pages/Workers target
 
-#### Android TV App (`apps/tv/`)
+#### Android App (`apps/android/`)
 - **Framework**: Kotlin host with Media3 and AndroidX WebKit
-- **Purpose**: Raffi on Google TV devices, driven by the remote
-- **UI**: The same shared Svelte package, with focus navigation and a TV player page
+- **Purpose**: Raffi on Android phones, driven by touch, and on Google TV devices, driven by the remote
+- **UI**: The same shared Svelte package, with a native-video player page and focus navigation on TVs
 - **Build**: Vite bundles the interface into the APK and Gradle builds it
 
 #### Shared App (`packages/app/`)
 - **Framework**: Svelte 5
-- **Purpose**: The reusable Raffi app experience mounted by desktop, web, and Android TV
+- **Purpose**: The reusable Raffi app experience mounted by desktop, web, and Android
 - **Playback**: Browser-compatible direct playback where possible, desktop-only gates for local/server-dependent features
 
 #### Sync Service (`services/sync/`)
@@ -206,17 +206,17 @@ bun run check:web
 bun run build:web
 ```
 
-### Android TV Development
+### Android Development
 
 ```bash
 bun install
 
-# Typecheck the TV shell and build a debug APK
-bun run check:tv
-bun run apk:tv
+# Typecheck the Android shell and build a debug APK
+bun run check:android
+bun run apk:android
 ```
 
-Building the APK needs JDK 25 and the Android SDK; [apps/tv](apps/tv/README.md) covers setup and installing on a TV.
+Building the APK needs JDK 25 and the Android SDK; [apps/android](apps/android/README.md) covers setup and installing on a phone or TV.
 
 ### Website Development
 
@@ -246,11 +246,11 @@ bun --filter @raffi/marketing build
 - **Playback**: Native video and HLS.js for direct HTTP/debrid streams
 - **Limitations**: Torrent, local file, and clip export stay desktop-only
 
-#### Android TV App
-- **Host**: Kotlin app hosting the shared interface in a WebView, navigated with the remote
+#### Android App
+- **Host**: Kotlin app hosting the shared interface in a WebView, navigated with touch on phones and the remote on TVs
 - **Playback**: Media3 (ExoPlayer) beneath the transparent page, with hardware decoding, HDMI audio passthrough, and embedded plus addon subtitles
-- **Torrents**: Stream from Limbo on a computer on the same network, after pairing the TV with it once
-- **Limitations**: Provider web players aren't supported yet
+- **Torrents**: Stream from Limbo on a computer on the same network, after pairing the phone or TV with it once
+- **Limitations**: Provider web players, local files and watch parties aren't supported yet
 
 #### Sync Service
 - **Runtime**: Cloudflare Workers
@@ -272,7 +272,7 @@ bun --filter @raffi/marketing build
 - Custom video player with HLS for addon streams
 - HTTP/debrid streams play in-app via MediaBunny (probe + remux) or native `<video>` when compatible
 - Local files and clip export use MediaBunny on desktop (`raffi-media://` for disk access)
-- Torrents stream through Limbo, on the same computer or, for Android TV, on a paired computer on the network
+- Torrents stream through Limbo, on the same computer or, for Android, on a paired computer on the network
 - Community addon catalog is fetched from Electron main
 - Text subtitles embedded in MKV files (SRT, ASS/SSA, WebVTT) are read from the stream as it plays, with no extra downloads. Image-based subtitles such as PGS aren't supported.
 - Multiple quality selection

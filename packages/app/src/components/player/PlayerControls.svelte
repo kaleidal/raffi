@@ -7,7 +7,7 @@
     import SeekBar from "./seek/SeekBar.svelte";
     import type { TimeRange } from "./seek/seekTrack";
     import type { SeekPreview } from "../../lib/media/preview/seekPreview";
-    import { isTvPlatform } from "../../lib/shell/platform";
+    import { isAndroidPlatform } from "../../lib/shell/platform";
     import { formatTime } from "../../lib/utils/time";
     import {
         Maximize,
@@ -137,7 +137,7 @@
         </div>
 
         <div class="player-actions flex items-center w-full justify-center">
-            {#if !isTvPlatform}
+            {#if !isAndroidPlatform}
                 <IconButton
                     label="Fullscreen"
                     onClick={() => {
@@ -184,7 +184,7 @@
                 </IconButton>
             {/if}
 
-            {#if metaData && !isTvPlatform}
+            {#if metaData && !isAndroidPlatform}
             <IconButton
                 label="Download"
                 onClick={() => {
@@ -195,7 +195,7 @@
             </IconButton>
             {/if}
 
-            {#if !isWatchPartyMember && !isTvPlatform}
+            {#if !isWatchPartyMember && !isAndroidPlatform}
                 <IconButton
                     label="Clip"
                     onClick={() => setClipPanelOpen(!showClipPanel)}
@@ -204,7 +204,7 @@
                 </IconButton>
             {/if}
 
-            {#if !isTvPlatform}
+            {#if !isAndroidPlatform}
                 <div class="player-volume">
                     <Slider
                         onInput={onVolumeChange}

@@ -3,8 +3,8 @@
 	import SearchBarPositionCard from "./SearchBarPositionCard.svelte";
 	import HeroSourceCard from "./HeroSourceCard.svelte";
 	import DirectSourceSection from "./DirectSourceSection.svelte";
-	import TvTorrentingCard from "./torrenting/TvTorrentingCard.svelte";
-	import { isTvPlatform } from "../../../../lib/shell/platform";
+	import LimboNetworkCard from "./torrenting/LimboNetworkCard.svelte";
+	import { isAndroidPlatform, isTvPlatform } from "../../../../lib/shell/platform";
 	import { enableRPC, disableRPC } from "../../../../lib/shell/rpc";
 	import { getAddons, getTraktStatus } from "../../../../lib/db/db";
 	import {
@@ -367,8 +367,8 @@
 		</button>
 	</div>
 
-	{#if isTvPlatform}
-		<TvTorrentingCard />
+	{#if isAndroidPlatform}
+		<LimboNetworkCard />
 	{:else}
 		<div class="rounded-2xl bg-white/8 p-4 flex flex-wrap items-center gap-4 justify-between">
 			<div>

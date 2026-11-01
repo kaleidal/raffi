@@ -1,8 +1,8 @@
-/** Limbo companion client for torrent add/stream: Limbo on this computer, or the paired one on the network for TV. */
+/** Limbo companion client for torrent add/stream: Limbo on this computer, or the paired one on the network for the Android app. */
 
 import { get } from "svelte/store";
 import { hostFetch } from "../shell/hostFetch";
-import { getPlatformName, isTvPlatform } from "../shell/platform";
+import { getPlatformName, isAndroidPlatform } from "../shell/platform";
 import { allowLocalNetwork, limboPairing, relocateLimbo } from "./limboLan";
 
 export const LIMBO_DEFAULT_PORT = 17890;
@@ -121,7 +121,7 @@ export function clearLimboDiscoveryCache() {
 }
 
 async function resolveConnection(): Promise<{ baseUrl: string; token: string }> {
-	if (isTvPlatform) {
+	if (isAndroidPlatform) {
 		const pairing = get(limboPairing);
 		if (!pairing) throw new LimboUnavailableError(LIMBO_NOT_PAIRED_MESSAGE);
 		return pairing;
@@ -231,7 +231,7 @@ async function ensurePairedLimboAvailable(signal?: AbortSignal): Promise<LimboHe
 }
 
 export async function ensureLimboAvailable(signal?: AbortSignal): Promise<LimboHealth> {
-	if (isTvPlatform) {
+	if (isAndroidPlatform) {
 		const health = await ensurePairedLimboAvailable(signal);
 		assertLimboCompatible(health);
 		return health;
@@ -287,10 +287,10 @@ export async function addLimboTorrent(input: {
 	if (!response.ok) {
 		const text = (await response.text().catch(() => "")).trim();
 		if (response.status === 401) {
-			if (isTvPlatform) {
+			if (isAndroidPlatform) {
 				limboPairing.set(null);
 				throw new LimboUnavailableError(
-					"Limbo no longer recognizes this TV. Pair it again under Allow Torrenting in Settings.",
+					"Limbo no longer recognizes this device. Pair it again under Allow Torrenting in Settings.",
 				);
 			}
 			clearLimboDiscoveryCache();

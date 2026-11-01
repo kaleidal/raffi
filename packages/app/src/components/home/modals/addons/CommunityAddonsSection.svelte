@@ -180,7 +180,7 @@
 	});
 </script>
 
-<section class="rounded-[28px] bg-white/[0.04] p-5 md:p-6 flex flex-col gap-4 flex-1 min-h-0 min-w-0">
+<section class="rounded-[28px] bg-white/[0.04] p-5 md:p-6 flex flex-col gap-4 flex-1 min-h-[70dvh] min-w-0 lg:min-h-0">
 	<div class="flex flex-col gap-1">
 		<div class="flex items-center gap-3 flex-wrap">
 			<h3 class="text-white text-xl font-semibold">

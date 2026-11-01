@@ -128,7 +128,7 @@
             </div>
 
             <div class="relative z-10 flex-1 min-h-0">
-                <div class="flex h-full flex-col gap-6 overflow-hidden lg:flex-row lg:gap-8">
+                <div class="flex h-full flex-col gap-6 overflow-y-auto lg:flex-row lg:gap-8 lg:overflow-hidden">
                     <CommunityAddonsSection {initialResourceFilter} />
                     <InstalledAddonsSection />
                 </div>

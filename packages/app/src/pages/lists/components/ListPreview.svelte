@@ -1,14 +1,14 @@
 <script lang="ts">
     import { ArchiveX, Info, Pause, Play, Volume2, VolumeX } from "@lucide/svelte";
     import IconButton from "../../../components/common/IconButton.svelte";
-    import { isTvPlatform } from "../../../lib/shell/platform";
+    import { isAndroidPlatform } from "../../../lib/shell/platform";
     import { router } from "../../../lib/stores/router";
     import { handleRemoveFromList } from "../listActions";
     import { playerState, selectedItem } from "../listsState";
     import { setPlayerIframe, toggleMute, togglePlay } from "../playerLogic";
 
     let playerIframe: HTMLIFrameElement;
-    $: trailerId = isTvPlatform ? "" : $selectedItem?.trailerStreams?.at(-1)?.ytId ?? "";
+    $: trailerId = isAndroidPlatform ? "" : $selectedItem?.trailerStreams?.at(-1)?.ytId ?? "";
 
     function syncTrailerState() {
         if (playerIframe) setPlayerIframe(playerIframe);

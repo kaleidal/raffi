@@ -3,7 +3,7 @@
     import { fade } from "svelte/transition";
     import { Info, Play, Pause, VolumeX, Volume2 } from "@lucide/svelte";
     import type { PopularTitleMeta } from "../../lib/library/types/popular_types";
-    import { isTvPlatform } from "../../lib/shell/platform";
+    import { isAndroidPlatform } from "../../lib/shell/platform";
     import { router } from "../../lib/stores/router";
     import IconButton from "../common/IconButton.svelte";
 
@@ -25,7 +25,7 @@
         isPaused = false;
         wasPlayingBeforeHidden = false;
         canControlTrailer = false;
-        const trailerId = isTvPlatform ? undefined : showcasedTitle.trailerStreams?.at(-1)?.ytId;
+        const trailerId = isAndroidPlatform ? undefined : showcasedTitle.trailerStreams?.at(-1)?.ytId;
         const origin = typeof window !== "undefined" ? window.location.origin : "";
         const originParam = origin && origin !== "null" ? `&origin=${encodeURIComponent(origin)}` : "";
         trailerSrc = trailerId

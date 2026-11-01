@@ -9,8 +9,9 @@
     } from "../../lib/library/library";
     import { getCachedMetaData } from "../../lib/library/metaCache";
     import { router } from "../../lib/stores/router";
-    import { isTvPlatform } from "../../lib/shell/platform";
-    import { listenForSpeech } from "../../lib/tv/voice";
+    import { isAndroidPlatform, isTvPlatform } from "../../lib/shell/platform";
+    import { allowTorrenting } from "../../lib/stores/torrenting";
+    import { listenForSpeech } from "../../lib/android/voice";
     import Skeleton from "../common/Skeleton.svelte";
     import { fade } from "svelte/transition";
 	import TitleContextMenu from "./context_menus/TitleContextMenu.svelte";
@@ -687,13 +688,15 @@
     />
 
     <div class="flex flex-row items-start gap-[10px]">
-        <button
-            class="header-action bg-[#2C2C2C]/80 rounded-[clamp(18px,1.3vw,24px)] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-[width,height,border-radius,background-color] duration-300 cursor-pointer"
-            aria-label="addons"
-            onclick={openPlayModal}
-        >
-            <Link size={40} strokeWidth={2} color="#C3C3C3" />
-        </button>
+        {#if !isAndroidPlatform || $allowTorrenting}
+            <button
+                class="header-action bg-[#2C2C2C]/80 rounded-[clamp(18px,1.3vw,24px)] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-[width,height,border-radius,background-color] duration-300 cursor-pointer"
+                aria-label="Play"
+                onclick={openPlayModal}
+            >
+                <Link size={40} strokeWidth={2} color="#C3C3C3" />
+            </button>
+        {/if}
 
         <button
             class="header-action bg-[#2C2C2C]/80 rounded-[clamp(18px,1.3vw,24px)] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-[width,height,border-radius,background-color] duration-300 cursor-pointer"

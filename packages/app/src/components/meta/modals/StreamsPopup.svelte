@@ -332,6 +332,7 @@
         }
 
         .streams-layout {
+            flex: none;
             grid-template-columns: minmax(0, 1fr);
             overflow: visible;
         }

@@ -1,8 +1,8 @@
-/** Finds and pairs with Limbo on another computer on the local network, for the TV app. */
+/** Finds and pairs with Limbo on another computer on the local network, for the Android app. */
 
 import { get, writable } from "svelte/store";
 import { hostFetch } from "../shell/hostFetch";
-import { requestNative } from "../tv/bridge";
+import { requestNative } from "../android/bridge";
 
 const PAIRING_KEY = "raffi_limbo_pairing";
 const LIMBO_PORT = 17890;

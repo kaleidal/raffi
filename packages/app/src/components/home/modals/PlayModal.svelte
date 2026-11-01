@@ -7,6 +7,7 @@
     import { getCachedMetaData } from "../../../lib/library/metaCache";
     import { cloudSyncStatus, getWatchPartyInfo } from "../../../lib/db/db";
     import { localMode } from "../../../lib/stores/authStore";
+    import { isAndroidPlatform } from "../../../lib/shell/platform";
     import TorrentWarningModal from "../../meta/modals/TorrentWarningModal.svelte";
     import {
         acknowledgeTorrentWarning,
@@ -286,18 +287,20 @@
         <div class="relative z-10 flex-1 overflow-y-auto">
             {#if mode === "select"}
                 <div class="flex flex-col gap-4">
-                    <label
-                        for="local-file-input"
-                        class="bg-white/5 hover:bg-white/10 text-white p-4 rounded-2xl flex items-center gap-4 transition-colors text-left group cursor-pointer"
-                    >
-                        <div class="bg-white/10 p-3 rounded-full group-hover:bg-white/20 transition-colors">
-                            <FileVideo size={24} strokeWidth={2} />
-                        </div>
-                        <div class="flex flex-col gap-1">
-                            <span class="font-bold text-lg">Local File</span>
-                            <span class="text-[#878787] text-sm">Play a video file from your computer</span>
-                        </div>
-                    </label>
+                    {#if !isAndroidPlatform}
+                        <label
+                            for="local-file-input"
+                            class="bg-white/5 hover:bg-white/10 text-white p-4 rounded-2xl flex items-center gap-4 transition-colors text-left group cursor-pointer"
+                        >
+                            <div class="bg-white/10 p-3 rounded-full group-hover:bg-white/20 transition-colors">
+                                <FileVideo size={24} strokeWidth={2} />
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <span class="font-bold text-lg">Local File</span>
+                                <span class="text-[#878787] text-sm">Play a video file from your computer</span>
+                            </div>
+                        </label>
+                    {/if}
 
                     {#if $allowTorrenting}
                         <button
@@ -314,7 +317,7 @@
                         </button>
                     {/if}
 
-                    {#if !$localMode && $cloudSyncStatus.cloudFeaturesAvailable}
+                    {#if !isAndroidPlatform && !$localMode && $cloudSyncStatus.cloudFeaturesAvailable}
                         <button
                             class="bg-white/5 hover:bg-white/10 text-white p-4 rounded-2xl flex items-center gap-4 transition-colors text-left group cursor-pointer"
                             on:click={() => mode = "join"}
