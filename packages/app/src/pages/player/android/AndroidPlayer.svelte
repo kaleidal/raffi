@@ -14,7 +14,8 @@
     import { moveFocusTo } from "../../../lib/tv/spatialNavigation";
     import * as NavigationLogic from "../../meta/navigationLogic";
     import * as ProgressLogic from "../../meta/progressLogic";
-    import { progressMap, selectedStream, streamsPopupVisible } from "../../meta/metaState";
+    import { progressMap, selectedStream } from "../../meta/metaState";
+    import { reopenStreamsOnReturn } from "../../meta/streamLogic";
     import * as Chapters from "../chapters/chapters";
     import * as IntroDb from "../chapters/introdb";
     import PlayerLoadingScreen from "../components/PlayerLoadingScreen.svelte";
@@ -235,7 +236,7 @@
     }
 
     function returnToStreams() {
-        streamsPopupVisible.set(true);
+        reopenStreamsOnReturn(imdbID);
         close();
     }
 

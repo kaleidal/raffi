@@ -22,10 +22,9 @@
     } from "../../lib/stores/playbackPreferences";
     import { ChevronLeft, SkipForward } from "@lucide/svelte";
     import * as NavigationLogic from "../meta/navigationLogic";
-    import { streamToPlayableUrl } from "../meta/streamLogic";
+    import { markCurrentStreamAsFailed, reopenStreamsOnReturn, streamToPlayableUrl } from "../meta/streamLogic";
     import * as ProgressLogic from "../meta/progressLogic";
-    import { progressMap as metaProgressMap, streamsPopupVisible, selectedStream } from "../meta/metaState";
-    import { markCurrentStreamAsFailed } from "../meta/streamLogic";
+    import { progressMap as metaProgressMap, selectedStream } from "../meta/metaState";
     import { isDesktopPlatform } from "../../lib/shell/platform";
     import {
         isLikelyProviderStatusMedia,
@@ -566,7 +565,7 @@
         showError.set(true);
         errorMessage.set("Stream failed");
         errorDetails.set(reason);
-        streamsPopupVisible.set(true);
+        reopenStreamsOnReturn(imdbID);
 
 
         torrentFailureExitTimeout = setTimeout(() => {
@@ -1527,7 +1526,7 @@
     };
 
     const returnToStreams = () => {
-        streamsPopupVisible.set(true);
+        reopenStreamsOnReturn(imdbID);
         void handleClose();
     };
 

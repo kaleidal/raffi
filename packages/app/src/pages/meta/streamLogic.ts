@@ -5,6 +5,7 @@ import {
     selectedStream, showTorrentWarning, pendingTorrentStream,
     streamFailureMessage,
     progressMap,
+    streamsToReopen,
 } from "./metaState";
 import { router } from "../../lib/stores/router";
 
@@ -202,6 +203,12 @@ export const fetchStreamListForEpisodeOnly = async (episode: any, imdbID: string
     }
 };
 
+
+/** Called by the player before it closes, so the title page opens on the streams of what was playing. */
+export const reopenStreamsOnReturn = (imdbId: string | null) => {
+    const episode = get(selectedEpisode);
+    if (imdbId && episode) streamsToReopen.set({ imdbId, episode });
+};
 
 export const episodeClicked = async (episode: any, imdbID: string) => {
     await fetchStreams(episode, false, true, imdbID);

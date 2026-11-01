@@ -30,6 +30,7 @@
         selectedAddon,
         addons,
         streamsPopupVisible,
+        streamsToReopen,
         showTorrentWarning,
         showEpisodeContextMenu,
         contextMenuPos,
@@ -109,6 +110,7 @@
     });
 
     onDestroy(() => {
+        streamsToReopen.set(null);
         DataLoader.cancelMetaDataLoad();
         document.body.style.overflow = "";
         const scrollContainer = document.querySelector("[data-scroll-container]");
@@ -241,6 +243,12 @@
 
         partyJoinStreamPromptHandled = true;
         void StreamLogic.episodeClicked(targetEpisode, imdbID);
+    }
+
+    $: if ($streamsToReopen && $loadedMeta && $streamsToReopen.imdbId === $metaData?.meta?.imdb_id && $selectedAddon) {
+        const { episode } = $streamsToReopen;
+        streamsToReopen.set(null);
+        void StreamLogic.episodeClicked(episode, imdbID);
     }
 </script>
 

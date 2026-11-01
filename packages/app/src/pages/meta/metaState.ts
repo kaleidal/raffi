@@ -32,6 +32,8 @@ export const addons = writable<Addon[]>([]);
 
 // UI State
 export const streamsPopupVisible = writable<boolean>(false);
+/** Survives the title page's reset, so "Back to Streams" in the player can show the same episode's streams again. */
+export const streamsToReopen = writable<{ imdbId: string; episode: any } | null>(null);
 
 export const showTorrentWarning = writable<boolean>(false);
 export const pendingTorrentStream = writable<Stream | null>(null);
