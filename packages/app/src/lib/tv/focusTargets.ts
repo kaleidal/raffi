@@ -67,23 +67,52 @@ export function firstCandidate(layer: HTMLElement) {
 	return offscreen;
 }
 
-/** Scores by geometry alone and only checks styles on the winner, which keeps a key press cheap on slow TVs. */
-function closestIn(scope: HTMLElement, from: HTMLElement, direction: Direction) {
-	const origin = from.getBoundingClientRect();
-	const scored: Array<[number, HTMLElement]> = [];
-	for (const candidate of focusables(scope)) {
+const OUTSIDE_ROWS = `:is(${FOCUSABLE}):not(${ROW} *)`;
+
+type Scored = Array<[number, HTMLElement]>;
+
+/** Scores by geometry alone; styles are only checked on the winner, which keeps a key press cheap on slow TVs. */
+function rank(candidates: Iterable<HTMLElement>, from: HTMLElement, origin: DOMRect, direction: Direction): Scored {
+	const scored: Scored = [];
+	for (const candidate of candidates) {
 		if (candidate === from || candidate.contains(from)) continue;
 		const rect = candidate.getBoundingClientRect();
 		if (!hasSize(rect)) continue;
 		const score = distance(origin, rect, direction);
 		if (score !== null) scored.push([score, candidate]);
 	}
-	scored.sort((a, b) => a[0] - b[0]);
-	return scored.find(([, candidate]) => isShown(candidate))?.[1] ?? null;
+	return scored.sort((a, b) => a[0] - b[0]);
 }
 
-/** Moving sideways stays inside the current row of cards when it can, so most presses never scan the whole page. */
+const firstShown = (scored: Scored) => scored.find(([, candidate]) => isShown(candidate))?.[1] ?? null;
+
+const PINNED = "[data-tv-pinned]";
+const isPinned = (element: HTMLElement) => element.closest(PINNED) !== null;
+
+/** Bars pinned over the page are reached once nothing in the page lies that way, so they never interrupt browsing the rows. */
+function contentFirst(scored: Scored, from: HTMLElement): Scored {
+	if (isPinned(from)) return scored;
+	return [...scored.filter(([, candidate]) => !isPinned(candidate)), ...scored.filter(([, candidate]) => isPinned(candidate))];
+}
+
+/**
+ * Each row of cards competes as a single box, and only the winning row has its cards measured,
+ * so a press measures a few dozen elements instead of every card on the page.
+ */
+function closestInLayer(layer: HTMLElement, from: HTMLElement, origin: DOMRect, direction: Direction) {
+	const candidates = [...layer.querySelectorAll<HTMLElement>(OUTSIDE_ROWS), ...layer.querySelectorAll<HTMLElement>(ROW)];
+	for (const [, candidate] of contentFirst(rank(candidates, from, origin, direction), from)) {
+		const match = candidate.matches(ROW)
+			? firstShown(rank(focusables(candidate), from, origin, direction))
+			: isShown(candidate) && candidate;
+		if (match) return match;
+	}
+	return null;
+}
+
+/** Moving sideways stays inside the current row of cards when it can. */
 export function nearest(from: HTMLElement, direction: Direction, layer: HTMLElement) {
+	const origin = from.getBoundingClientRect();
 	const row = direction === "left" || direction === "right" ? from.closest<HTMLElement>(ROW) : null;
-	return (row && closestIn(row, from, direction)) ?? closestIn(layer, from, direction);
+	return (row && firstShown(rank(focusables(row), from, origin, direction))) || closestInLayer(layer, from, origin, direction);
 }

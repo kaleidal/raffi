@@ -24,6 +24,13 @@ export function startFocusRing() {
 	document.documentElement.append(ring);
 
 	let target: HTMLElement | null = null;
+	let shapeFrame = 0;
+
+	// Read in the next frame, before it paints: reading styles inside the key press would force a layout.
+	const matchShape = () => {
+		shapeFrame = 0;
+		if (target) ring.style.borderRadius = `calc(${getComputedStyle(target).borderTopLeftRadius} + ${GAP_PX}px)`;
+	};
 
 	const retarget = () => {
 		const next = ringTarget(document.activeElement);
@@ -33,7 +40,7 @@ export function startFocusRing() {
 		ring.hidden = !target;
 		if (!target) return;
 		target.style.setProperty("anchor-name", ANCHOR);
-		ring.style.borderRadius = `calc(${getComputedStyle(target).borderTopLeftRadius} + ${GAP_PX}px)`;
+		shapeFrame ||= requestAnimationFrame(matchShape);
 	};
 
 	document.addEventListener("focusin", retarget);

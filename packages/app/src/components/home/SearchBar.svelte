@@ -108,8 +108,6 @@
     };
 
     function updateAutoDockPosition() {
-        portraitLayout = window.matchMedia("(orientation: portrait)").matches;
-
         if (searchBarPositionPreference !== HOME_SEARCH_BAR_POSITION_AUTO) {
             autoDockToBottom = false;
             return;
@@ -141,10 +139,6 @@
         searchBarPositionPreference = getStoredHomeSearchBarPosition();
         updateAutoDockPosition();
     }
-
-    const handleScrollOrResize = () => {
-        updateAutoDockPosition();
-    };
 
 	const runCommand = (rawCommand: string) => {
 		const normalized = rawCommand.trim().toLowerCase();
@@ -332,12 +326,14 @@
 	}
 
 	$: totalSearchResults = searchResults.movies.length + searchResults.series.length;
+    /** On TV the bar stays in the header, where it neither covers the rows nor catches the remote's Down key. */
     $: searchDockBottom =
-        portraitLayout ||
-        searchBarPositionPreference === HOME_SEARCH_BAR_POSITION_BOTTOM ||
-        (searchBarPositionPreference === HOME_SEARCH_BAR_POSITION_AUTO &&
-            $router.page === "home" &&
-            autoDockToBottom);
+        !isTvPlatform &&
+        (portraitLayout ||
+            searchBarPositionPreference === HOME_SEARCH_BAR_POSITION_BOTTOM ||
+            (searchBarPositionPreference === HOME_SEARCH_BAR_POSITION_AUTO &&
+                $router.page === "home" &&
+                autoDockToBottom));
     $: homeOverlayMode = absolute && $router.page === "home";
     $: portalSearchDock = homeOverlayMode || portraitLayout;
     $: if (searchBarPositionPreference === HOME_SEARCH_BAR_POSITION_AUTO) {
@@ -346,28 +342,29 @@
     }
 
     onMount(() => {
+        const portrait = window.matchMedia("(orientation: portrait)");
+        const updatePortrait = () => {
+            portraitLayout = portrait.matches;
+        };
+        updatePortrait();
+        portrait.addEventListener("change", updatePortrait);
         refreshSearchBarPositionPreference();
         scrollContainer = document.querySelector(
             "[data-scroll-container]",
         ) as HTMLElement | null;
         updateAutoDockPosition();
-        (scrollContainer ?? window).addEventListener(
-            "scroll",
-            handleScrollOrResize,
-            { passive: true } as AddEventListenerOptions,
-        );
-        window.addEventListener("resize", handleScrollOrResize);
+        const scrollTarget = scrollContainer ?? window;
+        if (!isTvPlatform) {
+            scrollTarget.addEventListener("scroll", updateAutoDockPosition, { passive: true });
+        }
         window.addEventListener(
             HOME_SEARCH_BAR_POSITION_CHANGED_EVENT,
             refreshSearchBarPositionPreference,
         );
 
         return () => {
-            (scrollContainer ?? window).removeEventListener(
-                "scroll",
-                handleScrollOrResize,
-            );
-            window.removeEventListener("resize", handleScrollOrResize);
+            portrait.removeEventListener("change", updatePortrait);
+            scrollTarget.removeEventListener("scroll", updateAutoDockPosition);
             window.removeEventListener(
                 HOME_SEARCH_BAR_POSITION_CHANGED_EVENT,
                 refreshSearchBarPositionPreference,
@@ -459,6 +456,7 @@
 
     <div
         use:portalToBody={portalSearchDock}
+        data-tv-pinned={homeOverlayMode || portraitLayout ? "" : undefined}
         style={homeOverlayMode || portraitLayout
             ? `top: ${portraitLayout || searchDockBottom
                 ? "calc(100dvh - clamp(20px, 3vh, 32px) - clamp(56px, 4vw, 80px))"

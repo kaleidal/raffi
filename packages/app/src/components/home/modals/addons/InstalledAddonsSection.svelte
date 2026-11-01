@@ -130,7 +130,7 @@
 	}
 </script>
 
-<section class="rounded-[28px] bg-white/4 p-5 md:p-6 flex flex-col gap-4 flex-1 min-h-0">
+<section class="rounded-[28px] bg-white/4 p-5 md:p-6 flex flex-col gap-4 flex-1 min-h-0 min-w-0">
 	<div class="flex flex-col gap-1">
 		<h3 class="text-white text-xl font-semibold">Installed Addons</h3>
 		<p class="text-white/60 text-sm">These sources are already available inside Raffi.</p>

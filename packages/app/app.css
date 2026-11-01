@@ -163,6 +163,11 @@ summary:focus-visible {
   background-color: rgb(0 0 0 / 0.55);
 }
 
+/* Rows follow the remote's focus, so the mouse arrows at their edges would only cover posters. */
+:root[data-platform="tv"] .rail-button {
+  display: none;
+}
+
 /* Without the blur, a darker backdrop keeps dialogs readable over the page. */
 :root[data-platform="tv"] [data-tv-modal] {
   background-color: rgb(9 9 9 / 0.96);

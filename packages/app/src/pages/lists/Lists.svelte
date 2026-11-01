@@ -62,7 +62,7 @@
                 </div>
             </div>
         {:else}
-            <div class="relative z-10 flex-1 min-h-0 w-full px-[clamp(14px,1.3vw,20px)] pb-[clamp(14px,1.3vw,20px)] pt-[clamp(20px,2.6vw,40px)]" in:fade={{ duration: 300 }}>
+            <div class="relative z-10 flex-1 min-h-0 w-full px-[var(--raffi-page-gutter)] pb-[clamp(14px,1.3vw,20px)] pt-[clamp(20px,2.6vw,40px)]" in:fade={{ duration: 300 }}>
                 <div class="lists-layout mx-auto grid h-full min-h-0 w-full max-w-[1680px] gap-[clamp(14px,1.3vw,20px)]">
                     <ListSidebar>
                         <div slot="grid" let:listId>

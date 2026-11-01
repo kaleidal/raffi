@@ -100,11 +100,11 @@
         on:wheel|preventDefault|stopPropagation
         role="button"
         tabindex="0"
-        style="padding: clamp(20px, 5vw, 150px);"
+        style="padding: clamp(16px, 5vh, 150px) clamp(20px, 5vw, 150px);"
     >
 
         <div
-            class="w-full h-full rounded-[32px] bg-[#2b2b2b]/56 backdrop-blur-[40px] p-6 md:p-10 flex flex-col gap-6 relative overflow-hidden shadow-[0_40px_160px_rgba(0,0,0,0.45)]"
+            class="w-full h-full rounded-[32px] bg-[#2b2b2b]/56 backdrop-blur-[40px] p-6 md:p-10 [@media(max-height:800px)]:p-6 flex flex-col gap-6 relative overflow-hidden shadow-[0_40px_160px_rgba(0,0,0,0.45)]"
             transition:scale={{ start: 0.95, duration: 200 }}
             on:wheel|stopPropagation
         >

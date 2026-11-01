@@ -490,8 +490,10 @@
 	<DirectSourceSection />
 
 
-	<div class="grid items-stretch gap-4 xl:grid-cols-2">
-		<SearchBarPositionCard {searchBarPosition} onChange={setSearchBarPosition} />
+	<div class="grid items-stretch gap-4 {isTvPlatform ? '' : 'xl:grid-cols-2'}">
+		{#if !isTvPlatform}
+			<SearchBarPositionCard {searchBarPosition} onChange={setSearchBarPosition} />
+		{/if}
 		<HeroSourceCard
 			{heroSource}
 			{heroSourceLoading}
