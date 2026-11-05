@@ -32,8 +32,8 @@ function createMainWindow({
   const primaryWorkArea = screen.getPrimaryDisplay()?.workArea;
   const initialWidth = Math.min(defaultWindowWidth, primaryWorkArea?.width || defaultWindowWidth);
   const initialHeight = Math.min(defaultWindowHeight, primaryWorkArea?.height || defaultWindowHeight);
-  const minWindowWidth = Math.min(1200, primaryWorkArea?.width || 1200);
-  const minWindowHeight = Math.min(800, primaryWorkArea?.height || 800);
+  const minWindowWidth = Math.min(960, primaryWorkArea?.width || 960);
+  const minWindowHeight = Math.min(600, primaryWorkArea?.height || 600);
   logToFile("Creating main window");
 
   const windowOptions = {
