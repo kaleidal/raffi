@@ -46,6 +46,7 @@ export const buildTraktHeaders = (clientId: string, accessToken?: string) => {
     "Content-Type": "application/json",
     "trakt-api-version": "2",
     "trakt-api-key": clientId,
+    "User-Agent": "Raffi Sync",
   };
   if (accessToken) {
     headers.Authorization = `Bearer ${accessToken}`;

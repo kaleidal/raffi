@@ -23,7 +23,7 @@ export const deviceSignInState = (status: number): DeviceSignInState | undefined
 const deviceRequest = (path: "code" | "token", clientId: string, body: Record<string, string>) =>
   fetch(`${TRAKT_API_BASE_URL}/oauth/device/${path}`, {
     method: "POST",
-    headers: { ...buildTraktHeaders(clientId), "User-Agent": "Raffi Sync" },
+    headers: buildTraktHeaders(clientId),
     body: JSON.stringify(body),
   });
 
