@@ -1,391 +1,113 @@
 # Raffi
 
-<div align="center">
+![Raffi](preview.png)
 
-![Raffi Preview](preview.png)
+Raffi is a streaming app built around Stremio addons. Add the addons you already use, and everything they offer shows up in one library with a fast player, progress tracking and watch parties.
 
-**A modern, beautiful streaming platform for your personal media library**
+Raffi doesn't come with anything to stream. What you can watch depends on the addons you add.
 
-[![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Website](https://img.shields.io/badge/Website-raffi.al-orange)](https://raffi.al)
+**[Download](https://raffi.al)** · [Schelf](https://schelf.store/kaleidal/raffi) · [Report a bug](https://github.com/kaleidal/raffi/issues)
 
-[Features](#features) • [Installation](#installation) • [Development](#development) • [Architecture](#architecture) • [Contributing](#contributing)
+## What it does
 
-</div>
+- **Addons:** use any Stremio addon, several at once, or add your own direct link templates. You can also import your Stremio library.
+- **Player:** switch audio and subtitle tracks, adjust subtitle delay, preview frames on the seek bar, skip intros and recaps, save clips, and keep watching in a mini player.
+- **Audio:** Dolby Digital, Dolby Digital Plus, DTS and TrueHD all play in the app on desktop, and every text subtitle track in an MKV is available as it streams.
+- **Library:** continue watching, per-episode progress, and your own lists, synced across devices with an account or kept on your device in local mode.
+- **Watch parties:** synced playback with host controls.
+- **Trakt:** connect with a short code to send your progress to your profile.
+- **Torrents:** stream through [Limbo](https://limbo.kaleid.al), on the same computer or, for Android, on a paired computer on your network.
+- **Discord:** optional Rich Presence showing what you're watching.
 
----
+## Get Raffi
 
-## Overview
+| Platform | Download | Updates |
+| --- | --- | --- |
+| Windows | `.exe` installer or `.msi` | Automatic |
+| macOS (Apple silicon) | `.dmg` or `.zip` | Built unsigned, so macOS may block automatic updates |
+| Linux | AppImage, `.deb` or `.rpm` | Automatic |
+| Android, phones and TVs | Build from source, see [apps/android](apps/android/README.md) | Manual |
 
-Raffi is a modern, cross-platform streaming application inspired by [Stremio](https://www.stremio.com/), designed to be a faster, more beautiful alternative with enhanced features. Built with modern web technologies, it provides a Netflix-like experience while leveraging the **Stremio addon ecosystem** for content discovery and streaming.
+Windows and macOS builds aren't code-signed, so your system may warn you before opening them. Intel Macs can stay on 0.16.0, the last version built for them.
 
-Like Stremio, Raffi uses community addons to aggregate streaming sources, but goes beyond with a reimagined interface, improved performance, and additional features like synchronized watch parties, enhanced progress tracking, and Discord integration.
+Not everything works everywhere yet:
 
-## Features
-
-### 🎬 **Rich Media Experience**
-- Beautiful, responsive UI with smooth animations
-- Auto-playing trailers on hover
-- Multiple video quality options
-- Audio and subtitle track selection
-- Picture-in-picture and fullscreen support
-
-### 📱 **Cross-Platform**
-- **Windows** - `.exe` and `.msi` installers
-- **Linux** - `.deb`, `.rpm`, and `.AppImage` packages
-- **macOS** - `.dmg` and `.zip` distributions for Apple silicon
-- **Web** - Browser app on Cloudflare
-- **Android** - One app for phones and TVs: touch on phones, the remote on Google TV devices such as the Chromecast with Google TV
-
-### 👥 **Watch Together**
-- Real-time watch parties with synchronized playback
-- Chat and presence indicators
-- Host controls for play/pause/seek
-
-### 📚 **Library Management**
-- Custom lists and collections
-- Continue watching with progress tracking
-- Episode and season management
-- Search across all content
-
-### 🔌 **Stremio Addon Compatibility**
-- **Full Stremio addon support** - Use any Stremio addon for content sources
-- Community addon ecosystem for movies, TV shows, and more
-- Multiple addon sources simultaneously
-- Easy addon management and configuration
-- Optional direct link mode with user-supplied movie and series URL templates
-- Direct links can open as provider embeds or play through Raffi's player when compatible
-- Source settings sync with your account while keeping addon and direct configurations separate
-
-### 🎨 **Customization**
-- Configurable seek bar styles
-- Subtitle delay adjustment
-- Theme customization
-
-### 🔧 **Advanced Features**
-- Torrent/magnet link streaming via Limbo
-- Local file playback
-- Discord Rich Presence with cover art, playback progress, title context, and Raffi/IMDb links
-- Auto-updater
-- Offline mode support
-
-## Installation
-
-### Download
-
-Visit [raffi.al](https://raffi.al) or get the latest version from [Schelf](https://schelf.store/kaleidal/raffi).
-
-#### Windows
-- **Installer**: `Raffi-Setup-x.x.x.exe`
-- **MSI**: `Raffi-x.x.x.msi`
-
-#### Linux
-```bash
-# Debian/Ubuntu
-sudo dpkg -i Raffi-x.x.x-amd64.deb
-
-# Fedora/RHEL
-sudo rpm -i Raffi-x.x.x-x86_64.rpm
-
-# AppImage
-chmod +x Raffi-x.x.x-x86_64.AppImage
-./Raffi-x.x.x-x86_64.AppImage
-```
-
-#### macOS
-- **DMG**: Mount and drag to Applications
-- **ZIP**: Extract and move to Applications
-
-#### Android
-- **APK**: Build it from source (see [apps/android](apps/android/README.md)) and install it with `adb` on a phone or TV
+| | Desktop | Web | Android |
+| --- | --- | --- | --- |
+| Debrid and direct HTTP streams | Yes | Yes | Yes |
+| Torrents through Limbo | Yes | No | Yes |
+| Local files | Yes | No | No |
+| Saving clips | Yes | No | No |
+| Watch parties | Yes | Yes | No |
 
 ## Development
 
-### Prerequisites
-
-- **Bun** 1.3+
-- **Git**
-- **tar** (included with current Windows, macOS, and Linux developer environments)
-
-### Project Structure
-
-```
-raffi/
-├── apps/
-│   ├── android/       # Android host for phones and TVs (Kotlin, WebView, Media3)
-│   ├── desktop/       # Electron desktop shell
-│   └── web/           # SvelteKit + Cloudflare web app
-├── packages/
-│   └── app/           # Shared Svelte Raffi UI and app logic
-├── services/
-│   └── sync/          # Cloud sync API (Cloudflare Workers + D1)
-└── marketing/         # Public raffi.al site
-```
-
-#### Desktop App (`apps/desktop/`)
-- **Framework**: Electron with Svelte 5 and TypeScript
-- **Platforms**: Windows, macOS, Linux
-- **Features**: Full desktop experience with watch parties, Discord integration, local file playback
-- **Build**: Bun bundles the Electron main/preload processes and electron-builder creates multi-platform releases. Production packages exclude source files, development dependencies, and unused Chromium locales.
-- **Playback**: MediaBunny remuxes streams in the renderer and decodes the audio browsers can't play themselves, including Dolby Digital, Dolby Digital Plus, DTS, and Dolby TrueHD, converting it to AAC on the fly.
-
-Run `bun run validate` from the repository root to typecheck every workspace and run the app and desktop playback suites. The desktop suite checks that Chromium accepts the remuxed AAC stream and that DTS and TrueHD audio decode inside Electron.
-
-#### Web App (`apps/web/`)
-- **Framework**: SvelteKit with Cloudflare adapter
-- **Purpose**: Browser-first Raffi for direct HTTP and debrid streams
-- **UI**: Consumes the same shared Svelte package as desktop
-- **Deploy**: Cloudflare Pages/Workers target
-
-#### Android App (`apps/android/`)
-- **Framework**: Kotlin host with Media3 and AndroidX WebKit
-- **Purpose**: Raffi on Android phones, driven by touch, and on Google TV devices, driven by the remote
-- **UI**: The same shared Svelte package, with a native-video player page and focus navigation on TVs
-- **Build**: Vite bundles the interface into the APK and Gradle builds it
-
-#### Shared App (`packages/app/`)
-- **Framework**: Svelte 5
-- **Purpose**: The reusable Raffi app experience mounted by desktop, web, and Android
-- **Playback**: Browser-compatible direct playback where possible, desktop-only gates for local/server-dependent features
-
-#### Sync Service (`services/sync/`)
-- **Runtime**: Cloudflare Workers
-- **Storage**: Cloudflare D1 for account data and Durable Objects for watch-party state
-- **Features**: Email sign-in codes, cloud sync, profile photos, Trakt token integration, watch-party coordination
-
-#### Marketing Site (`marketing/`)
-- **Framework**: SvelteKit
-- **Purpose**: Marketing site and download page
-- **Hosted at**: [raffi.al](https://raffi.al)
-
-### Quick Start
+You'll need [Bun](https://bun.sh).
 
 ```bash
-# Clone the repository
 git clone https://github.com/kaleidal/raffi.git
 cd raffi
-
 bun install
 
-# Desktop app
 bun run dev:desktop
-
-# Web app
 bun run dev:web
-
-# Build for production
-bun run build:desktop
-bun run build:web
 ```
 
-### Desktop Development
+Android also needs JDK 25 and the Android SDK:
 
 ```bash
-bun install
-
-# Run in development mode
-bun run dev:desktop
-
-# Run Electron only (Vite already running)
-bun --filter @raffi/desktop electron:dev:only
-
-# Build production release
-bun --filter @raffi/desktop dist
-```
-
-### Web Development
-
-```bash
-bun install
-
-# Start the browser app
-bun run dev:web
-
-# Typecheck and build for Cloudflare
-bun run check:web
-bun run build:web
-```
-
-### Android Development
-
-```bash
-bun install
-
-# Typecheck the Android shell and build a debug APK
-bun run check:android
 bun run apk:android
 ```
 
-Building the APK needs JDK 25 and the Android SDK; [apps/android](apps/android/README.md) covers setup and installing on a phone or TV.
-
-### Website Development
+Before opening a pull request, run the type checks and every test suite. The desktop tests start Electron and decode real audio, so on a machine with no display, run this under `xvfb-run`:
 
 ```bash
-# Run development server
-bun --filter @raffi/marketing dev
-
-# Build for production
-bun --filter @raffi/marketing build
-```
-
-## Architecture
-
-### Tech Stack
-
-#### Desktop App
-- **Frontend**: Svelte 5, TypeScript, Tailwind CSS
-- **Desktop Runtime**: Electron
-- **Video Player**: native media playback, HLS.js, and MediaBunny with Dolby and DTS decoders
-- **Storage**: Local app data with Raffi Sync cloud backup
-- **Build**: Vite + electron-builder
-- **Key Libraries**: `@lucide/svelte`, MediaBunny, and HLS.js
-
-#### Web App
-- **Frontend**: SvelteKit, TypeScript, Tailwind CSS
-- **Deployment**: Cloudflare Pages/Workers
-- **Playback**: Native video and HLS.js for direct HTTP/debrid streams
-- **Limitations**: Torrent, local file, and clip export stay desktop-only
-
-#### Android App
-- **Host**: Kotlin app hosting the shared interface in a WebView, navigated with touch on phones and the remote on TVs
-- **Playback**: Media3 (ExoPlayer) beneath the transparent page, with hardware decoding, HDMI audio passthrough, and embedded plus addon subtitles
-- **Torrents**: Stream from Limbo on a computer on the same network, after pairing the phone or TV with it once
-- **Limitations**: Provider web players, local files and watch parties aren't supported yet
-
-#### Sync Service
-- **Runtime**: Cloudflare Workers
-- **Database**: Cloudflare D1
-- **State Coordination**: Durable Objects for active watch parties
-- **Auth**: Better Auth email sign-in codes, with short-lived signed tokens verified at the API edge
-- **Profile photos**: Cloudflare R2
-
-### Key Features Implementation
-
-#### Stremio Addon System
-- **Compatible with Stremio addons** - Reuses the proven Stremio addon protocol
-- Addon discovery and installation
-- Multi-source aggregation from different addons
-- Torrent/magnet link support via addons
-- Community-maintained content catalogs
-
-#### Video Playback
-- Custom video player with HLS for addon streams
-- HTTP/debrid streams play in-app via MediaBunny (probe + remux) or native `<video>` when compatible
-- Local files and clip export use MediaBunny on desktop (`raffi-media://` for disk access)
-- Torrents stream through Limbo, on the same computer or, for Android, on a paired computer on the network
-- Community addon catalog is fetched from Electron main
-- Text subtitles embedded in MKV files (SRT, ASS/SSA, WebVTT) are read from the stream as it plays, with no extra downloads. Image-based subtitles such as PGS aren't supported.
-- Multiple quality selection
-- Subtitle parsing (SRT/VTT)
-- Audio track switching
-- Skip Intro and Skip Recap land instantly on remuxed streams, since the first seconds after the chapter are prepared while it plays
-- Seek bar with time-remaining display, chapter segments, loaded ranges, drag scrubbing, and frame previews for HTTP/debrid streams. Previews fetch only the keyframe they show, found through the file's own index (MKV cues or the MP4 sample table).
-
-#### Watch Parties
-- Synchronized playback state through Raffi Sync
-- Durable Object-backed party state
-- Host/participant role system
-- Automatic reconnection
-
-#### Progress Tracking
-- Local and cloud sync
-- Per-episode progress
-- Resume from last position
-- Watched/unwatched states
-
-#### Cross-Device Synchronization
-- **One account everywhere** - Sign in on desktop or web with a code sent to your email
-- **Watch progress sync** - Start on desktop or web, continue on another client
-- **Library sync** - Custom lists and favorites across devices
-- **Addon settings** - Configured addons available on all platforms
-
-## Building from Source
-
-### Build Desktop App
-
-```bash
-# Verify all workspaces and playback paths first
 bun run validate
-
-# Windows
-bun --filter @raffi/desktop dist -- --win
-
-# Linux
-bun --filter @raffi/desktop dist -- --linux
-
-# macOS
-bun --filter @raffi/desktop dist -- --mac
-
-# All platforms
-bun --filter @raffi/desktop dist
 ```
 
-Output will be in `apps/desktop/release/`
+### Layout
 
-### Publishing a Release
+| Path | What's there |
+| --- | --- |
+| [`packages/app`](packages/app) | The Svelte app itself, shared by every platform |
+| [`apps/desktop`](apps/desktop) | Electron shell |
+| [`apps/web`](apps/web/README.md) | SvelteKit build for Cloudflare |
+| [`apps/android`](apps/android/README.md) | Kotlin host for phones and TVs, with native playback through Media3 |
+| [`services/sync`](services/sync/README.md) | Accounts, cloud sync, Trakt and watch parties, on Cloudflare Workers |
+| [`marketing`](marketing) | The [raffi.al](https://raffi.al) site |
 
-From an up-to-date `main`, with `gh` signed in and Wrangler able to reach the Cloudflare account:
+### Playback
+
+Streams that the browser can play go straight to a `<video>` element, with HLS.js for HLS. Everything else goes through [MediaBunny](https://mediabunny.dev), which remuxes the stream in the app and decodes audio the browser can't, so there's no FFmpeg to ship. On Android, Media3 plays the video on a surface underneath the page.
+
+Seek previews fetch only the keyframe they show. For MKV, Raffi reads the file's cue index itself, because going through MediaBunny would download the whole cluster around each frame.
+
+### Building packages
 
 ```bash
-scripts/publish.sh 0.15.1
+bun --filter @raffi/desktop dist -- --win
+bun --filter @raffi/desktop dist -- --mac
+bun --filter @raffi/desktop dist -- --linux
 ```
 
-The script opens your editor for the release notes. It then:
-- applies pending sync D1 migrations;
-- bumps the version and lockfile, commits `Release <version>`, and pushes `main`;
-- runs the **Build and Release** workflow, which also publishes the builds on Schelf, and waits for it;
-- puts the notes on the release and publishes it.
+Packages end up in `apps/desktop/release`. Build each one on its own system.
 
-If `main` is already at that version, the bump is skipped. Pass `--notes FILE` to skip the editor, `--draft` to leave the release unpublished, and `--yes` to skip the confirmation.
+### Releasing
 
-### Build Configuration
+From an up-to-date `main`, with `gh` signed in and Wrangler logged in:
 
-**Desktop** (`apps/desktop/package.json`):
-- App metadata (name, version, author)
-- Build targets (Windows, Linux, macOS)
-- Icon paths and file associations
-- Auto-update settings
-- Minimal production file allowlist and English Chromium locale
+```bash
+scripts/publish.sh 1.2.3
+```
+
+The script applies pending sync migrations, bumps the version, runs the release workflow, and publishes the release on GitHub and [Schelf](https://schelf.store/kaleidal/raffi). `--notes FILE` skips the editor, `--draft` leaves the GitHub release unpublished, and `--yes` skips the confirmation.
+
+Pushing to `main` deploys the sync service and the website, so database migrations have to go out first. The script handles that for releases.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-### Development Guidelines
-
-1. **Code Style**: Follow existing patterns, use TypeScript
-2. **Commits**: Write clear, descriptive commit messages
-3. **Testing**: Test on multiple platforms when possible
-4. **Documentation**: Update README for significant changes
-
-### Areas for Contribution
-
-- 🐛 Bug fixes
-- ✨ New features
-- 🎨 UI/UX improvements
-- 📝 Documentation
-- 🌍 Translations
-- 🧪 Testing
+Pull requests are welcome. For anything big, open an issue first so we can talk it through.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](apps/desktop/LICENSE) file for details.
-
-## Acknowledgments
-
-- Built with ❤️ by [Kaleidal](https://github.com/kaleidal)
-- Inspired by [Stremio](https://www.stremio.com/) and its addon ecosystem
-- Icons by [Lucide](https://lucide.dev)
-- Powered by the community-driven Stremio addon protocol
-
-## Links
-
-- **Website**: [raffi.al](https://raffi.al)
-- **GitHub**: [github.com/kaleidal/raffi](https://github.com/kaleidal/raffi)
-- **Issues**: [Report a bug](https://github.com/kaleidal/raffi/issues)
-
----
-
-<div align="center">
-Made with Svelte and Electron
-</div>
+[MIT](LICENSE)
