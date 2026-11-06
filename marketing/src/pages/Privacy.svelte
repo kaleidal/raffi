@@ -1,5 +1,5 @@
 <script lang="ts">
-  const updatedAt = "September 28, 2026";
+  const updatedAt = "November 6, 2026";
 
   const sections = [
     { id: "scope", label: "Scope and operator" },
@@ -200,7 +200,11 @@
             </div>
             <div class="service-row">
               <h3><a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noreferrer">GitHub</a></h3>
-              <p>Provides release information, application downloads, update metadata, source code, issue reporting, and community discussions.</p>
+              <p>Provides source code, issue reporting, community discussions, and updates for versions of Raffi older than 0.16.</p>
+            </div>
+            <div class="service-row">
+              <h3><a href="https://schelf.store/legal/privacy" target="_blank" rel="noreferrer">Schelf</a></h3>
+              <p>Provides application downloads and update metadata.</p>
             </div>
           </div>
           <p>

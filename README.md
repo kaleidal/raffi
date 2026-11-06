@@ -73,7 +73,7 @@ Like Stremio, Raffi uses community addons to aggregate streaming sources, but go
 
 ### Download
 
-Visit [raffi.al](https://raffi.al) or check the [Releases](https://github.com/kaleidal/raffi/releases) page for the latest version.
+Visit [raffi.al](https://raffi.al) or get the latest version from [Schelf](https://schelf.store/kaleidal/raffi).
 
 #### Windows
 - **Installer**: `Raffi-Setup-x.x.x.exe`
