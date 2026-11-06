@@ -1,7 +1,11 @@
-name: Manual Build and Release
+name: Build and Release
 
 on:
   workflow_dispatch:
+    inputs:
+      notes:
+        description: Release notes
+        type: string
 
 permissions:
   contents: write
@@ -12,7 +16,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -35,7 +39,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -52,6 +56,24 @@ jobs:
           EP_DRAFT: true
         run: bun run dist -- --publish always
         working-directory: apps/desktop
+
+      - name: Keep the builds for Schelf
+        uses: actions/upload-artifact@v7
+        with:
+          name: raffi-${{ matrix.os }}
+          path: |
+            apps/desktop/release/Raffi-Setup-*.exe
+            apps/desktop/release/Raffi-Setup-*.exe.blockmap
+            apps/desktop/release/Raffi-*.msi
+            apps/desktop/release/Raffi-*.dmg
+            apps/desktop/release/Raffi-*.dmg.blockmap
+            apps/desktop/release/Raffi-*.zip
+            apps/desktop/release/Raffi-*.zip.blockmap
+            apps/desktop/release/Raffi-*.AppImage
+            apps/desktop/release/Raffi-*.deb
+            apps/desktop/release/Raffi-*.rpm
+          compression-level: 0
+          if-no-files-found: error
 
       - name: Install Flatpak tools
         if: matrix.os == 'ubuntu-latest'
@@ -86,3 +108,33 @@ jobs:
           gh release view "${TAG}" >/dev/null 2>&1 || gh release create "${TAG}" --draft --title "Raffi ${VERSION}" --notes ""
           gh release upload "${TAG}" flatpak/artifacts/*.flatpak --clobber
         working-directory: apps/desktop
+
+  schelf:
+    needs: release
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Read the version
+        id: version
+        run: echo "version=$(jq -r .version apps/desktop/package.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Download the builds
+        uses: actions/download-artifact@v8
+        with:
+          path: builds
+          merge-multiple: true
+
+      - name: Publish on Schelf
+        uses: Lantharos/Store/publish@v1
+        with:
+          files: builds/*
+          version: ${{ steps.version.outputs.version }}
+          notes: ${{ inputs.notes }}

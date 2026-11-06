@@ -57,12 +57,19 @@
       "buildResources": "build",
       "output": "release"
     },
-    "publish": {
-      "provider": "github",
-      "owner": "kaleidal",
-      "repo": "raffi",
-      "releaseType": "draft"
-    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://dl.schelf.store/kaleidal/raffi",
+        "useMultipleRangeRequest": false
+      },
+      {
+        "provider": "github",
+        "owner": "kaleidal",
+        "repo": "raffi",
+        "releaseType": "draft"
+      }
+    ],
     "protocols": [
       {
         "name": "Raffi links",
@@ -127,6 +134,12 @@
         "msi"
       ],
       "icon": "build/icons/icon.ico"
+    },
+    "nsis": {
+      "artifactName": "Raffi-Setup-${version}.${ext}"
+    },
+    "msi": {
+      "artifactName": "Raffi-${version}.${ext}"
     },
     "fileAssociations": [
       {

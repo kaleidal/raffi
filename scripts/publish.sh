@@ -7,7 +7,7 @@
 # 2. Applies pending sync D1 migrations (main auto-deploys the Worker, so tables go first).
 # 3. Bumps the app and desktop versions, the lockfile and the Flatpak release notes,
 #    then commits "Release <version>" and pushes main. Skipped when main already has it.
-# 4. Runs the Manual Build and Release workflow and waits for it.
+# 4. Runs the Build and Release workflow, which also publishes on Schelf, and waits for it.
 # 5. Sets the release notes on the draft release and publishes it.
 set -euo pipefail
 
@@ -54,7 +54,7 @@ confirm() {
 [[ -n "$VERSION" ]] || { usage; exit 1; }
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "Version must look like 1.2.3, got '$VERSION'"
 TAG="v$VERSION"
-WORKFLOW="manual_release.yml"
+WORKFLOW="schelf.yml"
 METAINFO="apps/desktop/flatpak/al.kaleid.raffi.metainfo.xml"
 
 cd "$(dirname "$0")/.."
@@ -176,7 +176,7 @@ step "Starting the $WORKFLOW workflow"
 HEAD_SHA="$(git rev-parse HEAD)"
 # Run IDs only grow, so anything above the newest existing run came from this dispatch.
 LAST_RUN_ID="$(gh run list --workflow "$WORKFLOW" --limit 1 --json databaseId --jq '.[0].databaseId // 0')"
-gh workflow run "$WORKFLOW" --ref main
+gh workflow run "$WORKFLOW" --ref main -f notes="$(cat "$NOTES_FILE")"
 
 RUN_ID=""
 for _ in $(seq 1 30); do
