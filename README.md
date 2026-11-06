@@ -33,7 +33,7 @@ Like Stremio, Raffi uses community addons to aggregate streaming sources, but go
 ### 📱 **Cross-Platform**
 - **Windows** - `.exe` and `.msi` installers
 - **Linux** - `.deb`, `.rpm`, and `.AppImage` packages
-- **macOS** - `.dmg` and `.zip` distributions
+- **macOS** - `.dmg` and `.zip` distributions for Apple silicon
 - **Web** - Browser app on Cloudflare
 - **Android** - One app for phones and TVs: touch on phones, the remote on Google TV devices such as the Chromecast with Google TV
 

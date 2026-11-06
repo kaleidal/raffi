@@ -9,8 +9,8 @@
         deb: `${LATEST}/linux-x86_64/deb`,
         appimage: `${LATEST}/linux-x86_64/appimage`,
         rpm: `${LATEST}/linux-x86_64/rpm`,
-        dmg: `${LATEST}/macos-universal/dmg`,
-        macZip: `${LATEST}/macos-universal/zip`,
+        dmg: `${LATEST}/macos-aarch64/dmg`,
+        macZip: `${LATEST}/macos-aarch64/zip`,
     };
 
     type UserOS = "windows" | "mac" | "linux";
@@ -31,7 +31,7 @@
 
     const RECOMMENDED: Record<UserOS, { label: string; href: string }> = {
         windows: { label: "Windows (.exe)", href: downloadUrls.exe },
-        mac: { label: "macOS (.dmg)", href: downloadUrls.dmg },
+        mac: { label: "macOS Apple silicon (.dmg)", href: downloadUrls.dmg },
         linux: { label: "Linux (.deb)", href: downloadUrls.deb },
     };
 
@@ -121,7 +121,7 @@
                 </div>
 
                 <div class="space-y-3 sm:col-span-2">
-                    <p class="text-[13px] font-medium text-neutral-500">macOS</p>
+                    <p class="text-[13px] font-medium text-neutral-500">macOS (Apple silicon)</p>
                     <div class="flex flex-wrap gap-2">
                         <a
                             href={downloadUrls.dmg}
