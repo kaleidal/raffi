@@ -14,20 +14,4 @@ describe("Limbo API discovery", () => {
 			}),
 		).toEqual([path.win32.join(appData, "kaleid", "Limbo", "data", "api.json")]);
 	});
-
-	test("checks the host data directory from a Flatpak sandbox", () => {
-		expect(
-			candidateLimboApiPaths({
-				platform: "linux",
-				env: {
-					XDG_DATA_HOME: "/home/raffi/.var/app/al.kaleid.raffi/data",
-					HOST_XDG_DATA_HOME: "/home/raffi/.local/share",
-				},
-				home: "/home/raffi",
-			}),
-		).toEqual([
-			"/home/raffi/.var/app/al.kaleid.raffi/data/limbo/api.json",
-			"/home/raffi/.local/share/limbo/api.json",
-		]);
-	});
 });

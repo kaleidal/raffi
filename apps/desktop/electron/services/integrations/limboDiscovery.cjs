@@ -19,11 +19,8 @@ function candidateLimboApiPaths({
       platformPath.join(home, "Library", "Application Support", "al.kaleid.Limbo", "api.json"),
     );
   } else {
-    const dataHomes = [
-      env.XDG_DATA_HOME || platformPath.join(home, ".local", "share"),
-      env.HOST_XDG_DATA_HOME,
-    ].filter((value, index, values) => value && values.indexOf(value) === index);
-    candidates.push(...dataHomes.map((dataHome) => platformPath.join(dataHome, "limbo", "api.json")));
+    const dataHome = env.XDG_DATA_HOME || platformPath.join(home, ".local", "share");
+    candidates.push(platformPath.join(dataHome, "limbo", "api.json"));
   }
 
   return candidates;

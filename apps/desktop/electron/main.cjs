@@ -25,15 +25,11 @@ registerPrivilegedSchemes(protocol, [appPrivilegedScheme]);
 
 const { logFallback, logToFile } = createLogger(app);
 
-const isFlatpak = process.platform === "linux" && Boolean(process.env.FLATPAK_ID);
-
 let autoUpdater = null;
-if (!isFlatpak) {
-  try {
-    ({ autoUpdater } = require("electron-updater"));
-  } catch (err) {
-    logFallback("Failed to load electron-updater", err);
-  }
+try {
+  ({ autoUpdater } = require("electron-updater"));
+} catch (err) {
+  logFallback("Failed to load electron-updater", err);
 }
 
 const pendingAppUserModelId =
@@ -73,7 +69,7 @@ const DEFAULT_WINDOW_HEIGHT = 1000;
 
 const isDev = !app.isPackaged;
 const electronRuntimeDir = path.join(app.getAppPath(), isDev ? "electron" : "electron-dist");
-const linuxDesktopId = process.env.FLATPAK_ID || "raffi";
+const linuxDesktopId = "raffi";
 if (process.platform === "linux") {
   const enabledFeatures = new Set(
     app.commandLine
@@ -224,18 +220,14 @@ app.whenReady().then(async () => {
     app.setAppUserModelId(pendingAppUserModelId);
   }
 
-  if (!isFlatpak) {
-    try {
-      if (isDev && (process.platform === "win32" || process.platform === "linux")) {
-        app.setAsDefaultProtocolClient("raffi", process.execPath, [path.resolve(process.argv[1])]);
-      } else {
-        app.setAsDefaultProtocolClient("raffi");
-      }
-    } catch (error) {
-      logToFile("Failed to register raffi protocol", error);
+  try {
+    if (isDev && (process.platform === "win32" || process.platform === "linux")) {
+      app.setAsDefaultProtocolClient("raffi", process.execPath, [path.resolve(process.argv[1])]);
+    } else {
+      app.setAsDefaultProtocolClient("raffi");
     }
-  } else {
-    logToFile("Skipping host protocol registration inside Flatpak");
+  } catch (error) {
+    logToFile("Failed to register raffi protocol", error);
   }
 
   if (process.platform === "win32" || process.platform === "linux") {

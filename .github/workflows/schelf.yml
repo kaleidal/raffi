@@ -75,40 +75,6 @@ jobs:
           compression-level: 0
           if-no-files-found: error
 
-      - name: Install Flatpak tools
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y flatpak flatpak-builder gh
-          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-
-      - name: Build Flatpak bundle
-        if: matrix.os == 'ubuntu-latest'
-        env:
-          RAFFI_FLATPAK_INSTALL_DEPS_FROM: flathub
-          RAFFI_FLATPAK_RUNTIME_REPO: https://dl.flathub.org/repo/flathub.flatpakrepo
-        run: bash flatpak/build-bundle.sh
-        working-directory: apps/desktop
-
-      - name: Upload Flatpak workflow artifact
-        if: matrix.os == 'ubuntu-latest'
-        uses: actions/upload-artifact@v7
-        with:
-          name: raffi-flatpak-x86_64
-          path: apps/desktop/flatpak/artifacts/*.flatpak
-          if-no-files-found: error
-
-      - name: Upload Flatpak to GitHub Release
-        if: matrix.os == 'ubuntu-latest'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="$(bun -e "console.log(require('./package.json').version)")"
-          TAG="v${VERSION}"
-          gh release view "${TAG}" >/dev/null 2>&1 || gh release create "${TAG}" --draft --title "Raffi ${VERSION}" --notes ""
-          gh release upload "${TAG}" flatpak/artifacts/*.flatpak --clobber
-        working-directory: apps/desktop
-
   schelf:
     needs: release
     runs-on: ubuntu-latest

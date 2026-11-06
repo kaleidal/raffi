@@ -16,7 +16,7 @@
     <binary>raffi</binary>
   </provides>
   <description>
-    <p>Raffi is a desktop video player with a personal library, local file playback, watch progress, add-ons, and custom streaming source configuration.</p>
+    <p>Raffi is a streaming app built around community addons, with a personal library, local file playback and watch progress.</p>
   </description>
   <categories>
     <category>AudioVideo</category>
@@ -38,36 +38,4 @@
       <caption>Play video with Raffi's desktop player.</caption>
     </screenshot>
   </screenshots>
-  <releases>
-    <release version="0.16.0" date="2026-11-06">
-      <description>
-        <p>Every audio format now plays inside Raffi without FFmpeg, updates come from Schelf, and the window fits smaller laptops.</p>
-      </description>
-    </release>
-    <release version="0.15.1" date="2026-10-25">
-      <description>
-        <p>Catches typos and temporary addresses at sign-up, safer local file playback, Electron 45, and more reliable seeking.</p>
-      </description>
-    </release>
-    <release version="0.15.0" date="2026-10-08">
-      <description>
-        <p>Seek bar previews, faster and more accurate seeking, embedded subtitles, instant intro skipping, and automatic recovery from stalled streams.</p>
-      </description>
-    </release>
-    <release version="0.14.0" date="2026-10-05">
-      <description>
-        <p>Sign in with a code sent to your email, profile names and photos, and refreshed home posters.</p>
-      </description>
-    </release>
-    <release version="0.13.0" date="2026-08-25">
-      <description>
-        <p>Improved playback reliability, Limbo torrent integration, cloud synchronization, watched progress, and responsive player controls.</p>
-      </description>
-    </release>
-    <release version="0.9.2" date="2026-05-12">
-      <description>
-        <p>Added direct streaming sources, collapsible library lists, clearer add-on setup guidance, and faster startup.</p>
-      </description>
-    </release>
-  </releases>
 </component>

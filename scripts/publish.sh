@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Release Raffi end to end:
 #   scripts/publish.sh 0.15.1
-#   scripts/publish.sh 0.15.1 --notes notes.md --summary "One line for Flathub" --yes
+#   scripts/publish.sh 0.15.1 --notes notes.md --yes
 #
 # 1. Checks you're on an up-to-date, clean main and the version isn't released yet.
 # 2. Applies pending sync D1 migrations (main auto-deploys the Worker, so tables go first).
-# 3. Bumps the app and desktop versions, the lockfile and the Flatpak release notes,
-#    then commits "Release <version>" and pushes main. Skipped when main already has it.
+# 3. Bumps the app and desktop versions and the lockfile, then commits
+#    "Release <version>" and pushes main. Skipped when main already has it.
 # 4. Runs the Build and Release workflow, which also publishes on Schelf, and waits for it.
 # 5. Sets the release notes on the draft release and publishes it.
 set -euo pipefail
@@ -17,7 +17,6 @@ Usage: scripts/publish.sh <version> [options]
 
 Options:
   --notes FILE      Markdown release notes. Without it, $EDITOR opens a template.
-  --summary TEXT    One-line summary for the Flatpak metainfo. Asked for when needed.
   --draft           Leave the GitHub release as a draft instead of publishing it.
   --yes             Skip the script's confirmation. Wrangler still asks before
                     applying migrations, so a database change is never silent.
@@ -27,14 +26,12 @@ EOF
 
 VERSION=""
 NOTES_FILE=""
-SUMMARY=""
 KEEP_DRAFT=false
 ASSUME_YES=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --notes) NOTES_FILE="${2:?--notes needs a file}"; shift 2 ;;
-    --summary) SUMMARY="${2:?--summary needs text}"; shift 2 ;;
     --draft) KEEP_DRAFT=true; shift ;;
     --yes|-y) ASSUME_YES=true; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -55,7 +52,6 @@ confirm() {
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "Version must look like 1.2.3, got '$VERSION'"
 TAG="v$VERSION"
 WORKFLOW="schelf.yml"
-METAINFO="apps/desktop/flatpak/al.kaleid.raffi.metainfo.xml"
 
 cd "$(dirname "$0")/.."
 
@@ -114,11 +110,6 @@ fi
 [[ -s "$NOTES_FILE" ]] || fail "Release notes are empty"
 grep -q "Headline goes here" "$NOTES_FILE" && fail "Release notes still have the template headline"
 
-if $NEEDS_BUMP && [[ -z "$SUMMARY" ]] && ! grep -q "<release version=\"$VERSION\"" "$METAINFO"; then
-  read -r -p "One-line Flatpak summary for $VERSION: " SUMMARY
-  [[ -n "$SUMMARY" ]] || fail "The Flatpak summary can't be empty"
-fi
-
 echo ""
 echo "About to release $TAG:"
 $NEEDS_BUMP && echo "  • bump $CURRENT → $VERSION, commit and push to main"
@@ -133,29 +124,13 @@ step "Applying pending sync D1 migrations"
 
 if $NEEDS_BUMP; then
   step "Bumping to $VERSION"
-  RAFFI_VERSION="$VERSION" RAFFI_SUMMARY="$SUMMARY" bun -e '
+  RAFFI_VERSION="$VERSION" bun -e '
     const fs = require("fs");
     const version = process.env.RAFFI_VERSION;
     for (const file of ["apps/desktop/package.json", "packages/app/package.json"]) {
       const pkg = JSON.parse(fs.readFileSync(file, "utf8"));
       pkg.version = version;
       fs.writeFileSync(file, JSON.stringify(pkg, null, 2) + "\n");
-    }
-
-    const metainfo = "apps/desktop/flatpak/al.kaleid.raffi.metainfo.xml";
-    const xml = fs.readFileSync(metainfo, "utf8");
-    if (!xml.includes(`<release version="${version}"`)) {
-      const escape = (text) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      const date = new Date().toISOString().slice(0, 10);
-      const entry = [
-        `    <release version="${version}" date="${date}">`,
-        "      <description>",
-        `        <p>${escape(process.env.RAFFI_SUMMARY)}</p>`,
-        "      </description>",
-        "    </release>",
-      ].join("\n");
-      if (!xml.includes("  <releases>\n")) throw new Error("No <releases> block in " + metainfo);
-      fs.writeFileSync(metainfo, xml.replace("  <releases>\n", `  <releases>\n${entry}\n`));
     }
   '
   bun install --silent
@@ -164,7 +139,7 @@ if $NEEDS_BUMP; then
   bun run check
 
   step "Committing and pushing"
-  git add apps/desktop/package.json packages/app/package.json bun.lock "$METAINFO"
+  git add apps/desktop/package.json packages/app/package.json bun.lock
   git commit -m "Release $VERSION"
   git push origin main
 else

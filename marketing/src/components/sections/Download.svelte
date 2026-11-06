@@ -9,7 +9,6 @@
         deb: `${LATEST}/linux-x86_64/deb`,
         appimage: `${LATEST}/linux-x86_64/appimage`,
         rpm: `${LATEST}/linux-x86_64/rpm`,
-        flatpak: `${LATEST}/linux-x86_64/flatpak`,
         dmg: `${LATEST}/macos-universal/dmg`,
         macZip: `${LATEST}/macos-universal/zip`,
     };
@@ -33,7 +32,7 @@
     const RECOMMENDED: Record<UserOS, { label: string; href: string }> = {
         windows: { label: "Windows (.exe)", href: downloadUrls.exe },
         mac: { label: "macOS (.dmg)", href: downloadUrls.dmg },
-        linux: { label: "Linux (.flatpak)", href: downloadUrls.flatpak },
+        linux: { label: "Linux (.deb)", href: downloadUrls.deb },
     };
 
     const recommended = $derived(RECOMMENDED[userOS]);
@@ -110,13 +109,6 @@
                             class="inline-flex h-9 items-center rounded-xl px-4 text-[13px] ring-1 ring-black/10 hover:ring-black/20"
                         >
                             .rpm
-                        </a>
-                        <a
-                            href={downloadUrls.flatpak}
-                            download
-                            class="inline-flex h-9 items-center rounded-xl px-4 text-[13px] ring-1 ring-black/10 hover:ring-black/20"
-                        >
-                            .flatpak
                         </a>
                         <a
                             href={downloadUrls.appimage}
