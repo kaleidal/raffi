@@ -1,2 +1,3 @@
 id = "al.kaleid.raffi"
 format = "files"
+listing = "store/"

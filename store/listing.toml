@@ -1,0 +1,29 @@
+summary = "Movies and shows from the Stremio addons you choose, in one fast, good-looking library"
+description = """
+Raffi is a streaming app built around community addons. Add the Stremio addons you already use and everything they offer shows up in one place, with a home screen, search, trailers and full details for every title.
+
+Raffi doesn't come with anything to stream. What you can watch depends on the addons you add, and you're responsible for those sources.
+
+**Watching**
+
+- Hardware-accelerated playback with audio and subtitle track selection
+- Seek bar previews, intro skipping and subtitle delay adjustment
+- Local files, and torrents through [Limbo](https://limbo.kaleid.al)
+
+**Keeping track**
+
+- Continue watching with progress for every episode
+- Your own lists and collections
+- Progress, lists and addons that sync with your account
+
+**Watching together**
+
+- Watch parties with synced playback, chat and host controls
+- Discord presence that shows what you're watching
+"""
+keywords = ["streaming", "movies", "tv shows", "media player", "stremio addons", "watch party"]
+categories = ["AudioVideo", "Video", "Player"]
+homepage = "https://raffi.al"
+support = "https://github.com/kaleidal/raffi/issues"
+privacy_url = "https://raffi.al/privacy"
+brand_color = "#f97316"
