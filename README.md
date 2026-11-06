@@ -71,7 +71,7 @@ bun run validate
 | --- | --- |
 | [`packages/app`](packages/app) | The Svelte app itself, shared by every platform |
 | [`apps/desktop`](apps/desktop) | Electron shell |
-| [`apps/web`](apps/web/README.md) | SvelteKit build for Cloudflare |
+| [`apps/web`](apps/web/README.md) | SvelteKit build, live at [web.raffi.al](https://web.raffi.al) |
 | [`apps/android`](apps/android/README.md) | Kotlin host for phones and TVs, with native playback through Media3 |
 | [`services/sync`](services/sync/README.md) | Accounts, cloud sync, Trakt and watch parties, on Cloudflare Workers |
 | [`marketing`](marketing) | The [raffi.al](https://raffi.al) site |

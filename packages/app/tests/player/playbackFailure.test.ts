@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { describePlaybackFailure } from "../../src/pages/player/session/playbackFailure";
+import { describePlaybackFailure, streamConnectionFailure } from "../../src/pages/player/session/playbackFailure";
 
 describe("describePlaybackFailure", () => {
 	test("identifies a browser fetch failure as a likely network block", () => {
@@ -8,11 +8,7 @@ describe("describePlaybackFailure", () => {
 				reason: "probe-failed",
 				error: "TypeError: Failed to fetch",
 			}),
-		).toEqual({
-			title: "Stream connection failed",
-			details:
-				"Raffi couldn't reach this stream. It may be blocked by your network, carrier, ISP, or DNS provider. Try changing DNS, switching networks, or using a VPN.",
-		});
+		).toEqual(streamConnectionFailure());
 	});
 
 	test("preserves a specific codec failure", () => {

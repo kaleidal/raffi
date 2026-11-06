@@ -1,9 +1,16 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "raffi-web",
+	"account_id": "ab780d52c6d4df0c826897411f1558e0",
 	"compatibility_date": "2026-05-10",
+	"compatibility_flags": ["nodejs_als"],
+	"main": ".svelte-kit/cloudflare/_worker.js",
 	"assets": {
-		"directory": ".svelte-kit/cloudflare",
-		"not_found_handling": "single-page-application"
+		"binding": "ASSETS",
+		"directory": ".svelte-kit/cloudflare"
+	},
+	"routes": [{ "pattern": "web.raffi.al", "custom_domain": true }],
+	"observability": {
+		"enabled": true
 	}
 }

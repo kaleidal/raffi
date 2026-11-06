@@ -1,6 +1,6 @@
 # @raffi/web
 
-SvelteKit + Cloudflare Pages implementation of Raffi.
+SvelteKit implementation of Raffi, hosted on Cloudflare Workers.
 
 This is a **first-class web target** that consumes the exact same `@raffi/app` package as the desktop app.
 
@@ -31,4 +31,4 @@ bun run build:web
 bun --filter @raffi/web deploy
 ```
 
-Target domain: **web.raffi.al**
+Live at [web.raffi.al](https://web.raffi.al).

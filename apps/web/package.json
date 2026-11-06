@@ -10,7 +10,7 @@
     "sync": "svelte-kit sync",
     "check": "svelte-kit sync && svelte-check --tsgo --tsconfig ./tsconfig.json",
     "postinstall": "svelte-kit sync || true",
-    "deploy": "bun run build && wrangler pages deploy .svelte-kit/cloudflare"
+    "deploy": "bun run build && wrangler deploy"
   },
   "devDependencies": {
     "@typescript/native": "npm:typescript@^7.0.2",

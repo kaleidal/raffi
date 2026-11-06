@@ -1,3 +1,5 @@
+import { isWeb } from "../../../lib/shell/platform";
+
 type PlaybackFailure = {
 	reason?: string | null;
 	error?: string | null;
@@ -16,6 +18,19 @@ export class PlaybackPreparationError extends Error {
 	}
 }
 
+export const streamConnectionFailure = () =>
+	isWeb
+		? {
+				title: "This source can't play in a browser",
+				details:
+					"Its host may not allow web apps to read the video, or your connection dropped. Try another source, or use the desktop app.",
+			}
+		: {
+				title: "Stream connection failed",
+				details:
+					"Raffi couldn't reach this stream. It may be blocked by your network, carrier, ISP, or DNS provider. Try changing DNS, switching networks, or using a VPN.",
+			};
+
 export function describePlaybackFailure(failure: PlaybackFailure): {
 	title: string;
 	details: string;
@@ -27,11 +42,7 @@ export function describePlaybackFailure(failure: PlaybackFailure): {
 		NETWORK_FAILURE_PATTERN.test(error);
 
 	if (likelyNetworkFailure) {
-		return {
-			title: "Stream connection failed",
-			details:
-				"Raffi couldn't reach this stream. It may be blocked by your network, carrier, ISP, or DNS provider. Try changing DNS, switching networks, or using a VPN.",
-		};
+		return streamConnectionFailure();
 	}
 
 	if (error) {

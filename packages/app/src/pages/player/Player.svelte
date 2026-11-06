@@ -27,6 +27,7 @@
     import { progressMap as metaProgressMap, selectedStream } from "../meta/metaState";
     import { isDesktopPlatform } from "../../lib/shell/platform";
     import { needsServerResolve, resolveBrowserStream } from "../../lib/streams/browserStreams";
+    import { streamConnectionFailure } from "./session/playbackFailure";
     import {
         isLikelyProviderStatusMedia,
         isStreamPreparationPending,
@@ -1492,10 +1493,9 @@
 
         if (result.state === "network-error") {
             availabilityBlockedSource = nextVideoSrc;
-            errorMessage.set("Stream connection failed");
-            errorDetails.set(
-                "Raffi couldn't reach this stream. It may be blocked by your network, carrier, ISP, or DNS provider. Try changing DNS, switching networks, or using a VPN.",
-            );
+            const failure = streamConnectionFailure();
+            errorMessage.set(failure.title);
+            errorDetails.set(failure.details);
             showError.set(true);
             loading.set(false);
             return;
