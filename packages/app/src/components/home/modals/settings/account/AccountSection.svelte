@@ -121,6 +121,16 @@
 
 	const cancelTraktSignIn = () => traktSignIn?.abort();
 
+	async function openTrakt(url: string) {
+		traktError = "";
+		try {
+			await openTraktActivation(url);
+		} catch (e) {
+			console.error("Failed to open Trakt", e);
+			traktError = "Couldn't open your browser. Open the address above yourself and enter the code.";
+		}
+	}
+
 	onDestroy(cancelTraktSignIn);
 
 	async function disconnectTrakt() {
@@ -261,7 +271,7 @@
 					<div class="flex flex-wrap gap-2">
 						<button
 							class="bg-white text-black px-4 py-2 rounded-2xl font-semibold hover:bg-white/90 transition-colors cursor-pointer"
-							on:click={() => traktCode && openTraktActivation(traktCode.verificationUrl)}
+							on:click={() => traktCode && openTrakt(traktCode.verificationUrl)}
 						>
 							Open Trakt
 						</button>

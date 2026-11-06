@@ -5,6 +5,7 @@ const ALLOWED_EXTERNAL_HOSTS = new Set([
   "www.stator.sh",
   "trakt.tv",
   "www.trakt.tv",
+  "auth.trakt.tv",
   "limbo.kaleid.al",
   "torbox.app",
   "www.torbox.app",

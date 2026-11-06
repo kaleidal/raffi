@@ -20,6 +20,10 @@ describe("desktop external URL policy", () => {
         }
     });
 
+    test("allows the page Trakt sends people to for device sign-in", () => {
+        expect(isAllowedExternalUrl("https://auth.trakt.tv/activate")).toBe(true);
+    });
+
     test("allows the current Limbo download site", () => {
         expect(isAllowedExternalUrl("https://limbo.kaleid.al")).toBe(true);
         expect(isAllowedExternalUrl("https://limbo.al")).toBe(false);
