@@ -21,6 +21,7 @@ import {
   refreshTraktToken,
   traktScrobble,
 } from "./trakt";
+import { resolveStreamUrl } from "./streamResolve";
 import { pollTraktDeviceSignIn, startTraktDeviceSignIn } from "./traktDevice";
 import type { Addon, SyncPayload } from "./types";
 import { WatchPartyObject } from "./watchParty";
@@ -174,6 +175,11 @@ const routeAuthedRequest = async (request: Request, env: Env, parts: string[]) =
       list_id?: unknown;
       imdb_id?: unknown;
     }>(request)));
+  }
+
+  if (request.method === "POST" && parts[0] === "streams" && parts[1] === "resolve") {
+    const body = await readJson<{ url?: unknown }>(request);
+    return json(await resolveStreamUrl(body.url));
   }
 
   if (parts[0] === "trakt") {

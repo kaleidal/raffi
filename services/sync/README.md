@@ -14,6 +14,7 @@ Production apps use `https://sync.raffi.al` by default.
 - Resolve multi-device edits by update time, including timestamped deletion tombstones and per-episode progress merging.
 - Coordinate watch parties through Durable Objects.
 - Provide Trakt device sign-in, refresh, client auth, and scrobble endpoints.
+- Resolve stream links whose hosts block browsers. `POST /streams/resolve` follows redirects on an allowlist of hosts and returns the file's address, so the browser streams it directly and no video passes through the Worker.
 
 ## Development
 

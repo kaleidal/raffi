@@ -26,6 +26,7 @@
     import * as ProgressLogic from "../meta/progressLogic";
     import { progressMap as metaProgressMap, selectedStream } from "../meta/metaState";
     import { isDesktopPlatform } from "../../lib/shell/platform";
+    import { needsServerResolve, resolveBrowserStream } from "../../lib/streams/browserStreams";
     import {
         isLikelyProviderStatusMedia,
         isStreamPreparationPending,
@@ -1472,6 +1473,15 @@
         loadingStage.set("Checking availability");
         loadingDetails.set("Verifying that this source can start immediately.");
         loadingProgress.set(null);
+
+        if (needsServerResolve(nextVideoSrc)) {
+            const resolved = await resolveBrowserStream(nextVideoSrc);
+            if (run !== availabilityCheckRun) return;
+            if (resolved !== nextVideoSrc) {
+                videoSrc = resolved;
+                return;
+            }
+        }
 
         const result = await preflightStreamUrl(nextVideoSrc);
         if (
