@@ -50,6 +50,9 @@
     "extraMetadata": {
       "main": "electron-dist/main.cjs"
     },
+    "toolsets": {
+      "appimage": "1.0.3"
+    },
     "electronLanguages": [
       "en-US"
     ],
