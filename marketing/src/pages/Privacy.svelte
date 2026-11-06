@@ -23,63 +23,33 @@
   />
 </svelte:head>
 
-<div class="min-h-dvh bg-white text-black selection:bg-black selection:text-white">
-  <div class="pointer-events-none fixed inset-0">
-    <div
-      class="absolute inset-0 opacity-[0.20]"
-      style="background-image: radial-gradient(#a3a3a3 1px, transparent 1px); background-size: 26px 26px;"
-    ></div>
-  </div>
-
-  <header class="sticky top-0 z-20">
-    <div class="bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/55">
-      <div class="mx-auto max-w-6xl px-6">
-        <div class="flex h-16 items-center justify-between">
-          <a href="/" class="flex items-center gap-3 font-poppins text-[15px] tracking-[-0.01em]">
-            <img src="/raffi.svg" alt="" class="h-6 w-6" />
-            <span class="font-semibold">Raffi</span>
-          </a>
-          <nav class="flex items-center gap-6 text-[13px] text-neutral-600">
-            <a class="hover:text-black" href="/">Home</a>
-            <a
-              class="hover:text-black"
-              href="https://github.com/kaleidal/raffi"
-              target="_blank"
-              rel="noreferrer"
-            >Source</a>
-          </nav>
-        </div>
-        <div class="h-px bg-black/5"></div>
-      </div>
-    </div>
-  </header>
-
+<div>
   <main class="relative">
     <section class="mx-auto max-w-6xl px-6 pb-14 pt-14 md:pb-20 md:pt-20">
       <div class="max-w-3xl">
         <h1 class="font-poppins text-[44px] leading-[1.02] tracking-[-0.04em] md:text-[64px]">
           Privacy,
-          <span class="text-neutral-400">without the fog.</span>
+          <span class="text-ink-muted">without the fog.</span>
         </h1>
-        <p class="mt-6 max-w-2xl text-[15px] leading-6 text-neutral-600 md:text-[16px] md:leading-7">
+        <p class="mt-6 max-w-2xl text-[15px] leading-6 text-ink-soft md:text-[16px] md:leading-7">
           Raffi works locally without an account. If you choose cloud sync or connect another service,
           this policy explains what moves off your device, why, and how you can stop it.
         </p>
-        <p class="mt-5 text-[13px] text-neutral-500">Last updated {updatedAt}</p>
+        <p class="mt-5 text-[13px] text-ink-muted">Last updated {updatedAt}</p>
       </div>
 
-      <div class="mt-12 grid gap-8 border-y border-black/5 py-8 sm:grid-cols-3 sm:gap-10">
+      <div class="mt-12 grid gap-8 border-y border-well py-8 sm:grid-cols-3 sm:gap-10">
         <div>
           <p class="font-poppins text-[18px] font-medium tracking-[-0.02em]">Local by default</p>
-          <p class="mt-2 text-[14px] leading-6 text-neutral-600">An account is optional. Local mode keeps your library and preferences on your device.</p>
+          <p class="mt-2 text-[14px] leading-6 text-ink-soft">An account is optional. Local mode keeps your library and preferences on your device.</p>
         </div>
         <div>
           <p class="font-poppins text-[18px] font-medium tracking-[-0.02em]">No analytics</p>
-          <p class="mt-2 text-[14px] leading-6 text-neutral-600">Raffi does not use advertising trackers, behavioral analytics, or sell personal information.</p>
+          <p class="mt-2 text-[14px] leading-6 text-ink-soft">Raffi does not use advertising trackers, behavioral analytics, or sell personal information.</p>
         </div>
         <div>
           <p class="font-poppins text-[18px] font-medium tracking-[-0.02em]">Integrations are optional</p>
-          <p class="mt-2 text-[14px] leading-6 text-neutral-600">Trakt, Stremio, Discord, direct players, and torrenting are features you control.</p>
+          <p class="mt-2 text-[14px] leading-6 text-ink-soft">Trakt, Stremio, Discord, direct players, and torrenting are features you control.</p>
         </div>
       </div>
     </section>
@@ -87,12 +57,12 @@
     <div class="mx-auto grid max-w-6xl gap-12 px-6 pb-20 lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-20">
       <aside class="hidden lg:block">
         <nav class="sticky top-24" aria-label="Privacy policy sections">
-          <p class="mb-4 text-[13px] font-medium text-neutral-900">On this page</p>
-          <ol class="space-y-2.5 text-[13px] leading-5 text-neutral-500">
+          <p class="mb-4 text-[13px] font-medium text-ink">On this page</p>
+          <ol class="space-y-2.5 text-[13px] leading-5 text-ink-muted">
             {#each sections as section, index}
               <li>
-                <a class="group flex gap-3 hover:text-black" href={`#${section.id}`}>
-                  <span class="w-5 shrink-0 text-neutral-300 group-hover:text-neutral-500">{String(index + 1).padStart(2, "0")}</span>
+                <a class="group flex gap-3 hover:text-ink" href={`#${section.id}`}>
+                  <span class="w-5 shrink-0 text-ink-muted group-hover:text-ink-soft">{String(index + 1).padStart(2, "0")}</span>
                   <span>{section.label}</span>
                 </a>
               </li>
@@ -101,7 +71,7 @@
         </nav>
       </aside>
 
-      <article class="min-w-0 max-w-3xl text-[15px] leading-7 text-neutral-700">
+      <article class="min-w-0 max-w-3xl text-[15px] leading-7 text-ink-soft">
         <section id="scope" class="scroll-mt-24">
           <h2>Scope and operator</h2>
           <p>
@@ -177,7 +147,7 @@
         <section id="services" class="scroll-mt-24">
           <h2>Services and integrations</h2>
           <p>Raffi shares information with another service only when needed for a feature you use:</p>
-          <div class="divide-y divide-black/5 border-y border-black/5">
+          <div class="divide-y divide-well border-y border-well">
             <div class="service-row">
               <h3><a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noreferrer">Cloudflare</a></h3>
               <p>Hosts Raffi’s website, web app, sync database, profile photos, and watch-party coordination, and delivers sign-in code emails. Cloudflare may process request and security metadata.</p>
@@ -298,8 +268,8 @@
             We may update this policy when Raffi’s behavior or legal obligations change. We will revise the date at the
             top and provide additional notice when a change materially affects how personal information is handled.
           </p>
-          <div class="mt-8 border-t border-black/5 pt-8">
-            <p class="font-poppins text-[18px] font-medium tracking-[-0.02em] text-black">Questions or requests?</p>
+          <div class="mt-8 border-t border-well pt-8">
+            <p class="font-poppins text-[18px] font-medium tracking-[-0.02em] text-ink">Questions or requests?</p>
             <p class="mt-2">Email <a href="mailto:hello@kaleid.al">hello@kaleid.al</a>.</p>
           </div>
         </section>
@@ -307,17 +277,6 @@
     </div>
   </main>
 
-  <footer class="relative mx-auto max-w-6xl px-6 pb-14">
-    <div class="h-px bg-black/5"></div>
-    <div class="mt-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-      <p class="text-[13px] text-neutral-500">© {new Date().getFullYear()} Raffi</p>
-      <div class="flex flex-wrap gap-x-6 gap-y-2 text-[13px] text-neutral-600">
-        <a class="hover:text-black" href="/">Home</a>
-        <a class="hover:text-black" href="mailto:hello@kaleid.al">Contact</a>
-        <a class="hover:text-black" href="https://github.com/kaleidal/raffi" target="_blank" rel="noreferrer">Source</a>
-      </div>
-    </div>
-  </footer>
 </div>
 
 <style>
@@ -326,7 +285,7 @@
   }
 
   article h2 {
-    color: #0a0a0a;
+    color: var(--ink);
     font-family: "Poppins", sans-serif;
     font-size: clamp(1.65rem, 3vw, 2rem);
     font-weight: 500;
@@ -336,7 +295,7 @@
   }
 
   article h3 {
-    color: #171717;
+    color: var(--ink);
     font-family: "Poppins", sans-serif;
     font-size: 1rem;
     font-weight: 500;
@@ -360,14 +319,14 @@
   }
 
   article a {
-    color: #171717;
+    color: var(--ink);
     text-decoration-line: underline;
-    text-decoration-color: #d4d4d4;
+    text-decoration-color: var(--ink-muted);
     text-underline-offset: 0.2em;
   }
 
   article a:hover {
-    text-decoration-color: #171717;
+    text-decoration-color: var(--ink);
   }
 
   .service-row {

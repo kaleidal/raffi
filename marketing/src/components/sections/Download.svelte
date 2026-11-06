@@ -1,145 +1,45 @@
 <script lang="ts">
-    import { fade } from "svelte/transition";
-    import { onMount } from "svelte";
-    
-    const LATEST = "https://dl.schelf.store/kaleidal/raffi/latest";
-    const downloadUrls = {
-        exe: `${LATEST}/windows-x86_64/exe`,
-        msi: `${LATEST}/windows-x86_64/msi`,
-        deb: `${LATEST}/linux-x86_64/deb`,
-        appimage: `${LATEST}/linux-x86_64/appimage`,
-        rpm: `${LATEST}/linux-x86_64/rpm`,
-        dmg: `${LATEST}/macos-aarch64/dmg`,
-        macZip: `${LATEST}/macos-aarch64/zip`,
-    };
-
-    type UserOS = "windows" | "mac" | "linux";
-    let userOS: UserOS = $state("windows");
-    
-    onMount(() => {
-        const platform = navigator.platform.toLowerCase();
-        const userAgent = navigator.userAgent.toLowerCase();
-        
-        if (platform.includes('mac') || userAgent.includes('mac')) {
-            userOS = 'mac';
-        } else if (platform.includes('linux') || userAgent.includes('linux')) {
-            userOS = 'linux';
-        } else if (platform.includes('win') || userAgent.includes('windows')) {
-            userOS = 'windows';
-        }
-    });
-
-    const RECOMMENDED: Record<UserOS, { label: string; href: string }> = {
-        windows: { label: "Windows (.exe)", href: downloadUrls.exe },
-        mac: { label: "macOS Apple silicon (.dmg)", href: downloadUrls.dmg },
-        linux: { label: "Linux (.deb)", href: downloadUrls.deb },
-    };
-
-    const recommended = $derived(RECOMMENDED[userOS]);
+  import { SYSTEMS, WEB_APP } from "../../lib/downloads";
+  import { SOURCE } from "../../lib/links";
+  import Mark from "../Mark.svelte";
 </script>
 
-<div in:fade={{ duration: 220 }} class="grid gap-10 md:grid-cols-12 md:gap-12">
-    <div class="md:col-span-5">
-        <h2 class="font-poppins text-[28px] leading-[1.1] tracking-[-0.03em] md:text-[34px]">
-            Download
-        </h2>
-        <p class="mt-4 text-[15px] leading-6 text-neutral-600 md:text-[16px] md:leading-7">
-            We’ll suggest a build based on your device. You can also grab any format below.
-        </p>
-        <p class="mt-4 text-[13px] leading-5 text-neutral-500">
-            The app isn’t code‑signed, so Windows can show SmartScreen. That’s expected.
-        </p>
-    </div>
+<section id="download" class="mt-24 bg-well/60 py-20 md:mt-40 md:py-32">
+  <div class="mx-auto max-w-6xl px-6">
+    <Mark class="h-12 w-auto text-ink" />
+    <h2 class="mt-8 max-w-3xl text-[36px] leading-[1.1] font-semibold tracking-[-0.03em] text-balance md:text-[56px]">
+      Get Raffi, then bring your addons.
+    </h2>
+    <p class="mt-5 max-w-2xl text-lg leading-8 text-ink-soft">
+      Raffi doesn't come with anything to stream. What you can watch depends on the addons you add.
+    </p>
 
-    <div class="md:col-span-7">
-        <div class="rounded-3xl bg-black/[0.03] p-5 sm:p-6">
-            <div class="flex items-center justify-between gap-4">
-                <p class="text-[13px] font-medium text-neutral-500">Recommended</p>
-                <p class="text-[13px] text-neutral-500">
-                    {userOS === "windows" ? "Windows" : userOS === "mac" ? "macOS" : "Linux"}
-                </p>
-            </div>
-
-            <div class="mt-3">
-                <a
-                    class="inline-flex h-11 items-center rounded-xl bg-black px-5 text-[13px] font-medium text-white hover:bg-black/90"
-                    href={recommended.href}
-                    download
-                >
-                    {recommended.label}
-                </a>
-            </div>
-
-            <div class="mt-6 h-px bg-black/5"></div>
-
-            <div class="mt-6 grid gap-6 sm:grid-cols-2">
-                <div class="space-y-3">
-                    <p class="text-[13px] font-medium text-neutral-500">Windows</p>
-                    <div class="flex flex-wrap gap-2">
-                        <a
-                            href={downloadUrls.exe}
-                            download
-                            class="inline-flex h-9 items-center rounded-xl px-4 text-[13px] ring-1 ring-black/10 hover:ring-black/20"
-                        >
-                            .exe
-                        </a>
-                        <a
-                            href={downloadUrls.msi}
-                            download
-                            class="inline-flex h-9 items-center rounded-xl px-4 text-[13px] ring-1 ring-black/10 hover:ring-black/20"
-                        >
-                            .msi
-                        </a>
-                    </div>
-                </div>
-
-                <div class="space-y-3">
-                    <p class="text-[13px] font-medium text-neutral-500">Linux</p>
-                    <div class="flex flex-wrap gap-2">
-                        <a
-                            href={downloadUrls.deb}
-                            download
-                            class="inline-flex h-9 items-center rounded-xl px-4 text-[13px] ring-1 ring-black/10 hover:ring-black/20"
-                        >
-                            .deb
-                        </a>
-                        <a
-                            href={downloadUrls.rpm}
-                            download
-                            class="inline-flex h-9 items-center rounded-xl px-4 text-[13px] ring-1 ring-black/10 hover:ring-black/20"
-                        >
-                            .rpm
-                        </a>
-                        <a
-                            href={downloadUrls.appimage}
-                            download
-                            class="inline-flex h-9 items-center rounded-xl px-4 text-[13px] ring-1 ring-black/10 hover:ring-black/20"
-                        >
-                            .AppImage
-                        </a>
-                    </div>
-                </div>
-
-                <div class="space-y-3 sm:col-span-2">
-                    <p class="text-[13px] font-medium text-neutral-500">macOS (Apple silicon)</p>
-                    <div class="flex flex-wrap gap-2">
-                        <a
-                            href={downloadUrls.dmg}
-                            download
-                            class="inline-flex h-9 items-center rounded-xl px-4 text-[13px] ring-1 ring-black/10 hover:ring-black/20"
-                        >
-                            .dmg
-                        </a>
-                        <a
-                            href={downloadUrls.macZip}
-                            download
-                            class="inline-flex h-9 items-center rounded-xl px-4 text-[13px] ring-1 ring-black/10 hover:ring-black/20"
-                        >
-                            .zip
-                        </a>
-                    </div>
-                </div>
-            </div>
+    <div class="mt-14 grid gap-x-14 gap-y-10 md:grid-cols-3">
+      {#each SYSTEMS as system (system.id)}
+        <div>
+          <h3 class="text-2xl font-semibold tracking-tight">{system.name}</h3>
+          <p class="mt-1 h-6 text-sm text-ink-muted">{"note" in system ? system.note : ""}</p>
+          <a
+            href={system.primary.href}
+            class="mt-3 inline-flex h-12 items-center rounded-full bg-pill px-6 font-semibold text-pill-ink transition-opacity hover:opacity-85"
+          >
+            Download {system.primary.label}
+          </a>
+          <p class="mt-3 flex gap-4 text-sm text-ink-soft">
+            {#each system.others as other (other.label)}
+              <a class="underline underline-offset-4 transition-colors hover:text-ink" href={other.href}>{other.label}</a>
+            {/each}
+          </p>
         </div>
+      {/each}
     </div>
-</div>
+
+    <p class="mt-14 max-w-3xl leading-7 text-ink-soft">
+      Or use <a class="font-medium text-ink underline underline-offset-4" href={WEB_APP}>Raffi on the web</a>, which works with hosts that allow browsers. The Android app for phones and TVs can be
+      <a class="font-medium text-ink underline underline-offset-4" href="{SOURCE}/tree/main/apps/android" target="_blank" rel="noreferrer">built from source</a>.
+    </p>
+    <p class="mt-3 max-w-3xl text-sm leading-6 text-ink-muted">
+      Windows and macOS builds aren't code-signed, so your system may warn you before opening them.
+    </p>
+  </div>
+</section>
