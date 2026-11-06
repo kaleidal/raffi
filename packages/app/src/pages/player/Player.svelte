@@ -78,6 +78,7 @@
     import * as Chapters from "./chapters/chapters";
     import * as IntroDb from "./chapters/introdb";
     import * as Discord from "./integrations/discord";
+    import * as MediaSession from "./integrations/mediaSession";
     import * as WatchParty from "./integrations/watchParty";
     import {
         acknowledgeSeekStyleInfo,
@@ -866,6 +867,7 @@
 
     onDestroy(() => {
         isTearingDown = true;
+        MediaSession.clearMediaSession();
         followSeekPreviewSource(null);
         availabilityCheckRun += 1;
         getWindowControls()?.syncMiniPlayerState?.({
@@ -1230,6 +1232,21 @@
     $: if (availabilityNoticeVisible) {
         Discord.clearDiscordActivity();
     }
+
+    $: canControlPlayback = !$watchParty.isActive || $watchParty.isHost;
+
+    const seekWithMediaKeys = (time: number) => {
+        if (canControlPlayback) seekToTime(Math.max(0, Math.min(time, $duration)));
+    };
+
+    $: MediaSession.setNowPlaying(metaData, season, episode);
+
+    $: MediaSession.bindMediaControls({
+        togglePlay: togglePlayWithFeedback,
+        seekTo: seekWithMediaKeys,
+        seekBy: (seconds) => seekWithMediaKeys($currentTime + seconds),
+        nextEpisode: hasNextEpisode && canControlPlayback ? handleNextEpisodeClick : null,
+    });
 
     const showActionLoading = (actionLabel: string, err: unknown) => {
         bingeAutoAdvancing = false;
