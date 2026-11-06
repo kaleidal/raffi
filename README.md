@@ -34,7 +34,7 @@ Not everything works everywhere yet:
 
 | | Desktop | Web | Android |
 | --- | --- | --- | --- |
-| Debrid and direct HTTP streams | Yes | Yes | Yes |
+| Debrid and direct HTTP streams | Yes | Only hosts that allow browser access | Yes |
 | Torrents through Limbo | Yes | No | Yes |
 | Local files | Yes | No | No |
 | Saving clips | Yes | No | No |
