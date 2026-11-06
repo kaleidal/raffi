@@ -18,7 +18,6 @@ const {
 const { registerMainIpcHandlers } = require("./services/mainIpc.cjs");
 const { registerDiscordRpcHandlers } = require("./services/integrations/rpc.cjs");
 const { createMainWindow } = require("./services/window.cjs");
-const { createDefenderService } = require("./services/integrations/defender.cjs");
 
 registerPrivilegedSchemes(protocol, [appPrivilegedScheme]);
 
@@ -143,10 +142,6 @@ if (!gotTheLock) {
   });
 }
 
-const defenderService = createDefenderService({
-  logToFile,
-});
-
 function createWindow() {
   if (mainWindow && !mainWindow.isDestroyed()) {
     return;
@@ -234,8 +229,6 @@ registerMainIpcHandlers({
   isAllowedExternalUrl,
   logToFile,
   getMainWindow: () => mainWindow,
-  getDefenderExclusionStatus: () => defenderService.getExclusionStatus(),
-  applyDefenderExclusions: () => defenderService.applyExclusions(),
   scanLibraryRoots,
   localMediaAccess,
   net,

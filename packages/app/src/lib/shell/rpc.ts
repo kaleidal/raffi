@@ -55,31 +55,6 @@ declare global {
                 season: number,
                 episode: number,
             ) => Promise<{ status: number; data: unknown | null }>;
-            getDefenderExclusionStatus?: () => Promise<{
-                supported: boolean;
-                excluded: boolean;
-                paths: string[];
-                processes: string[];
-                missingPaths: string[];
-                missingProcesses: string[];
-                error: string | null;
-            }>;
-            applyDefenderExclusions?: () => Promise<{
-                ok: boolean;
-                elevated: boolean;
-                error: string | null;
-                paths?: string[];
-                processes?: string[];
-                status?: {
-                    supported: boolean;
-                    excluded: boolean;
-                    paths: string[];
-                    processes: string[];
-                    missingPaths: string[];
-                    missingProcesses: string[];
-                    error: string | null;
-                };
-            }>;
             showConfirmDialog?: (message: string, title?: string) => Promise<boolean>;
         };
     }

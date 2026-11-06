@@ -77,19 +77,19 @@ Visit [raffi.al](https://raffi.al) or get the latest version from [Schelf](https
 
 #### Windows
 - **Installer**: `Raffi-Setup-x.x.x.exe`
-- **Portable**: `Raffi-x.x.x.msi`
+- **MSI**: `Raffi-x.x.x.msi`
 
 #### Linux
 ```bash
 # Debian/Ubuntu
-sudo dpkg -i Raffi-x.x.x.amd64.deb
+sudo dpkg -i Raffi-x.x.x-amd64.deb
 
 # Fedora/RHEL
-sudo rpm -i Raffi-x.x.x.x86_64.rpm
+sudo rpm -i Raffi-x.x.x-x86_64.rpm
 
-# AppImage (Universal)
-chmod +x Raffi-x.x.x.AppImage
-./Raffi-x.x.x.AppImage
+# AppImage
+chmod +x Raffi-x.x.x-x86_64.AppImage
+./Raffi-x.x.x-x86_64.AppImage
 ```
 
 #### macOS

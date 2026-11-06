@@ -121,7 +121,6 @@
         "better-auth": "^1.7.18",
         "disposable-email-domains-js": "^1.26.0",
         "jose": "^6.2.15",
-        "zod": "^4.6.7",
       },
       "devDependencies": {
         "@cloudflare/workers-types": "^5.20261106.1",

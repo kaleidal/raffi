@@ -54,8 +54,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
         },
     },
     readLimboApiDiscovery: () => ipcRenderer.invoke('LIMBO_API_DISCOVERY_READ'),
-    getDefenderExclusionStatus: () => ipcRenderer.invoke('DEFENDER_EXCLUSION_STATUS'),
-    applyDefenderExclusions: () => ipcRenderer.invoke('DEFENDER_APPLY_EXCLUSIONS'),
     onUpdateAvailable: (callback) => {
         const handler = (_event, value) => callback(value);
         ipcRenderer.on('UPDATE_AVAILABLE', handler);

@@ -58,13 +58,7 @@ Thumbs.db
 *.swo
 *~
 
-# Local tooling binaries (not shipped)
-ffmpeg
-ffmpeg.exe
-ffprobe
-ffprobe.exe
-decoder
-decoder-*
+# Local packaged builds
 *.AppImage
 *.dmg
 *.deb
@@ -72,17 +66,12 @@ decoder-*
 *.snap
 
 # App-specific build outputs
-apps/desktop/electron/decoder-*
-apps/desktop/electron/main
-apps/desktop/electron/raffi
 apps/desktop/release/
 apps/desktop/electron-dist/
 
-# Legacy / stale paths from pre-refactor layouts
+# Early startup logs
 /Raffi/
 apps/desktop/Raffi/
-raffi-desktop/
-services/raffi-desktop/
 
 # Misc
 tmp/

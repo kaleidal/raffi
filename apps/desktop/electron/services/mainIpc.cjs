@@ -7,8 +7,6 @@ function registerMainIpcHandlers({
   isAllowedExternalUrl,
   logToFile,
   getMainWindow,
-  getDefenderExclusionStatus,
-  applyDefenderExclusions,
   scanLibraryRoots,
   localMediaAccess,
   net,
@@ -141,28 +139,6 @@ function registerMainIpcHandlers({
   ipcMain.handle("LIMBO_API_DISCOVERY_READ", async () => {
     const { readLimboApiDiscovery } = require("./integrations/limboDiscovery.cjs");
     return readLimboApiDiscovery(fs);
-  });
-
-  ipcMain.handle("DEFENDER_EXCLUSION_STATUS", async () => {
-    if (typeof getDefenderExclusionStatus !== "function") {
-      return {
-        supported: false,
-        excluded: false,
-        paths: [],
-        processes: [],
-        missingPaths: [],
-        missingProcesses: [],
-        error: "Unavailable",
-      };
-    }
-    return getDefenderExclusionStatus();
-  });
-
-  ipcMain.handle("DEFENDER_APPLY_EXCLUSIONS", async () => {
-    if (typeof applyDefenderExclusions !== "function") {
-      return { ok: false, elevated: false, error: "Unavailable" };
-    }
-    return applyDefenderExclusions();
   });
 
   ipcMain.handle("INTRODB_FETCH_SEGMENTS", async (_event, payload) => {

@@ -81,7 +81,7 @@ const editDistance = (a: string, b: string) => {
   return rows[a.length]![b.length]!;
 };
 
-export const suggestDomain = (domain: string): string | null => {
+const suggestDomain = (domain: string): string | null => {
   if (KNOWN_DOMAINS.has(domain)) return null;
 
   const dot = domain.lastIndexOf(".");

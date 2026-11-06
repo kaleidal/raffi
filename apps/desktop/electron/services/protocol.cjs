@@ -1,8 +1,6 @@
 const ALLOWED_EXTERNAL_HOSTS = new Set([
   "github.com",
   "www.github.com",
-  "stator.sh",
-  "www.stator.sh",
   "trakt.tv",
   "www.trakt.tv",
   "auth.trakt.tv",
