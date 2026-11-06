@@ -1,7 +1,6 @@
 import { betterAuth } from "better-auth";
 import { bearer, emailOTP, jwt } from "better-auth/plugins";
 import { emailScreening } from "./emailScreening";
-import { aveHandoff } from "./legacyAve";
 import { OTP_LIFETIME_SECONDS, sendSignInCode } from "./otpEmail";
 
 const DAY_SECONDS = 24 * 60 * 60;
@@ -44,7 +43,6 @@ const createAuth = (env: Env) => betterAuth({
         definePayload: () => ({}),
       },
     }),
-    aveHandoff(env),
   ],
 });
 

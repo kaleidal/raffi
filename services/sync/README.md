@@ -13,7 +13,7 @@ Production apps use `https://sync.raffi.al` by default.
 - Store profile photos in R2 and serve them from `/avatars`.
 - Resolve multi-device edits by update time, including timestamped deletion tombstones and per-episode progress merging.
 - Coordinate watch parties through Durable Objects.
-- Provide Trakt OAuth exchange, refresh, client auth, and scrobble endpoints.
+- Provide Trakt device sign-in, refresh, client auth, and scrobble endpoints.
 
 ## Development
 
@@ -55,8 +55,6 @@ Before step 1 sends a code to an address with no account yet, the Worker screens
 
 Every other endpoint expects `Authorization: Bearer <jwt>`. The Worker verifies JWTs against the signing keys in D1 and keeps them in memory, so authenticated requests don't need a database lookup. `GET /auth/get-session` returns the profile and also sends a fresh JWT in the `set-auth-jwt` response header. Names are updated with `POST /auth/update-user`, photos with `PUT` and `DELETE /profile/avatar`.
 
-Accounts that signed in with Ave keep their user IDs. Until `AVE_ACCEPTED_UNTIL`, the API still accepts Ave ID tokens from older app versions, and `POST /auth/ave/handoff` swaps an Ave session for a Raffi session so updated apps stay signed in.
-
 ## Configuration
 
 `wrangler.jsonc` declares the D1, R2, email, and Durable Object bindings, plus these variables:
@@ -64,7 +62,6 @@ Accounts that signed in with Ave keep their user IDs. Until `AVE_ACCEPTED_UNTIL`
 - `BETTER_AUTH_URL`: public URL of the Worker, also used as the JWT issuer and audience
 - `EMAIL_FROM`: sender address for sign-in codes, on a domain onboarded to Cloudflare Email Sending
 - `TRUSTED_ORIGINS`: comma-separated origins allowed to call the sign-in endpoints from a browser
-- `AVE_CLIENT_ID`, `AVE_ISSUER`, `AVE_ACCEPTED_UNTIL`: Ave sign-in handoff for older app versions
 - `TRAKT_REDIRECT_URI`
 
 Set secrets before deploying:

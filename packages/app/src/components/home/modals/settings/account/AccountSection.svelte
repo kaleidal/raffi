@@ -1,15 +1,18 @@
 <script lang="ts">
 	import {
 		cloudSyncStatus,
+		type TraktDeviceCode,
 		type TraktStatus,
 		getTraktStatus,
+		startTraktDeviceSignIn,
 		disconnectTrakt as disconnectTraktFromDb,
 		getStremioStatus,
 		syncStremioLibrary,
 		disconnectStremio,
 		type StremioConnectionStatus,
 	} from "../../../../../lib/db/db";
-	import { signInWithTraktViaBrowser } from "../../../../../lib/auth/traktAuth";
+	import { openTraktActivation, waitForTraktApproval } from "../../../../../lib/auth/traktAuth";
+	import { onDestroy } from "svelte";
 	import AccountProfile from "./AccountProfile.svelte";
 
 	let traktLoading = false;
@@ -18,6 +21,8 @@
 	let traktMessage = "";
 	let traktError = "";
 	let traktStatusRequested = false;
+	let traktCode: TraktDeviceCode | null = null;
+	let traktSignIn: AbortController | null = null;
 
 	let stremioStatus: StremioConnectionStatus = getStremioStatus();
 	let stremioBusy = false;
@@ -54,7 +59,9 @@
 		: traktBusy
 			? traktStatus?.connected
 				? "Disconnecting..."
-				: "Connecting..."
+				: traktCode
+					? "Waiting for Trakt..."
+					: "Connecting..."
 			: traktStatus?.connected
 				? "Disconnect"
 				: "Connect";
@@ -92,18 +99,29 @@
 		traktBusy = true;
 		traktError = "";
 		traktMessage = "";
+		const signIn = new AbortController();
+		traktSignIn = signIn;
 		try {
-			traktStatus = await signInWithTraktViaBrowser();
+			traktCode = await startTraktDeviceSignIn();
+			traktStatus = await waitForTraktApproval(traktCode, signIn.signal);
 			traktMessage = traktStatus?.username
 				? `Connected as ${traktStatus.username}`
 				: "Trakt connected.";
 		} catch (e: any) {
-			console.error("Failed to connect Trakt", e);
-			traktError = e?.message || "Failed to connect Trakt";
+			if (!signIn.signal.aborted) {
+				console.error("Failed to connect Trakt", e);
+				traktError = e?.message || "Failed to connect Trakt";
+			}
 		} finally {
+			traktCode = null;
+			traktSignIn = null;
 			traktBusy = false;
 		}
 	}
+
+	const cancelTraktSignIn = () => traktSignIn?.abort();
+
+	onDestroy(cancelTraktSignIn);
 
 	async function disconnectTrakt() {
 		traktBusy = true;
@@ -234,6 +252,27 @@
 				{#if traktStatus && !traktStatus.configured}
 					<p class="text-white/60 text-sm">Trakt is not configured yet in this build.</p>
 				{/if}
+			{/if}
+
+			{#if traktCode}
+				<div class="rounded-2xl bg-white/[0.04] p-4 flex flex-col gap-3">
+					<p class="text-white/60 text-sm">Go to {traktCode.verificationUrl.replace("https://", "")} and enter this code.</p>
+					<p class="text-white text-3xl font-semibold tracking-widest select-all">{traktCode.userCode}</p>
+					<div class="flex flex-wrap gap-2">
+						<button
+							class="bg-white text-black px-4 py-2 rounded-2xl font-semibold hover:bg-white/90 transition-colors cursor-pointer"
+							on:click={() => traktCode && openTraktActivation(traktCode.verificationUrl)}
+						>
+							Open Trakt
+						</button>
+						<button
+							class="bg-white/10 text-white px-4 py-2 rounded-2xl font-semibold hover:bg-white/20 transition-colors cursor-pointer"
+							on:click={cancelTraktSignIn}
+						>
+							Cancel
+						</button>
+					</div>
+				</div>
 			{/if}
 
 			{#if traktMessage}

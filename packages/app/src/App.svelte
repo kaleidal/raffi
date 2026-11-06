@@ -8,7 +8,6 @@
 
     import { X } from "@lucide/svelte";
     import LoadingSpinner from "./components/common/LoadingSpinner.svelte";
-    import SignInChangeNotice from "./components/common/SignInChangeNotice.svelte";
     import {
         initAuth,
         updateStatus,
@@ -339,7 +338,6 @@
         </div>
     </div>
 
-    <SignInChangeNotice />
 
     {#if showUpdatePrompt}
         <div

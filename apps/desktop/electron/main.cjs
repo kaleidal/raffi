@@ -5,7 +5,6 @@ const { createLogger } = require("./services/logging.cjs");
 const { scanLibraryRoots } = require("./services/media/mediaScan.cjs");
 const {
   isAllowedExternalUrl,
-  createProtocolUrlHandler,
 } = require("./services/protocol.cjs");
 const {
   registerPrivilegedSchemes,
@@ -52,15 +51,7 @@ app.on("child-process-gone", (_event, details) => {
 
 let mainWindow;
 let fileToOpen = null;
-let pendingTraktAuthPayload = null;
 const localMediaAccess = createLocalMediaAccess({ logToFile });
-const handleProtocolUrl = createProtocolUrlHandler({
-  logToFile,
-  getMainWindow: () => mainWindow,
-  setPendingTraktAuthPayload: (payload) => {
-    pendingTraktAuthPayload = payload;
-  },
-});
 
 
 
@@ -133,11 +124,6 @@ app.on("open-file", (event, path) => {
   }
 });
 
-app.on("open-url", (event, url) => {
-  event.preventDefault();
-  handleProtocolUrl(url);
-});
-
 if (!gotTheLock) {
   logToFile("Another instance is running; quitting");
   app.quit();
@@ -148,11 +134,6 @@ if (!gotTheLock) {
       mainWindow.__raffiMiniPlayer?.exit?.({ focus: false });
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
-
-      const deepLink = commandLine.find((arg) => typeof arg === "string" && arg.startsWith("raffi://"));
-      if (deepLink && handleProtocolUrl(deepLink)) {
-        return;
-      }
 
       const filePath = commandLine[commandLine.length - 1];
       if (filePath && !filePath.startsWith("-") && filePath !== ".") {
@@ -186,12 +167,8 @@ function createWindow() {
     defaultWindowHeight: DEFAULT_WINDOW_HEIGHT,
     fileToOpen,
     authorizeLocalMediaPath: (filePath) => localMediaAccess.authorizeTrustedFile(filePath),
-    pendingTraktAuthPayload,
     setFileToOpen: (value) => {
       fileToOpen = value;
-    },
-    setPendingTraktAuthPayload: (value) => {
-      pendingTraktAuthPayload = value;
     },
   });
 }
@@ -220,23 +197,8 @@ app.whenReady().then(async () => {
     app.setAppUserModelId(pendingAppUserModelId);
   }
 
-  try {
-    if (isDev && (process.platform === "win32" || process.platform === "linux")) {
-      app.setAsDefaultProtocolClient("raffi", process.execPath, [path.resolve(process.argv[1])]);
-    } else {
-      app.setAsDefaultProtocolClient("raffi");
-    }
-  } catch (error) {
-    logToFile("Failed to register raffi protocol", error);
-  }
-
   if (process.platform === "win32" || process.platform === "linux") {
     const argv = process.argv;
-    const deepLink = argv.find((arg) => typeof arg === "string" && arg.startsWith("raffi://"));
-    if (deepLink && handleProtocolUrl(deepLink)) {
-      // handled as auth callback
-    }
-
     let filePath = null;
     if (isDev && argv.length >= 3) {
       filePath = argv[2];
@@ -244,7 +206,7 @@ app.whenReady().then(async () => {
       filePath = argv[1];
     }
 
-    if (filePath && !filePath.startsWith("-") && !filePath.startsWith("raffi://")) {
+    if (filePath && !filePath.startsWith("-")) {
       fileToOpen = filePath;
     }
   }

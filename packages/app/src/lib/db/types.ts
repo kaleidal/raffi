@@ -60,11 +60,19 @@ export interface WatchParty {
     last_update: string;
 }
 
+export interface TraktDeviceCode {
+    deviceCode: string;
+    userCode: string;
+    verificationUrl: string;
+    expiresIn: number;
+    interval: number;
+}
+
+export type TraktDevicePoll = { status: "connected" | "pending" | "slow-down" | "expired" | "denied" };
+
 export interface TraktStatus {
     configured: boolean;
     clientId: string | null;
-    redirectUri: string;
-    authorizeUrl: string;
     connected: boolean;
     username: string | null;
     slug: string | null;

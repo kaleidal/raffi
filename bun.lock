@@ -118,7 +118,6 @@
     "services/sync": {
       "name": "@raffi/sync",
       "dependencies": {
-        "@ave-id/sdk": "^0.12.0",
         "better-auth": "^1.7.18",
         "disposable-email-domains-js": "^1.26.0",
         "jose": "^6.2.15",
@@ -143,8 +142,6 @@
     "undici": "7.30.2",
   },
   "packages": {
-    "@ave-id/sdk": ["@ave-id/sdk@0.12.0", "", {}, "sha512-87AdcvKUW8Y5QyNw3SA8/bs4aAzi+IViWb/egaFei3LFg15Qdxx77OgmIRuoehRoUJ2L7dGhXV/0KxAfyYw2pQ=="],
-
     "@better-auth/core": ["@better-auth/core@1.7.18", "", { "dependencies": { "@standard-schema/spec": "^1.1.0", "zod": "^4.5.4" }, "peerDependencies": { "@better-auth/utils": "^0.4.2 || ^0.5.0", "@better-fetch/fetch": "1.3.3", "@opentelemetry/api": "^1.9.0", "better-call": "1.4.5", "jose": "^6.1.0", "kysely": "^0.28.5 || ^0.29.0", "nanostores": "^1.0.1" }, "optionalPeers": ["@opentelemetry/api"] }, "sha512-GPue1yR24fd+RkCiOpVtdBwtCqkgGHRMGxUL6A11LzUv0JsHA2hnIFEdoxorr9TWO2kJLvYOuUu0vjV9Wxd4AA=="],
 
     "@better-auth/drizzle-adapter": ["@better-auth/drizzle-adapter@1.7.18", "", { "peerDependencies": { "@better-auth/core": "^1.7.18", "@better-auth/utils": "^0.4.2 || ^0.5.0", "drizzle-orm": "^0.45.2 || >=1.0.0-rc.1 <2.0.0" }, "optionalPeers": ["drizzle-orm"] }, "sha512-l+J+WG11dQ9kzcAyAxgo5qh7bqGzsvN4uApR45limXe9gR02kijQi42xHJlWN8+TL6mmA69EC7W4MWbaHvmHGg=="],

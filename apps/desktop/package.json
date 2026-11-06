@@ -73,14 +73,6 @@
         "releaseType": "draft"
       }
     ],
-    "protocols": [
-      {
-        "name": "Raffi links",
-        "schemes": [
-          "raffi"
-        ]
-      }
-    ],
     "files": [
       "dist/**/*",
       "electron-dist/**/*",

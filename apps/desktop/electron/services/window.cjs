@@ -20,9 +20,7 @@ function createMainWindow({
   defaultWindowHeight,
   fileToOpen,
   authorizeLocalMediaPath,
-  pendingTraktAuthPayload,
   setFileToOpen,
-  setPendingTraktAuthPayload,
 }) {
   const isWindows = process.platform === "win32";
   const isMac = process.platform === "darwin";
@@ -438,10 +436,6 @@ function createMainWindow({
       } catch (error) {
         logToFile("Failed to authorize startup media file", error);
       }
-    }
-    if (pendingTraktAuthPayload) {
-      mainWindow.webContents.send("TRAKT_AUTH_CALLBACK", pendingTraktAuthPayload);
-      setPendingTraktAuthPayload(null);
     }
   });
 

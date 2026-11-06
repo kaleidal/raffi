@@ -21,6 +21,7 @@ import {
   refreshTraktToken,
   traktScrobble,
 } from "./trakt";
+import { pollTraktDeviceSignIn, startTraktDeviceSignIn } from "./traktDevice";
 import type { Addon, SyncPayload } from "./types";
 import { WatchPartyObject } from "./watchParty";
 import { getSyncDatabase } from "./d1Session";
@@ -178,6 +179,13 @@ const routeAuthedRequest = async (request: Request, env: Env, parts: string[]) =
   if (parts[0] === "trakt") {
     if (request.method === "GET" && parts[1] === "status") {
       return json(await getTraktStatus(env, userId));
+    }
+    if (request.method === "POST" && parts[1] === "device" && parts[2] === "start") {
+      return json(await startTraktDeviceSignIn(env));
+    }
+    if (request.method === "POST" && parts[1] === "device" && parts[2] === "poll") {
+      const body = await readJson<{ deviceCode?: unknown }>(request);
+      return json(await pollTraktDeviceSignIn(env, userId, body.deviceCode));
     }
     if (request.method === "POST" && parts[1] === "exchange-code") {
       const body = await readJson<{ code?: unknown }>(request);

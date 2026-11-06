@@ -1,9 +1,7 @@
 import type { AppUser } from "../auth/types";
 import {
-    AccountRequestError,
     fetchActiveSession,
     fetchSessionJwt,
-    handOffAveSession,
     isRejectedSession,
     requestSignInCode,
     revokeSession,
@@ -12,7 +10,6 @@ import {
     type SignedInSession,
 } from "../auth/accountApi";
 import { prepareAvatarImage } from "../auth/avatarImage";
-import { clearLegacyAveSession, readLegacyAveTokens } from "../auth/legacyAveSession";
 import {
     clearStoredSession,
     readStoredSession,
@@ -49,12 +46,10 @@ export type UpdateStatus = {
     releaseDate: string | null;
 };
 
-export type SignInChangeNotice = "signed-in" | "sign-in-needed";
 
 export const currentUser = writable<AppUser | null>(null);
 export const localMode = writable(false);
 export const authInitializing = writable(false);
-export const signInChangeNotice = writable<SignInChangeNotice | null>(null);
 export const updateStatus = writable<UpdateStatus>({
     available: false,
     downloaded: false,
@@ -202,28 +197,6 @@ async function restoreStoredSession(): Promise<AppUser | null> {
     }
 }
 
-async function handOffLegacyAveSession(): Promise<AppUser | null> {
-    const tokens = readLegacyAveTokens();
-    if (!tokens) return null;
-
-    try {
-        const session = await handOffAveSession(tokens);
-        clearLegacyAveSession();
-        adoptSession(session);
-        signInChangeNotice.set("signed-in");
-        setRaffiSyncAuthToken(await fetchSessionJwt(session.sessionToken).catch(() => null));
-        return session.user;
-    } catch (error) {
-        if (error instanceof AccountRequestError) {
-            clearLegacyAveSession();
-            signInChangeNotice.set("sign-in-needed");
-        } else {
-            console.error("Account handoff failed", error);
-        }
-        return null;
-    }
-}
-
 const refreshSessionJwt = async (): Promise<string | null> => {
     if (!sessionToken) return null;
     try {
@@ -246,7 +219,7 @@ export async function initAuth() {
             persistLocalMode(true);
         }
 
-        const activeUser = await restoreStoredSession() ?? await handOffLegacyAveSession();
+        const activeUser = await restoreStoredSession();
 
         if (activeUser) {
             disableLocalMode();
@@ -268,7 +241,6 @@ export async function signInWithCode(email: string, code: string) {
     const session = await verifySignInCode(email, code);
     adoptSession(session);
     setRaffiSyncAuthToken(await fetchSessionJwt(session.sessionToken));
-    signInChangeNotice.set(null);
 
     disableLocalMode();
     resetRemoteStateCache();

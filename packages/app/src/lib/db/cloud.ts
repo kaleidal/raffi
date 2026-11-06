@@ -1,4 +1,11 @@
-import type { TraktRecommendation, TraktScrobbleArgs, TraktStatus, WatchParty } from "./types";
+import type {
+    TraktDeviceCode,
+    TraktDevicePoll,
+    TraktRecommendation,
+    TraktScrobbleArgs,
+    TraktStatus,
+    WatchParty,
+} from "./types";
 import { DEFAULT_TRAKT_STATUS, canUseCloudFeatures, getRequiredUserId, isLocalModeActive } from "./state";
 import {
     clearTraktClientAuthCache,
@@ -15,11 +22,17 @@ export const getTraktStatus = async (): Promise<TraktStatus> => {
     return status || DEFAULT_TRAKT_STATUS;
 };
 
-export const exchangeTraktCode = async (code: string) => {
+export const startTraktDeviceSignIn = async () => {
     if (!canUseCloudFeatures()) throw new Error("Cloud backup is offline");
     getRequiredUserId();
-    const result = await syncPost("/trakt/exchange-code", { code });
-    clearTraktClientAuthCache();
+    return syncPost<TraktDeviceCode>("/trakt/device/start", {});
+};
+
+export const pollTraktDeviceSignIn = async (deviceCode: string) => {
+    if (!canUseCloudFeatures()) throw new Error("Cloud backup is offline");
+    getRequiredUserId();
+    const result = await syncPost<TraktDevicePoll>("/trakt/device/poll", { deviceCode });
+    if (result.status === "connected") clearTraktClientAuthCache();
     return result;
 };
 

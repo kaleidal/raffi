@@ -39,45 +39,6 @@ function isAllowedExternalUrl(value) {
   }
 }
 
-function createProtocolUrlHandler({
-  logToFile,
-  getMainWindow,
-  setPendingTraktAuthPayload,
-}) {
-  return function handleProtocolUrl(url) {
-    if (!url || typeof url !== "string") return false;
-    if (!url.startsWith("raffi://")) return false;
-
-    try {
-      const parsed = new URL(url);
-      const payload = {
-        code: parsed.searchParams.get("code") || undefined,
-        state: parsed.searchParams.get("state") || undefined,
-        error: parsed.searchParams.get("error") || undefined,
-        url,
-      };
-
-      if (parsed.hostname === "trakt" && parsed.pathname === "/callback") {
-        setPendingTraktAuthPayload(payload);
-        const mainWindow = getMainWindow();
-        if (mainWindow && mainWindow.webContents) {
-          mainWindow.__raffiMiniPlayer?.exit?.({ focus: false });
-          mainWindow.webContents.send("TRAKT_AUTH_CALLBACK", payload);
-          if (mainWindow.isMinimized()) mainWindow.restore();
-          mainWindow.focus();
-        }
-        return true;
-      }
-
-      return false;
-    } catch (error) {
-      logToFile("Failed to parse protocol URL", error);
-      return false;
-    }
-  };
-}
-
 module.exports = {
   isAllowedExternalUrl,
-  createProtocolUrlHandler,
 };

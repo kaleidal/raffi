@@ -44,8 +44,6 @@ export const DEFAULT_ADDON = {
 export const DEFAULT_TRAKT_STATUS: TraktStatus = {
     configured: false,
     clientId: null,
-    redirectUri: "raffi://trakt/callback",
-    authorizeUrl: "https://trakt.tv/oauth/authorize",
     connected: false,
     username: null,
     slug: null,

@@ -84,15 +84,6 @@ export const verifySignInCode = async (email: string, code: string): Promise<Sig
     return { sessionToken: payload.token, user: toAppUser(payload.user) };
 };
 
-export const handOffAveSession = async (tokens: { idToken?: string; refreshToken?: string }): Promise<SignedInSession> => {
-    const response = await accountRequest("/ave/handoff", {
-        method: "POST",
-        json: tokens,
-    });
-    const payload = await response.json() as { token: string; user: AccountUser };
-    return { sessionToken: payload.token, user: toAppUser(payload.user) };
-};
-
 export const fetchActiveSession = async (sessionToken: string): Promise<ActiveSession> => {
     const response = await accountRequest("/get-session", { sessionToken });
     const payload = await response.json() as { user: AccountUser } | null;

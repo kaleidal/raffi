@@ -2,11 +2,19 @@ import { deleteTraktIntegration, getTraktIntegration, saveTraktIntegration } fro
 import { HttpError, optionalString } from "./http";
 import { getSyncDatabase } from "./d1Session";
 
-const TRAKT_API_BASE_URL = "https://api.trakt.tv";
+export const TRAKT_API_BASE_URL = "https://api.trakt.tv";
 const TRAKT_AUTHORIZE_URL = "https://trakt.tv/oauth/authorize";
 const DEFAULT_TRAKT_REDIRECT_URI = "raffi://trakt/callback";
 
 const envString = (env: Env, key: string) => optionalString(Reflect.get(env, key));
+
+export const requireTraktCredentials = (env: Env) => {
+  const { clientId, clientSecret } = getTraktConfig(env);
+  if (!clientId || !clientSecret) {
+    throw new HttpError(500, "Trakt is not configured on the server", "trakt_not_configured");
+  }
+  return { clientId, clientSecret };
+};
 
 const getTraktConfig = (env: Env) => {
   const clientId = envString(env, "TRAKT_CLIENT_ID");
@@ -33,7 +41,7 @@ const readResponseBody = async (response: Response) => {
   }
 };
 
-const buildTraktHeaders = (clientId: string, accessToken?: string) => {
+export const buildTraktHeaders = (clientId: string, accessToken?: string) => {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     "trakt-api-version": "2",
@@ -197,24 +205,12 @@ export const getTraktStatus = async (env: Env, userId: string) => {
   };
 };
 
-export const exchangeTraktCode = async (env: Env, userId: string, code: unknown) => {
-  const db = getSyncDatabase(env);
-  const authCode = optionalString(code);
-  const config = getTraktConfig(env);
-  if (!authCode) throw new HttpError(400, "Missing Trakt authorization code", "missing_code");
-  if (!config.clientId || !config.clientSecret) {
-    throw new HttpError(500, "Trakt is not configured on the server", "trakt_not_configured");
-  }
-
-  const tokenPayload = await exchangeOrRefreshToken(
-    {
-      code: authCode,
-      grant_type: "authorization_code",
-      redirect_uri: config.redirectUri,
-    },
-    { clientId: config.clientId, clientSecret: config.clientSecret },
-  );
-
+export const connectTraktTokens = async (
+  db: ReturnType<typeof getSyncDatabase>,
+  userId: string,
+  clientId: string,
+  tokenPayload: Record<string, unknown>,
+) => {
   const accessToken = optionalString(tokenPayload.access_token);
   const refreshToken = optionalString(tokenPayload.refresh_token);
   if (!accessToken || !refreshToken) {
@@ -223,7 +219,7 @@ export const exchangeTraktCode = async (env: Env, userId: string, code: unknown)
 
   let profile: { username?: string; slug?: string } = {};
   try {
-    profile = getProfileValues(await fetchTraktSettings(config.clientId, accessToken));
+    profile = getProfileValues(await fetchTraktSettings(clientId, accessToken));
   } catch {
     profile = {};
   }
@@ -247,6 +243,27 @@ export const exchangeTraktCode = async (env: Env, userId: string, code: unknown)
     scope: optionalString(tokenPayload.scope) ?? null,
     expiresAt: expiresAt ?? null,
   };
+};
+
+export const exchangeTraktCode = async (env: Env, userId: string, code: unknown) => {
+  const db = getSyncDatabase(env);
+  const authCode = optionalString(code);
+  const config = getTraktConfig(env);
+  if (!authCode) throw new HttpError(400, "Missing Trakt authorization code", "missing_code");
+  if (!config.clientId || !config.clientSecret) {
+    throw new HttpError(500, "Trakt is not configured on the server", "trakt_not_configured");
+  }
+
+  const tokenPayload = await exchangeOrRefreshToken(
+    {
+      code: authCode,
+      grant_type: "authorization_code",
+      redirect_uri: config.redirectUri,
+    },
+    { clientId: config.clientId, clientSecret: config.clientSecret },
+  );
+
+  return connectTraktTokens(db, userId, config.clientId, tokenPayload);
 };
 
 export const refreshTraktToken = async (env: Env, userId: string) => {
