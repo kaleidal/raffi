@@ -19,10 +19,10 @@ export const SYSTEMS = [
     {
         id: "linux",
         name: "Linux",
-        primary: { label: ".deb", href: `${LATEST}/linux-x86_64/deb` },
+        primary: { label: "AppImage", href: `${LATEST}/linux-x86_64/appimage` },
         others: [
+            { label: ".deb", href: `${LATEST}/linux-x86_64/deb` },
             { label: ".rpm", href: `${LATEST}/linux-x86_64/rpm` },
-            { label: "AppImage", href: `${LATEST}/linux-x86_64/appimage` },
         ],
     },
 ] as const;
