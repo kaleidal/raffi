@@ -1,3 +1,4 @@
+name = "Raffi"
 summary = "Movies and shows from the Stremio addons you choose, in one fast, good-looking library"
 description = """
 Raffi is a streaming app built around community addons. Add the Stremio addons you already use and everything they offer shows up in one place, with a home screen, search, trailers and full details for every title.
@@ -27,3 +28,21 @@ homepage = "https://raffi.al"
 support = "https://github.com/kaleidal/raffi/issues"
 privacy_url = "https://raffi.al/privacy"
 brand_color = "#f97316"
+icon = "al.kaleid.raffi.png"
+listed = true
+
+[[screenshots]]
+file = "screenshots/home.png"
+caption = "Pick up where you left off from the home screen"
+
+[[screenshots]]
+file = "screenshots/details.png"
+caption = "Details, progress and trailers for every title"
+
+[[screenshots]]
+file = "screenshots/episodes.png"
+caption = "Browse seasons and episodes"
+
+[[screenshots]]
+file = "screenshots/playback.png"
+caption = "Controls that stay out of the way during playback"

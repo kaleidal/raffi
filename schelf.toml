@@ -1,3 +1,6 @@
 id = "al.kaleid.raffi"
 format = "files"
+updater = "electron"
 listing = "store/"
+licence = "MIT"
+repository = "kaleidal/raffi"
