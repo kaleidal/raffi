@@ -40,6 +40,8 @@ class NativePlayer(
 ) {
     private var player: ExoPlayer? = null
     private var source: MediaItem? = null
+    private var live = false
+    private val http = DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(true)
     private var addonSubtitlePending = false
     private val trackNames = DefaultTrackNameProvider(activity.resources)
     private val ticker = Handler(Looper.getMainLooper())
@@ -68,6 +70,12 @@ class NativePlayer(
         }
 
         override fun onPlayerError(error: PlaybackException) {
+            val exo = player
+            if (live && exo != null && error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
+                exo.seekToDefaultPosition()
+                exo.prepare()
+                return
+            }
             emit(
                 JSONObject()
                     .put("type", "player.error")
@@ -105,31 +113,36 @@ class NativePlayer(
         player?.release()
         player = null
         source = null
+        live = false
         addonSubtitlePending = false
         view.player = null
         view.visibility = View.GONE
         view.keepScreenOn = false
     }
 
+    /** Live channels start at the live edge and may name the headers their provider expects. */
     private fun load(message: JSONObject) {
+        live = message.optBoolean("live")
         val item = MediaItem.Builder()
             .setUri(message.getString("url"))
+            .setMimeType(message.optString("mimeType").ifEmpty { null })
             .setMediaMetadata(MediaMetadata.Builder().setTitle(message.optString("title")).build())
             .build()
+        http.setUserAgent(message.optString("userAgent").ifEmpty { USER_AGENT })
+        http.setDefaultRequestProperties(
+            message.optString("referer").takeIf { it.isNotEmpty() }?.let { mapOf("Referer" to it) } ?: emptyMap(),
+        )
         val exo = player ?: createPlayer().also { player = it }
         source = item
         addonSubtitlePending = false
         exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon().clearOverrides().build()
-        exo.setMediaItem(item, message.optLong("startMs"))
+        if (live) exo.setMediaItem(item) else exo.setMediaItem(item, message.optLong("startMs"))
         exo.prepare()
         exo.play()
         view.visibility = View.VISIBLE
     }
 
     private fun createPlayer(): ExoPlayer {
-        val http = DefaultHttpDataSource.Factory()
-            .setAllowCrossProtocolRedirects(true)
-            .setUserAgent(USER_AGENT)
         val movieAudio = AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)
             .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
@@ -205,7 +218,8 @@ class NativePlayer(
                 .put("ended", exo.playbackState == Player.STATE_ENDED)
                 .put("position", exo.currentPosition / 1000.0)
                 .put("duration", if (exo.duration == C.TIME_UNSET) 0.0 else exo.duration / 1000.0)
-                .put("buffered", exo.bufferedPosition / 1000.0),
+                .put("buffered", exo.bufferedPosition / 1000.0)
+                .put("live", exo.isCurrentMediaItemLive),
         )
     }
 }

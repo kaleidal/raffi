@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { Search, Link, Blocks, Library, Settings, Mic } from "@lucide/svelte";
+    import { Search, Mic } from "@lucide/svelte";
     import {
         searchAddonTitlesSplit,
         searchTitlesSplit,
@@ -9,20 +9,15 @@
     } from "../../lib/library/library";
     import { getCachedMetaData } from "../../lib/library/metaCache";
     import { router } from "../../lib/stores/router";
-    import { isAndroidPlatform, isTvPlatform } from "../../lib/shell/platform";
-    import { allowTorrenting } from "../../lib/stores/torrenting";
+    import { isTvPlatform } from "../../lib/shell/platform";
     import { listenForSpeech } from "../../lib/android/voice";
-    import Skeleton from "../common/Skeleton.svelte";
+    import { channelQuery } from "../../lib/live/library";
     import { fade } from "svelte/transition";
 	import TitleContextMenu from "./context_menus/TitleContextMenu.svelte";
 	import ListsPopup from "../meta/modals/ListsPopup.svelte";
 	import PlayModal from "./modals/PlayModal.svelte";
-	import {
-		currentUser,
-		authInitializing,
-		updateStatus,
-	} from "../../lib/stores/authStore";
-	import LoadingSpinner from "../common/LoadingSpinner.svelte";
+	import HeaderActions from "./header/HeaderActions.svelte";
+	import SearchResults from "./header/SearchResults.svelte";
     import {
         HOME_SEARCH_BAR_POSITION_AUTO,
         HOME_SEARCH_BAR_POSITION_BOTTOM,
@@ -42,7 +37,6 @@
 	let showSearchResults = false;
 	let loading = false;
 	let commandHint = "";
-	let updateProgressPercent = 0;
     let totalSearchResults = 0;
     let searchBarPositionPreference: HomeSearchBarPosition =
         HOME_SEARCH_BAR_POSITION_AUTO;
@@ -188,7 +182,9 @@
 
 	async function searchByVoice() {
 		const spoken = await listenForSpeech();
-		if (spoken) runSearch(spoken);
+		if (!spoken) return;
+		if (channelMode) channelQuery.set(spoken);
+		else runSearch(spoken);
 	}
 
 	function runSearch(query: string) {
@@ -289,27 +285,6 @@
 		router.navigate("meta", { imdbId, type, name });
 	}
 
-	function openAddons() {
-        onOpenAddons();
-	}
-
-	function openLists() {
-		router.navigate("lists");
-	}
-
-	function openSettings() {
-        onOpenSettings();
-	}
-
-	$: {
-		const raw = $updateStatus.downloaded
-			? 100
-			: typeof $updateStatus.downloadProgress === "number"
-				? $updateStatus.downloadProgress
-				: 8;
-		updateProgressPercent = Math.max(8, Math.min(100, Math.round(raw)));
-	}
-
 	function openPlayModal() {
 		showPlayModal = true;
 	}
@@ -326,6 +301,10 @@
 		showContextMenu = true;
 	}
 
+	const inputClass =
+		"bg-[#000000]/50 text-[#D4D4D4] text-center px-[clamp(20px,2vw,40px)] w-full min-w-0 text-[clamp(18px,1.5vw,28px)] font-poppins font-normal outline-none focus:outline-none focus:ring-0 transition-[font-size,padding] duration-300";
+
+	$: channelMode = $router.page === "live";
 	$: totalSearchResults = searchResults.movies.length + searchResults.series.length;
     /** On TV the bar stays in the header, where it neither covers the rows nor catches the remote's Down key. */
     $: searchDockBottom =
@@ -487,22 +466,36 @@
                         : ""
                 }`}
             >
-                <div class="search-icon flex w-[clamp(56px,4vw,80px)] shrink-0 items-center justify-center bg-[#181818]/50">
-                    <Search size={40} strokeWidth={2} color="#C3C3C3" />
-                </div>
+                <slot name="leading">
+                    <div class="search-icon flex w-[clamp(56px,4vw,80px)] shrink-0 items-center justify-center bg-[#181818]/50">
+                        <Search size={40} strokeWidth={2} color="#C3C3C3" />
+                    </div>
+                </slot>
 
-                <input
-                    type="text"
-                    placeholder="search for anything"
-                    class="bg-[#000000]/50 text-[#D4D4D4] text-center px-[clamp(20px,2vw,40px)] w-full min-w-0 text-[clamp(18px,1.5vw,28px)] font-poppins font-normal outline-none focus:outline-none focus:ring-0 transition-[font-size,padding] duration-300"
-                    oninput={handleSearch}
-                    onkeydown={handleSearchKeydown}
-                    onfocus={() => {
-                        if (searchQuery) showSearchResults = true;
-                    }}
-                    onblur={closeSearch}
-                    value={searchQuery}
-                />
+                {#if channelMode}
+                    <input
+                        type="text"
+                        placeholder="search channels"
+                        spellcheck="false"
+                        class={inputClass}
+                        oninput={(event) => channelQuery.set(event.currentTarget.value)}
+                        onkeydown={(event) => event.key === "Escape" && channelQuery.set("")}
+                        value={$channelQuery}
+                    />
+                {:else}
+                    <input
+                        type="text"
+                        placeholder="search for anything"
+                        class={inputClass}
+                        oninput={handleSearch}
+                        onkeydown={handleSearchKeydown}
+                        onfocus={() => {
+                            if (searchQuery) showSearchResults = true;
+                        }}
+                        onblur={closeSearch}
+                        value={searchQuery}
+                    />
+                {/if}
 
                 {#if isTvPlatform}
                     <button
@@ -526,143 +519,13 @@
                     {commandHint}
                 </div>
             {:else if showSearchResults && (totalSearchResults > 0 || loading)}
-                <div
-                    class={`absolute left-1/2 -translate-x-1/2 w-[min(780px,76vw)] bg-[#181818]/90 backdrop-blur-xl rounded-[24px] p-4 z-100 ${
-                        portraitLayout || searchDockBottom ? "bottom-[90px]" : "top-[90px]"
-                    }`}
-                    transition:fade={{ duration: 200 }}
-                >
-                {#if loading}
-                    <div class="grid grid-cols-2 gap-4">
-                        {#each ["Movies", "Series"] as label}
-                            <div class="rounded-2xl bg-white/[0.04] p-3">
-                                <p
-                                    class="text-white/70 text-sm font-semibold leading-normal mb-3"
-                                >
-                                    {label}
-                                </p>
-                                <div class="space-y-2">
-                                    {#each Array(3) as _}
-                                        <div
-                                            class="flex flex-row gap-4 items-center p-2 rounded-xl"
-                                        >
-                                            <Skeleton
-                                                width="40px"
-                                                height="60px"
-                                                borderRadius="6px"
-                                            />
-                                            <div class="flex flex-col gap-2">
-                                                <Skeleton width="170px" height="20px" />
-                                                <Skeleton width="90px" height="14px" />
-                                            </div>
-                                        </div>
-                                    {/each}
-                                </div>
-                            </div>
-                        {/each}
-                    </div>
-                {:else}
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="rounded-2xl bg-white/[0.04] p-3">
-                            <p
-                                class="text-white/70 text-sm font-semibold leading-normal mb-3"
-                            >
-                                Movies
-                            </p>
-                            <div class="space-y-1 max-h-[360px] overflow-y-auto">
-                                {#if searchResults.movies.length === 0}
-                                    <p class="text-white/45 text-sm px-2 py-3">
-                                        No movie results.
-                                    </p>
-                                {:else}
-                                    {#each searchResults.movies as result}
-                                        <button
-                                            class="w-full flex flex-row gap-4 items-center p-2 hover:bg-white/10 rounded-xl transition-colors cursor-pointer text-left"
-                                            onclick={() =>
-                                                navigateToMeta(
-                                                    result.imdbId,
-                                                    result.type,
-													result.name,
-                                                )}
-                                            oncontextmenu={(e) => {
-                                                e.preventDefault();
-                                                handleContextMenu(
-                                                    e,
-													result,
-                                                );
-                                            }}
-                                        >
-                                            <img
-                                                src={result.poster || ""}
-                                                alt={result.name}
-                                                class="w-[40px] h-[60px] object-cover rounded-md bg-black/50"
-                                            />
-                                            <div class="flex flex-col min-w-0">
-                                                <span
-                                                    class="text-white font-poppins font-medium text-lg line-clamp-1"
-                                                    >{result.name}</span
-                                                >
-                                                <span class="text-white/50 font-poppins text-sm line-clamp-1"
-                                                    >{result.year || result.releaseInfo || ""}</span
-                                                >
-                                            </div>
-                                        </button>
-                                    {/each}
-                                {/if}
-                            </div>
-                        </div>
-
-                        <div class="rounded-2xl bg-white/[0.04] p-3">
-                            <p
-                                class="text-white/70 text-sm font-semibold leading-normal mb-3"
-                            >
-                                Series
-                            </p>
-                            <div class="space-y-1 max-h-[360px] overflow-y-auto">
-                                {#if searchResults.series.length === 0}
-                                    <p class="text-white/45 text-sm px-2 py-3">
-                                        No series results.
-                                    </p>
-                                {:else}
-                                    {#each searchResults.series as result}
-                                        <button
-                                            class="w-full flex flex-row gap-4 items-center p-2 hover:bg-white/10 rounded-xl transition-colors cursor-pointer text-left"
-                                            onclick={() =>
-                                                navigateToMeta(
-                                                    result.imdbId,
-                                                    result.type,
-													result.name,
-                                                )}
-                                            oncontextmenu={(e) => {
-                                                e.preventDefault();
-                                                handleContextMenu(
-                                                    e,
-													result,
-                                                );
-                                            }}
-                                        >
-                                            <img
-                                                src={result.poster || ""}
-                                                alt={result.name}
-                                                class="w-[40px] h-[60px] object-cover rounded-md bg-black/50"
-                                            />
-                                            <div class="flex flex-col min-w-0">
-                                                <span
-                                                    class="text-white font-poppins font-medium text-lg line-clamp-1"
-                                                    >{result.name}</span
-                                                >
-                                                <span class="text-white/50 font-poppins text-sm line-clamp-1"
-                                                    >{result.year || result.releaseInfo || ""}</span
-                                                >
-                                            </div>
-                                        </button>
-                                    {/each}
-                                {/if}
-                            </div>
-                        </div>
-                    </div>
-                {/if}
-                </div>
+                <SearchResults
+                    results={searchResults}
+                    {loading}
+                    above={portraitLayout || searchDockBottom}
+                    onOpen={(result) => navigateToMeta(result.imdbId, result.type, result.name)}
+                    onContextMenu={handleContextMenu}
+                />
             {/if}
         </div>
     </div>
@@ -687,94 +550,13 @@
         type={selectedType}
     />
 
-    <div class="flex flex-row items-start gap-[10px]">
-        {#if !isAndroidPlatform || $allowTorrenting}
-            <button
-                class="header-action bg-[#2C2C2C]/80 rounded-[clamp(18px,1.3vw,24px)] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-[width,height,border-radius,background-color] duration-300 cursor-pointer"
-                aria-label="Play"
-                onclick={openPlayModal}
-            >
-                <Link size={40} strokeWidth={2} color="#C3C3C3" />
-            </button>
-        {/if}
-
-        <button
-            class="header-action bg-[#2C2C2C]/80 rounded-[clamp(18px,1.3vw,24px)] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-[width,height,border-radius,background-color] duration-300 cursor-pointer"
-            aria-label="addons"
-            onclick={openAddons}
-        >
-            <Blocks size={40} strokeWidth={2} color="#C3C3C3" />
-        </button>
-
-        <button
-            class="header-action bg-[#2C2C2C]/80 rounded-[clamp(18px,1.3vw,24px)] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-[width,height,border-radius,background-color] duration-300 cursor-pointer"
-            aria-label="lists"
-            onclick={openLists}
-        >
-            <Library size={40} strokeWidth={2} color="#C3C3C3" />
-        </button>
-
-        <div class="flex flex-col items-center">
-            <button
-                class={`header-action group relative bg-[#2C2C2C]/80 rounded-[clamp(18px,1.3vw,24px)] hover:bg-[#2C2C2C]/50 backdrop-blur-md transition-[width,height,border-radius,background-color] duration-300 ${$authInitializing
-                    ? "cursor-wait pointer-events-none overflow-hidden"
-                    : $currentUser
-                        ? "cursor-pointer overflow-hidden"
-                        : "cursor-pointer"}`
-                }
-                aria-label="settings"
-                onclick={openSettings}
-            >
-                {#if $authInitializing}
-                    <div class="w-full h-full bg-white/10 flex items-center justify-center">
-                        <LoadingSpinner size="30px" />
-                    </div>
-                {:else if $currentUser}
-                    <div class="w-full h-full bg-white/10 group-hover:bg-black/35 transition-colors duration-300 flex items-center justify-center">
-                        {#if $currentUser.avatar}
-                            <img
-                                src={$currentUser.avatar}
-                                alt="Profile"
-                                class="w-full h-full object-cover"
-                                loading="lazy"
-                            />
-                            <span class="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></span>
-                        {:else}
-                            <span class="text-white text-2xl font-semibold uppercase">
-                                {($currentUser.name || $currentUser.email || "?").slice(0, 1)}
-                            </span>
-                        {/if}
-                    </div>
-                {:else}
-                    <Settings size={40} strokeWidth={2} color="#C3C3C3" />
-                {/if}
-            </button>
-
-            {#if $updateStatus.available}
-                <div class="mt-2 h-[3px] w-[54px] rounded-full bg-white/25 overflow-hidden">
-                    <div
-                        class="h-full bg-white transition-[width] duration-300"
-                        style={`width: ${updateProgressPercent}%`}
-                    ></div>
-                </div>
-            {/if}
-        </div>
-    </div>
+    <HeaderActions onOpenPlay={openPlayModal} onOpenAddons={onOpenAddons} onOpenSettings={onOpenSettings} />
 </div>
 
 <style>
     .header-logo {
         transition: height 300ms cubic-bezier(0.22, 1, 0.36, 1);
     }
-    .header-action {
-        display: flex;
-        width: clamp(56px, 4vw, 80px);
-        height: clamp(56px, 4vw, 80px);
-        flex: 0 0 auto;
-        align-items: center;
-        justify-content: center;
-    }
-    .header-action :global(svg),
     .search-icon :global(svg) {
         width: clamp(24px, 1.7vw, 32px);
         height: clamp(24px, 1.7vw, 32px);

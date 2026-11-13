@@ -26,6 +26,8 @@
                 ? import("./pages/player/android/AndroidPlayer.svelte")
                 : import("./pages/player/Player.svelte")) as Promise<{ default: PageComponent }>,
         lists: () => import("./pages/lists/Lists.svelte") as Promise<{ default: PageComponent }>,
+        live: () => import("./pages/live/LiveTV.svelte") as Promise<{ default: PageComponent }>,
+        "live-player": () => import("./pages/live/player/LivePlayer.svelte") as Promise<{ default: PageComponent }>,
     };
 
     const pageCache: Record<string, PageComponent> = {
@@ -91,6 +93,7 @@
     $: void ensurePageLoaded($router.page);
     $: if ($router.page === "home") prefetchPage("meta");
     $: if ($router.page === "meta") prefetchPage("player");
+    $: if ($router.page === "live") prefetchPage("live-player");
 
     let showTitleBar = false;
     let showUpdatePrompt = false;

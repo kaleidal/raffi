@@ -27,6 +27,7 @@
 	import LocalModeSignInSection from "./settings/account/LocalModeSignInSection.svelte";
 	import PreferencesSection from "./settings/PreferencesSection.svelte";
 	import LocalLibrarySection from "./settings/LocalLibrarySection.svelte";
+	import LiveTvSection from "./settings/LiveTvSection.svelte";
 	import AccountSection from "./settings/account/AccountSection.svelte";
 	import AccountStateMismatchSection from "./settings/account/AccountStateMismatchSection.svelte";
 	import StremioImportModal from "./StremioImportModal.svelte";
@@ -322,6 +323,8 @@
 								<FeedbackSection {openExternalLink} />
 
 								<PreferencesSection />
+
+								<LiveTvSection />
 
 								<LocalLibrarySection />
 							</div>

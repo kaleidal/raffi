@@ -41,7 +41,9 @@ object AppWebView {
             override fun shouldInterceptRequest(
                 view: WebView,
                 request: WebResourceRequest,
-            ): WebResourceResponse? = loader.shouldInterceptRequest(request.url)
+            ): WebResourceResponse? =
+                if (LiveProxy.handles(request.url, HOST)) LiveProxy.respond(request.url)
+                else loader.shouldInterceptRequest(request.url)
 
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) =
                 request.url.host != HOST
