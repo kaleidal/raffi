@@ -17,6 +17,7 @@ Raffi doesn't come with anything to stream. What you can watch depends on the ad
 - **Watch parties:** synced playback with host controls.
 - **Trakt:** connect with a short code to send your progress to your profile.
 - **Torrents:** stream through [Limbo](https://limbo.kaleid.al), on the same computer or, for Android, on a paired computer on your network.
+- **Live TV:** add M3U playlists or Xtream Codes accounts and browse channels in a guide or a grid, with XMLTV programme data, favourites and channel up and down in the player. Turn it on in Settings under Live TV.
 - **Discord:** optional Rich Presence showing what you're watching.
 
 ## Get Raffi
@@ -39,6 +40,7 @@ Not everything works everywhere yet:
 | Local files | Yes | No | No |
 | Saving clips | Yes | No | No |
 | Watch parties | Yes | Yes | No |
+| Live TV | Yes | Only servers that allow browser access | Yes |
 
 ## Development
 

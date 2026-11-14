@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, screen, ipcMain, shell, protocol, net } = require("electron");
+const { app, BrowserWindow, dialog, screen, ipcMain, shell, protocol, net, session } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const { createLogger } = require("./services/logging.cjs");
@@ -16,10 +16,11 @@ const {
   createAppProtocolHandler,
 } = require("./services/appProtocol.cjs");
 const { registerMainIpcHandlers } = require("./services/mainIpc.cjs");
+const { livePrivilegedScheme, createLiveProxyHandler } = require("./services/live/liveProxy.cjs");
 const { registerDiscordRpcHandlers } = require("./services/integrations/rpc.cjs");
 const { createMainWindow } = require("./services/window.cjs");
 
-registerPrivilegedSchemes(protocol, [appPrivilegedScheme]);
+registerPrivilegedSchemes(protocol, [appPrivilegedScheme, livePrivilegedScheme]);
 
 const { logFallback, logToFile } = createLogger(app);
 
@@ -187,6 +188,11 @@ app.whenReady().then(async () => {
     createLocalMediaProtocolHandler({ protocol, net, logToFile, localMediaAccess });
   } catch (error) {
     logToFile("Failed to register raffi-media protocol", error);
+  }
+  try {
+    createLiveProxyHandler({ protocol, session, logToFile });
+  } catch (error) {
+    logToFile("Failed to register raffi-live protocol", error);
   }
   if (pendingAppUserModelId) {
     app.setAppUserModelId(pendingAppUserModelId);

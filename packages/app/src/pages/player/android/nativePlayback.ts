@@ -24,6 +24,14 @@ export type NativeTracks = { audio: NativeTrack[]; subtitles: NativeTrack[] };
 
 export type NativeError = { message: string; details: string };
 
+/** What a live channel adds: start at the live edge, a format hint for addresses without an extension, and provider headers. */
+export type NativeLoadOptions = {
+	live?: boolean;
+	mimeType?: string;
+	userAgent?: string;
+	referer?: string;
+};
+
 export type SubtitleChoice =
 	| { kind: "off" }
 	| { kind: "embedded"; id: string }
@@ -74,9 +82,9 @@ export function createNativePlayback() {
 		state,
 		tracks,
 		error,
-		load(url: string, startTime: number, title: string) {
+		load(url: string, startTime: number, title: string, options: NativeLoadOptions = {}) {
 			error.set(null);
-			sendNative({ type: "player.load", url, startMs: Math.round(startTime * 1000), title });
+			sendNative({ type: "player.load", url, startMs: Math.round(startTime * 1000), title, ...options });
 			nativeVideoVisible.set(true);
 		},
 		play: () => sendNative({ type: "player.play" }),

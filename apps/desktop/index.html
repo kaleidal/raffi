@@ -11,10 +11,10 @@
     script-src 'self' 'wasm-unsafe-eval' __RAFFI_DEV_EVAL__;
     worker-src 'self' blob:;
     style-src 'self' 'unsafe-inline';
-    img-src 'self' data: blob: https: http: raffi-media:;
-    connect-src 'self' data: blob: https: http: ws: wss: raffi-media:;
+    img-src 'self' data: blob: https: http: raffi-media: raffi-live:;
+    connect-src 'self' data: blob: https: http: ws: wss: raffi-media: raffi-live:;
     font-src 'self' data:;
-    media-src 'self' data: blob: https: http: raffi-media:;
+    media-src 'self' data: blob: https: http: raffi-media: raffi-live:;
     frame-src https: http:;
     object-src 'none';
     base-uri 'self';

@@ -1,6 +1,6 @@
 import { writable } from "svelte/store";
 
-export type Route = "home" | "meta" | "player" | "lists";
+export type Route = "home" | "meta" | "player" | "lists" | "live" | "live-player";
 
 export interface RouterState {
     page: Route;
