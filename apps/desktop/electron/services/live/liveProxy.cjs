@@ -121,7 +121,7 @@ function createLiveProxyHandler({ protocol, session, logToFile }) {
       const reason = String(error?.message ?? error);
       logToFile("Live proxy request failed", { host: new URL(target.url).host, reason });
       const status = reason.includes("ERR_CERT") ? BAD_CERTIFICATE : UNREACHABLE;
-      return new Response(reason, { status, headers: corsHeaders(origin) });
+      return new Response(null, { status, headers: corsHeaders(origin) });
     }
 
     const headers = responseHeaders(upstream, origin);

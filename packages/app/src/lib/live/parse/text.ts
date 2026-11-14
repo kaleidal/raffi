@@ -43,15 +43,15 @@ export function decodeEntities(text: string) {
 	});
 }
 
-/** The text inside an element, with CDATA kept as is and any markup dropped. */
+/** The text inside an element, with CDATA kept as is. */
 export function elementText(inner: string) {
 	let text = "";
 	let cursor = 0;
 	for (const match of inner.matchAll(/<!\[CDATA\[([\s\S]*?)\]\]>/g)) {
-		text += decodeEntities(inner.slice(cursor, match.index).replace(/<[^>]*>/g, ""));
+		text += decodeEntities(inner.slice(cursor, match.index));
 		text += match[1];
 		cursor = match.index + match[0].length;
 	}
-	text += decodeEntities(inner.slice(cursor).replace(/<[^>]*>/g, ""));
+	text += decodeEntities(inner.slice(cursor));
 	return text.trim();
 }
