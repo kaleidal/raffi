@@ -13,7 +13,7 @@ import {
     traktScrobbleClient,
     warmTraktClientAuth as warmTraktClientAuthInternal,
 } from "./traktClient";
-import { syncGet, syncPost } from "./raffiSync";
+import { openSyncSocket, syncGet, syncPost } from "./raffiSync";
 
 export const getTraktStatus = async (): Promise<TraktStatus> => {
     if (isLocalModeActive() || !canUseCloudFeatures()) return DEFAULT_TRAKT_STATUS;
@@ -74,19 +74,10 @@ export const leaveWatchParty = async (partyId: string) => {
     return syncPost(`/watch-parties/${encodeURIComponent(partyId)}/leave`, {});
 };
 
-export const updateWatchPartyState = async (partyId: string, currentTimeSeconds: number, isPlaying: boolean) => {
-    if (!canUseCloudFeatures()) return { ok: false, reason: "cloud_unavailable" };
-    getRequiredUserId();
-    return syncPost(`/watch-parties/${encodeURIComponent(partyId)}/state`, { currentTimeSeconds, isPlaying });
-};
-
 export const getWatchPartyInfo = async (partyId: string) => {
     if (!canUseCloudFeatures()) return null;
     return syncGet<any>(`/watch-parties/${encodeURIComponent(partyId)}`);
 };
 
-export const updateMemberLastSeen = async (partyId: string) => {
-    if (!canUseCloudFeatures()) return { ok: false, reason: "cloud_unavailable" };
-    getRequiredUserId();
-    return syncPost(`/watch-parties/${encodeURIComponent(partyId)}/heartbeat`, {});
-};
+export const openWatchPartySocket = (partyId: string) =>
+    openSyncSocket(`/watch-parties/${encodeURIComponent(partyId)}/socket`, "raffi-party");

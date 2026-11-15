@@ -2,7 +2,7 @@
     import {
         watchParty,
         leaveWatchParty,
-    } from "../../../lib/stores/watchPartyStore";
+    } from "../../../lib/watchParty/store";
     import { fade, scale } from "svelte/transition";
 
     let showDetails = false;

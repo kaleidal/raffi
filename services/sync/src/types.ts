@@ -88,13 +88,6 @@ export interface WatchParty {
   last_update: string;
 }
 
-export interface WatchPartyMember {
-  party_id: string;
-  user_id: string;
-  joined_at: string;
-  last_seen: string;
-}
-
 export interface WatchPartyInfo extends WatchParty {
   memberCount: number;
   is_local_source?: boolean;

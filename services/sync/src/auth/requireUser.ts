@@ -14,12 +14,12 @@ const readIssuer = (token: string) => {
   }
 };
 
-export const requireUserId = async (request: Request, env: Env): Promise<string> => {
-  const token = request.headers.get("authorization")?.match(BEARER)?.[1];
-  if (!token) throw unauthorized();
-
-  if (readIssuer(token) !== env.BETTER_AUTH_URL) throw unauthorized();
+export const userIdFromToken = async (env: Env, token: string | undefined): Promise<string> => {
+  if (!token || readIssuer(token) !== env.BETTER_AUTH_URL) throw unauthorized();
   const userId = await verifySessionJwt(env, token);
   if (!userId) throw unauthorized();
   return userId;
 };
+
+export const requireUserId = (request: Request, env: Env): Promise<string> =>
+  userIdFromToken(env, request.headers.get("authorization")?.match(BEARER)?.[1]);

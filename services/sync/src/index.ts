@@ -24,77 +24,11 @@ import {
 import { resolveStreamUrl } from "./streamResolve";
 import { pollTraktDeviceSignIn, startTraktDeviceSignIn } from "./traktDevice";
 import type { Addon, SyncPayload } from "./types";
-import { WatchPartyObject } from "./watchParty";
+import { WatchPartyObject } from "./party/object";
+import { connectPartySocket, partySocketTarget, routeWatchParty } from "./party/routes";
 import { getSyncDatabase } from "./d1Session";
 
 export { WatchPartyObject };
-
-type WatchPartyBody = {
-  imdbId?: string;
-  streamSource?: string;
-  season?: number | null;
-  episode?: number | null;
-  fileIdx?: number | null;
-};
-
-const getPartyStub = (env: Env, partyId: string) => env.WATCH_PARTIES.getByName(partyId);
-
-const routeWatchParty = async (
-  request: Request,
-  env: Env,
-  userId: string,
-  parts: string[],
-) => {
-  if (request.method === "POST" && parts.length === 1) {
-    const body = await readJson<WatchPartyBody>(request);
-    const partyId = crypto.randomUUID();
-    const party = await getPartyStub(env, partyId).create(userId, {
-      partyId,
-      imdbId: body.imdbId || "",
-      streamSource: body.streamSource || "",
-      season: body.season ?? null,
-      episode: body.episode ?? null,
-      fileIdx: body.fileIdx ?? null,
-    });
-    return json(party);
-  }
-
-  const partyId = parts[1];
-  if (!partyId) throw new HttpError(404, "Not found", "not_found");
-  const action = parts[2];
-  const stub = getPartyStub(env, partyId);
-
-  if (request.method === "GET" && !action) {
-    return json(await stub.getInfo(userId));
-  }
-
-  if (request.method === "GET" && action === "members") {
-    return json(await stub.getMembers(userId));
-  }
-
-  if (request.method === "POST" && action === "join") {
-    return json(await stub.join(userId));
-  }
-
-  if (request.method === "POST" && action === "leave") {
-    return json(await stub.leave(userId));
-  }
-
-  if (request.method === "POST" && action === "heartbeat") {
-    return json(await stub.heartbeat(userId));
-  }
-
-  if (request.method === "POST" && action === "state") {
-    const body = await readJson<{ currentTimeSeconds?: number; isPlaying?: boolean }>(request);
-    return json(await stub.updateState(
-      userId,
-      Number(body.currentTimeSeconds) || 0,
-      Boolean(body.isPlaying),
-    ));
-  }
-
-  throw new HttpError(404, "Not found", "not_found");
-};
 
 const routeAuthedRequest = async (request: Request, env: Env, parts: string[]) => {
   const userId = await requireUserId(request, env);
@@ -242,6 +176,8 @@ export default {
       if (request.method === "GET" && parts[0] === "avatars" && parts.length === 3) {
         return await serveAvatar(request, env, `${parts[1]}/${parts[2]}`, ctx);
       }
+      const socketParty = partySocketTarget(request, parts);
+      if (socketParty) return await connectPartySocket(request, env, socketParty);
       return await routeAuthedRequest(request, env, parts);
     } catch (error) {
       return handleError(error);

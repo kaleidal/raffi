@@ -6,7 +6,7 @@
         joinWatchParty as joinParty,
         leaveWatchParty,
         getWatchPartyInfo,
-    } from "../../../lib/stores/watchPartyStore";
+    } from "../../../lib/watchParty/store";
     import { fade } from "svelte/transition";
 
     import { onDestroy, onMount } from "svelte";

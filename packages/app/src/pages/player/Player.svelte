@@ -13,7 +13,7 @@
     import PlayerWatchParty from "./components/PlayerWatchParty.svelte";
     import LoadingSpinner from "../../components/common/LoadingSpinner.svelte";
     import type { ShowResponse } from "../../lib/library/types/meta_types";
-    import { watchParty } from "../../lib/stores/watchPartyStore";
+    import { watchParty } from "../../lib/watchParty/store";
     import { localMode } from "../../lib/stores/authStore";
     import { cloudSyncStatus, flushPendingLibraryProgress } from "../../lib/db/db";
     import {
@@ -816,13 +816,13 @@
 
         seekBarStyle = getSeekBarStyleFromStorage();
 
-        WatchParty.setupWatchPartySync(
-            videoElem,
-            seekToTime,
-            () => $currentTime,
-            (val) => {}, // ignorePlayPause setter - handled in sync logic if needed
-            (val) => {}, // ignoreSeek setter
-        );
+        const stopFollowingParty = WatchParty.followWatchParty({
+            video: videoElem,
+            seek: seekToTime,
+            currentTime: () => $currentTime,
+            isPlaying: () => $isPlaying,
+            isBusy: () => $loading || $playbackBuffering || $pendingSeek != null || $seekGuard,
+        });
 
         WatchParty.setupPartyEndCallback(
             showPartyEndModal.set,
@@ -858,6 +858,7 @@
         }, 1000);
 
         return () => {
+            stopFollowingParty();
             if (typeof removeMiniPlayerChanged === "function") {
                 removeMiniPlayerChanged();
             }
