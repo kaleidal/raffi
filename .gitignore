@@ -69,10 +69,6 @@ Thumbs.db
 apps/desktop/release/
 apps/desktop/electron-dist/
 
-# Early startup logs
-/Raffi/
-apps/desktop/Raffi/
-
 # Misc
 tmp/
 temp/

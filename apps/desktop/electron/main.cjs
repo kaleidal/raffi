@@ -22,19 +22,19 @@ const { createMainWindow } = require("./services/window.cjs");
 
 registerPrivilegedSchemes(protocol, [appPrivilegedScheme, livePrivilegedScheme]);
 
-const { logFallback, logToFile } = createLogger(app);
+app.setName("Raffi");
+const { logToFile } = createLogger(app);
 
 let autoUpdater = null;
 try {
   ({ autoUpdater } = require("electron-updater"));
 } catch (err) {
-  logFallback("Failed to load electron-updater", err);
+  logToFile("Failed to load electron-updater", err);
 }
 
 const pendingAppUserModelId =
   process.platform === "win32" ? "al.kaleid.raffi" : null;
 
-logFallback("Main process booting");
 logToFile("Main process booting");
 
 app.on("ready", () => {
@@ -90,7 +90,6 @@ if (process.platform === "linux") {
   );
   app.commandLine.appendSwitch("class", linuxDesktopId);
 }
-app.setName("Raffi");
 if (process.platform === "linux" && !isDev) {
   try {
     app.setDesktopName(`${linuxDesktopId}.desktop`);
