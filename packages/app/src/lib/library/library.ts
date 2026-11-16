@@ -104,7 +104,7 @@ function addonSupportsMeta(addon: Addon, id: string, type: CatalogType) {
     );
 }
 
-async function fetchJson(url: string) {
+export async function fetchJson(url: string) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 

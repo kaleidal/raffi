@@ -1,7 +1,7 @@
 <script lang="ts">
     import { untrack } from "svelte";
 
-    let { src }: { src: string | null | undefined } = $props();
+    let { src, fill = false }: { src: string | null | undefined; fill?: boolean } = $props();
 
     const SAMPLE_WIDTH = 64;
     const SAMPLE_HEIGHT = 36;
@@ -62,7 +62,7 @@
     });
 </script>
 
-<div class="ambient pointer-events-none absolute inset-x-0 top-0 overflow-hidden" aria-hidden="true">
+<div class="ambient pointer-events-none inset-x-0 top-0 overflow-hidden" class:fill aria-hidden="true">
     <div class="ambient-layers absolute inset-0">
         {#each layers as layer (layer.id)}
             <canvas
@@ -75,12 +75,36 @@
             ></canvas>
         {/each}
     </div>
-    <div class="absolute inset-0 bg-gradient-to-b from-canvas/20 via-canvas/70 to-canvas"></div>
+    <div class="ambient-shade absolute inset-0"></div>
 </div>
 
 <style>
     .ambient {
+        position: absolute;
         height: min(100dvh, 1100px);
+    }
+
+    .ambient.fill {
+        position: fixed;
+        height: 100dvh;
+    }
+
+    .ambient-shade {
+        background: linear-gradient(
+            to bottom,
+            color-mix(in oklab, var(--raffi-canvas) 20%, transparent),
+            color-mix(in oklab, var(--raffi-canvas) 70%, transparent) 50%,
+            var(--raffi-canvas)
+        );
+    }
+
+    .fill .ambient-shade {
+        background: linear-gradient(
+            to bottom,
+            var(--raffi-canvas),
+            color-mix(in oklab, var(--raffi-canvas) 55%, transparent) 40%,
+            color-mix(in oklab, var(--raffi-canvas) 40%, transparent)
+        );
     }
 
     .ambient-layer {
