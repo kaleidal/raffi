@@ -11,7 +11,6 @@
 
 @theme inline {
   --color-canvas: var(--raffi-canvas);
-  --color-page: var(--raffi-page);
   --color-surface: var(--raffi-surface);
   --color-raised: var(--raffi-raised);
   --color-ink: var(--raffi-ink);
@@ -49,27 +48,10 @@
   color-scheme: light;
 }
 
-:root {
-  --raffi-page: var(--raffi-canvas);
-}
-
 .scheme-dark {
   color: var(--raffi-ink);
 }
 
-.page-fade {
-  background: linear-gradient(
-    to top,
-    var(--raffi-page) 0%,
-    color-mix(in oklab, var(--raffi-page) 98%, transparent) 8%,
-    color-mix(in oklab, var(--raffi-page) 91%, transparent) 20%,
-    color-mix(in oklab, var(--raffi-page) 74%, transparent) 36%,
-    color-mix(in oklab, var(--raffi-page) 48%, transparent) 54%,
-    color-mix(in oklab, var(--raffi-page) 22%, transparent) 72%,
-    color-mix(in oklab, var(--raffi-page) 6%, transparent) 88%,
-    color-mix(in oklab, var(--raffi-page) 0%, transparent) 100%
-  );
-}
 
 :root {
   /*

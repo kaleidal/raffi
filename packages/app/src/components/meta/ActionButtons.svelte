@@ -1,72 +1,28 @@
 <script lang="ts">
+    import { Film, ListPlus } from "@lucide/svelte";
+    import IconButton from "../common/controls/IconButton.svelte";
     import ListsPopup from "./modals/ListsPopup.svelte";
     import TrailerModal from "./modals/TrailerModal.svelte";
-    import { Archive, Film } from "@lucide/svelte";
+    import type { ShowResponse } from "../../lib/library/types/meta_types";
+    import { getPrimaryTrailerId } from "../../lib/home/trailers";
 
+    let { metaData }: { metaData: ShowResponse } = $props();
 
-    export let metaData: any;
+    let listsPopupVisible = $state(false);
+    let trailerVisible = $state(false);
 
-    let listsPopupVisible = false;
-    let trailerVisible = false;
-
-    const openLists = () => {
-        listsPopupVisible = true;
-    };
-
-    const openTrailer = () => {
-        trailerVisible = true;
-    };
-
+    const trailerId = $derived(getPrimaryTrailerId(metaData.meta));
 </script>
 
-<div class="flex flex-row gap-[clamp(12px,1vw,18px)] justify-between w-full">
-    <button
-        class="action-button px-[clamp(22px,2vw,36px)] py-[clamp(14px,1.1vw,18px)] flex flex-1 min-w-0 flex-row gap-[clamp(10px,0.8vw,14px)] items-center cursor-pointer hover:bg-ink/15 transition-all duration-200 bg-ink/10 backdrop-blur-[16px] rounded-full justify-center"
-        on:click={openLists}
-    >
+<IconButton label="Add to list" onClick={() => (listsPopupVisible = true)}>
+    <ListPlus size={24} strokeWidth={2} />
+</IconButton>
 
-        <Archive
-            size={30}
-            strokeWidth={2}
-            class="shrink-0 min-w-[30px] min-h-[30px]"
-        />
+{#if trailerId}
+    <IconButton label="Trailer" onClick={() => (trailerVisible = true)}>
+        <Film size={22} strokeWidth={2} />
+    </IconButton>
+    <TrailerModal bind:visible={trailerVisible} ytId={trailerId} />
+{/if}
 
-        <span class="text-ink/90 text-[clamp(17px,1.2vw,22px)] font-medium whitespace-nowrap"
-            >Add to list</span
-        >
-    </button>
-
-    <ListsPopup
-        bind:visible={listsPopupVisible}
-        imdbId={metaData.meta.imdb_id}
-        type={metaData.meta.type}
-    />
-
-    {#if metaData.meta.trailers && metaData.meta.trailers.length > 0}
-        <button
-            class="action-button px-[clamp(22px,2vw,36px)] py-[clamp(14px,1.1vw,18px)] flex flex-1 min-w-0 flex-row gap-[clamp(10px,0.8vw,14px)] items-center cursor-pointer hover:bg-ink/15 transition-all duration-200 bg-ink/10 backdrop-blur-[16px] rounded-full justify-center"
-            on:click={openTrailer}
-        >
-
-            <Film size={30} strokeWidth={2} />
-
-            <span class="text-ink/90 text-[clamp(17px,1.2vw,22px)] font-medium whitespace-nowrap"
-                >Trailer</span
-            >
-        </button>
-
-        <TrailerModal
-            bind:visible={trailerVisible}
-            ytId={metaData.meta.trailers[0].source}
-        />
-    {/if}
-</div>
-
-<style>
-    .action-button :global(svg) {
-        width: clamp(22px, 1.5vw, 28px);
-        height: clamp(22px, 1.5vw, 28px);
-        min-width: 0;
-        min-height: 0;
-    }
-</style>
+<ListsPopup bind:visible={listsPopupVisible} imdbId={metaData.meta.imdb_id} type={metaData.meta.type} />

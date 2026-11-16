@@ -23,7 +23,7 @@ import type {
 
 export const RESOLUTION_FILTERS: Array<{ label: string; value: ResolutionFilter }> = [
     { label: "All", value: "all" },
-    { label: "2160p", value: "2160p" },
+    { label: "4K", value: "2160p" },
     { label: "1440p", value: "1440p" },
     { label: "1080p", value: "1080p" },
     { label: "720p", value: "720p" },
@@ -177,11 +177,7 @@ export function parseStreamMetadata(stream: any): ParsedStreamMetadata {
         resolution = "2160p";
     }
 
-    const resolutionLabel = resolution
-        ? resolution === "2160p" && /4k/i.test(fullText)
-            ? "4K"
-            : resolution.toUpperCase()
-        : null;
+    const resolutionLabel = resolution === "2160p" ? "4K" : resolution;
     const resolutionRank = resolution ? (RESOLUTION_RANKS[resolution] ?? 0) : 0;
 
     const hasDolbyVision = /Dolby\s?Vision|\bDV\b/i.test(fullText);

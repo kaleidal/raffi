@@ -45,6 +45,8 @@
     import { getFirstStandardEpisode, getSeriesResumeEpisode } from "./episodeSelection";
     import ActionButtons from "../../components/meta/ActionButtons.svelte";
     import MetaInfo from "./components/MetaInfo.svelte";
+    import UpNextCard from "../../components/meta/UpNextCard.svelte";
+    import AmbientBackdrop from "../../components/common/AmbientBackdrop.svelte";
     import UnsupportedTitleModal from "../../components/meta/modals/UnsupportedTitleModal.svelte";
     import { ADDONS_CHANGED_EVENT } from "../../components/settings/addons/addonsShared";
 
@@ -205,11 +207,23 @@
         streamsToReopen.set(null);
         void StreamLogic.episodeClicked(episode, imdbID);
     }
+
+    $: progressStarted = Object.keys($progressMap ?? {}).length > 0;
+    $: upNext =
+        $metaData?.meta?.type === "series" && progressStarted
+            ? getSeriesResumeEpisode(
+                  $metaData.meta.videos,
+                  $lastWatched,
+                  ProgressLogic.getProgress($progressMap, `${$lastWatched.season}:${$lastWatched.episode}`),
+              )
+            : null;
+    $: upNextProgress = upNext ? ProgressLogic.getProgress($progressMap, `${upNext.season}:${upNext.episode}`) : undefined;
 </script>
 
 {#if $loadedMeta && $metaData && $metaData.meta}
     <div class="bg-canvas flex-1 relative" in:fade={{ duration: 300 }}>
-        <div class="scheme-dark relative w-full overflow-visible bg-canvas">
+        <AmbientBackdrop src={$metaData.meta.background} fill />
+        <div class="meta-shell scheme-dark relative w-full bg-canvas">
             <div class="meta-backdrop absolute inset-0 opacity-60">
                 <MetaBackground
                     background={$metaData.meta.background}
@@ -301,182 +315,127 @@
                             </h1>
                         {/if}
 
-                        <MetaInfo metaData={$metaData} />
+                        <MetaInfo metaData={$metaData} seasons={$seasons} />
                     </div>
 
-                    {#if $metaData.meta.type === "series"}
-                        {@const lastEpKey = `${$lastWatched.season}:${$lastWatched.episode}`}
-                        {@const lastEpProgress = ProgressLogic.getProgress(
-                            $progressMap,
-                            lastEpKey,
-                        )}
-                        {@const resumeEpisode =
-                            getSeriesResumeEpisode(
-                                $metaData.meta.videos,
-                                $lastWatched,
-                                lastEpProgress,
-                            ) || { season: 1, episode: 1 }}
-                        {@const isResumable =
-                            lastEpProgress &&
-                            !lastEpProgress.watched &&
-                            lastEpProgress.time > 0}
+                    <div class="flex flex-col gap-4">
+                        <div class="flex items-center gap-3">
+                            {#if $metaData.meta.type === "series"}
+                                {@const lastEpKey = `${$lastWatched.season}:${$lastWatched.episode}`}
+                                {@const lastEpProgress = ProgressLogic.getProgress(
+                                    $progressMap,
+                                    lastEpKey,
+                                )}
+                                {@const resumeEpisode =
+                                    getSeriesResumeEpisode(
+                                        $metaData.meta.videos,
+                                        $lastWatched,
+                                        lastEpProgress,
+                                    ) || { season: 1, episode: 1 }}
+                                {@const isResumable =
+                                    lastEpProgress &&
+                                    !lastEpProgress.watched &&
+                                    lastEpProgress.time > 0}
 
-                        <div class="relative rounded-[50px] resume-button-shell" data-focus-ring>
-                            <button
-                                data-tv-autofocus
-                                class="bg-accent/85 hover:bg-accent/70 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-5 text-on-accent font-medium w-full transition-colors duration-200 relative z-10 resume-button"
-                                on:click={() =>
-                                    StreamLogic.episodeClicked(
-                                        resumeEpisode,
-                                        imdbID,
-                                    )}
-                            >
-                                <div class="resume-button__icon flex items-center justify-center">
-                                    <Play size={48} strokeWidth={2} fill="currentColor" />
-                                </div>
+                                <div class="relative rounded-[50px] resume-button-shell" data-focus-ring>
+                                    <button
+                                        data-tv-autofocus
+                                        class="bg-accent/85 hover:bg-accent/70 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-5 text-on-accent font-medium w-full transition-colors duration-200 relative z-10 resume-button"
+                                        on:click={() =>
+                                            StreamLogic.episodeClicked(
+                                                resumeEpisode,
+                                                imdbID,
+                                            )}
+                                    >
+                                        <div class="resume-button__icon flex items-center justify-center">
+                                            <Play size={48} strokeWidth={2} fill="currentColor" />
+                                        </div>
 
-                                <span class="resume-button__label">
+                                        <span class="resume-button__label">
+                                            {#if isResumable}
+                                                Resume S{$lastWatched.season}E{$lastWatched.episode}
+                                            {:else}
+                                                Watch S{resumeEpisode.season}E{resumeEpisode.episode}
+                                            {/if}
+                                        </span>
+                                    </button>
                                     {#if isResumable}
-                                        Resume S{$lastWatched.season}E{$lastWatched.episode}
-                                    {:else}
-                                        Watch S{resumeEpisode.season}E{resumeEpisode.episode}
+                                        <div
+                                            class="absolute bottom-0 left-0 h-1.5 bg-accent z-20 rounded-full overflow-hidden"
+                                            style="width: {(lastEpProgress.time /
+                                                lastEpProgress.duration) *
+                                                100}%"
+                                        ></div>
                                     {/if}
-                                </span>
-                            </button>
-                            {#if isResumable}
-                                <div
-                                    class="absolute bottom-0 left-0 h-1.5 bg-accent z-20 rounded-full overflow-hidden"
-                                    style="width: {(lastEpProgress.time /
-                                        lastEpProgress.duration) *
-                                        100}%"
-                                ></div>
-                            {/if}
-                        </div>
-                    {:else}
-                        {@const movieProgress =
-                            ProgressLogic.getProgress($progressMap)}
-                        {@const isMovieResumable =
-                            movieProgress &&
-                            !movieProgress.watched &&
-                            movieProgress.time > 0}
-
-                        <div class="relative rounded-[50px] resume-button-shell" data-focus-ring>
-                            <button
-                                data-tv-autofocus
-                                class="bg-accent/85 hover:bg-accent/70 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-5 text-on-accent font-medium w-full transition-colors duration-200 relative z-10 resume-button"
-                                on:click={() =>
-                                    StreamLogic.episodeClicked(
-                                        { season: 0, episode: 0 },
-                                        imdbID,
-                                    )}
-                            >
-                                <div class="resume-button__icon flex items-center justify-center">
-                                    <Play size={48} strokeWidth={2} fill="currentColor" />
                                 </div>
-                                <span class="resume-button__label">
+                            {:else}
+                                {@const movieProgress =
+                                    ProgressLogic.getProgress($progressMap)}
+                                {@const isMovieResumable =
+                                    movieProgress &&
+                                    !movieProgress.watched &&
+                                    movieProgress.time > 0}
+
+                                <div class="relative rounded-[50px] resume-button-shell" data-focus-ring>
+                                    <button
+                                        data-tv-autofocus
+                                        class="bg-accent/85 hover:bg-accent/70 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-5 text-on-accent font-medium w-full transition-colors duration-200 relative z-10 resume-button"
+                                        on:click={() =>
+                                            StreamLogic.episodeClicked(
+                                                { season: 0, episode: 0 },
+                                                imdbID,
+                                            )}
+                                    >
+                                        <div class="resume-button__icon flex items-center justify-center">
+                                            <Play size={48} strokeWidth={2} fill="currentColor" />
+                                        </div>
+                                        <span class="resume-button__label">
+                                            {#if isMovieResumable}
+                                                Resume
+                                            {:else}
+                                                Watch Movie
+                                            {/if}
+                                        </span>
+                                    </button>
                                     {#if isMovieResumable}
-                                        Resume
-                                    {:else}
-                                        Watch Movie
+                                        <div
+                                            class="absolute bottom-0 left-0 h-1.5 bg-accent z-20 rounded-full overflow-hidden"
+                                            style="width: {(movieProgress.time /
+                                                movieProgress.duration) *
+                                                100}%"
+                                        ></div>
                                     {/if}
-                                </span>
-                            </button>
-                            {#if isMovieResumable}
-                                <div
-                                    class="absolute bottom-0 left-0 h-1.5 bg-accent z-20 rounded-full overflow-hidden"
-                                    style="width: {(movieProgress.time /
-                                        movieProgress.duration) *
-                                        100}%"
-                                ></div>
+                                </div>
                             {/if}
+                            <ActionButtons metaData={$metaData} />
                         </div>
-                    {/if}
-                </div>
 
-                <div
-                    class="flex w-full flex-col items-end justify-end gap-[clamp(14px,1.2vw,20px)] self-stretch xl:w-[30.7vw] xl:max-w-[590px]"
-                >
-                    {#if $metaData.meta.type === "series"}
-                        {@const watchedCount = Object.values(
-                            $progressMap,
-                        ).filter((p: any) => p && p.watched).length}
-                        {@const progressPercent =
-                            $episodes > 0
-                                ? (watchedCount / $episodes) * 100
-                                : 0}
-                        {#if watchedCount > 0}
-                        <div
-                            class="px-[clamp(26px,2.4vw,44px)] py-[clamp(20px,1.6vw,30px)] w-full bg-ink/10 backdrop-blur-lg rounded-[clamp(30px,2.8vw,52px)] flex flex-col gap-4"
-                        >
-                            <span
-                                class="text-ink/90 text-[clamp(21px,1.5vw,28px)] font-bold"
-                                >{watchedCount} of {$episodes} watched</span
-                            >
-                            <div
-                                class="w-full h-2.5 bg-ink/20 rounded-full overflow-hidden"
-                            >
-                                <div
-                                    class="h-full bg-accent rounded-full transition-all duration-300"
-                                    style="width: {progressPercent}%"
-                                ></div>
-                            </div>
-                        </div>
-                        {/if}
-                    {/if}
-
-                    <div
-                        class="px-[clamp(26px,2.4vw,44px)] py-[clamp(20px,1.6vw,30px)] w-full bg-ink/10 backdrop-blur-lg rounded-[clamp(30px,2.8vw,52px)] flex flex-col gap-4 justify-center"
-                    >
                         {#if $metaData.meta.type === "series"}
-                            <span
-                                class="text-ink/90 text-[clamp(21px,1.5vw,28px)] font-bold"
-                                >{$episodes} {$episodes === 1 ? "episode" : "episodes"} · {$seasons} {$seasons === 1 ? "season" : "seasons"}</span
-                            >
+                            {@const watchedCount = Object.values($progressMap).filter((p: any) => p && p.watched).length}
+                            {#if watchedCount > 0}
+                                <div class="flex items-center gap-3 text-sm text-ink/60">
+                                    <div class="h-1 w-[clamp(120px,10vw,180px)] overflow-hidden rounded-full bg-ink/15">
+                                        <div class="h-full rounded-full bg-accent" style="width: {(watchedCount / $episodes) * 100}%"></div>
+                                    </div>
+                                    {watchedCount} of {$episodes} watched
+                                </div>
+                            {/if}
                         {/if}
-
-                        <div
-                            class="flex flex-row gap-2.5 items-center justify-between"
-                        >
-                            <span
-                                class="text-ink/75 text-[clamp(17px,1.15vw,22px)] font-medium"
-                                >{$metaData.meta.year}</span
-                            >
-
-                            <div class="flex flex-row gap-2.5 items-center">
-                                <span
-                                    class="text-ink/75 text-[clamp(17px,1.15vw,22px)] font-medium"
-                                    >{$metaData.meta.imdbRating}</span
-                                >
-
-                                <a
-                                    href={`https://www.imdb.com/title/${$metaData.meta.imdb_id}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    class="cursor-pointer hover:opacity-60 transition-opacity duration-200 shrink-0"
-                                >
-                                    <img
-                                        src="imdb.png"
-                                        alt="IMDB Logo"
-                                        class="h-12.5 min-h-12.5 w-auto min-w-[110px] object-contain shrink-0"
-                                    />
-                                </a>
-                            </div>
-                        </div>
                     </div>
-
-                    <ActionButtons metaData={$metaData} />
                 </div>
             </div>
 
-            {#if $metaData.meta.type === "series"}
-                <div
-                    class="meta-fade page-fade absolute bottom-0 left-0 w-full h-37.5"
-                ></div>
-            {/if}
         </div>
 
         {#if $metaData.meta.type === "series"}
-            <div class="w-full px-[clamp(32px,8.3vw,160px)] pt-2 pb-[clamp(32px,8.3vw,160px)]">
+            <div class="relative w-full px-[clamp(32px,8.3vw,160px)] pt-2 pb-[clamp(32px,8.3vw,160px)]">
+                {#if upNext && !upNextProgress?.watched}
+                    <UpNextCard
+                        episode={upNext}
+                        progress={upNextProgress}
+                        onPlay={() => upNext && StreamLogic.episodeClicked(upNext, imdbID)}
+                    />
+                {/if}
                 <SeasonSelector
                     seasonsArray={$seasonsArray}
                     bind:currentSeason={$currentSeason}
@@ -570,8 +529,21 @@
         opacity: 0.85;
     }
 
-    :global(:root[data-theme="light"]) .meta-fade {
-        height: 30%;
+    .meta-shell {
+        --meta-fade: clamp(120px, 16vh, 180px);
+        mask-image: linear-gradient(
+            to top,
+            transparent,
+            rgb(0 0 0 / 0.1) calc(var(--meta-fade) * 0.15),
+            rgb(0 0 0 / 0.35) calc(var(--meta-fade) * 0.38),
+            rgb(0 0 0 / 0.65) calc(var(--meta-fade) * 0.62),
+            rgb(0 0 0 / 0.9) calc(var(--meta-fade) * 0.85),
+            black var(--meta-fade)
+        );
+    }
+
+    :global(:root[data-theme="light"]) .meta-shell {
+        --meta-fade: 30%;
     }
 
     .meta-hero {
