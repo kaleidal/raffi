@@ -248,9 +248,9 @@
 
             <div
                 data-scroll-row
-                class="flex gap-[20px] w-full pb-6 pt-3 transition-all duration-300 {isExpanded
-                    ? 'flex-wrap'
-                    : 'flex-row overflow-x-auto overflow-y-visible no-scrollbar scroll-smooth'}"
+                class="gap-[20px] w-full pb-6 pt-3 transition-all duration-300 {isExpanded
+                    ? 'watching-grid'
+                    : 'flex flex-row overflow-x-auto overflow-y-visible no-scrollbar scroll-smooth'}"
                 bind:this={scrollContainer}
                 on:scroll={scheduleLayoutUpdate}
             >
@@ -332,5 +332,12 @@
     }
     .watching-card {
         width: clamp(260px, 22vw, 420px);
+    }
+    .watching-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(clamp(240px, 19vw, 380px), 1fr));
+    }
+    .watching-grid .watching-card {
+        width: auto;
     }
 </style>
