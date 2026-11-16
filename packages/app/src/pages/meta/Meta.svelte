@@ -20,7 +20,6 @@
         logoFailed,
         progressMap,
         lastWatched,
-        episodes,
         seasons,
         seasonsArray,
         currentSeason,
@@ -42,9 +41,10 @@
     import * as StreamLogic from "./streamLogic";
     import * as ProgressLogic from "./progressLogic";
     import { hydrateStreamFailures } from "./streamFailures";
-    import { getFirstStandardEpisode, getSeriesResumeEpisode } from "./episodeSelection";
+    import { getFirstStandardEpisode, getSeriesResumeEpisode, getStandardEpisodes } from "./episodeSelection";
     import ActionButtons from "../../components/meta/ActionButtons.svelte";
     import MetaInfo from "./components/MetaInfo.svelte";
+    import TitleLogo from "./components/TitleLogo.svelte";
     import UpNextCard from "../../components/meta/UpNextCard.svelte";
     import AmbientBackdrop from "../../components/common/AmbientBackdrop.svelte";
     import UnsupportedTitleModal from "../../components/meta/modals/UnsupportedTitleModal.svelte";
@@ -187,15 +187,20 @@
         void StreamLogic.episodeClicked(episode, imdbID);
     }
 
-    $: progressStarted = Object.keys($progressMap ?? {}).length > 0;
     $: upNext =
-        $metaData?.meta?.type === "series" && progressStarted
+        $metaData?.meta?.type === "series"
             ? getSeriesResumeEpisode(
                   $metaData.meta.videos,
                   $lastWatched,
                   ProgressLogic.getProgress($progressMap, `${$lastWatched.season}:${$lastWatched.episode}`),
               )
             : null;
+    $: standardEpisodes = $metaData?.meta?.type === "series" ? getStandardEpisodes($metaData.meta.videos) : [];
+    $: seriesProgress = standardEpisodes.length
+        ? standardEpisodes.filter(
+              (video) => ProgressLogic.getProgress($progressMap, `${video.season}:${video.episode}`)?.watched,
+          ).length / standardEpisodes.length
+        : null;
     $: upNextProgress = upNext ? ProgressLogic.getProgress($progressMap, `${upNext.season}:${upNext.episode}`) : undefined;
 </script>
 
@@ -279,128 +284,68 @@
                     <div
                         class="flex flex-col gap-2.5 justify-start items-start w-full"
                     >
-                        {#if $metaData.meta.logo && !$logoFailed}
-                            <img
-                                src={$metaData.meta.logo}
-                                alt="Logo"
-                                class="h-[clamp(140px,12.5vw,250px)] max-w-full w-auto object-contain object-left"
-                                on:error={() => logoFailed.set(true)}
-                            />
-                        {:else}
-                            <h1
-                                class="text-ink/90 text-[clamp(38px,3.5vw,58px)] font-bold leading-tight max-w-200"
-                            >
-                                {$metaData.meta.name}
-                            </h1>
-                        {/if}
+                        <TitleLogo
+                            logo={$logoFailed ? null : $metaData.meta.logo}
+                            name={$metaData.meta.name}
+                            progress={seriesProgress}
+                            onLogoError={() => logoFailed.set(true)}
+                        />
 
                         <MetaInfo metaData={$metaData} seasons={$seasons} />
-                    </div>
-
-                    <div class="flex flex-col gap-4">
-                        <div class="flex items-center gap-3">
-                            {#if $metaData.meta.type === "series"}
-                                {@const lastEpKey = `${$lastWatched.season}:${$lastWatched.episode}`}
-                                {@const lastEpProgress = ProgressLogic.getProgress(
-                                    $progressMap,
-                                    lastEpKey,
-                                )}
-                                {@const resumeEpisode =
-                                    getSeriesResumeEpisode(
-                                        $metaData.meta.videos,
-                                        $lastWatched,
-                                        lastEpProgress,
-                                    ) || { season: 1, episode: 1 }}
-                                {@const isResumable =
-                                    lastEpProgress &&
-                                    !lastEpProgress.watched &&
-                                    lastEpProgress.time > 0}
-
-                                <div class="relative rounded-[50px] resume-button-shell" data-focus-ring>
-                                    <button
-                                        data-tv-autofocus
-                                        class="bg-accent/85 hover:bg-accent/70 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-5 text-on-accent font-medium w-full transition-colors duration-200 relative z-10 resume-button"
-                                        on:click={() =>
-                                            StreamLogic.episodeClicked(
-                                                resumeEpisode,
-                                                imdbID,
-                                            )}
-                                    >
-                                        <div class="resume-button__icon flex items-center justify-center">
-                                            <Play size={48} strokeWidth={2} fill="currentColor" />
-                                        </div>
-
-                                        <span class="resume-button__label">
-                                            {#if isResumable}
-                                                Resume S{$lastWatched.season}E{$lastWatched.episode}
-                                            {:else}
-                                                Watch S{resumeEpisode.season}E{resumeEpisode.episode}
-                                            {/if}
-                                        </span>
-                                    </button>
-                                    {#if isResumable}
-                                        <div
-                                            class="absolute bottom-0 left-0 h-1.5 bg-accent z-20 rounded-full overflow-hidden"
-                                            style="width: {(lastEpProgress.time /
-                                                lastEpProgress.duration) *
-                                                100}%"
-                                        ></div>
-                                    {/if}
-                                </div>
-                            {:else}
-                                {@const movieProgress =
-                                    ProgressLogic.getProgress($progressMap)}
-                                {@const isMovieResumable =
-                                    movieProgress &&
-                                    !movieProgress.watched &&
-                                    movieProgress.time > 0}
-
-                                <div class="relative rounded-[50px] resume-button-shell" data-focus-ring>
-                                    <button
-                                        data-tv-autofocus
-                                        class="bg-accent/85 hover:bg-accent/70 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-5 text-on-accent font-medium w-full transition-colors duration-200 relative z-10 resume-button"
-                                        on:click={() =>
-                                            StreamLogic.episodeClicked(
-                                                { season: 0, episode: 0 },
-                                                imdbID,
-                                            )}
-                                    >
-                                        <div class="resume-button__icon flex items-center justify-center">
-                                            <Play size={48} strokeWidth={2} fill="currentColor" />
-                                        </div>
-                                        <span class="resume-button__label">
-                                            {#if isMovieResumable}
-                                                Resume
-                                            {:else}
-                                                Watch Movie
-                                            {/if}
-                                        </span>
-                                    </button>
-                                    {#if isMovieResumable}
-                                        <div
-                                            class="absolute bottom-0 left-0 h-1.5 bg-accent z-20 rounded-full overflow-hidden"
-                                            style="width: {(movieProgress.time /
-                                                movieProgress.duration) *
-                                                100}%"
-                                        ></div>
-                                    {/if}
-                                </div>
-                            {/if}
-                            <ActionButtons metaData={$metaData} />
-                        </div>
 
                         {#if $metaData.meta.type === "series"}
-                            {@const watchedCount = Object.values($progressMap).filter((p: any) => p && p.watched).length}
-                            {#if watchedCount > 0}
-                                <div class="flex items-center gap-3 text-sm text-ink/60">
-                                    <div class="h-1 w-[clamp(120px,10vw,180px)] overflow-hidden rounded-full bg-ink/15">
-                                        <div class="h-full rounded-full bg-accent" style="width: {(watchedCount / $episodes) * 100}%"></div>
-                                    </div>
-                                    {watchedCount} of {$episodes} watched
-                                </div>
-                            {/if}
+                            <div class="mt-1 flex items-center gap-3">
+                                <ActionButtons metaData={$metaData} />
+                            </div>
                         {/if}
                     </div>
+
+                    {#if $metaData.meta.type === "series"}
+                        {#if upNext}
+                            <UpNextCard
+                                episode={upNext}
+                                progress={upNextProgress}
+                                onPlay={() => upNext && StreamLogic.episodeClicked(upNext, imdbID)}
+                            />
+                        {/if}
+                    {:else}
+                        {@const movieProgress = ProgressLogic.getProgress($progressMap)}
+                        {@const isMovieResumable = movieProgress && !movieProgress.watched && movieProgress.time > 0}
+
+                        <div class="flex items-center gap-3">
+                            <div class="relative rounded-[50px] resume-button-shell" data-focus-ring>
+                                <button
+                                    data-tv-autofocus
+                                    class="bg-accent/85 hover:bg-accent/70 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-5 text-on-accent font-medium w-full transition-colors duration-200 relative z-10 resume-button"
+                                    on:click={() =>
+                                        StreamLogic.episodeClicked(
+                                            { season: 0, episode: 0 },
+                                            imdbID,
+                                        )}
+                                >
+                                    <div class="resume-button__icon flex items-center justify-center">
+                                        <Play size={48} strokeWidth={2} fill="currentColor" />
+                                    </div>
+                                    <span class="resume-button__label">
+                                        {#if isMovieResumable}
+                                            Resume
+                                        {:else}
+                                            Watch Movie
+                                        {/if}
+                                    </span>
+                                </button>
+                                {#if isMovieResumable}
+                                    <div
+                                        class="absolute bottom-0 left-0 h-1.5 bg-accent z-20 rounded-full overflow-hidden"
+                                        style="width: {(movieProgress.time /
+                                            movieProgress.duration) *
+                                            100}%"
+                                    ></div>
+                                {/if}
+                            </div>
+                            <ActionButtons metaData={$metaData} />
+                        </div>
+                    {/if}
                 </div>
             </div>
 
@@ -408,13 +353,6 @@
 
         {#if $metaData.meta.type === "series"}
             <div class="relative w-full px-[clamp(32px,8.3vw,160px)] pt-2 pb-[clamp(32px,8.3vw,160px)]">
-                {#if upNext && !upNextProgress?.watched}
-                    <UpNextCard
-                        episode={upNext}
-                        progress={upNextProgress}
-                        onPlay={() => upNext && StreamLogic.episodeClicked(upNext, imdbID)}
-                    />
-                {/if}
                 <SeasonSelector
                     seasonsArray={$seasonsArray}
                     bind:currentSeason={$currentSeason}

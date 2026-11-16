@@ -1,7 +1,7 @@
 import { getCachedMetaData } from "../../lib/library/metaCache";
 import { getAddons, getLibraryItem } from "../../lib/db/db";
 import {
-    loadedMeta, metaData, episodes, seasons, seasonsArray,
+    loadedMeta, metaData, seasons, seasonsArray,
     progressMap, lastWatched, currentSeason, addons, selectedAddon,
     backgroundFailed, logoFailed, metaLoadError,
 } from "./metaState";
@@ -46,7 +46,6 @@ export async function loadMetaData(imdbID: string, titleType: string, expectedNa
     logoFailed.set(false);
     progressMap.set({});
     lastWatched.set({ season: 1, episode: 0 });
-    episodes.set(0);
     seasons.set(0);
     seasonsArray.set([]);
     currentSeason.set(1);
@@ -104,8 +103,6 @@ export async function loadMetaData(imdbID: string, titleType: string, expectedNa
         const availableEpisodes = (data.meta.videos || []).filter(
             (video: any) => video.season > 0,
         );
-        const epCount = availableEpisodes.length;
-        episodes.set(epCount);
 
         const seasonSet = new Set<number>(
             availableEpisodes.map((video: any) => Number(video.season) || 0),

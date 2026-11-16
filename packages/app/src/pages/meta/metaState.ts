@@ -15,7 +15,6 @@ export const progressMap = writable<ProgressMap>({});
 export const lastWatched = writable<LastWatched>({ season: 1, episode: 0 });
 
 // Season/Episode State
-export const episodes = writable<number>(0);
 export const seasons = writable<number>(0);
 export const seasonsArray = writable<number[]>([]);
 export const currentSeason = writable<number>(1);
@@ -52,7 +51,6 @@ export function resetMetaState() {
     logoFailed.set(false);
     progressMap.set({});
     lastWatched.set({ season: 1, episode: 0 });
-    episodes.set(0);
     seasons.set(0);
     seasonsArray.set([]);
     currentSeason.set(1);
