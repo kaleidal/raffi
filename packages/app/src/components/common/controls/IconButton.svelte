@@ -4,7 +4,7 @@
 </script>
 
 <button
-    class="icon-button bg-ink/25 hover:bg-ink/30 flex flex-row items-center cursor-pointer w-auto rounded-full duration-200 ease-out"
+    class="icon-button bg-[#6e6e6e]/50 text-white hover:bg-[#7a7a7a]/55 flex flex-row items-center cursor-pointer w-auto rounded-full duration-200 ease-out"
     on:click={onClick}
     aria-label={label}
 >

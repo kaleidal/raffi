@@ -210,7 +210,7 @@
 {#if $loadedMeta && $metaData && $metaData.meta}
     <div class="bg-canvas flex-1 relative" in:fade={{ duration: 300 }}>
         <div class="scheme-dark relative w-full overflow-visible bg-canvas">
-            <div class="absolute inset-0 opacity-60">
+            <div class="meta-backdrop absolute inset-0 opacity-60">
                 <MetaBackground
                     background={$metaData.meta.background}
                     bind:backgroundFailed={$backgroundFailed}
@@ -470,7 +470,7 @@
 
             {#if $metaData.meta.type === "series"}
                 <div
-                    class="page-fade absolute bottom-0 left-0 w-full h-37.5"
+                    class="meta-fade page-fade absolute bottom-0 left-0 w-full h-37.5"
                 ></div>
             {/if}
         </div>
@@ -566,6 +566,14 @@
 {/if}
 
 <style>
+    :global(:root[data-theme="light"]) .meta-backdrop {
+        opacity: 0.85;
+    }
+
+    :global(:root[data-theme="light"]) .meta-fade {
+        height: 30%;
+    }
+
     .meta-hero {
         min-height: calc(100dvh - var(--episode-peek, 0px));
     }

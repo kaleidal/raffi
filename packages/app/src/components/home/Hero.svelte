@@ -173,7 +173,7 @@
             <div class="flex flex-row gap-[10px] items-center">
                 <button
                     data-tv-autofocus
-                    class="details-button bg-accent/85 hover:bg-accent/70 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-[clamp(10px,1vw,16px)] text-on-accent text-[clamp(20px,1.8vw,32px)] font-medium px-[clamp(36px,4.4vw,84px)] py-[clamp(12px,1vw,18px)] w-fit rounded-full transition-colors duration-200"
+                    class="details-button bg-accent/85 hover:bg-accent/70 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-[clamp(10px,1vw,16px)] text-on-accent text-[clamp(20px,1.8vw,32px)] font-medium px-[clamp(36px,4.4vw,84px)] py-[clamp(12px,1vw,18px)] w-fit rounded-full shadow-[0_10px_30px_rgba(0,0,0,0.18)] transition-colors duration-200"
                     on:click={() =>
                         navigateToMeta(showcasedTitle.imdb_id, showcasedTitle.type)}
                 >
@@ -226,7 +226,7 @@
     {/if}
 
     <div
-        class="absolute inset-0 z-[1] bg-gradient-to-t from-canvas via-canvas/80 to-transparent"
+        class="hero-bottom-shade absolute inset-0 z-[1] bg-gradient-to-t from-canvas via-canvas/80 to-transparent"
     ></div>
     <div
         class="absolute inset-0 z-[1] bg-gradient-to-r from-canvas/80 via-transparent to-transparent"
@@ -248,6 +248,14 @@
 
     .hero-blend {
         height: var(--hero-content-gap);
+    }
+
+    :global(:root[data-theme="light"]) .hero-blend {
+        height: 40%;
+    }
+
+    :global(:root[data-theme="light"]) .hero-bottom-shade {
+        opacity: 0.3;
     }
 
     .hero-frame {
