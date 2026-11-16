@@ -82,11 +82,6 @@
     onDestroy(() => {
         streamsToReopen.set(null);
         DataLoader.cancelMetaDataLoad();
-        document.body.style.overflow = "";
-        const scrollContainer = document.querySelector("[data-scroll-container]");
-        if (scrollContainer instanceof HTMLElement) {
-            scrollContainer.style.overflow = "";
-        }
         window.removeEventListener(ADDONS_CHANGED_EVENT, handleAddonsChanged);
     });
 
@@ -114,22 +109,6 @@
         }
     } else {
         unsupportedReason = null;
-    }
-
-    $: {
-        if ($streamsPopupVisible || unsupportedReason) {
-            document.body.style.overflow = "hidden";
-            const scrollContainer = document.querySelector("[data-scroll-container]");
-            if (scrollContainer instanceof HTMLElement) {
-                scrollContainer.style.overflow = "hidden";
-            }
-        } else {
-            document.body.style.overflow = "";
-            const scrollContainer = document.querySelector("[data-scroll-container]");
-            if (scrollContainer instanceof HTMLElement) {
-                scrollContainer.style.overflow = "";
-            }
-        }
     }
 
     $: if ($selectedAddon && $selectedEpisode && $streamsPopupVisible) {

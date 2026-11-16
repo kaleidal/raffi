@@ -1,5 +1,6 @@
 <script lang="ts">
     import { portal } from "../../common/portal";
+    import { lockPageScroll } from "../../common/scrollLock";
     import { fade, scale } from "svelte/transition";
     import { AlertTriangle } from "@lucide/svelte";
 
@@ -20,6 +21,7 @@
 
 <div
     use:portal
+    use:lockPageScroll
     class="raffi-modal-backdrop fixed inset-0 z-300 flex items-center justify-center bg-canvas/60 backdrop-blur-xl"
     transition:fade={{ duration: 200 }}
 >

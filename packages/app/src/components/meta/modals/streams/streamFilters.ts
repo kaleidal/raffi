@@ -103,7 +103,28 @@ function formatAudioLanguageLabel(codes: string[]): string | null {
     return `${visible.join(" + ")}${remainder > 0 ? ` +${remainder}` : ""}`;
 }
 
-function getRecommendedScore(meta: ParsedStreamMetadata): number {
+const GIGABYTE_MB = 1024;
+const COMFORTABLE_SIZE_MB = 15 * GIGABYTE_MB;
+
+export function preferredResolutionRank() {
+    const longestEdge = Math.max(window.screen.width, window.screen.height) * window.devicePixelRatio;
+    if (longestEdge >= 3200) return RESOLUTION_RANKS["2160p"];
+    if (longestEdge >= 2300) return RESOLUTION_RANKS["1440p"];
+    if (longestEdge >= 1700) return RESOLUTION_RANKS["1080p"];
+    return RESOLUTION_RANKS["720p"];
+}
+
+function resolutionFitScore(rank: number, preferred: number) {
+    if (!rank) return 0;
+    return rank <= preferred ? rank * 200 : preferred * 200 - (rank - preferred) * 150;
+}
+
+function sizePenalty(meta: ParsedStreamMetadata) {
+    const oversizedGb = meta.sizeInMb ? Math.max(0, meta.sizeInMb - COMFORTABLE_SIZE_MB) / GIGABYTE_MB : 0;
+    return Math.min(oversizedGb * 40, 800) + (meta.releaseTypeLabel === "Remux" ? 300 : 0);
+}
+
+function getRecommendedScore(meta: ParsedStreamMetadata, preferredRank: number): number {
     const sourceScore =
         meta.sourceType === "local"
             ? 5000
@@ -112,18 +133,23 @@ function getRecommendedScore(meta: ParsedStreamMetadata): number {
                 : meta.sourceType === "direct"
                     ? 2600
                     : 1800;
-
-    const qualityScore = meta.resolutionRank * 200;
-    const peerScore = Math.min(meta.peerCount ?? 0, 999);
-    const hdrScore = meta.isHDR ? 25 : 0;
-    const sizeScore = meta.sizeInMb ? Math.min(meta.sizeInMb / 256, 40) : 0;
-
     const cachedScore = meta.isCached === true ? 1200 : 0;
+    const peerScore = Math.log2((meta.peerCount ?? 0) + 1) * 40;
+    const hdrScore = meta.isHDR ? 25 : 0;
+    const unplayablePenalty = meta.statusBadges.some((badge) => badge.variant === "danger") ? 2000 : 0;
 
-    return sourceScore + cachedScore + qualityScore + peerScore + hdrScore + sizeScore;
+    return (
+        sourceScore +
+        cachedScore +
+        resolutionFitScore(meta.resolutionRank, preferredRank) +
+        peerScore +
+        hdrScore -
+        sizePenalty(meta) -
+        unplayablePenalty
+    );
 }
 
-function compareBySort(left: EnrichedStream, right: EnrichedStream, sortOption: StreamSortOption) {
+function compareBySort(left: EnrichedStream, right: EnrichedStream, sortOption: StreamSortOption, preferredRank: number) {
     if (sortOption === "quality") {
         return (right.meta.resolutionRank - left.meta.resolutionRank) || ((right.meta.peerCount ?? -1) - (left.meta.peerCount ?? -1));
     }
@@ -136,7 +162,7 @@ function compareBySort(left: EnrichedStream, right: EnrichedStream, sortOption: 
         return ((right.meta.peerCount ?? -1) - (left.meta.peerCount ?? -1)) || (right.meta.resolutionRank - left.meta.resolutionRank);
     }
 
-    return getRecommendedScore(right.meta) - getRecommendedScore(left.meta);
+    return getRecommendedScore(right.meta, preferredRank) - getRecommendedScore(left.meta, preferredRank);
 }
 
 export function getFilteredAddons(addons: Addon[]): Addon[] {
@@ -397,6 +423,7 @@ export function buildEnrichedStreams(
 export function applyStreamFilters(
     enrichedStreams: EnrichedStream[],
     state: StreamFilterState,
+    preferredRank = RESOLUTION_RANKS["1080p"],
 ): EnrichedStream[] {
     const filtered = enrichedStreams.filter(({ meta }) => {
         if (state.dynamicRangeFilter === "hdr" && !meta.isHDR) return false;
@@ -424,7 +451,7 @@ export function applyStreamFilters(
         return meta.resolution === state.resolutionFilter;
     });
 
-    return [...filtered].sort((left, right) => compareBySort(left, right, state.sortOption));
+    return [...filtered].sort((left, right) => compareBySort(left, right, state.sortOption, preferredRank));
 }
 
 export function splitStreamsBySource(filteredStreams: EnrichedStream[]) {

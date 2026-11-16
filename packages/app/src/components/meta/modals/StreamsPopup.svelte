@@ -20,6 +20,7 @@
         STREAM_SORT_OPTIONS,
         applyStreamFilters,
         buildEnrichedStreams,
+        preferredResolutionRank,
     } from "./streams/streamFilters";
     import { computeProgressDetails, getProgressEntry, getReleaseInfo } from "./streams/episodeDetails";
     import type {
@@ -167,7 +168,9 @@
         sizeFilter = "all";
     }
 
-    $: filteredStreams = applyStreamFilters(enrichedStreams, filterState);
+    const preferredRank = preferredResolutionRank();
+
+    $: filteredStreams = applyStreamFilters(enrichedStreams, filterState, preferredRank);
     $: ({ localFilteredStreams, addonFilteredStreams } = splitStreamsBySource(filteredStreams));
     $: bestStream = filteredStreams.find((item) => !item.isFailed) ?? null;
     $: hasDirectStream = visibleStreams.some((stream) => stream?.raffiSource === "direct");
