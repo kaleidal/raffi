@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { secondaryButton } from "../buttons";
 	import { Download } from "@lucide/svelte";
 	import Toggle from "../../common/controls/Toggle.svelte";
 	import SettingRow from "../SettingRow.svelte";
@@ -37,7 +38,7 @@
 				href={LIMBO_INSTALL_URL}
 				target="_blank"
 				rel="noreferrer"
-				class="inline-flex items-center gap-2 rounded-full bg-ink/10 px-4 py-2 text-sm font-semibold text-ink hover:bg-ink/16"
+				class={secondaryButton}
 			>
 				<Download size={16} strokeWidth={2} />
 				Get Limbo

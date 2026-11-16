@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { primaryButton } from "../buttons";
 	import { formatReleaseNotes } from "../../../lib/shell/updateNotes";
 	import { updateStatus } from "../../../lib/stores/authStore";
 
@@ -21,7 +22,7 @@
 			</div>
 			{#if $updateStatus.downloaded}
 				<button
-					class="cursor-pointer rounded-full bg-accent px-5 py-2.5 font-semibold text-on-accent transition-colors hover:bg-accent/85"
+					class={primaryButton}
 					on:click={() => window.electronAPI?.installUpdate?.()}
 				>
 					Restart to update

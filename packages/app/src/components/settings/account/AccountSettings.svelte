@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from "svelte";
 	import LoadingSpinner from "../../common/LoadingSpinner.svelte";
 	import AccountSection from "./AccountSection.svelte";
 	import AccountStateMismatchSection from "./AccountStateMismatchSection.svelte";
@@ -17,24 +16,10 @@
 	import { router } from "../../../lib/stores/router";
 	import { closeSettings } from "../../../lib/stores/settings";
 
-	let movies = 0;
-	let shows = 0;
 	let error = "";
 	let showSignOut = false;
 	let showStremioImport = false;
 	let stremioConnectionRevision = 0;
-
-	async function refreshStats() {
-		try {
-			const library = await getLibrary(1000);
-			movies = library.filter((item) => item.type === "movie" || !item.type).length;
-			shows = library.filter((item) => item.type === "series").length;
-		} catch (e) {
-			console.error("Failed to load stats", e);
-		}
-	}
-
-	onMount(refreshStats);
 
 	async function downloadData() {
 		try {
@@ -63,7 +48,6 @@
 			if (keepData) await syncUserStateToLocal($currentUser.id);
 			else clearLocalState();
 			signOutToLocalMode();
-			await refreshStats();
 			router.navigate("home");
 		} catch (e) {
 			console.error("Failed to switch to local mode", e);
@@ -71,8 +55,7 @@
 		}
 	}
 
-	async function handleSignedIn() {
-		await refreshStats();
+	function handleSignedIn() {
 		closeSettings();
 		router.navigate("home");
 	}
@@ -81,8 +64,7 @@
 		error = "";
 		try {
 			const result = await syncCloudBackupNow();
-			if (result?.ok) await refreshStats();
-			else error = "Cloud backup is currently unavailable.";
+			if (!result?.ok) error = "Cloud backup is currently unavailable.";
 		} catch (e: any) {
 			console.error("Failed to sync cloud backup", e);
 			error = e?.message || "Failed to sync cloud backup";
@@ -115,11 +97,6 @@
 	/>
 {/if}
 
-{#if movies + shows > 0}
-	<p class="pt-6 text-sm text-ink/45">
-		{movies} {movies === 1 ? "movie" : "movies"} and {shows} {shows === 1 ? "show" : "shows"} in your library
-	</p>
-{/if}
 
 {#if showSignOut}
 	<SignOutDialog onChoose={switchToLocalMode} onCancel={() => (showSignOut = false)} />
@@ -128,8 +105,5 @@
 <StremioImportModal
 	open={showStremioImport}
 	on:close={() => (showStremioImport = false)}
-	on:imported={() => {
-		refreshStats();
-		stremioConnectionRevision += 1;
-	}}
+	on:imported={() => (stremioConnectionRevision += 1)}
 />

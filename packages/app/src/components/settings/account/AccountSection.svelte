@@ -15,6 +15,7 @@
 	import { onDestroy } from "svelte";
 	import AccountProfile from "./AccountProfile.svelte";
 	import SettingRow from "../SettingRow.svelte";
+	import { primaryButton, secondaryButton } from "../buttons";
 
 	let traktLoading = false;
 	let traktStatus: TraktStatus | null = null;
@@ -37,24 +38,26 @@
 	export let onImportStremio: () => void = () => {};
 	export let onRequestSignOut: () => void = () => {};
 
-	const formatTimestamp = (value: number | null) => {
-		if (!value) return "Never";
-		return new Date(value).toLocaleString();
-	};
+	const formatTimestamp = (value: number | null) =>
+		value ? new Date(value).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "never";
 
 	$: pendingSyncCount = $cloudSyncStatus.pendingUploads + $cloudSyncStatus.pendingDeletes;
-	$: syncStatusLabel = $cloudSyncStatus.isSyncing
-		? "Syncing"
-		: $cloudSyncStatus.lastError
-			? "Sync failed"
-			: "Sync ready";
-	$: syncStatusDetail = $cloudSyncStatus.lastError
-		? (
-			$cloudSyncStatus.lastSuccessAt
-				? `Last successful sync: ${formatTimestamp($cloudSyncStatus.lastSuccessAt)}`
-				: "No successful sync yet"
-		)
-		: `Last sync ${formatTimestamp($cloudSyncStatus.lastSuccessAt)}`;
+	$: syncDescription = [
+		$cloudSyncStatus.isSyncing ? "Syncing now" : `Last synced ${formatTimestamp($cloudSyncStatus.lastSuccessAt)}`,
+		pendingSyncCount > 0 ? `${pendingSyncCount} waiting` : "",
+	]
+		.filter(Boolean)
+		.join(" · ");
+	$: traktDescription = !$cloudSyncStatus.cloudFeaturesAvailable
+		? "Unavailable while sync is offline."
+		: traktStatus && !traktStatus.configured
+			? "Not available in this build."
+			: traktStatus?.connected
+				? "Sends your progress to your Trakt profile."
+				: "Send your progress to your Trakt profile.";
+	$: stremioDescription = stremioStatus.connected
+		? `Connected as ${stremioStatus.email}`
+		: "Import your library and addons, or stay connected to keep progress in sync.";
 	$: traktActionLabel = traktLoading
 		? "Loading..."
 		: traktBusy
@@ -185,156 +188,77 @@
 	}
 </script>
 
-<section class="flex flex-col gap-6">
-	<div class="flex flex-col gap-5">
-		<AccountProfile />
+<AccountProfile />
 
-		<SettingRow
-			title={syncStatusLabel}
-			description={pendingSyncCount > 0 ? `${syncStatusDetail} · ${pendingSyncCount} waiting to sync` : syncStatusDetail}
-		/>
-
-		<div class="flex flex-wrap gap-3">
-			{#if $cloudSyncStatus.cloudFeaturesAvailable}
-				<button
-					class="bg-ink/10 text-ink px-4 py-2 rounded-full font-semibold hover:bg-ink/20 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-					on:click={onSyncNow}
-					disabled={$cloudSyncStatus.isSyncing}
-				>
-					{$cloudSyncStatus.isSyncing ? "Syncing..." : "Sync now"}
-				</button>
-			{/if}
-			<button
-				class="bg-ink/10 text-ink px-4 py-2 rounded-full font-semibold hover:bg-ink/20 transition-colors cursor-pointer"
-				on:click={onDownloadData}
-			>
-				Export library and lists
+<div class="pt-4">
+	<SettingRow title="Sync" description={syncDescription}>
+		{#if $cloudSyncStatus.cloudFeaturesAvailable}
+			<button class={secondaryButton} on:click={onSyncNow} disabled={$cloudSyncStatus.isSyncing}>
+				Sync now
 			</button>
-			<button
-				class="bg-ink/10 text-ink px-4 py-2 rounded-full font-semibold hover:bg-ink/20 transition-colors cursor-pointer"
-				on:click={onRequestSignOut}
-			>
-				Sign out
-			</button>
-			{#if $cloudSyncStatus.lastError}
-				<p class="self-center text-sm text-warning/90">{$cloudSyncStatus.lastError}</p>
-			{/if}
-		</div>
-	</div>
-
-	<div class="flex flex-col">
-		<h3 class="pb-1 text-lg font-semibold text-ink">Connected services</h3>
-
-		<div class="py-3.5 space-y-3">
-			<div class="flex flex-col gap-3 sm:gap-6 sm:flex-row sm:items-center sm:justify-between">
-				<div>
-					<p class="text-ink font-medium">Trakt</p>
-					<p class="text-ink/60 text-sm">Send watch progress and playback state to your Trakt profile.</p>
-				</div>
-				{#if $cloudSyncStatus.cloudFeaturesAvailable && !traktLoading && (!traktStatus || traktStatus.configured)}
-					<button
-						class={`${traktStatus?.connected ? "bg-ink/10 text-ink hover:bg-ink/20" : "bg-accent text-on-accent hover:bg-accent/85"} px-4 py-2 rounded-full font-semibold transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0`}
-						on:click={traktStatus?.connected ? disconnectTrakt : connectTrakt}
-						disabled={traktBusy}
-					>
-						{traktActionLabel}
-					</button>
-				{/if}
-			</div>
-
-			{#if !$cloudSyncStatus.cloudFeaturesAvailable}
-				<p class="text-ink/60 text-sm">
-					Cloud backup is offline, so Trakt and watch party features are temporarily hidden.
-				</p>
-			{:else if traktLoading}
-				<p class="text-ink/60 text-sm">Loading Trakt status...</p>
-			{:else}
-				{#if traktStatus && !traktStatus.configured}
-					<p class="text-ink/60 text-sm">Trakt is not configured yet in this build.</p>
-				{/if}
-			{/if}
-
-			{#if traktCode}
-				<div class="rounded-3xl bg-ink/6 p-5 flex flex-col gap-3">
-					<p class="text-ink/60 text-sm">Go to {traktCode.verificationUrl.replace("https://", "")} and enter this code.</p>
-					<p class="text-ink text-3xl font-semibold tracking-widest select-all">{traktCode.userCode}</p>
-					<div class="flex flex-wrap gap-2">
-						<button
-							class="bg-accent text-on-accent px-4 py-2 rounded-full font-semibold hover:bg-accent/85 transition-colors cursor-pointer"
-							on:click={() => traktCode && openTrakt(traktCode.verificationUrl)}
-						>
-							Open Trakt
-						</button>
-						<button
-							class="bg-ink/10 text-ink px-4 py-2 rounded-full font-semibold hover:bg-ink/20 transition-colors cursor-pointer"
-							on:click={cancelTraktSignIn}
-						>
-							Cancel
-						</button>
-					</div>
-				</div>
-			{/if}
-
-			{#if traktMessage}
-				<div class="p-3 rounded-2xl bg-success/12 text-success text-sm">{traktMessage}</div>
-			{/if}
-			{#if traktError}
-				<div class="p-3 rounded-2xl bg-danger/12 text-danger text-sm">{traktError}</div>
-			{/if}
-		</div>
-
-		<div class="py-3.5 space-y-3">
-			<div class="flex flex-col gap-3 sm:gap-6 sm:flex-row sm:items-center sm:justify-between">
-				<div>
-					<p class="text-ink font-medium">Stremio</p>
-					<p class="text-ink/60 text-sm">
-						{#if stremioStatus.connected}
-							Connected as {stremioStatus.email}
-							{#if stremioStatus.connectedAt}
-								· since {formatTimestamp(Date.parse(stremioStatus.connectedAt))}
-							{/if}
-						{:else}
-							Import your library and addons, or stay connected to keep progress in sync.
-						{/if}
-					</p>
-				</div>
-				<div class="flex flex-wrap gap-2 shrink-0">
-					{#if stremioStatus.connected}
-						<button
-							class="bg-accent text-on-accent px-4 py-2 rounded-full font-semibold hover:bg-accent/85 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-							on:click={syncStremio}
-							disabled={stremioBusy}
-						>
-							{stremioActionLabel}
-						</button>
-						<button
-							class="bg-ink/10 text-ink px-4 py-2 rounded-full font-semibold hover:bg-ink/20 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-							on:click={disconnectStremioAccount}
-							disabled={stremioBusy}
-						>
-							Disconnect
-						</button>
-					{:else}
-						<button
-							class="bg-ink/10 text-ink px-4 py-2 rounded-full font-semibold hover:bg-ink/20 transition-colors cursor-pointer"
-							on:click={onImportStremio}
-						>
-							Sign in to import
-						</button>
-					{/if}
-				</div>
-			</div>
-
-			{#if stremioMessage}
-				<div class="p-3 rounded-2xl bg-success/12 text-success text-sm">{stremioMessage}</div>
-			{/if}
-			{#if stremioError}
-				<div class="p-3 rounded-2xl bg-danger/12 text-danger text-sm">{stremioError}</div>
-			{/if}
-		</div>
-	</div>
-
-	{#if error}
-		<div class="p-3 rounded-2xl bg-danger/12 text-danger text-sm">{error}</div>
+		{/if}
+	</SettingRow>
+	{#if $cloudSyncStatus.lastError}
+		<p class="pb-2 text-sm text-warning">{$cloudSyncStatus.lastError}</p>
 	{/if}
-</section>
+
+	<SettingRow title="Export" description="Download your library and lists as a file.">
+		<button class={secondaryButton} on:click={onDownloadData}>Export</button>
+	</SettingRow>
+
+	<SettingRow title="Sign out" description="You can keep your data on this device.">
+		<button class={secondaryButton} on:click={onRequestSignOut}>Sign out</button>
+	</SettingRow>
+</div>
+
+<h3 class="pt-8 pb-1 text-lg font-semibold text-ink">Connected services</h3>
+
+<SettingRow title="Trakt" description={traktDescription}>
+	{#if $cloudSyncStatus.cloudFeaturesAvailable && !traktLoading && (!traktStatus || traktStatus.configured)}
+		<button
+			class={traktStatus?.connected ? secondaryButton : primaryButton}
+			on:click={traktStatus?.connected ? disconnectTrakt : connectTrakt}
+			disabled={traktBusy}
+		>
+			{traktActionLabel}
+		</button>
+	{/if}
+</SettingRow>
+
+{#if traktCode}
+	<div class="mb-3 flex flex-col gap-3 rounded-3xl bg-ink/6 p-5">
+		<p class="text-sm text-ink/60">Go to {traktCode.verificationUrl.replace("https://", "")} and enter this code.</p>
+		<p class="select-all text-3xl font-semibold tracking-widest text-ink">{traktCode.userCode}</p>
+		<div class="flex flex-wrap gap-2">
+			<button class={primaryButton} on:click={() => traktCode && openTrakt(traktCode.verificationUrl)}>Open Trakt</button>
+			<button class={secondaryButton} on:click={cancelTraktSignIn}>Cancel</button>
+		</div>
+	</div>
+{/if}
+{#if traktMessage}
+	<p class="pb-2 text-sm text-success">{traktMessage}</p>
+{/if}
+{#if traktError}
+	<p class="pb-2 text-sm text-danger">{traktError}</p>
+{/if}
+
+<SettingRow title="Stremio" description={stremioDescription}>
+	<div class="flex flex-wrap gap-2">
+		{#if stremioStatus.connected}
+			<button class={primaryButton} on:click={syncStremio} disabled={stremioBusy}>{stremioActionLabel}</button>
+			<button class={secondaryButton} on:click={disconnectStremioAccount} disabled={stremioBusy}>Disconnect</button>
+		{:else}
+			<button class={secondaryButton} on:click={onImportStremio}>Import</button>
+		{/if}
+	</div>
+</SettingRow>
+{#if stremioMessage}
+	<p class="pb-2 text-sm text-success">{stremioMessage}</p>
+{/if}
+{#if stremioError}
+	<p class="pb-2 text-sm text-danger">{stremioError}</p>
+{/if}
+
+{#if error}
+	<p class="pt-4 text-sm text-danger">{error}</p>
+{/if}

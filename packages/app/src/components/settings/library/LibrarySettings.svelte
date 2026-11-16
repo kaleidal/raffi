@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { primaryButton, secondaryButton } from "../buttons";
 	import { onMount } from "svelte";
 	import {
 		getRoots as getLocalRoots,
@@ -66,13 +67,13 @@
 
 <div class="flex flex-wrap items-center gap-3 pt-4">
 	<button
-		class="cursor-pointer rounded-full bg-accent px-5 py-2.5 font-semibold text-on-accent transition-colors hover:bg-accent/85"
+		class={primaryButton}
 		on:click={addLocalFolder}
 	>
 		Add folder
 	</button>
 	<button
-		class="cursor-pointer rounded-full bg-ink/10 px-5 py-2.5 font-semibold text-ink transition-colors hover:bg-ink/16 disabled:cursor-wait disabled:opacity-60"
+		class={secondaryButton}
 		on:click={rescanLocalLibrary}
 		disabled={scanningLocal}
 	>

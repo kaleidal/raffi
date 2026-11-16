@@ -82,7 +82,7 @@
 	<div class="flex items-center gap-4 min-w-0">
 		<button
 			type="button"
-			class="group relative h-18 w-18 rounded-[26px] bg-ink/9 overflow-hidden shrink-0 flex items-center justify-center text-ink text-2xl font-semibold cursor-pointer disabled:cursor-wait"
+			class="group relative h-18 w-18 rounded-full bg-ink/9 overflow-hidden shrink-0 flex items-center justify-center text-ink text-2xl font-semibold cursor-pointer disabled:cursor-wait"
 			aria-label="Change photo"
 			disabled={avatarBusy}
 			on:click={() => fileInput.click()}

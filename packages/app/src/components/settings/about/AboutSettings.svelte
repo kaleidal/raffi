@@ -1,9 +1,14 @@
 <script lang="ts">
 	import { ExternalLink } from "@lucide/svelte";
+	import RaffiMark from "../../common/RaffiMark.svelte";
 	import SettingRow from "../SettingRow.svelte";
 	import UpdateSection from "./UpdateSection.svelte";
+	import { secondaryButton } from "../buttons";
+	import { appVersion, platformLabel } from "../../../lib/shell/appInfo";
 
 	const links = [
+		{ title: "Website", description: "raffi.al", url: "https://raffi.al" },
+		{ title: "Source code", description: "Open source under the MIT license.", url: "https://github.com/kaleidal/raffi" },
 		{ title: "Report a problem", description: "Something broken or acting odd.", url: "https://github.com/kaleidal/raffi/issues" },
 		{ title: "Ideas and questions", description: "Talk with other people using Raffi.", url: "https://github.com/kaleidal/raffi/discussions" },
 	];
@@ -11,24 +16,28 @@
 	function openExternalLink(url: string) {
 		const openExternal = window.electronAPI?.openExternal;
 		if (!openExternal) {
-			window.location.assign(url);
+			window.open(url, "_blank", "noopener");
 			return;
 		}
 		openExternal(url).catch((error) => {
 			console.error("Failed to open external link", error);
-			window.location.assign(url);
 		});
 	}
 </script>
+
+<div class="flex items-center gap-4 pb-6">
+	<RaffiMark class="h-14 w-auto text-ink/85" />
+	<div>
+		<p class="text-xl font-semibold text-ink">Raffi {appVersion}</p>
+		<p class="text-sm text-ink/55">{platformLabel()}</p>
+	</div>
+</div>
 
 <UpdateSection />
 
 {#each links as link (link.url)}
 	<SettingRow title={link.title} description={link.description}>
-		<button
-			class="inline-flex cursor-pointer items-center gap-2 rounded-full bg-ink/10 px-4 py-2 text-sm font-semibold text-ink hover:bg-ink/16"
-			on:click={() => openExternalLink(link.url)}
-		>
+		<button class={secondaryButton} on:click={() => openExternalLink(link.url)}>
 			Open
 			<ExternalLink size={15} strokeWidth={2} />
 		</button>

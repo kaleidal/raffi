@@ -9,6 +9,7 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": false,
+    "resolveJsonModule": true,
     "types": [
       "svelte",
       "vite/client"

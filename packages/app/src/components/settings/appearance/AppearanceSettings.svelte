@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { secondaryButton } from "../buttons";
 	import { onMount } from "svelte";
 	import CustomSelect from "../../common/controls/CustomSelect.svelte";
 	import Segmented from "../../common/controls/Segmented.svelte";
@@ -93,7 +94,7 @@
 {#if supportsCustomThemes}
 	<SettingRow title="Custom themes" description="Stylesheets in this folder load on top of Raffi's look.">
 		<button
-			class="cursor-pointer rounded-full bg-ink/10 px-4 py-2 text-sm font-semibold text-ink hover:bg-ink/16"
+			class={secondaryButton}
 			on:click={openThemesFolder}
 		>
 			Open folder

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { secondaryButton } from "../buttons";
 	import LimboPairingModal from "./LimboPairingModal.svelte";
 	import Toggle from "../../common/controls/Toggle.svelte";
 	import SettingRow from "../SettingRow.svelte";
@@ -47,14 +48,14 @@
 	<div class="flex items-center gap-3">
 		{#if $limboPairing}
 			<button
-				class="cursor-pointer rounded-full bg-ink/10 px-4 py-2 text-sm font-semibold text-ink hover:bg-ink/16"
+				class={secondaryButton}
 				on:click={unpair}
 			>
 				Unpair
 			</button>
 		{:else if $allowTorrenting}
 			<button
-				class="cursor-pointer rounded-full bg-ink/10 px-4 py-2 text-sm font-semibold text-ink hover:bg-ink/16"
+				class={secondaryButton}
 				on:click={() => (pairing = true)}
 			>
 				Pair with Limbo
