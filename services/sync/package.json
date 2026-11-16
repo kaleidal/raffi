@@ -4,15 +4,15 @@
   "type": "module",
   "private": true,
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20261106.1",
+    "@cloudflare/workers-types": "^5.20261116.1",
     "@types/bun": "^1.4.4",
-    "typescript": "^6.0.3",
-    "wrangler": "^4.158.0"
+    "typescript": "^7.0.2",
+    "wrangler": "^4.162.0"
   },
   "dependencies": {
-    "better-auth": "^1.7.18",
-    "disposable-email-domains-js": "^1.26.0",
-    "jose": "^6.2.15"
+    "better-auth": "^1.7.25",
+    "disposable-email-domains-js": "^2.0.0",
+    "jose": "^6.2.17"
   },
   "scripts": {
     "dev": "wrangler dev",

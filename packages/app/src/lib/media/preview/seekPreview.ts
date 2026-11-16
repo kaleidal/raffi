@@ -27,7 +27,7 @@ async function openKeyframeSource(stream: StreamInput, src: string, signal: Abor
 	if (!config) return null;
 
 	if ((await stream.input.getFormat()) instanceof MatroskaInputFormat) {
-		const keyframes = await MatroskaKeyframes.open(new RangeReader(src, signal), track.id);
+		const keyframes = await MatroskaKeyframes.open(new RangeReader(src, signal), track.number);
 		return keyframes && { config, source: keyframes };
 	}
 	return { config, source: new PacketKeyframes(track) };

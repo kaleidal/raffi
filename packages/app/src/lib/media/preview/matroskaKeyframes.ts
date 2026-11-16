@@ -16,6 +16,7 @@ const DEFAULT_TIMESTAMP_SCALE = 1_000_000;
 const NANOSECONDS_PER_SECOND = 1e9;
 const SIMPLE_BLOCK_KEYFRAME = 0x80;
 const BLOCK_LACING = 0x06;
+const VIDEO_TRACK_TYPE = 1;
 
 type CuePoint = {
 	time: number;
@@ -32,6 +33,20 @@ async function readElement(reader: RangeReader, position: number, id: number) {
 	const header = readElementAt(await reader.read(position, position + ELEMENT_HEADER_BYTES), 0);
 	if (header?.id !== id || header.size == null) return null;
 	return reader.read(position + header.headerSize, header.end + position);
+}
+
+/** TrackNumber of the `videoIndex`-th video TrackEntry, counting from 1. */
+function videoTrackNumber(tracks: Uint8Array, videoIndex: number) {
+	let seen = 0;
+	for (const entry of childElements(tracks)) {
+		if (entry.id !== EBML.TrackEntry) continue;
+		const fields = [...childElements(tracks, entry.start, entry.end)];
+		const type = fields.find((field) => field.id === EBML.TrackType);
+		if (!type || readUnsignedChild(tracks, type) !== VIDEO_TRACK_TYPE || ++seen !== videoIndex) continue;
+		const number = fields.find((field) => field.id === EBML.TrackNumber);
+		return number ? readUnsignedChild(tracks, number) : null;
+	}
+	return null;
 }
 
 function parseCues(cues: Uint8Array, track: number, segmentStart: number, timestampScale: number) {
@@ -91,7 +106,7 @@ export class MatroskaKeyframes {
 		private readonly cues: CuePoint[],
 	) {}
 
-	static async open(reader: RangeReader, track: number): Promise<MatroskaKeyframes | null> {
+	static async open(reader: RangeReader, videoIndex: number): Promise<MatroskaKeyframes | null> {
 		const head = await reader.read(0, HEAD_BYTES);
 		const ebml = readElementAt(head, 0);
 		if (ebml?.id !== EBML.EBML) return null;
@@ -101,12 +116,17 @@ export class MatroskaKeyframes {
 
 		let timestampScale = DEFAULT_TIMESTAMP_SCALE;
 		let cuesAt: number | null = null;
+		let tracksAt: number | null = null;
+		let track: number | null = null;
 		for (const element of childElements(head, segmentStart)) {
 			if (element.id === EBML.SeekHead) {
-				const cues = readSeekHead(head.subarray(element.start, element.end)).find(
-					(entry) => entry.id === EBML.Cues,
-				);
+				const entries = readSeekHead(head.subarray(element.start, element.end));
+				const cues = entries.find((entry) => entry.id === EBML.Cues);
+				const tracks = entries.find((entry) => entry.id === EBML.Tracks);
 				if (cues) cuesAt = segmentStart + cues.position;
+				if (tracks) tracksAt = segmentStart + tracks.position;
+			} else if (element.id === EBML.Tracks) {
+				track = videoTrackNumber(head.subarray(element.start, element.end), videoIndex);
 			} else if (element.id === EBML.Info) {
 				const scale = [...childElements(head, element.start, element.end)].find(
 					(child) => child.id === EBML.TimestampScale,
@@ -116,7 +136,11 @@ export class MatroskaKeyframes {
 				break;
 			}
 		}
-		if (cuesAt == null) return null;
+		if (track == null && tracksAt != null) {
+			const tracks = await readElement(reader, tracksAt, EBML.Tracks);
+			if (tracks) track = videoTrackNumber(tracks, videoIndex);
+		}
+		if (track == null || cuesAt == null) return null;
 
 		const cues = await readElement(reader, cuesAt, EBML.Cues);
 		if (!cues) return null;
