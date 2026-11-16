@@ -226,7 +226,7 @@
     {/if}
 
     <div
-        class="hero-bottom-scrim absolute inset-0 z-[1] bg-gradient-to-t from-canvas via-canvas/80 to-transparent"
+        class="absolute inset-0 z-[1] bg-gradient-to-t from-canvas via-canvas/80 to-transparent"
     ></div>
     <div
         class="absolute inset-0 z-[1] bg-gradient-to-r from-canvas/80 via-transparent to-transparent"
@@ -237,25 +237,17 @@
 
 <style>
     .hero-shell {
-        --hero-blend: 0px;
-        height: calc(clamp(440px, min(58vw, 76dvh), 760px) + var(--hero-blend));
+        --hero-content-gap: clamp(48px, 6vw, 100px);
+        height: clamp(440px, min(58vw, 76dvh), 760px);
         min-height: 440px;
     }
 
-    :global(:root[data-theme="light"]) .hero-shell {
-        --hero-blend: clamp(120px, 11vw, 200px);
-    }
-
-    :global(:root[data-theme="light"]) .hero-bottom-scrim {
-        display: none;
-    }
-
     .hero-content {
-        bottom: calc(clamp(48px, 6vw, 100px) + var(--hero-blend));
+        bottom: var(--hero-content-gap);
     }
 
     .hero-blend {
-        height: calc(var(--hero-blend) * 1.5);
+        height: var(--hero-content-gap);
     }
 
     .hero-frame {
@@ -281,7 +273,7 @@
 
     @media (orientation: portrait) {
         .hero-shell {
-            height: calc(clamp(560px, 74dvh, 780px) + var(--hero-blend));
+            height: clamp(560px, 74dvh, 780px);
             min-height: min(560px, 74dvh);
         }
 
