@@ -231,27 +231,31 @@
     <div
         class="absolute inset-0 z-[1] bg-gradient-to-r from-canvas/80 via-transparent to-transparent"
     ></div>
-    <div class="hero-blend page-fade pointer-events-none absolute inset-x-0 bottom-0 z-[2]"></div>
-    <div class="absolute bottom-0 left-0 right-0 h-[14px] z-[2] bg-page"></div>
 </div>
 
 <style>
     .hero-shell {
         --hero-content-gap: clamp(48px, 6vw, 100px);
+        --hero-fade: var(--hero-content-gap);
         height: clamp(440px, min(58vw, 76dvh), 760px);
         min-height: 440px;
+        mask-image: linear-gradient(
+            to top,
+            transparent,
+            rgb(0 0 0 / 0.1) calc(var(--hero-fade) * 0.15),
+            rgb(0 0 0 / 0.35) calc(var(--hero-fade) * 0.38),
+            rgb(0 0 0 / 0.65) calc(var(--hero-fade) * 0.62),
+            rgb(0 0 0 / 0.9) calc(var(--hero-fade) * 0.85),
+            black var(--hero-fade)
+        );
+    }
+
+    :global(:root[data-theme="light"]) .hero-shell {
+        --hero-fade: 40%;
     }
 
     .hero-content {
         bottom: var(--hero-content-gap);
-    }
-
-    .hero-blend {
-        height: var(--hero-content-gap);
-    }
-
-    :global(:root[data-theme="light"]) .hero-blend {
-        height: 40%;
     }
 
     :global(:root[data-theme="light"]) .hero-bottom-shade {

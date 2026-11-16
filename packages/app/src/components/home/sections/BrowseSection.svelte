@@ -1,6 +1,7 @@
 <script lang="ts">
     import { untrack } from "svelte";
     import Segmented from "../../common/controls/Segmented.svelte";
+    import ChipRail from "../../common/ChipRail.svelte";
     import Skeleton from "../../common/Skeleton.svelte";
     import PosterCard from "./PosterCard.svelte";
     import { BROWSE_GENRES, BROWSE_PAGE_SIZE, fetchBrowsePage, type BrowseType } from "../../../lib/library/browseCatalog";
@@ -77,16 +78,19 @@
         />
     </div>
 
-    <div class="flex flex-wrap gap-2">
+    <ChipRail>
         {#each [null, ...genres] as genre (genre ?? "popular")}
             <button
                 class="{tab} {$browseSelection.genre === genre ? 'bg-accent text-on-accent' : 'bg-ink/8 text-ink/75 hover:bg-ink/14 hover:text-ink'}"
-                onclick={() => choose($browseSelection.type, genre)}
+                onclick={(event) => {
+                    choose($browseSelection.type, genre);
+                    event.currentTarget.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+                }}
             >
                 {genre ?? "Popular"}
             </button>
         {/each}
-    </div>
+    </ChipRail>
 
     <div class="browse-grid grid gap-[clamp(14px,1.2vw,22px)] pt-2">
         {#each titles as title (title.imdb_id)}

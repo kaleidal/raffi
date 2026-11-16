@@ -478,7 +478,6 @@
     {#if fetchedTitles}
         <div class="relative" in:fade={{ duration: 300 }}>
             <Hero {showcasedTitle} onLogoError={refreshFeatured} />
-            <div class="w-full h-[6px] -mt-[3px] bg-canvas relative z-20"></div>
 
             <SearchBar
                 onLogoClick={refreshFeatured}
