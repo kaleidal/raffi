@@ -1,7 +1,6 @@
 <script lang="ts">
     import { fade } from "svelte/transition";
-    import { createList } from "../../../lib/db/db";
-    import { loadLists } from "../dataLoader";
+    import { createNewList } from "../listActions";
 
     let name = $state("");
     let creating = $state(false);
@@ -10,8 +9,7 @@
         event.preventDefault();
         if (!name.trim()) return;
         creating = true;
-        await createList(name.trim());
-        await loadLists();
+        await createNewList(name.trim());
         creating = false;
     }
 </script>

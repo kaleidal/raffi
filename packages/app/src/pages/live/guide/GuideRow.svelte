@@ -18,6 +18,7 @@
     export let edge: number;
     export let onPlay: (channel: LiveChannel) => void;
     export let onMenu: (event: MouseEvent, channel: LiveChannel) => void;
+    export let onHighlight: (channel: LiveChannel) => void;
 
     $: all = channel.guideId ? $guideProgrammes.get(channel.guideId) : undefined;
     $: programmes = programmesBetween(all, Math.max(from, origin), until);
@@ -31,7 +32,14 @@
     }
 </script>
 
-<div class="guide-row absolute left-0 w-full" style="top:{top}px;height:{height}px" data-scroll-row>
+<div
+    class="guide-row absolute left-0 w-full"
+    style="top:{top}px;height:{height}px"
+    data-scroll-row
+    role="presentation"
+    onpointerenter={() => onHighlight(channel)}
+    onfocusin={() => onHighlight(channel)}
+>
     <button
         class="channel-cell sticky left-0 z-10 flex h-full items-center gap-3 bg-canvas pr-3 text-left cursor-pointer"
         style="width:{channelWidth}px"

@@ -9,6 +9,7 @@
     export let now: number;
     export let onPlay: (channel: LiveChannel) => void;
     export let onMenu: (event: MouseEvent, channel: LiveChannel) => void;
+    export let onHighlight: (channel: LiveChannel) => void;
 
     let scroller: HTMLDivElement;
     let width = 0;
@@ -56,7 +57,7 @@
                 data-scroll-row
             >
                 {#each cards as channel (channel.id)}
-                    <ChannelCard {channel} {now} {onPlay} {onMenu} />
+                    <ChannelCard {channel} {now} {onPlay} {onMenu} {onHighlight} />
                 {/each}
             </div>
         {/each}

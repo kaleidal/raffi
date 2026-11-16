@@ -8,6 +8,7 @@
     export let now: number;
     export let onPlay: (channel: LiveChannel) => void;
     export let onMenu: (event: MouseEvent, channel: LiveChannel) => void;
+    export let onHighlight: (channel: LiveChannel) => void;
 
     $: airing = nowAndNext(channel.guideId ? $guideProgrammes.get(channel.guideId) : undefined, now).now;
 </script>
@@ -15,6 +16,8 @@
 <button
     class="channel-card group flex h-full w-full flex-col gap-3 text-left cursor-pointer"
     onclick={() => onPlay(channel)}
+    onpointerenter={() => onHighlight(channel)}
+    onfocus={() => onHighlight(channel)}
     oncontextmenu={(event) => {
         event.preventDefault();
         onMenu(event, channel);

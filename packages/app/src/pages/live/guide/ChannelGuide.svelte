@@ -10,6 +10,7 @@
     export let now: number;
     export let onPlay: (channel: LiveChannel) => void;
     export let onMenu: (event: MouseEvent, channel: LiveChannel) => void;
+    export let onHighlight: (channel: LiveChannel) => void;
 
     const LOOKAROUND = 60 * MINUTE;
 
@@ -116,6 +117,7 @@
                 edge={channelWidth + scrollLeft}
                 {onPlay}
                 {onMenu}
+                {onHighlight}
             />
         {/each}
     </div>

@@ -1,10 +1,15 @@
-import { deleteList, removeFromList as dbRemoveFromList, updateList } from "../../lib/db/db";
-import { loadLists, loadListItems, selectItem } from "./dataLoader";
+import { createList, deleteList, removeFromList as dbRemoveFromList, updateList } from "../../lib/db/db";
+import { loadLists, loadListItems, selectItem, selectList } from "./dataLoader";
 import { lists, selectedListId, selectedItem, editingState, listItemsMap } from "./listsState";
 import { get } from "svelte/store";
 import type { List } from "./types";
 import { confirmDialog } from "../../lib/shell/systemDialogs";
 
+export async function createNewList(name: string) {
+    const list = await createList(name);
+    await loadLists();
+    selectList(list.list_id);
+}
 
 export async function handleDeleteList(listId: string) {
     if (!(await confirmDialog("Are you sure you want to delete this list?", "Delete list"))) return;
@@ -12,10 +17,13 @@ export async function handleDeleteList(listId: string) {
         await deleteList(listId);
         await loadLists();
 
-        const currentSelectedListId = get(selectedListId);
-        if (currentSelectedListId === listId) {
-            selectedItem.set(null);
-            selectedListId.set(null);
+        if (get(selectedListId) === listId) {
+            const next = get(lists)[0];
+            if (next) selectList(next.list_id);
+            else {
+                selectedListId.set(null);
+                selectedItem.set(null);
+            }
         }
     } catch (e) {
         console.error("Failed to delete list", e);
@@ -33,11 +41,9 @@ export async function handleRemoveFromList() {
         await dbRemoveFromList(currentSelectedListId, currentSelectedItem.imdb_id);
         await loadListItems(currentSelectedListId);
 
-        const currentListItemsMap = get(listItemsMap);
-        const currentListItems = currentListItemsMap[currentSelectedListId];
-
-        if (currentListItems && currentListItems.length > 0) {
-            selectItem(currentListItems[0], currentSelectedListId);
+        const remaining = get(listItemsMap)[currentSelectedListId];
+        if (remaining && remaining.length > 0) {
+            selectItem(remaining[0], currentSelectedListId);
         } else {
             selectedItem.set(null);
         }
@@ -57,33 +63,35 @@ export async function saveListName() {
     const currentEditingState = get(editingState);
     if (!currentEditingState.listId) return;
     try {
-        await updateList(currentEditingState.listId, { name: currentEditingState.name });
-        await loadLists();
+        if (currentEditingState.name.trim()) {
+            await updateList(currentEditingState.listId, { name: currentEditingState.name.trim() });
+            await loadLists();
+        }
         editingState.set({ listId: null, name: "" });
     } catch (e) {
         console.error("Failed to rename list", e);
     }
 }
 
-export async function moveList(index: number, direction: "up" | "down") {
-    const currentLists = get(lists);
+export async function reorderLists(fromIndex: number, toIndex: number) {
+    const current = get(lists);
+    if (fromIndex === toIndex || !current[fromIndex] || !current[toIndex]) return;
 
-    if (direction === "up" && index === 0) return;
-    if (direction === "down" && index === currentLists.length - 1) return;
-
-    const newIndex = direction === "up" ? index - 1 : index + 1;
-    const listA = currentLists[index];
-    const listB = currentLists[newIndex];
-
-    // Swap positions
-    const posA = listA.position;
-    const posB = listB.position;
+    const reordered = [...current];
+    const [moved] = reordered.splice(fromIndex, 1);
+    reordered.splice(toIndex, 0, moved);
+    lists.set(reordered);
 
     try {
-        await updateList(listA.list_id, { position: posB });
-        await updateList(listB.list_id, { position: posA });
+        await Promise.all(
+            reordered
+                .map((list, index) => ({ list, position: index + 1 }))
+                .filter(({ list, position }) => list.position !== position)
+                .map(({ list, position }) => updateList(list.list_id, { position })),
+        );
         await loadLists();
     } catch (e) {
-        console.error("Failed to move list", e);
+        console.error("Failed to reorder lists", e);
+        await loadLists();
     }
 }

@@ -4,7 +4,7 @@
     import { RotateCw } from "@lucide/svelte";
     import SearchBar from "../../components/home/SearchBar.svelte";
     import LoadingSpinner from "../../components/common/LoadingSpinner.svelte";
-    import TopGlow from "../../components/common/TopGlow.svelte";
+    import AmbientBackdrop from "../../components/common/AmbientBackdrop.svelte";
     import SourcePicker from "./components/SourcePicker.svelte";
     import GroupPicker from "./components/GroupPicker.svelte";
     import ChannelMenu from "./components/ChannelMenu.svelte";
@@ -12,6 +12,8 @@
     import ChannelGuide from "./guide/ChannelGuide.svelte";
     import SourcesModal from "./sources/SourcesModal.svelte";
     import LiveEmpty from "./components/LiveEmpty.svelte";
+    import ChannelFeature from "./components/ChannelFeature.svelte";
+    import { logoUrl } from "../../lib/live/network/proxy";
     import { router } from "../../lib/stores/router";
     import { channelQuery, closeLibrary, library, openSource, zapOrder } from "../../lib/live/library";
     import { filterChannels, groupChoices } from "../../lib/live/lineup";
@@ -20,11 +22,14 @@
     import type { LiveChannel, LiveSource } from "../../lib/live/types";
 
     const CLOCK_TICK_MS = 30_000;
+    const HIGHLIGHT_DELAY_MS = 120;
 
     let showSources = false;
     let settingsLoaded = false;
     let now = Date.now();
     let menu: { x: number; y: number; channel: LiveChannel } | null = null;
+    let highlighted: LiveChannel | null = null;
+    let highlightTimer: ReturnType<typeof setTimeout> | undefined;
 
     $: sources = $liveSettings.sources;
     $: source = $library.source;
@@ -38,6 +43,12 @@
     $: counts = groupCounts(lineup?.channels ?? [], favourites);
     $: hasGuide = Boolean(lineup?.channels.some((channel) => channel.guideId));
     $: layout = $liveLayout === "auto" ? (hasGuide ? "guide" : "grid") : $liveLayout;
+    $: if (!channels.some((channel) => channel.id === highlighted?.id)) highlighted = channels[0] ?? null;
+
+    function highlight(channel: LiveChannel) {
+        clearTimeout(highlightTimer);
+        highlightTimer = setTimeout(() => (highlighted = channel), HIGHLIGHT_DELAY_MS);
+    }
 
     function groupCounts(list: LiveChannel[], favourite: Set<string>) {
         const result = new Map<string, number>([[ALL_CHANNELS, list.length]]);
@@ -87,7 +98,10 @@
         return () => clearInterval(clock);
     });
 
-    onDestroy(() => channelQuery.set(""));
+    onDestroy(() => {
+        channelQuery.set("");
+        clearTimeout(highlightTimer);
+    });
 </script>
 
 <SourcesModal bind:open={showSources} onSaved={(saved) => select(saved, true)} onRemoved={removed} />
@@ -113,7 +127,7 @@
         />
     </SearchBar>
 
-    <TopGlow color="#C8D3E6" opacity={0.42} />
+    <AmbientBackdrop src={logoUrl(highlighted?.logo)} />
 
     <div class="relative z-10 flex min-h-0 flex-1 flex-col gap-[clamp(14px,1.4vw,24px)] px-[var(--raffi-page-gutter)] pt-[clamp(8px,1vw,16px)]">
         {#if !settingsLoaded}
@@ -153,15 +167,25 @@
                 </div>
             </div>
 
+            {#if highlighted}
+                <ChannelFeature
+                    channel={highlighted}
+                    {now}
+                    favourite={favourites.has(highlighted.id)}
+                    onPlay={play}
+                    onToggleFavourite={(channel) => toggleFavourite(channel.id)}
+                />
+            {/if}
+
             <div class="min-h-0 flex-1" in:fade={{ duration: 200 }}>
                 {#if channels.length === 0}
                     <p class="pt-16 text-center text-ink/45">No channels match.</p>
                 {:else}
                     {#key `${source?.id}:${group}:${$channelQuery}:${layout}`}
                         {#if layout === "guide"}
-                            <ChannelGuide {channels} {now} onPlay={play} onMenu={showMenu} />
+                            <ChannelGuide {channels} {now} onPlay={play} onMenu={showMenu} onHighlight={highlight} />
                         {:else}
-                            <ChannelGrid {channels} {now} onPlay={play} onMenu={showMenu} />
+                            <ChannelGrid {channels} {now} onPlay={play} onMenu={showMenu} onHighlight={highlight} />
                         {/if}
                     {/key}
                 {/if}

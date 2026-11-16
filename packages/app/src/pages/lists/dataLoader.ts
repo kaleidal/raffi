@@ -4,6 +4,8 @@ import { lists, listItemsMap, selectedItem, selectedListId, loadingItem } from "
 import { get } from "svelte/store";
 import type { List, ExtendedListItem } from "./types";
 
+const SELECTED_LIST_KEY = "raffi:lists:selected";
+
 const getFallbackPoster = (item: any) => {
     if (typeof item?.poster === "string" && item.poster.trim()) return item.poster;
     const imdbId = typeof item?.imdb_id === "string" ? item.imdb_id.trim() : "";
@@ -27,23 +29,14 @@ export async function loadLists() {
         const listsWithItems = await getListsWithItems();
         lists.set(listsWithItems as List[]);
 
-        // Load metadata for all items
-        for (const list of listsWithItems) {
-            await loadListItems(list.list_id, list.list_items);
-        }
+        await Promise.all(listsWithItems.map((list) => loadListItems(list.list_id, list.list_items)));
 
         const currentLists = get(lists);
-        const currentSelectedItem = get(selectedItem);
-        const currentListItemsMap = get(listItemsMap);
-
-        if (!currentSelectedItem && currentLists.length > 0) {
-            const firstListId = currentLists[0].list_id;
-            if (
-                currentListItemsMap[firstListId] &&
-                currentListItemsMap[firstListId].length > 0
-            ) {
-                selectItem(currentListItemsMap[firstListId][0], firstListId);
-            }
+        const current = get(selectedListId);
+        if (!currentLists.some((list) => list.list_id === current)) {
+            const remembered = localStorage.getItem(SELECTED_LIST_KEY);
+            const next = currentLists.find((list) => list.list_id === remembered) ?? currentLists[0];
+            if (next) selectList(next.list_id);
         }
     } catch (e) {
         console.error("Failed to load lists", e);
@@ -103,6 +96,14 @@ export async function loadListItems(listId: string, items?: any[]) {
     } catch (e) {
         console.error("Failed to load list items", e);
     }
+}
+
+export function selectList(listId: string) {
+    selectedListId.set(listId);
+    localStorage.setItem(SELECTED_LIST_KEY, listId);
+    const first = get(listItemsMap)[listId]?.[0];
+    if (first) void selectItem(first, listId);
+    else selectedItem.set(null);
 }
 
 export async function selectItem(item: ExtendedListItem, listId: string) {

@@ -1,90 +1,45 @@
 <script lang="ts">
-    import {
-        listItemsMap,
-        selectedItem,
-        loadingItem,
-        dragState,
-    } from "../listsState";
-    import { selectItem } from "../dataLoader";
-    import {
-        handleDragStart,
-        handleDragOver,
-        handleDrop,
-    } from "../dragDropLogic";
     import { fade } from "svelte/transition";
+    import { listItemsMap, selectedItem, loadingItem, dragState } from "../listsState";
+    import { selectItem } from "../dataLoader";
+    import { handleDragStart, handleDragOver, handleDrop } from "../dragDropLogic";
 
     export let listId: string;
 
     $: items = $listItemsMap[listId] || [];
 </script>
 
-{#if items.length > 0}
-    <div class="list-item-grid grid gap-[clamp(12px,1vw,16px)]">
-        {#each items as item (item.imdb_id)}
-            <button
-                class="flex flex-col gap-[10px] w-full aspect-[2/3] transition-opacity duration-300 group cursor-pointer relative
-                {$selectedItem?.imdb_id === item.imdb_id
-                    ? 'opacity-60'
-                    : 'hover:opacity-80'} 
-                {$dragState.draggedItem?.imdb_id === item.imdb_id
-                    ? 'opacity-30'
-                    : ''}"
-                on:click={() => selectItem(item, listId)}
-                draggable="true"
-                on:dragstart={(e) => handleDragStart(e, item, listId)}
-                on:dragover={handleDragOver}
-                on:drop={(e) => handleDrop(e, item, listId)}
-            >
-                <img
-                    src={item.poster}
-                    alt={item.name}
-                    class="w-full h-full object-cover rounded-[12px] bg-surface"
-                />
-                {#if $selectedItem?.imdb_id === item.imdb_id}
-                    <div
-                        class="absolute inset-0 bg-canvas/20 rounded-[12px]"
-                    ></div>
-                {/if}
+<div class="list-item-grid grid gap-[clamp(14px,1.2vw,22px)] pb-[clamp(32px,4vw,64px)]">
+    {#each items as item (item.imdb_id)}
+        {@const selected = $selectedItem?.imdb_id === item.imdb_id}
+        <button
+            class="relative aspect-[2/3] w-full cursor-pointer rounded-[16px] transition-[translate,opacity,box-shadow] duration-200 hover:-translate-y-1 {selected
+                ? 'ring-[3px] ring-accent ring-offset-[3px] ring-offset-canvas'
+                : ''} {$dragState.draggedItem?.imdb_id === item.imdb_id ? 'opacity-30' : ''}"
+            aria-label={item.name}
+            aria-pressed={selected}
+            on:click={() => selectItem(item, listId)}
+            draggable="true"
+            on:dragstart={(e) => handleDragStart(e, item, listId)}
+            on:dragover={handleDragOver}
+            on:drop={(e) => handleDrop(e, item, listId)}
+        >
+            <img src={item.poster} alt="" class="h-full w-full rounded-[16px] bg-surface object-cover" loading="lazy" />
 
-                {#if $loadingItem === item.imdb_id}
-                    <div
-                        class="absolute inset-0 flex items-center justify-center bg-canvas/40 rounded-[12px] backdrop-blur-[2px]"
-                        transition:fade={{ duration: 200 }}
-                    >
-                        <div
-                            class="w-8 h-8 border-4 border-ink/20 border-t-ink rounded-full animate-spin"
-                        ></div>
-                    </div>
-                {/if}
-            </button>
-        {/each}
-    </div>
-{:else}
-    <div class="text-ink/30 text-[1rem] italic py-4">
-        No items in this list
-    </div>
-{/if}
+            {#if $loadingItem === item.imdb_id}
+                <div
+                    class="absolute inset-0 flex items-center justify-center rounded-[16px] bg-canvas/40 backdrop-blur-[2px]"
+                    transition:fade={{ duration: 200 }}
+                >
+                    <div class="h-8 w-8 animate-spin rounded-full border-4 border-ink/20 border-t-ink"></div>
+                </div>
+            {/if}
+        </button>
+    {/each}
+</div>
 
 <style>
     .list-item-grid {
-        grid-template-columns: repeat(6, minmax(0, 1fr));
-    }
-
-    @media (max-width: 1500px) {
-        .list-item-grid {
-            grid-template-columns: repeat(5, minmax(0, 1fr));
-        }
-    }
-
-    @media (max-width: 1050px) {
-        .list-item-grid {
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-        }
-    }
-
-    @media (max-width: 700px) {
-        .list-item-grid {
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-        }
+        grid-template-columns: repeat(auto-fill, minmax(clamp(120px, 9.5vw, 190px), 1fr));
     }
 </style>
