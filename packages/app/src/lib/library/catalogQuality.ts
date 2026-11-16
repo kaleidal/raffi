@@ -10,6 +10,11 @@ const INVALID_TITLE_NAMES = new Set([
     "n/a",
 ]);
 
+/** Cinemeta entries whose metadata belongs to a different title. */
+const BROKEN_TITLE_IDS = new Set(["tt0118933"]);
+
+export const isBrokenTitleId = (id: string) => BROKEN_TITLE_IDS.has(id.toLowerCase());
+
 const cleanText = (value: unknown) => String(value ?? "").trim().replace(/\s+/g, " ");
 
 export const getCatalogTitleKey = (title: Pick<PopularTitleMeta, "imdb_id" | "id" | "type">) => {
@@ -22,7 +27,7 @@ export function sanitizeCatalogTitle(title: PopularTitleMeta): PopularTitleMeta 
     const name = cleanText(title.name);
     const type = title.type === "series" ? "series" : title.type === "movie" ? "movie" : null;
 
-    if (!id || !name || !type || INVALID_TITLE_NAMES.has(name.toLowerCase())) {
+    if (!id || !name || !type || INVALID_TITLE_NAMES.has(name.toLowerCase()) || isBrokenTitleId(id)) {
         return null;
     }
 

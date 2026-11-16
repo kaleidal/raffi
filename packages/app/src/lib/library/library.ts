@@ -1,3 +1,4 @@
+import { isBrokenTitleId } from "./catalogQuality";
 import type { ShowResponse } from "./types/meta_types";
 import type { PopularTitleMeta } from "./types/popular_types";
 import { getAddons, type Addon } from "../db/db";
@@ -269,7 +270,7 @@ export const getPopularTitles = async (type: string): Promise<PopularTitleMeta[]
 
 function mapSearchMeta(meta: any, fallbackType: CatalogType): SearchTitleResult | null {
     const id = String(meta?.imdb_id ?? meta?.id ?? "").trim();
-    if (!id) return null;
+    if (!id || isBrokenTitleId(id)) return null;
 
     const rawYear = meta?.year ?? null;
     let year: string | null = null;
