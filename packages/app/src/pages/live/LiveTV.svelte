@@ -5,6 +5,7 @@
     import SearchBar from "../../components/home/SearchBar.svelte";
     import LoadingSpinner from "../../components/common/LoadingSpinner.svelte";
     import AmbientBackdrop from "../../components/common/AmbientBackdrop.svelte";
+    import { collapseOnScroll } from "../../components/common/collapseOnScroll";
     import SourcePicker from "./components/SourcePicker.svelte";
     import GroupPicker from "./components/GroupPicker.svelte";
     import ChannelMenu from "./components/ChannelMenu.svelte";
@@ -12,7 +13,6 @@
     import ChannelGuide from "./guide/ChannelGuide.svelte";
     import SourcesModal from "./sources/SourcesModal.svelte";
     import LiveEmpty from "./components/LiveEmpty.svelte";
-    import ChannelFeature from "./components/ChannelFeature.svelte";
     import { logoUrl } from "../../lib/live/network/proxy";
     import { router } from "../../lib/stores/router";
     import { channelQuery, closeLibrary, library, openSource, zapOrder } from "../../lib/live/library";
@@ -29,6 +29,8 @@
     let now = Date.now();
     let menu: { x: number; y: number; channel: LiveChannel } | null = null;
     let highlighted: LiveChannel | null = null;
+    let header: HTMLDivElement;
+    let headerCollapsed = false;
     let highlightTimer: ReturnType<typeof setTimeout> | undefined;
 
     $: sources = $liveSettings.sources;
@@ -116,20 +118,27 @@
     />
 {/if}
 
-<div class="relative flex h-[100dvh] min-h-0 w-full flex-col overflow-hidden bg-canvas">
-    <SearchBar absolute={false}>
-        <SourcePicker
-            slot="leading"
-            {sources}
-            activeId={source?.id}
-            onSelect={(next) => select(next)}
-            onManage={() => (showSources = true)}
-        />
-    </SearchBar>
-
+<div
+    class="relative flex h-[100dvh] min-h-0 w-full flex-col overflow-hidden bg-canvas"
+    use:collapseOnScroll={{ header, onChange: (collapsed) => (headerCollapsed = collapsed) }}
+>
     <AmbientBackdrop src={logoUrl(highlighted?.logo)} />
 
-    <div class="relative z-10 flex min-h-0 flex-1 flex-col gap-[clamp(14px,1.4vw,24px)] px-[var(--raffi-page-gutter)] pt-[clamp(8px,1vw,16px)]">
+    <div bind:this={header} class="page-header relative z-20" class:collapsed={headerCollapsed}>
+        <div>
+            <SearchBar absolute={false}>
+                <SourcePicker
+                    slot="leading"
+                    {sources}
+                    activeId={source?.id}
+                    onSelect={(next) => select(next)}
+                    onManage={() => (showSources = true)}
+                />
+            </SearchBar>
+        </div>
+    </div>
+
+    <div class="page-body relative z-10 flex min-h-0 flex-1 flex-col gap-[clamp(14px,1.4vw,24px)] px-[var(--raffi-page-gutter)] pt-[clamp(8px,1vw,16px)]">
         {#if !settingsLoaded}
             <div class="flex flex-1 items-center justify-center"><LoadingSpinner size="60px" /></div>
         {:else if !sources.length}
@@ -166,16 +175,6 @@
                     </button>
                 </div>
             </div>
-
-            {#if highlighted}
-                <ChannelFeature
-                    channel={highlighted}
-                    {now}
-                    favourite={favourites.has(highlighted.id)}
-                    onPlay={play}
-                    onToggleFavourite={(channel) => toggleFavourite(channel.id)}
-                />
-            {/if}
 
             <div class="min-h-0 flex-1" in:fade={{ duration: 200 }}>
                 {#if channels.length === 0}

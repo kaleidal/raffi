@@ -38,7 +38,6 @@
                 {:else if item.background}
                     <img src={item.background} alt="" class="h-full w-full object-cover" />
                 {/if}
-                <div class="absolute inset-0 bg-gradient-to-r from-canvas via-canvas/55 to-transparent"></div>
                 <div class="absolute inset-0 bg-gradient-to-t from-canvas/70 via-transparent to-transparent"></div>
             </div>
         {/key}
@@ -117,5 +116,6 @@
 
     .feature-media {
         container-type: size;
+        mask-image: linear-gradient(to right, transparent, rgb(0 0 0 / 0.45) 22%, black 55%);
     }
 </style>

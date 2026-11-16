@@ -218,6 +218,35 @@ textarea:focus-visible,
   background-color: color-mix(in oklab, var(--raffi-canvas) 96%, transparent);
 }
 
+.page-header {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition:
+    grid-template-rows 380ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 240ms ease;
+}
+
+.page-header > * {
+  min-height: 0;
+}
+
+.page-header.collapsed {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+
+.page-header.collapsed > * {
+  overflow: hidden;
+}
+
+.page-body {
+  transition: padding-top 380ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.page-header.collapsed + .page-body {
+  padding-top: clamp(28px, 2.6vw, 44px);
+}
+
 .release-notes-content :is(h1, h2, h3, h4) {
   color: var(--raffi-ink);
   font-weight: 700;

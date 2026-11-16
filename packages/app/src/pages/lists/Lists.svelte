@@ -4,6 +4,7 @@
     import SearchBar from "../../components/home/SearchBar.svelte";
     import LoadingSpinner from "../../components/common/LoadingSpinner.svelte";
     import AmbientBackdrop from "../../components/common/AmbientBackdrop.svelte";
+    import { collapseOnScroll } from "../../components/common/collapseOnScroll";
     import ListsEmpty from "./components/ListsEmpty.svelte";
     import ListTabs from "./components/ListTabs.svelte";
     import ListFeature from "./components/ListFeature.svelte";
@@ -14,6 +15,8 @@
     const HOME_REFRESH_EVENT = "raffi:home-refresh";
 
     let refreshRequestId = 0;
+    let header: HTMLDivElement;
+    let headerCollapsed = false;
 
     async function refreshLists(showLoading = false) {
         const requestId = ++refreshRequestId;
@@ -30,17 +33,24 @@
     });
 </script>
 
-<div class="relative flex h-[100dvh] min-h-0 w-full flex-col overflow-hidden bg-canvas">
+<div
+    class="relative flex h-[100dvh] min-h-0 w-full flex-col overflow-hidden bg-canvas"
+    use:collapseOnScroll={{ header, onChange: (collapsed) => (headerCollapsed = collapsed) }}
+>
     <AmbientBackdrop src={$selectedItem?.background || $selectedItem?.poster} />
 
-    <SearchBar absolute={false} />
+    <div bind:this={header} class="page-header relative z-20" class:collapsed={headerCollapsed}>
+        <div>
+            <SearchBar absolute={false} />
+        </div>
+    </div>
 
     {#if $loaded}
         {#if $lists.length === 0}
             <ListsEmpty />
         {:else}
             <div
-                class="relative z-10 mx-auto flex min-h-0 w-full max-w-[1680px] flex-1 flex-col gap-[clamp(16px,1.6vw,26px)] px-[var(--raffi-page-gutter)]"
+                class="page-body relative z-10 mx-auto flex min-h-0 w-full max-w-[1680px] flex-1 flex-col gap-[clamp(16px,1.6vw,26px)] px-[var(--raffi-page-gutter)]"
                 in:fade={{ duration: 300 }}
             >
                 <ListTabs />
