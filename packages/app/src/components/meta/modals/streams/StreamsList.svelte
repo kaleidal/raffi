@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { openSettings } from "../../../../lib/stores/settings";
     import LoadingSpinner from "../../../common/LoadingSpinner.svelte";
     import StreamCard from "./StreamCard.svelte";
     import type { EnrichedStream } from "./types";
@@ -11,7 +12,6 @@
     export let showAddonSetupGuide = false;
 
     export let onStreamClick: (item: EnrichedStream) => void = () => {};
-    export let onOpenAddons: () => void = () => {};
 
     const handleStreamClick = (item: EnrichedStream) => {
         onStreamClick(item);
@@ -27,24 +27,24 @@
         {#if showAddonSetupGuide}
             <div class="flex flex-col items-center justify-center gap-5 px-4 py-12 text-center">
                 <div class="flex max-w-md flex-col gap-2">
-                    <h3 class="text-white text-xl font-poppins font-semibold">
+                    <h3 class="text-ink text-xl font-semibold">
                         Add a stream addon
                     </h3>
-                    <p class="text-white/60 text-sm leading-relaxed">
+                    <p class="text-ink/60 text-sm leading-relaxed">
                         Raffi needs a stream addon before it can show online sources. Open Addons and install a community addon that supports Streams.
                     </p>
                 </div>
                 <button
                     type="button"
                     data-tv-autofocus
-                    class="rounded-full bg-white px-5 py-3 text-sm font-semibold text-black transition-colors hover:bg-white/90 cursor-pointer"
-                    on:click={onOpenAddons}
+                    class="rounded-full bg-accent px-5 py-3 text-sm font-semibold text-on-accent transition-colors hover:bg-accent/85 cursor-pointer"
+                    on:click={() => openSettings("addons", "stream")}
                 >
                     Open Addons
                 </button>
             </div>
         {:else}
-            <div class="text-white/50 text-center py-10">
+            <div class="text-ink/50 text-center py-10">
                 {streams.length === 0
                     ? "No streams found."
                     : "No streams match the current filters."}
@@ -53,7 +53,7 @@
     {:else}
         {#if localFilteredStreams.length}
             <div class="flex items-center justify-between">
-                <span class="text-white/60 text-sm font-medium">
+                <span class="text-ink/60 text-sm font-medium">
                     Local files
                 </span>
             </div>
@@ -66,7 +66,7 @@
             {/each}
 
             {#if addonFilteredStreams.length}
-                <div class="h-px bg-white/10"></div>
+                <div class="h-px bg-ink/10"></div>
             {/if}
         {/if}
 

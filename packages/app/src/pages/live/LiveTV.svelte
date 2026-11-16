@@ -3,7 +3,6 @@
     import { fade } from "svelte/transition";
     import { RotateCw } from "@lucide/svelte";
     import SearchBar from "../../components/home/SearchBar.svelte";
-    import SettingsModal from "../../components/home/modals/SettingsModal.svelte";
     import LoadingSpinner from "../../components/common/LoadingSpinner.svelte";
     import TopGlow from "../../components/common/TopGlow.svelte";
     import SourcePicker from "./components/SourcePicker.svelte";
@@ -23,7 +22,6 @@
     const CLOCK_TICK_MS = 30_000;
 
     let showSources = false;
-    let showSettings = false;
     let settingsLoaded = false;
     let now = Date.now();
     let menu: { x: number; y: number; channel: LiveChannel } | null = null;
@@ -92,7 +90,6 @@
     onDestroy(() => channelQuery.set(""));
 </script>
 
-<SettingsModal bind:showSettings />
 <SourcesModal bind:open={showSources} onSaved={(saved) => select(saved, true)} onRemoved={removed} />
 
 {#if menu}
@@ -105,8 +102,8 @@
     />
 {/if}
 
-<div class="relative flex h-[100dvh] min-h-0 w-full flex-col overflow-hidden bg-[#090909]">
-    <SearchBar absolute={false} onOpenSettings={() => (showSettings = true)}>
+<div class="relative flex h-[100dvh] min-h-0 w-full flex-col overflow-hidden bg-canvas">
+    <SearchBar absolute={false}>
         <SourcePicker
             slot="leading"
             {sources}
@@ -136,17 +133,17 @@
         {:else}
             <div class="flex items-center justify-between gap-4" in:fade={{ duration: 200 }}>
                 <GroupPicker {groups} value={group} {counts} onChange={chooseGroup} />
-                <div class="flex min-w-0 items-center gap-3 font-poppins text-sm text-white/45">
+                <div class="flex min-w-0 items-center gap-3 text-sm text-ink/45">
                     {#if $library.loading || $library.guideLoading}
-                        <LoadingSpinner size="16px" color="#9A9A9A" />
+                        <LoadingSpinner size="16px" />
                         <span class="truncate">{$library.loading ? "Updating channels" : "Loading guide"}</span>
                     {:else if $library.error || $library.guideError}
-                        <span class="truncate text-white/40" title={$library.error ?? $library.guideError}>
+                        <span class="truncate text-ink/40" title={$library.error ?? $library.guideError}>
                             {$library.error ? "Couldn't update channels" : "Guide unavailable"}
                         </span>
                     {/if}
                     <button
-                        class="rounded-full p-2 text-white/45 hover:bg-white/10 hover:text-white cursor-pointer disabled:opacity-40"
+                        class="rounded-full p-2 text-ink/45 hover:bg-ink/10 hover:text-ink cursor-pointer disabled:opacity-40"
                         aria-label="Refresh"
                         disabled={$library.loading || $library.guideLoading}
                         onclick={() => source && select(source, true)}
@@ -158,7 +155,7 @@
 
             <div class="min-h-0 flex-1" in:fade={{ duration: 200 }}>
                 {#if channels.length === 0}
-                    <p class="pt-16 text-center font-poppins text-white/45">No channels match.</p>
+                    <p class="pt-16 text-center text-ink/45">No channels match.</p>
                 {:else}
                     {#key `${source?.id}:${group}:${$channelQuery}:${layout}`}
                         {#if layout === "guide"}

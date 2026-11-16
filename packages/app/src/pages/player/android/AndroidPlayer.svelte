@@ -375,7 +375,7 @@
 
     {#if hasStarted && $playbackState.buffering && !blockingError}
         <div class="absolute inset-0 flex items-center justify-center">
-            <LoadingSpinner size="56px" color="#D8D8D8" />
+            <LoadingSpinner size="56px" />
         </div>
     {/if}
 

@@ -352,31 +352,31 @@
         out:slide={{ duration: 200, axis: "y" }}
         class="w-full px-2"
     >
-        <div class="rounded-[24px] bg-[#000000]/10 backdrop-blur-[24px] px-5 py-4">
+        <div class="rounded-[24px] bg-canvas/10 backdrop-blur-[24px] px-5 py-4">
             <div class="flex items-center justify-between gap-4">
                 <div class="flex items-center gap-3">
-                    <span class="text-[1rem] font-poppins font-[500] text-[#D3D3D3]">Start</span>
+                    <span class="text-[1rem] font-[500] text-ink/85">Start</span>
                     <span
-                        class="text-[1rem] font-poppins font-[500] text-white"
+                        class="text-[1rem] font-[500] text-ink"
                         style="font-variant-numeric: tabular-nums; font-feature-settings:'tnum';"
                     >{formatClipTimeLabel(clipStart)}</span>
-                    <span class="text-[1rem] font-poppins font-[500] text-[#D3D3D3]">End</span>
+                    <span class="text-[1rem] font-[500] text-ink/85">End</span>
                     <span
-                        class="text-[1rem] font-poppins font-[500] text-white"
+                        class="text-[1rem] font-[500] text-ink"
                         style="font-variant-numeric: tabular-nums; font-feature-settings:'tnum';"
                     >{formatClipTimeLabel(clipEnd)}</span>
                 </div>
 
                 <div class="flex items-center gap-3">
                     <button
-                        class="text-[0.875rem] font-poppins font-[500] text-[#D3D3D3] hover:opacity-80 transition-opacity duration-200"
+                        class="text-[0.875rem] font-[500] text-ink/85 hover:opacity-80 transition-opacity duration-200"
                         on:click={close}
                         disabled={clipBusy}
                     >
                         Cancel
                     </button>
                     <button
-                        class="text-[0.875rem] font-poppins font-[600] text-white hover:opacity-80 transition-opacity duration-200"
+                        class="text-[0.875rem] font-[600] text-ink hover:opacity-80 transition-opacity duration-200"
                         on:click={confirmClip}
                         disabled={clipBusy}
                     >
@@ -400,28 +400,28 @@
                     on:pointercancel={onBarPointerUp}
                     on:wheel|preventDefault|stopPropagation={onBarWheel}
                 >
-                    <div class="clip-track absolute inset-y-[3px] left-0 right-0 rounded-full bg-[#A3A3A3]/30"></div>
+                    <div class="clip-track absolute inset-y-[3px] left-0 right-0 rounded-full bg-ink/20"></div>
                     <div
-                        class="clip-selected absolute inset-y-[3px] rounded-full bg-white"
+                        class="clip-selected absolute inset-y-[3px] rounded-full bg-accent"
                         style={`left:${selectedLeft}%; width:${selectedWidth}%`}
                     ></div>
 
                     <!-- 'Now' marker so you can see what you're clipping around -->
                     <div
-                        class="clip-now absolute top-[1px] bottom-[1px] w-[2px] bg-white/60"
+                        class="clip-now absolute top-[1px] bottom-[1px] w-[2px] bg-ink/60"
                         style={`left:${nowLeft}%; transform: translateX(-1px);`}
                     ></div>
 
                     <!-- Custom thumbs so zoom doesn't clamp/move handle state -->
                     {#if startVisible}
                         <div
-                            class="clip-thumb absolute top-1/2 w-[18px] h-[18px] rounded-full bg-white"
+                            class="clip-thumb absolute top-1/2 w-[18px] h-[18px] rounded-full bg-accent"
                             style={`left:${clamp(startLeft, 0, 100)}%; transform: translate(-50%, -50%); z-index:${activeHandle === 'start' ? 3 : 2};`}
                         ></div>
                     {/if}
                     {#if endVisible}
                         <div
-                            class="clip-thumb absolute top-1/2 w-[18px] h-[18px] rounded-full bg-white"
+                            class="clip-thumb absolute top-1/2 w-[18px] h-[18px] rounded-full bg-accent"
                             style={`left:${clamp(endLeft, 0, 100)}%; transform: translate(-50%, -50%); z-index:${activeHandle === 'end' ? 3 : 2};`}
                         ></div>
                     {/if}
@@ -454,13 +454,13 @@
             </div>
 
             {#if clipError}
-                <div class="mt-3 text-[0.875rem] font-poppins text-[#D3D3D3]">
+                <div class="mt-3 text-[0.875rem] text-ink/85">
                     {clipError}
                 </div>
             {/if}
 
             {#if clipOutputPath}
-                <div class="mt-3 text-[0.875rem] font-poppins text-[#D3D3D3] break-all">
+                <div class="mt-3 text-[0.875rem] text-ink/85 break-all">
                     Saved: {clipOutputPath}
                 </div>
             {/if}

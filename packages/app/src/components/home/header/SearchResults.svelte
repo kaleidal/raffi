@@ -16,15 +16,15 @@
 </script>
 
 <div
-    class={`absolute left-1/2 -translate-x-1/2 w-[min(780px,76vw)] bg-[#181818]/90 backdrop-blur-xl rounded-[24px] p-4 z-100 ${
+    class={`absolute left-1/2 -translate-x-1/2 w-[min(780px,76vw)] bg-surface/90 backdrop-blur-xl rounded-[24px] p-4 z-100 ${
         above ? "bottom-[90px]" : "top-[90px]"
     }`}
     transition:fade={{ duration: 200 }}
 >
     <div class="grid grid-cols-2 gap-4">
         {#each columns as column (column.label)}
-            <div class="rounded-2xl bg-white/[0.04] p-3">
-                <p class="text-white/70 text-sm font-semibold leading-normal mb-3">{column.label}</p>
+            <div class="rounded-2xl bg-ink/[0.04] p-3">
+                <p class="text-ink/70 text-sm font-semibold leading-normal mb-3">{column.label}</p>
                 {#if loading}
                     <div class="space-y-2">
                         {#each Array(3) as _}
@@ -41,7 +41,7 @@
                     <div class="space-y-1 max-h-[360px] overflow-y-auto">
                         {#each column.items as result (result.id)}
                             <button
-                                class="w-full flex flex-row gap-4 items-center p-2 hover:bg-white/10 rounded-xl transition-colors cursor-pointer text-left"
+                                class="w-full flex flex-row gap-4 items-center p-2 hover:bg-ink/10 rounded-xl transition-colors cursor-pointer text-left"
                                 onclick={() => onOpen(result)}
                                 oncontextmenu={(event) => {
                                     event.preventDefault();
@@ -51,15 +51,15 @@
                                 <img
                                     src={result.poster || ""}
                                     alt={result.name}
-                                    class="w-[40px] h-[60px] object-cover rounded-md bg-black/50"
+                                    class="w-[40px] h-[60px] object-cover rounded-md bg-canvas/50"
                                 />
                                 <div class="flex flex-col min-w-0">
-                                    <span class="text-white font-poppins font-medium text-lg line-clamp-1">{result.name}</span>
-                                    <span class="text-white/50 font-poppins text-sm line-clamp-1">{result.year || result.releaseInfo || ""}</span>
+                                    <span class="text-ink font-medium text-lg line-clamp-1">{result.name}</span>
+                                    <span class="text-ink/50 text-sm line-clamp-1">{result.year || result.releaseInfo || ""}</span>
                                 </div>
                             </button>
                         {:else}
-                            <p class="text-white/45 text-sm px-2 py-3">{column.empty}</p>
+                            <p class="text-ink/45 text-sm px-2 py-3">{column.empty}</p>
                         {/each}
                     </div>
                 {/if}

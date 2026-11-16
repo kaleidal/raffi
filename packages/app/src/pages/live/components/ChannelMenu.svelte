@@ -33,14 +33,14 @@
 <div
     bind:this={menu}
     use:portal
-    class="fixed z-[100] flex min-w-[180px] flex-col rounded-xl bg-[#181818] py-2"
+    class="fixed z-[100] flex min-w-[180px] flex-col rounded-xl bg-surface py-2"
     transition:fade={{ duration: 100 }}
     oncontextmenu={(event) => event.preventDefault()}
     role="menu"
     tabindex="-1"
 >
     <button
-        class="flex flex-row items-center gap-2 px-4 py-2 text-left font-poppins text-sm text-white/80 hover:bg-white/10 hover:text-white cursor-pointer"
+        class="flex flex-row items-center gap-2 px-4 py-2 text-left text-sm text-ink/80 hover:bg-ink/10 hover:text-ink cursor-pointer"
         onclick={() => {
             onToggleFavourite();
             onClose();

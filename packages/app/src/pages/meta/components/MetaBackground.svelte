@@ -12,10 +12,10 @@
     />
 {:else}
     <div
-        class="w-full h-full bg-gradient-to-b from-[#1a1a1a] to-[#090909]"
+        class="w-full h-full bg-gradient-to-b from-surface to-canvas"
     ></div>
 {/if}
 
 <div
-    class="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#090909]"
+    class="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-canvas"
 ></div>

@@ -84,7 +84,7 @@
                             <input
                                 type="text"
                                 bind:value={$editingState.name}
-                                class="bg-transparent text-[#FFFFFF] text-[2rem] font-poppins font-semibold border-b border-white/20 focus:border-white outline-none w-full"
+                                class="bg-transparent text-ink text-[2rem] font-semibold border-b border-ink/20 focus:border-ink outline-none w-full"
                                 on:blur={saveListName}
                             />
                         </form>
@@ -92,7 +92,7 @@
                         <div class="flex flex-row gap-3 items-center min-w-0">
                             <button
                                 type="button"
-                                class="shrink-0 text-white/55 hover:text-white transition-colors cursor-pointer p-2 rounded-lg hover:bg-white/10"
+                                class="shrink-0 text-ink/55 hover:text-ink transition-colors cursor-pointer p-2 rounded-lg hover:bg-ink/10"
                                 on:click={() => toggleListCollapsed(list.list_id)}
                                 aria-label={$collapsedListIds[list.list_id]
                                     ? `Expand ${list.name}`
@@ -107,7 +107,7 @@
                             <h3 class="min-w-0">
                                 <button
                                     type="button"
-                                    class="block min-w-0 max-w-full truncate text-left text-[#FFFFFF] text-[1.75rem] xl:text-[2rem] font-poppins font-semibold cursor-pointer hover:text-white/80 transition-colors"
+                                    class="block min-w-0 max-w-full truncate text-left text-ink text-[1.75rem] xl:text-[2rem] font-semibold cursor-pointer hover:text-ink/80 transition-colors"
                                     on:click={() => selectFirstItem(list.list_id)}
                                     on:dblclick={() => startEditing(list)}
                                 >
@@ -119,7 +119,7 @@
                             >
                                 <button
                                     type="button"
-                                    class="text-white/50 hover:text-white cursor-pointer"
+                                    class="text-ink/50 hover:text-ink cursor-pointer"
                                     on:click={() =>
                                         moveList($lists.indexOf(list), "up")}
                                     disabled={$lists.indexOf(list) === 0}
@@ -141,7 +141,7 @@
                                 <button
                                     type="button"
                                     aria-label="Move list down"
-                                    class="text-white/50 hover:text-white cursor-pointer"
+                                    class="text-ink/50 hover:text-ink cursor-pointer"
                                     on:click={() =>
                                         moveList($lists.indexOf(list), "down")}
                                     disabled={$lists.indexOf(list) ===
@@ -167,7 +167,7 @@
                     <div class="flex flex-row gap-2">
                         <button
                             type="button"
-                            class="text-white/50 hover:text-white transition-colors p-2 hover:bg-white/10 rounded-lg cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                            class="text-ink/50 hover:text-ink transition-colors p-2 hover:bg-ink/10 rounded-lg cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                             on:click={() => selectRandomItem(list.list_id)}
                             disabled={!$listItemsMap[list.list_id]?.length}
                             aria-label="Pick random title"
@@ -176,7 +176,7 @@
                         </button>
                         <button
                             type="button"
-                            class="text-white/50 hover:text-white transition-colors p-2 hover:bg-white/10 rounded-lg cursor-pointer"
+                            class="text-ink/50 hover:text-ink transition-colors p-2 hover:bg-ink/10 rounded-lg cursor-pointer"
                             on:click={() => startEditing(list)}
                             aria-label="Rename list"
                         >
@@ -198,7 +198,7 @@
                         </button>
                         <button
                             type="button"
-                            class="text-[#FF4444] opacity-50 hover:opacity-100 transition-opacity p-2 hover:bg-[#FF4444]/10 rounded-lg cursor-pointer"
+                            class="text-danger opacity-50 hover:opacity-100 transition-opacity p-2 hover:bg-danger/10 rounded-lg cursor-pointer"
                             on:click={() => handleDeleteList(list.list_id)}
                             aria-label="Delete list"
                         >
@@ -220,7 +220,7 @@
                     </div>
                 </div>
 
-                <div class="w-full h-[1px] bg-[#333333]"></div>
+                <div class="w-full h-[1px] bg-raised"></div>
 
                 {#if !$collapsedListIds[list.list_id]}
                     <div transition:fade={{ duration: 160 }}>

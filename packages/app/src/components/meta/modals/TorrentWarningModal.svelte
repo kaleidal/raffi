@@ -16,19 +16,19 @@
 
 <div
     use:portal
-    class="raffi-modal-backdrop fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm"
+    class="raffi-modal-backdrop fixed inset-0 z-[200] flex items-center justify-center bg-canvas/80 backdrop-blur-sm"
     transition:fade={{ duration: 200 }}
 >
     <div
-        class="bg-[#121212] rounded-2xl p-8 max-w-md w-full shadow-2xl flex flex-col gap-6"
+        class="bg-canvas rounded-2xl p-8 max-w-md w-full shadow-2xl flex flex-col gap-6"
         transition:scale={{ duration: 200, start: 0.95 }}
     >
         <div class="flex flex-col gap-2 text-center">
             <div class="flex justify-center mb-2">
-                <div class="p-4 bg-yellow-500/10 rounded-full">
+                <div class="p-4 bg-warning/10 rounded-full">
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
-                        class="h-10 w-10 text-yellow-500"
+                        class="h-10 w-10 text-warning"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -42,13 +42,13 @@
                     </svg>
                 </div>
             </div>
-            <h2 class="text-2xl font-bold text-white">Torrenting Warning</h2>
-            <p class="text-[#878787]">
+            <h2 class="text-2xl font-bold text-ink">Torrenting Warning</h2>
+            <p class="text-ink/55">
                 You are about to stream using BitTorrent. Depending on your
                 location and local laws, this may expose your IP address to
                 others.
             </p>
-            <p class="text-[#878787] text-sm">
+            <p class="text-ink/55 text-sm">
                 Please ensure you are using a VPN if required in your country to
                 avoid potential fines or legal issues.
             </p>
@@ -56,13 +56,13 @@
 
         <div class="flex flex-col gap-3">
             <button
-                class="w-full py-3 px-4 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition-colors cursor-pointer"
+                class="w-full py-3 px-4 bg-accent text-on-accent font-bold rounded-xl hover:bg-accent/85 transition-colors cursor-pointer"
                 on:click={confirm}
             >
                 I Understand, Continue
             </button>
             <button
-                class="w-full py-3 px-4 bg-[#333] text-white font-medium rounded-xl hover:bg-[#444] transition-colors cursor-pointer"
+                class="w-full py-3 px-4 bg-raised text-ink font-medium rounded-xl hover:bg-ink/15 transition-colors cursor-pointer"
                 on:click={cancel}
             >
                 Cancel

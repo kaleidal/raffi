@@ -163,7 +163,7 @@
 {#if loading || blockingState}
     <div
         use:portal
-        class="fixed inset-0 z-[200] overflow-hidden bg-[#090909]"
+        class="fixed inset-0 z-[200] overflow-hidden bg-canvas"
         role={showError ? "alert" : showNotice || showSeekStyle ? "dialog" : "status"}
         aria-busy={!blockingState}
         aria-label={showError
@@ -193,7 +193,7 @@
             {/each}
         </div>
 
-        <div class="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/10 via-black/20 to-[#090909]"></div>
+        <div class="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/10 via-black/20 to-canvas"></div>
 
         {#if !blockingState}
             <div class="absolute bottom-0 right-0 z-10 p-8 sm:p-10">
@@ -204,25 +204,25 @@
         {#if (showError || showNotice) && errorContentVisible}
             <div class="error-state absolute inset-0 z-20 flex items-center justify-center px-6 py-24">
                 <div class="flex w-full flex-col items-center text-center {showNotice ? 'max-w-3xl' : 'max-w-lg'}">
-                    <h1 class="text-balance text-3xl font-semibold tracking-[-0.025em] text-white sm:text-4xl">
+                    <h1 class="text-balance text-3xl font-semibold tracking-[-0.025em] text-ink sm:text-4xl">
                         {showNotice ? noticeTitle || "Stream unavailable" : errorMessage || "Playback stopped"}
                     </h1>
                     {#if showNotice ? noticeDetails : errorDetails}
-                        <p class="mt-4 text-pretty text-[15px] leading-6 text-white/62 sm:text-base {showNotice ? 'max-w-2xl' : 'max-w-md'}">
+                        <p class="mt-4 text-pretty text-[15px] leading-6 text-ink/62 sm:text-base {showNotice ? 'max-w-2xl' : 'max-w-md'}">
                             {showNotice ? noticeDetails : errorDetails}
                         </p>
                     {/if}
 
                     <div class="mt-8 flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:justify-center">
                         <button
-                            class="cursor-pointer whitespace-nowrap rounded-xl bg-white px-7 py-3 text-[15px] font-semibold text-black transition-colors hover:bg-white/88 sm:min-w-48"
+                            class="cursor-pointer whitespace-nowrap rounded-xl bg-accent px-7 py-3 text-[15px] font-semibold text-on-accent transition-colors hover:bg-ink/88 sm:min-w-48"
                             on:click={showNotice ? onNoticePrimary : onRetry}
                         >
                             {showNotice ? noticePrimaryLabel : "Try Again"}
                         </button>
                         {#if !showNotice || noticeSecondaryLabel}
                             <button
-                                class="flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-white/10 px-7 py-3 text-[15px] font-semibold text-white transition-colors hover:bg-white/16 sm:min-w-52"
+                                class="flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-ink/10 px-7 py-3 text-[15px] font-semibold text-ink transition-colors hover:bg-ink/16 sm:min-w-52"
                                 on:click={showNotice ? onNoticeSecondary : onBack}
                             >
                                 {showNotice ? noticeSecondaryLabel : "Back to Streams"}
@@ -233,7 +233,7 @@
 
                     {#if showError && isWeb}
                         <button
-                            class="mt-4 flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-white/58 transition-colors hover:text-white"
+                            class="mt-4 flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-ink/58 transition-colors hover:text-ink"
                             on:click={onDownloadDesktop}
                         >
                             <MonitorDown size={17} strokeWidth={2} />
@@ -245,31 +245,31 @@
         {:else if showSeekStyle && errorContentVisible}
             <div class="error-state absolute inset-0 z-20 flex items-center justify-center px-6 py-24">
                 <div class="flex w-full max-w-lg flex-col items-center text-center">
-                    <h1 class="text-balance text-3xl font-semibold tracking-[-0.025em] text-white sm:text-4xl">
+                    <h1 class="text-balance text-3xl font-semibold tracking-[-0.025em] text-ink sm:text-4xl">
                         Choose how seeking feels
                     </h1>
-                    <p class="mt-4 max-w-md text-pretty text-[15px] leading-6 text-white/62 sm:text-base">
+                    <p class="mt-4 max-w-md text-pretty text-[15px] leading-6 text-ink/62 sm:text-base">
                         Raffi’s seek bar is inverted: move left to go forward and right to go back. You can switch to the normal direction instead.
                     </p>
 
                     <div class="mt-8 w-full max-w-sm">
-                        <div class="mb-2 text-left text-xs font-medium uppercase tracking-[0.14em] text-white/42">
+                        <div class="mb-2 text-left text-xs font-medium uppercase tracking-[0.14em] text-ink/42">
                             Seek direction
                         </div>
                         <button
-                            class="relative h-11 w-full cursor-pointer rounded-full border border-white/10 bg-white/8 p-1 transition-colors hover:bg-white/12"
+                            class="relative h-11 w-full cursor-pointer rounded-full border border-ink/10 bg-ink/8 p-1 transition-colors hover:bg-ink/12"
                             on:click={toggleSeekStyle}
                             aria-label="Toggle seek bar style"
                             type="button"
                         >
                             <div class="relative z-10 flex h-full w-full items-center">
-                                <span class={`flex-1 text-center text-xs font-semibold tracking-wider transition-colors ${localSeekBarStyle === "raffi" ? "text-black" : "text-white/55"}`}>RAFFI</span>
-                                <span class={`flex-1 text-center text-xs font-semibold tracking-wider transition-colors ${localSeekBarStyle === "normal" ? "text-black" : "text-white/55"}`}>NORMAL</span>
+                                <span class={`flex-1 text-center text-xs font-semibold tracking-wider transition-colors ${localSeekBarStyle === "raffi" ? "text-on-accent" : "text-ink/55"}`}>RAFFI</span>
+                                <span class={`flex-1 text-center text-xs font-semibold tracking-wider transition-colors ${localSeekBarStyle === "normal" ? "text-on-accent" : "text-ink/55"}`}>NORMAL</span>
                             </div>
-                            <div class={`absolute bottom-1 left-1 top-1 w-[calc(50%-4px)] rounded-full bg-white transition-transform duration-200 ${localSeekBarStyle === "normal" ? "translate-x-full" : "translate-x-0"}`}></div>
+                            <div class={`absolute bottom-1 left-1 top-1 w-[calc(50%-4px)] rounded-full bg-accent transition-transform duration-200 ${localSeekBarStyle === "normal" ? "translate-x-full" : "translate-x-0"}`}></div>
                         </button>
                         <button
-                            class="mt-3 w-full cursor-pointer rounded-xl bg-white px-5 py-3 text-[15px] font-semibold text-black transition-colors hover:bg-white/88"
+                            class="mt-3 w-full cursor-pointer rounded-xl bg-accent px-5 py-3 text-[15px] font-semibold text-on-accent transition-colors hover:bg-ink/88"
                             on:click={onSeekStyleAcknowledge}
                             type="button"
                         >
@@ -286,11 +286,11 @@
 
         <div class="absolute left-0 top-0 p-4 sm:p-10 z-50">
             <button
-                class="player-loading-nav bg-[#000000]/28 backdrop-blur-md hover:bg-[#FFFFFF]/20 transition-colors duration-200 rounded-full cursor-pointer"
+                class="player-loading-nav bg-canvas/28 backdrop-blur-md hover:bg-ink/20 transition-colors duration-200 rounded-full cursor-pointer"
                 on:click={onClose}
                 aria-label="Close player"
             >
-                <ChevronLeft size={26} color="white" strokeWidth={2} />
+                <ChevronLeft size={26} strokeWidth={2} />
             </button>
         </div>
     </div>
@@ -322,7 +322,7 @@
         inset: 0;
         opacity: 0.6;
         backface-visibility: hidden;
-        background-color: #1a1a1a;
+        background-color: var(--raffi-surface);
         background-repeat: no-repeat;
         transition:
             transform 0.7s cubic-bezier(0.4, 0, 0.2, 1),

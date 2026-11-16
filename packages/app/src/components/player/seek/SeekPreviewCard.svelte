@@ -38,7 +38,7 @@
 
 <div
     use:fullscreenPortal
-    class="fixed z-[1200] pointer-events-none flex flex-col overflow-hidden bg-[#000000]/60 backdrop-blur-md text-white shadow-[0_18px_50px_rgba(0,0,0,0.45)] {withImage
+    class="fixed z-[1200] pointer-events-none flex flex-col overflow-hidden bg-black/60 backdrop-blur-md text-ink shadow-[0_18px_50px_rgba(0,0,0,0.45)] {withImage
         ? 'rounded-[16px]'
         : 'rounded-md -translate-x-1/2'}"
     style={`left:${left}px;bottom:${bottom}px;${withImage ? `width:${CARD_WIDTH}px;` : ""}`}
@@ -46,7 +46,7 @@
     {#if withImage}
         <canvas
             bind:this={canvas}
-            class="block w-full bg-white/6 {frame ? 'opacity-100 transition-opacity duration-150' : 'opacity-0'}"
+            class="block w-full bg-ink/6 {frame ? 'opacity-100 transition-opacity duration-150' : 'opacity-0'}"
             style={`aspect-ratio:${aspectRatio}`}
         ></canvas>
     {/if}

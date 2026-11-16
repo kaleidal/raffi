@@ -1,6 +1,6 @@
 <script lang="ts">
-    import Slider from "../common/Slider.svelte";
-    import IconButton from "../common/IconButton.svelte";
+    import Slider from "../common/controls/Slider.svelte";
+    import IconButton from "../common/controls/IconButton.svelte";
     import PlayPauseIcon from "./PlayPauseIcon.svelte";
     import type { ShowResponse } from "../../lib/library/types/meta_types";
     import type { Chapter } from "../../pages/player/types";
@@ -64,9 +64,9 @@
 </script>
 
 <div
-    class="player-controls relative z-10 items-center flex flex-col text-white overflow-hidden"
+    class="player-controls relative z-10 items-center flex flex-col text-ink overflow-hidden"
 >
-    <div class="player-controls-surface absolute inset-0 rounded-[inherit] bg-[#000000]/10 backdrop-blur-xl pointer-events-none"></div>
+    <div class="player-controls-surface absolute inset-0 rounded-[inherit] bg-canvas/10 backdrop-blur-xl pointer-events-none"></div>
 
     <div class="relative z-10 flex flex-col gap-2 w-full">
         <div class="player-seek-row flex flex-row items-center w-full">
@@ -81,7 +81,7 @@
             {/if}
 
             <span
-                class="inline-block tabular-nums text-[clamp(14px,1.15vw,22px)] font-roboto font-medium text-[#D3D3D3] text-center"
+                class="inline-block tabular-nums text-[clamp(14px,1.15vw,22px)] font-medium text-ink/85 text-center"
                 >{formatTime(
                     seekBarStyle === "normal" ? displayedTime : remainingTime,
                 )}</span
@@ -105,7 +105,7 @@
             </div>
             {#if seekBarStyle === "normal"}
                 <span
-                    class="inline-block tabular-nums text-[clamp(14px,1.15vw,22px)] font-roboto font-medium text-[#D3D3D3] text-center"
+                    class="inline-block tabular-nums text-[clamp(14px,1.15vw,22px)] font-medium text-ink/85 text-center"
                     >{formatTime(duration)}</span
                 >
             {/if}
@@ -119,7 +119,7 @@
                         toggleFullscreen();
                     }}
                 >
-                    <Maximize size={22} color="#E9E9E9" strokeWidth={2} />
+                    <Maximize size={22} strokeWidth={2} />
                 </IconButton>
             {/if}
 
@@ -128,9 +128,9 @@
                 onClick={toggleObjectFit}
             >
                 {#if objectFit === "contain"}
-                    <ZoomIn size={20} color="#E9E9E9" strokeWidth={2} />
+                    <ZoomIn size={20} strokeWidth={2} />
                 {:else}
-                    <ZoomOut size={20} color="#E9E9E9" strokeWidth={2} />
+                    <ZoomOut size={20} strokeWidth={2} />
                 {/if}
             </IconButton>
 
@@ -139,7 +139,7 @@
                     label={currentAudioLabel || "Audio"}
                     onClick={onAudioClick}
                 >
-                    <AudioWaveform size={20} color="#E9E9E9" strokeWidth={2} />
+                    <AudioWaveform size={20} strokeWidth={2} />
                 </IconButton>
             {/if}
 
@@ -147,7 +147,7 @@
                 label={currentSubtitleLabel || "Subtitles: Off"}
                 onClick={onSubtitleClick}
             >
-                <Subtitles size={20} color="#E9E9E9" strokeWidth={2} />
+                <Subtitles size={20} strokeWidth={2} />
             </IconButton>
 
             {#if metaData && showWatchParty}
@@ -155,7 +155,7 @@
                     label="Watch Party"
                     onClick={onWatchPartyClick}
                 >
-                    <Users size={20} color="#E9E9E9" strokeWidth={2} />
+                    <Users size={20} strokeWidth={2} />
                 </IconButton>
             {/if}
 
@@ -166,7 +166,7 @@
                     window.open(videoSrc!!);
                 }}
             >
-                <Download size={22} color="#E9E9E9" strokeWidth={2} />
+                <Download size={22} strokeWidth={2} />
             </IconButton>
             {/if}
 
@@ -175,7 +175,7 @@
                     label="Clip"
                     onClick={() => setClipPanelOpen(!showClipPanel)}
                 >
-                    <Scissors size={20} color="#E9E9E9" strokeWidth={2} />
+                    <Scissors size={20} strokeWidth={2} />
                 </IconButton>
             {/if}
 

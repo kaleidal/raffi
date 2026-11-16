@@ -17,7 +17,10 @@
 	import ListsPopup from "../meta/modals/ListsPopup.svelte";
 	import PlayModal from "./modals/PlayModal.svelte";
 	import HeaderActions from "./header/HeaderActions.svelte";
+	import RaffiMark from "../common/RaffiMark.svelte";
 	import SearchResults from "./header/SearchResults.svelte";
+	import LinkResult from "./header/LinkResult.svelte";
+    import { parsePlayableLink } from "../../lib/streams/playableLink";
     import {
         HOME_SEARCH_BAR_POSITION_AUTO,
         HOME_SEARCH_BAR_POSITION_BOTTOM,
@@ -27,8 +30,6 @@
     } from "../../lib/home/searchBarSettings";
 
 
-    export let onOpenAddons: () => void = () => {};
-    export let onOpenSettings: () => void = () => {};
 
     let searchQuery = "";
     let searchResults: SplitSearchResults = { movies: [], series: [] };
@@ -37,6 +38,7 @@
 	let showSearchResults = false;
 	let loading = false;
 	let commandHint = "";
+	let linkResult: LinkResult | null = null;
     let totalSearchResults = 0;
     let searchBarPositionPreference: HomeSearchBarPosition =
         HOME_SEARCH_BAR_POSITION_AUTO;
@@ -205,6 +207,12 @@
 			return;
 		}
 
+		if (parsePlayableLink(query)) {
+			showSearchResults = true;
+			loading = false;
+			return;
+		}
+
 		loading = true;
 		showSearchResults = true;
 
@@ -259,6 +267,11 @@
 
 	const handleSearchKeydown = (event: KeyboardEvent) => {
 		if (event.key !== "Enter") return;
+		if (link) {
+			event.preventDefault();
+			linkResult?.activate();
+			return;
+		}
 		if (searchQuery.trim().startsWith("/")) {
 			event.preventDefault();
 			handleCommandEnter();
@@ -302,9 +315,10 @@
 	}
 
 	const inputClass =
-		"bg-[#000000]/50 text-[#D4D4D4] text-center px-[clamp(20px,2vw,40px)] w-full min-w-0 text-[clamp(18px,1.5vw,28px)] font-poppins font-normal outline-none focus:outline-none focus:ring-0 transition-[font-size,padding] duration-300";
+		"bg-canvas/50 text-ink/85 text-center px-[clamp(20px,2vw,40px)] w-full min-w-0 text-[clamp(18px,1.5vw,28px)] font-normal outline-none focus:outline-none focus:ring-0 transition-[font-size,padding] duration-300";
 
 	$: channelMode = $router.page === "live";
+	$: link = channelMode ? null : parsePlayableLink(searchQuery);
 	$: totalSearchResults = searchResults.movies.length + searchResults.series.length;
     /** On TV the bar stays in the header, where it neither covers the rows nor catches the remote's Down key. */
     $: searchDockBottom =
@@ -418,7 +432,7 @@
 <div
     class="{absolute
         ? 'absolute'
-        : 'relative'} top-0 left-0 w-full p-[clamp(24px,2.7vw,50px)] flex flex-row justify-between items-center z-50"
+        : 'relative'} {homeOverlayMode ? 'scheme-dark' : ''} top-0 left-0 w-full p-[clamp(24px,2.7vw,50px)] flex flex-row justify-between items-center z-50"
 >
     <button
         class="cursor-pointer hover:opacity-80 transition-opacity"
@@ -427,11 +441,7 @@
             onLogoClick();
         }}
     >
-        <img
-            src="raffi.svg"
-            alt="Raffi Logo"
-            class="header-logo h-[clamp(56px,4vw,80px)]"
-        />
+        <RaffiMark class="header-logo h-[clamp(56px,4vw,80px)] w-auto text-ink/85" />
     </button>
 
     <div
@@ -442,7 +452,7 @@
                 ? "calc(100dvh - clamp(20px, 3vh, 32px) - clamp(56px, 4vw, 80px))"
                 : "clamp(24px, 2.7vw, 50px)"};`
             : ""}
-        class={`flex flex-col left-1/2 -translate-x-1/2 ${
+        class={`flex flex-col left-1/2 -translate-x-1/2 ${homeOverlayMode && !searchDockBottom ? "scheme-dark" : ""} ${
             homeOverlayMode || portraitLayout
                 ? "fixed z-[140] will-change-[top] transition-[top,filter] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]"
                 : "absolute"
@@ -451,7 +461,7 @@
         <div bind:this={searchArea}>
             {#if portraitLayout || searchDockBottom}
                 <div
-                    class="pointer-events-none absolute -inset-x-6 -inset-y-4 -z-10 rounded-[48px] bg-white/[0.09] blur-2xl opacity-35"
+                    class="pointer-events-none absolute -inset-x-6 -inset-y-4 -z-10 rounded-[48px] bg-ink/[0.09] blur-2xl opacity-35"
                 ></div>
             {/if}
             <div
@@ -462,13 +472,13 @@
                         : "w-[clamp(340px,36vw,680px)] max-w-[48vw]"
                 } ${
                     portraitLayout || searchDockBottom
-                        ? "shadow-[0_18px_54px_rgba(0,0,0,0.6)] ring-1 ring-white/12"
+                        ? "shadow-[0_18px_54px_rgba(0,0,0,0.6)] ring-1 ring-ink/12"
                         : ""
                 }`}
             >
                 <slot name="leading">
-                    <div class="search-icon flex w-[clamp(56px,4vw,80px)] shrink-0 items-center justify-center bg-[#181818]/50">
-                        <Search size={40} strokeWidth={2} color="#C3C3C3" />
+                    <div class="search-icon flex w-[clamp(56px,4vw,80px)] shrink-0 items-center justify-center bg-surface/50">
+                        <Search size={40} strokeWidth={2} />
                     </div>
                 </slot>
 
@@ -500,7 +510,7 @@
                 {#if isTvPlatform}
                     <button
                         data-own-focus
-                        class="search-icon flex w-[clamp(56px,4vw,80px)] shrink-0 items-center justify-center bg-[#181818]/50 text-[#C3C3C3] transition-colors focus:bg-white focus:text-black"
+                        class="search-icon flex w-[clamp(56px,4vw,80px)] shrink-0 items-center justify-center bg-surface/50 text-ink/75 transition-colors focus:bg-ink focus:text-canvas"
                         aria-label="Search by voice"
                         onclick={searchByVoice}
                     >
@@ -511,13 +521,15 @@
 
             {#if commandHint}
                 <div
-                    class={`absolute left-0 w-full bg-[#181818]/90 backdrop-blur-xl rounded-[24px] p-4 text-white/70 text-sm z-100 ${
+                    class={`absolute left-0 w-full bg-surface/90 backdrop-blur-xl rounded-[24px] p-4 text-ink/70 text-sm z-100 ${
                         portraitLayout || searchDockBottom ? "bottom-[90px]" : "top-[90px]"
                     }`}
                     transition:fade={{ duration: 200 }}
                 >
                     {commandHint}
                 </div>
+            {:else if link && showSearchResults}
+                <LinkResult bind:this={linkResult} {link} above={portraitLayout || searchDockBottom} />
             {:else if showSearchResults && (totalSearchResults > 0 || loading)}
                 <SearchResults
                     results={searchResults}
@@ -550,7 +562,7 @@
         type={selectedType}
     />
 
-    <HeaderActions onOpenPlay={openPlayModal} onOpenAddons={onOpenAddons} onOpenSettings={onOpenSettings} />
+    <HeaderActions onOpenPlay={openPlayModal} />
 </div>
 
 <style>

@@ -5,7 +5,7 @@
     import type { PopularTitleMeta } from "../../lib/library/types/popular_types";
     import { isAndroidPlatform } from "../../lib/shell/platform";
     import { router } from "../../lib/stores/router";
-    import IconButton from "../common/IconButton.svelte";
+    import IconButton from "../common/controls/IconButton.svelte";
 
     export let showcasedTitle: PopularTitleMeta | null;
 
@@ -29,7 +29,7 @@
         const origin = typeof window !== "undefined" ? window.location.origin : "";
         const originParam = origin && origin !== "null" ? `&origin=${encodeURIComponent(origin)}` : "";
         trailerSrc = trailerId
-            ? `https://www.youtube-nocookie.com/embed/${trailerId}?controls=0&modestbranding=1&rel=0&autoplay=1&mute=1&loop=1&playlist=${trailerId}&showinfo=0&iv_load_policy=3&disablekb=1&enablejsapi=1${originParam}`
+            ? `https://www.youtube-nocookie.com/embed/${trailerId}?controls=0&modestbranding=1&rel=0&autoplay=1&mute=1&loop=1&playlist=${trailerId}&showinfo=0&iv_load_policy=3&cc_load_policy=0&disablekb=1&enablejsapi=1${originParam}`
             : "";
     }
 
@@ -148,13 +148,13 @@
 </script>
 
 <div
-    class="hero-shell w-full relative overflow-hidden bg-[#090909] isolate"
+    class="hero-shell scheme-dark w-full relative overflow-hidden bg-canvas isolate"
     bind:this={container}
 >
     {#if showcasedTitle}
         <div
             in:fade={{ duration: 400 }}
-            class="absolute bottom-[clamp(48px,6vw,100px)] left-[clamp(24px,5.2vw,100px)] z-10 flex max-w-[min(760px,72vw)] flex-col gap-[clamp(28px,3vw,50px)]"
+            class="hero-content absolute left-[clamp(24px,5.2vw,100px)] z-10 flex max-w-[min(760px,72vw)] flex-col gap-[clamp(28px,3vw,50px)]"
         >
             {#if showcasedTitle.logo}
                 <img
@@ -164,7 +164,7 @@
                     on:error={onLogoError}
                 />
             {:else}
-                <h1 class="text-white text-[clamp(40px,4vw,64px)] font-poppins font-bold max-w-[700px] leading-[1.05]">
+                <h1 class="text-ink text-[clamp(40px,4vw,64px)] font-bold max-w-[700px] leading-[1.05]">
                     {showcasedTitle.name}
                 </h1>
             {/if}
@@ -173,11 +173,11 @@
             <div class="flex flex-row gap-[10px] items-center">
                 <button
                     data-tv-autofocus
-                    class="details-button bg-[#FFFFFF]/80 hover:bg-[#D3D3D3]/80 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-[clamp(10px,1vw,16px)] text-black text-[clamp(20px,1.8vw,32px)] font-poppins font-medium px-[clamp(36px,4.4vw,84px)] py-[clamp(12px,1vw,18px)] w-fit rounded-full transition-colors duration-200"
+                    class="details-button bg-accent/85 hover:bg-accent/70 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-[clamp(10px,1vw,16px)] text-on-accent text-[clamp(20px,1.8vw,32px)] font-medium px-[clamp(36px,4.4vw,84px)] py-[clamp(12px,1vw,18px)] w-fit rounded-full transition-colors duration-200"
                     on:click={() =>
                         navigateToMeta(showcasedTitle.imdb_id, showcasedTitle.type)}
                 >
-                    <Info size={48} strokeWidth={3} color="black" />
+                    <Info size={48} strokeWidth={3} />
 
                     Details
                 </button>
@@ -188,9 +188,9 @@
                         onClick={togglePlay}
                     >
                         {#if isPaused}
-                            <Play size={24} strokeWidth={2} color="#E9E9E9" />
+                            <Play size={24} strokeWidth={2} />
                         {:else}
-                            <Pause size={24} strokeWidth={2} color="#E9E9E9" />
+                            <Pause size={24} strokeWidth={2} />
                         {/if}
                     </IconButton>
 
@@ -199,9 +199,9 @@
                         onClick={toggleMute}
                     >
                         {#if isMuted}
-                            <VolumeX size={24} strokeWidth={2} color="#E9E9E9" />
+                            <VolumeX size={24} strokeWidth={2} />
                         {:else}
-                            <Volume2 size={24} strokeWidth={2} color="#E9E9E9" />
+                            <Volume2 size={24} strokeWidth={2} />
                         {/if}
                     </IconButton>
                 {/if}
@@ -226,18 +226,36 @@
     {/if}
 
     <div
-        class="absolute inset-0 z-[1] bg-gradient-to-t from-[#090909] via-[#090909]/80 to-transparent"
+        class="hero-bottom-scrim absolute inset-0 z-[1] bg-gradient-to-t from-canvas via-canvas/80 to-transparent"
     ></div>
     <div
-        class="absolute inset-0 z-[1] bg-gradient-to-r from-[#090909]/80 via-transparent to-transparent"
+        class="absolute inset-0 z-[1] bg-gradient-to-r from-canvas/80 via-transparent to-transparent"
     ></div>
-    <div class="absolute bottom-0 left-0 right-0 h-[14px] z-[2] bg-[#090909]"></div>
+    <div class="hero-blend page-fade pointer-events-none absolute inset-x-0 bottom-0 z-[2]"></div>
+    <div class="absolute bottom-0 left-0 right-0 h-[14px] z-[2] bg-page"></div>
 </div>
 
 <style>
     .hero-shell {
-        height: clamp(440px, min(58vw, 76dvh), 760px);
+        --hero-blend: 0px;
+        height: calc(clamp(440px, min(58vw, 76dvh), 760px) + var(--hero-blend));
         min-height: 440px;
+    }
+
+    :global(:root[data-theme="light"]) .hero-shell {
+        --hero-blend: clamp(120px, 11vw, 200px);
+    }
+
+    :global(:root[data-theme="light"]) .hero-bottom-scrim {
+        display: none;
+    }
+
+    .hero-content {
+        bottom: calc(clamp(48px, 6vw, 100px) + var(--hero-blend));
+    }
+
+    .hero-blend {
+        height: calc(var(--hero-blend) * 1.5);
     }
 
     .hero-frame {
@@ -263,7 +281,7 @@
 
     @media (orientation: portrait) {
         .hero-shell {
-            height: clamp(560px, 74dvh, 780px);
+            height: calc(clamp(560px, 74dvh, 780px) + var(--hero-blend));
             min-height: min(560px, 74dvh);
         }
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { pointerScrub, type ScrubPosition } from "../../common/pointerScrub";
+    import { pointerScrub, type ScrubPosition } from "../../common/controls/pointerScrub";
     import { formatTime } from "../../../lib/utils/time";
     import type { SeekPreview } from "../../../lib/media/preview/seekPreview";
     import type { Chapter } from "../../../pages/player/types";
@@ -55,13 +55,13 @@
         return [
             `left:calc(${segment.left * 100}% + ${leftGap}px)`,
             `width:calc(${(segment.right - segment.left) * 100}% - ${leftGap + rightGap}px)`,
-            `background:${color ? `rgba(${color},0.4)` : "rgba(163,163,163,0.3)"}`,
+            `background:${color ? `rgba(${color},0.4)` : "color-mix(in oklab, var(--raffi-ink) 20%, transparent)"}`,
         ].join(";");
     };
 
     const fillColor = (segment: TrackSegment) => {
         const color = segment.kind ? KIND_COLORS[segment.kind] : undefined;
-        return color ? `rgb(${color})` : "#ffffff";
+        return color ? `rgb(${color})` : "var(--raffi-accent)";
     };
 
     const showPreview = (preview: SeekPreview, time: number) => {
@@ -120,7 +120,7 @@
                     {@const fill = fillWithin(segment, from, to)}
                     {#if fill}
                         <div
-                            class="absolute inset-y-0 bg-white/20"
+                            class="absolute inset-y-0 bg-ink/20"
                             style={`left:${fill.left * 100}%;width:${fill.width * 100}%`}
                         ></div>
                     {/if}
@@ -134,7 +134,7 @@
     </div>
 
     <div
-        class="pointer-events-none absolute top-1/2 size-3.5 rounded-full bg-white shadow-[0_1px_6px_rgba(0,0,0,0.35)] {active
+        class="pointer-events-none absolute top-1/2 size-3.5 rounded-full bg-accent shadow-[0_1px_6px_rgba(0,0,0,0.35)] {active
             ? 'scale-100'
             : 'scale-0'}"
         style={`left:${cursor * 100}%;translate:-50% -50%;transition:scale 150ms ease-out, left ${dragging ? 0 : 200}ms linear`}

@@ -38,21 +38,21 @@
                 <img
                     src={item.poster}
                     alt={item.name}
-                    class="w-full h-full object-cover rounded-[12px] bg-[#1a1a1a]"
+                    class="w-full h-full object-cover rounded-[12px] bg-surface"
                 />
                 {#if $selectedItem?.imdb_id === item.imdb_id}
                     <div
-                        class="absolute inset-0 bg-black/20 rounded-[12px]"
+                        class="absolute inset-0 bg-canvas/20 rounded-[12px]"
                     ></div>
                 {/if}
 
                 {#if $loadingItem === item.imdb_id}
                     <div
-                        class="absolute inset-0 flex items-center justify-center bg-black/40 rounded-[12px] backdrop-blur-[2px]"
+                        class="absolute inset-0 flex items-center justify-center bg-canvas/40 rounded-[12px] backdrop-blur-[2px]"
                         transition:fade={{ duration: 200 }}
                     >
                         <div
-                            class="w-8 h-8 border-4 border-white/20 border-t-white rounded-full animate-spin"
+                            class="w-8 h-8 border-4 border-ink/20 border-t-ink rounded-full animate-spin"
                         ></div>
                     </div>
                 {/if}
@@ -60,7 +60,7 @@
         {/each}
     </div>
 {:else}
-    <div class="text-white/30 text-[1rem] font-poppins italic py-4">
+    <div class="text-ink/30 text-[1rem] italic py-4">
         No items in this list
     </div>
 {/if}

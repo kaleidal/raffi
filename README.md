@@ -19,6 +19,29 @@ Raffi doesn't come with anything to stream. What you can watch depends on the ad
 - **Torrents:** stream through [Limbo](https://limbo.kaleid.al), on the same computer or, for Android, on a paired computer on your network.
 - **Live TV:** add M3U playlists or Xtream Codes accounts and browse channels in a guide or a grid, with XMLTV programme data, favourites and channel up and down in the player. Turn it on in Settings under Live TV.
 - **Discord:** optional Rich Presence showing what you're watching.
+- **Themes:** dark or light, and on desktop, your own stylesheets on top.
+
+## Themes
+
+On desktop, Settings → Appearance → Custom themes opens Raffi's themes folder. Every `.css` file in it loads on top of Raffi's styles, in alphabetical order, and changes show up as soon as you save.
+
+Raffi draws its colors from a handful of variables, so most themes only need to set those:
+
+```css
+:root {
+  --raffi-canvas: #0d0f14;   /* page background */
+  --raffi-surface: #161a22;  /* cards and menus */
+  --raffi-raised: #232936;   /* panels and dialogs */
+  --raffi-ink: #eef1f7;      /* text and icons */
+  --raffi-accent: #9cc3ff;   /* main buttons, switches, progress */
+  --raffi-on-accent: #0b1220;
+  --raffi-danger: #ff7a7a;
+  --raffi-success: #5bd6a0;
+  --raffi-warning: #f5c56b;
+}
+```
+
+The player, trailers and the big artwork at the top of pages always use the dark set. To restyle those too, set the same variables on `.scheme-dark`. Light mode sets `data-theme="light"` on the page, so `:root[data-theme="light"]` targets it.
 
 ## Get Raffi
 

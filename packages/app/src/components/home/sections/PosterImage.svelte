@@ -25,9 +25,9 @@
 </script>
 
 {#if normalizedSrc && !failed}
-    <div class="relative h-full w-full overflow-hidden rounded-[inherit] bg-[#141419]">
+    <div class="relative h-full w-full overflow-hidden rounded-[inherit] bg-surface">
         <div
-            class="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.07),rgba(255,255,255,0.015)_45%,rgba(255,255,255,0.05))] transition-opacity duration-300 {loaded ? 'opacity-0' : 'opacity-100'}"
+            class="absolute inset-0 bg-gradient-to-br from-ink/7 via-ink/2 to-ink/5 transition-opacity duration-300 {loaded ? 'opacity-0' : 'opacity-100'}"
             aria-hidden="true"
         ></div>
         <img
@@ -42,22 +42,22 @@
         />
 
         <div
-            class="pointer-events-none absolute inset-0 rounded-[inherit] shadow-[inset_0_0_0_1px_rgba(9,9,9,0.88)]"
+            class="pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring-inset ring-canvas/88"
             aria-hidden="true"
         ></div>
     </div>
 {:else}
     <div
-        class="flex h-full w-full flex-col items-center justify-center gap-3 rounded-[inherit] border border-white/10 bg-[radial-gradient(circle_at_50%_30%,rgba(255,255,255,0.075),transparent_58%),#101014] p-4 text-center"
+        class="flex h-full w-full flex-col items-center justify-center gap-3 rounded-[inherit] border border-ink/10 bg-surface p-4 text-center"
         aria-label={alt}
     >
-        <Film size={26} strokeWidth={2} color="#8B8B95" />
+        <Film size={26} strokeWidth={2} class="text-ink/50" />
         {#if displayTitle}
-            <span class="text-[#B1B1BD] text-sm font-medium leading-[1.35] break-words max-w-full">
+            <span class="text-ink/70 text-sm font-medium leading-[1.35] break-words max-w-full">
                 {displayTitle}
             </span>
         {:else}
-            <span class="text-[#9A9AA5] text-sm font-medium">Poster unavailable</span>
+            <span class="text-ink/60 text-sm font-medium">Poster unavailable</span>
         {/if}
     </div>
 {/if}

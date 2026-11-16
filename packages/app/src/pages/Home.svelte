@@ -31,10 +31,8 @@
     import Hero from "../components/home/Hero.svelte";
     import SearchBar from "../components/home/SearchBar.svelte";
     import ContinueWatching from "../components/home/sections/ContinueWatching.svelte";
-    import AddonsModal from "../components/home/modals/AddonsModal.svelte";
-    import SettingsModal from "../components/home/modals/SettingsModal.svelte";
-    import PopularSection from "../components/home/sections/PopularSection.svelte";
-    import GenreSection from "../components/home/sections/GenreSection.svelte";
+    import TitleRow from "../components/home/sections/TitleRow.svelte";
+    import { distinctGenreRows, uniqueTitles } from "../lib/home/homeRows";
     import LoadingSpinner from "../components/common/LoadingSpinner.svelte";
     import Skeleton from "../components/common/Skeleton.svelte";
 
@@ -42,10 +40,9 @@
     let fetchedTitles = false;
     let continueWatchingMeta: (ShowResponse & { libraryItem: any })[] = [];
     let popularMeta: PopularTitleMeta[] = [];
-    let showAddonsModal = false;
-    let showSettingsModal = false;
     let genreMap: Record<string, PopularTitleMeta[]> = {};
     let topGenres: string[] = [];
+    $: genreRows = distinctGenreRows(topGenres, genreMap, popularMeta);
     let absolutePopularTitles: PopularTitleMeta[] = [];
     let heroPoolTitles: PopularTitleMeta[] = [];
     let addonSections: { id: string; title: string; titles: PopularTitleMeta[] }[] =
@@ -479,7 +476,7 @@
             );
 
             absolutePopularTitles = absolutePopularTitles.slice(0, 20);
-            popularMeta = absolutePopularTitles;
+            popularMeta = uniqueTitles(absolutePopularTitles);
         }
 
         const allTitlesForGenres = [...sanitizedMovies, ...sanitizedSeries];
@@ -559,24 +556,16 @@
         };
     });
 
-    function handleOpenAddons() {
-        showAddonsModal = true;
-    }
 
-    function handleOpenSettings() {
-        showSettingsModal = true;
-    }
 </script>
 
-<div class="bg-[#090909] h-fit min-h-screen flex flex-col pb-[clamp(64px,7vw,100px)]">
+<div class="bg-canvas h-fit min-h-screen flex flex-col pb-[clamp(64px,7vw,100px)]">
     {#if fetchedTitles}
         <div in:fade={{ duration: 300 }}>
             <Hero {showcasedTitle} onLogoError={refreshFeatured} />
-            <div class="w-full h-[6px] -mt-[3px] bg-[#090909] relative z-20"></div>
+            <div class="w-full h-[6px] -mt-[3px] bg-canvas relative z-20"></div>
 
             <SearchBar
-                onOpenAddons={handleOpenAddons}
-                onOpenSettings={handleOpenSettings}
                 onLogoClick={refreshFeatured}
             />
 
@@ -584,17 +573,16 @@
                 class="w-full z-10 h-fit flex flex-col gap-[clamp(56px,7vw,100px)] px-[clamp(24px,5.2vw,100px)] pb-[clamp(56px,7vw,100px)] pt-[clamp(28px,3vw,50px)]"
             >
                 <ContinueWatching {continueWatchingMeta} />
-                <PopularSection {popularMeta} />
+                {#if popularMeta.length > 0}
+                    <TitleRow title="Popular" titles={popularMeta} />
+                {/if}
 
                 {#if traktRecommendationsConnected && traktRecommendations.length > 0}
-                    <GenreSection
-                        genre="Recommended for You (Trakt)"
-                        titles={traktRecommendations}
-                    />
+                    <TitleRow title="Recommended for you" titles={traktRecommendations} />
                 {/if}
 
                 {#each addonSections as section (section.id)}
-                    <GenreSection genre={section.title} titles={section.titles} />
+                    <TitleRow title={section.title} titles={section.titles} />
                 {/each}
 
                 {#if addonSectionsLoading}
@@ -614,13 +602,10 @@
                     {/each}
                 {/if}
 
-                {#each topGenres as genre}
-                    <GenreSection {genre} titles={genreMap[genre]} />
+                {#each genreRows as row (row.genre)}
+                    <TitleRow title={row.genre} titles={row.titles} />
                 {/each}
             </div>
-
-            <AddonsModal bind:showAddonsModal />
-            <SettingsModal bind:showSettings={showSettingsModal} />
         </div>
     {:else}
         <div

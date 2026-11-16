@@ -1,109 +1,26 @@
 <script lang="ts">
     import { portal } from "../../common/portal";
-    import { onDestroy } from "svelte";
-    import { X, FileVideo, Magnet, Users, Film } from "@lucide/svelte";
+    import { lockPageScroll } from "../../common/scrollLock";
+    import { X, FileVideo, Users, Film } from "@lucide/svelte";
     import { fade, scale } from "svelte/transition";
     import { router } from "../../../lib/stores/router";
     import { getCachedMetaData } from "../../../lib/library/metaCache";
     import { cloudSyncStatus, getWatchPartyInfo } from "../../../lib/db/db";
     import { localMode } from "../../../lib/stores/authStore";
-    import { isAndroidPlatform } from "../../../lib/shell/platform";
-    import TorrentWarningModal from "../../meta/modals/TorrentWarningModal.svelte";
-    import {
-        acknowledgeTorrentWarning,
-        allowTorrenting,
-        hasAcknowledgedTorrentWarning,
-    } from "../../../lib/stores/torrenting";
+    import { isDesktopPlatform } from "../../../lib/shell/platform";
 
     export let onClose: () => void;
 
-    let mode: "select" | "join" | "preview" | "magnet" = "select";
-    let bodyLocked = false;
+    let mode: "select" | "join" | "preview" = "select";
 
     let partyCode = "";
-    let magnetLink = "";
     let partyDetails: any = null;
     let loading = false;
     let error = "";
-    let showTorrentWarning = false;
 
-    const toggleBodyScroll = (active: boolean) => {
-        if (typeof document === "undefined") return;
-        const body = document.body;
-        const html = document.documentElement;
-        const container = document.querySelector(
-            "[data-scroll-container]",
-        ) as HTMLElement | null;
-        const count = Number(body.dataset.modalCount || "0");
-        if (active) {
-            if (count === 0) {
-                const scrollY = window.scrollY;
-                body.dataset.scrollY = String(scrollY);
-                body.dataset.prevOverflow = body.style.overflow || "";
-                body.dataset.prevPosition = body.style.position || "";
-                body.dataset.prevTop = body.style.top || "";
-                body.dataset.prevWidth = body.style.width || "";
-                body.style.overflow = "hidden";
-                body.style.position = "fixed";
-                body.style.top = `-${scrollY}px`;
-                body.style.width = "100%";
-                html.style.overflow = "hidden";
-                if (container) {
-                    container.dataset.prevOverflowY = container.style.overflowY || "";
-                    container.dataset.prevOverflowX = container.style.overflowX || "";
-                    container.style.overflowY = "hidden";
-                    container.style.overflowX = "hidden";
-                }
-            }
-            body.dataset.modalCount = String(count + 1);
-            return;
-        }
-        const next = Math.max(0, count - 1);
-        body.dataset.modalCount = String(next);
-        if (next === 0) {
-            const scrollY = Number(body.dataset.scrollY || "0");
-            body.style.overflow = body.dataset.prevOverflow || "";
-            body.style.position = body.dataset.prevPosition || "";
-            body.style.top = body.dataset.prevTop || "";
-            body.style.width = body.dataset.prevWidth || "";
-            html.style.overflow = "";
-            delete body.dataset.prevOverflow;
-            delete body.dataset.prevPosition;
-            delete body.dataset.prevTop;
-            delete body.dataset.prevWidth;
-            delete body.dataset.scrollY;
-            if (container) {
-                container.style.overflowY = container.dataset.prevOverflowY || "";
-                container.style.overflowX = container.dataset.prevOverflowX || "";
-                delete container.dataset.prevOverflowY;
-                delete container.dataset.prevOverflowX;
-            }
-            window.scrollTo(0, scrollY);
-        }
-    };
 
-    const updateBodyLock = (active: boolean) => {
-        if (active && !bodyLocked) {
-            toggleBodyScroll(true);
-            bodyLocked = true;
-        } else if (!active && bodyLocked) {
-            toggleBodyScroll(false);
-            bodyLocked = false;
-        }
-    };
 
-    updateBodyLock(true);
 
-    onDestroy(() => {
-        updateBodyLock(false);
-    });
-
-    $: if (!$allowTorrenting && mode === "magnet") {
-        mode = "select";
-        magnetLink = "";
-        error = "";
-        showTorrentWarning = false;
-    }
 
     const closeModal = () => {
         onClose();
@@ -133,43 +50,6 @@
         target.value = "";
     }
 
-    function openMagnetPlayer() {
-        if (!magnetLink.trim()) return;
-        router.navigate("player", {
-            videoSrc: magnetLink.trim(),
-            startTime: 0,
-            metaData: null,
-            fileIdx: null,
-            season: null,
-            episode: null,
-        });
-        onClose();
-    }
-
-    function playMagnet() {
-        if (!magnetLink.trim()) return;
-        error = "";
-        if (!$allowTorrenting) {
-            error = "Torrenting is disabled. Turn on Allow Torrenting in Settings before playing a magnet link.";
-            return;
-        }
-        if (!hasAcknowledgedTorrentWarning()) {
-            showTorrentWarning = true;
-            return;
-        }
-        openMagnetPlayer();
-    }
-
-    function confirmTorrentWarning() {
-        if (!$allowTorrenting) {
-            showTorrentWarning = false;
-            error = "Torrenting is disabled. Turn on Allow Torrenting in Settings before playing a magnet link.";
-            return;
-        }
-        acknowledgeTorrentWarning();
-        showTorrentWarning = false;
-        openMagnetPlayer();
-    }
 
     async function fetchPartyDetails() {
         if (!partyCode.trim()) return;
@@ -233,7 +113,8 @@
 
     <div
         use:portal
-        class="raffi-modal-backdrop fixed inset-0 z-[200] bg-[#101010]/58 backdrop-blur-xl flex items-center justify-center"
+        use:lockPageScroll
+        class="raffi-modal-backdrop fixed inset-0 z-[200] bg-canvas/58 backdrop-blur-xl flex items-center justify-center"
         transition:fade={{ duration: 200 }}
         on:click|self={closeModal}
         on:keydown={(e) => e.key === "Escape" && closeModal()}
@@ -251,7 +132,7 @@
     />
 
     <div
-        class="raffi-modal-surface w-full max-w-lg rounded-[32px] bg-[#2f2f2f]/58 backdrop-blur-[40px] p-6 md:p-8 flex flex-col gap-6 relative overflow-y-auto shadow-[0_40px_160px_rgba(0,0,0,0.45)] cursor-default"
+        class="raffi-modal-surface w-full max-w-lg rounded-[32px] bg-raised/58 backdrop-blur-[40px] p-6 md:p-8 flex flex-col gap-6 relative overflow-y-auto shadow-[0_40px_160px_rgba(0,0,0,0.45)] cursor-default"
         transition:scale={{ start: 0.95, duration: 200 }}
         on:click|stopPropagation
         on:keydown|stopPropagation
@@ -262,20 +143,18 @@
         <!-- Header -->
         <div class="relative z-10 flex flex-row items-center justify-between shrink-0">
             <div>
-                <h2 class="text-white text-2xl font-poppins font-bold">
+                <h2 class="text-ink text-2xl font-bold">
                     {#if mode === "select"}
                         Play
                     {:else if mode === "join"}
                         Join Party
-                    {:else if mode === "magnet"}
-                        Play Magnet Link
                     {:else}
                         Party Preview
                     {/if}
                 </h2>
             </div>
             <button
-                class="text-white/50 hover:text-white cursor-pointer transition-colors"
+                class="text-ink/50 hover:text-ink cursor-pointer transition-colors"
                 on:click={onClose}
                 aria-label="Close"
             >
@@ -287,116 +166,63 @@
         <div class="relative z-10 flex-1 overflow-y-auto">
             {#if mode === "select"}
                 <div class="flex flex-col gap-4">
-                    {#if !isAndroidPlatform}
+                    {#if isDesktopPlatform}
                         <label
                             for="local-file-input"
-                            class="bg-white/5 hover:bg-white/10 text-white p-4 rounded-2xl flex items-center gap-4 transition-colors text-left group cursor-pointer"
+                            class="bg-ink/5 hover:bg-ink/10 text-ink p-4 rounded-2xl flex items-center gap-4 transition-colors text-left group cursor-pointer"
                         >
-                            <div class="bg-white/10 p-3 rounded-full group-hover:bg-white/20 transition-colors">
+                            <div class="bg-ink/10 p-3 rounded-full group-hover:bg-ink/20 transition-colors">
                                 <FileVideo size={24} strokeWidth={2} />
                             </div>
                             <div class="flex flex-col gap-1">
                                 <span class="font-bold text-lg">Local File</span>
-                                <span class="text-[#878787] text-sm">Play a video file from your computer</span>
+                                <span class="text-ink/55 text-sm">Play a video file from your computer</span>
                             </div>
                         </label>
                     {/if}
 
-                    {#if $allowTorrenting}
-                        <button
-                            class="bg-white/5 hover:bg-white/10 text-white p-4 rounded-2xl flex items-center gap-4 transition-colors text-left group cursor-pointer"
-                            on:click={() => mode = "magnet"}
-                        >
-                            <div class="bg-white/10 p-3 rounded-full group-hover:bg-white/20 transition-colors">
-                                <Magnet size={24} strokeWidth={2} />
-                            </div>
-                            <div class="flex flex-col gap-1">
-                                <span class="font-bold text-lg">Play Magnet Link</span>
-                                <span class="text-[#878787] text-sm">Stream directly from a magnet URL</span>
-                            </div>
-                        </button>
-                    {/if}
 
-                    {#if !isAndroidPlatform && !$localMode && $cloudSyncStatus.cloudFeaturesAvailable}
+                    {#if !$localMode && $cloudSyncStatus.cloudFeaturesAvailable}
                         <button
-                            class="bg-white/5 hover:bg-white/10 text-white p-4 rounded-2xl flex items-center gap-4 transition-colors text-left group cursor-pointer"
+                            class="bg-ink/5 hover:bg-ink/10 text-ink p-4 rounded-2xl flex items-center gap-4 transition-colors text-left group cursor-pointer"
                             on:click={() => mode = "join"}
                         >
-                            <div class="bg-white/10 p-3 rounded-full group-hover:bg-white/20 transition-colors">
+                            <div class="bg-ink/10 p-3 rounded-full group-hover:bg-ink/20 transition-colors">
                                 <Users size={24} strokeWidth={2} />
                             </div>
                             <div class="flex flex-col gap-1">
                                 <span class="font-bold text-lg">Join Watch Party</span>
-                                <span class="text-[#878787] text-sm">Enter a code to join friends</span>
+                                <span class="text-ink/55 text-sm">Enter a code to join friends</span>
                             </div>
                         </button>
                     {/if}
 
-                </div>
-
-            {:else if mode === "magnet" && $allowTorrenting}
-                <div class="flex flex-col gap-4">
-                    <div>
-                        <label for="magnet-link" class="block text-sm font-medium text-[#878787] mb-2">Magnet Link</label>
-                        <textarea
-                            id="magnet-link"
-                            placeholder="magnet:?xt=urn:btih:..."
-                            bind:value={magnetLink}
-                            class="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-[#878787] focus:outline-none focus:border-white/30 font-mono text-sm min-h-[100px] resize-none transition-colors"
-                            on:keydown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), playMagnet())}
-                        ></textarea>
-                    </div>
-
-                    {#if error}
-                        <div class="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm text-center">
-                            {error}
-                        </div>
-                    {/if}
-
-                    <div class="flex gap-3 mt-2">
-                        <button
-                            class="flex-1 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-medium transition-colors"
-                            on:click={() => {
-                                mode = "select";
-                                magnetLink = "";
-                            }}
-                        >
-                            Back
-                        </button>
-                        <button
-                            class="flex-1 py-3 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            disabled={!magnetLink.trim()}
-                            on:click={playMagnet}
-                        >
-                            Play
-                        </button>
-                    </div>
                 </div>
 
             {:else if mode === "join" && !$localMode && $cloudSyncStatus.cloudFeaturesAvailable}
                 <div class="flex flex-col gap-4">
 
                     <div>
-                        <label for="party-code" class="block text-sm font-medium text-[#878787] mb-2">Party Code</label>
+                        <label for="party-code" class="block text-sm font-medium text-ink/55 mb-2">Party Code</label>
                         <input
                             id="party-code"
                             type="text"
                             placeholder="Enter code..."
                             bind:value={partyCode}
-                            class="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-[#878787] focus:outline-none focus:border-white/30 font-mono text-center text-lg tracking-widest uppercase transition-colors"
+                            class="w-full bg-surface border border-ink/10 rounded-xl px-4 py-3 text-ink placeholder-ink/55 focus:outline-none focus:border-ink/30 font-mono text-center text-lg tracking-widest uppercase transition-colors"
                             on:keydown={(e) => e.key === "Enter" && fetchPartyDetails()}
                         />
                     </div>
                     
                     {#if error}
-                        <div class="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm text-center">
+                        <div class="p-3 bg-danger/10 border border-danger/20 rounded-lg text-danger text-sm text-center">
                             {error}
                         </div>
                     {/if}
 
                     <div class="flex gap-3 mt-2">
                         <button
-                            class="flex-1 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-medium transition-colors"
+                            class="flex-1 py-3 bg-ink/10 hover:bg-ink/20 text-ink rounded-xl font-medium transition-colors"
                             on:click={() => {
                                 mode = "select";
                                 error = "";
@@ -406,12 +232,12 @@
                             Back
                         </button>
                         <button
-                            class="flex-1 py-3 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            class="flex-1 py-3 bg-accent text-on-accent font-bold rounded-xl hover:bg-accent/85 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                             disabled={!partyCode.trim() || loading}
                             on:click={fetchPartyDetails}
                         >
                             {#if loading}
-                                <div class="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin"></div>
+                                <div class="w-4 h-4 border-2 border-on-accent/30 border-t-on-accent rounded-full animate-spin"></div>
                                 Checking...
                             {:else}
                                 Next
@@ -429,31 +255,31 @@
                             class="w-[120px] h-[180px] object-cover rounded-lg shadow-lg"
                         />
                     {:else}
-                        <div class="w-[120px] h-[180px] bg-white/5 rounded-lg flex items-center justify-center border border-white/10">
-                            <Film size={48} strokeWidth={1} color="#878787" />
+                        <div class="w-[120px] h-[180px] bg-ink/5 rounded-lg flex items-center justify-center border border-ink/10">
+                            <Film size={48} strokeWidth={1} class="text-ink/55" />
                         </div>
                     {/if}
 
                     <div class="flex flex-col items-center gap-1 text-center">
-                        <h3 class="text-xl font-bold text-white">{partyDetails.showName}</h3>
+                        <h3 class="text-xl font-bold text-ink">{partyDetails.showName}</h3>
                         {#if partyDetails.season && partyDetails.episode}
-                            <p class="text-[#878787]">Season {partyDetails.season}, Episode {partyDetails.episode}</p>
+                            <p class="text-ink/55">Season {partyDetails.season}, Episode {partyDetails.episode}</p>
                         {/if}
-                        <div class="flex items-center gap-2 mt-2 bg-white/5 px-3 py-1 rounded-full border border-white/10">
-                            <div class="w-2 h-2 rounded-full bg-green-500"></div>
-                            <span class="text-sm text-[#878787]">{partyDetails.memberCount} online</span>
+                        <div class="flex items-center gap-2 mt-2 bg-ink/5 px-3 py-1 rounded-full border border-ink/10">
+                            <div class="w-2 h-2 rounded-full bg-success"></div>
+                            <span class="text-sm text-ink/55">{partyDetails.memberCount} online</span>
                         </div>
                     </div>
 
                     <div class="flex gap-3 w-full">
                         <button
-                            class="flex-1 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-medium transition-colors"
+                            class="flex-1 py-3 bg-ink/10 hover:bg-ink/20 text-ink rounded-xl font-medium transition-colors"
                             on:click={() => mode = "join"}
                         >
                             Back
                         </button>
                         <button
-                            class="flex-1 py-3 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition-colors"
+                            class="flex-1 py-3 bg-accent text-on-accent font-bold rounded-xl hover:bg-accent/85 transition-colors"
                             on:click={joinParty}
                         >
                             Join Party
@@ -464,10 +290,4 @@
         </div>
     </div>
 
-    {#if showTorrentWarning}
-        <TorrentWarningModal
-            onConfirm={confirmTorrentWarning}
-            onCancel={() => (showTorrentWarning = false)}
-        />
-    {/if}
 </div>

@@ -72,6 +72,7 @@
       "name": "@raffi/marketing",
       "version": "0.0.0",
       "dependencies": {
+        "@fontsource-variable/onest": "^5.3.1",
         "@tailwindcss/vite": "^4.3.5",
         "tailwindcss": "^4.3.5",
       },
@@ -92,8 +93,7 @@
       "name": "@raffi/app",
       "version": "0.17.0",
       "dependencies": {
-        "@fontsource/poppins": "5.3.0",
-        "@fontsource/roboto": "5.3.0",
+        "@fontsource-variable/onest": "^5.3.1",
         "@lucide/svelte": "^1.70.0",
         "@mediabunny/aac-encoder": "^1.65.2",
         "@mediabunny/ac3": "^1.65.2",
@@ -254,9 +254,7 @@
 
     "@esbuild/win32-x64": ["@esbuild/win32-x64@0.28.2", "", { "os": "win32", "cpu": "x64" }, "sha512-5ebpxr3nWMzrL/rnUI755Jkuee0bHL/Gq0WTF9lvcpv73wAp5eu8MfBUgWK9bhWvZjj7yX8etf/8tI8Ney695g=="],
 
-    "@fontsource/poppins": ["@fontsource/poppins@5.3.0", "", {}, "sha512-cms1nM7U6SN8epIV1WMVOV8VsA645aSm3wHfzIQnkk188U341ThbJGSl2Sv54V29gnDbT2arMPfLzvVIIVCceQ=="],
-
-    "@fontsource/roboto": ["@fontsource/roboto@5.3.0", "", {}, "sha512-BapRJOWYP+LZ21zp+wBQjfpPYKRoxc4LspJ/RLuI+HSMBD5u/X4O+ESDrSvEqDSy0rAl7GwBJ+09mdc16cVQ1Q=="],
+    "@fontsource-variable/onest": ["@fontsource-variable/onest@5.3.1", "", {}, "sha512-xaaw6G4HDB2/RczsWLD/2bnib4ykmQlTlBUN3GOEOiyErilZukQWVJG95h9zwAy0i8KY+QzDa+COPfqhI72Acw=="],
 
     "@hapi/address": ["@hapi/address@5.1.1", "", { "dependencies": { "@hapi/hoek": "^11.0.2" } }, "sha512-A+po2d/dVoY7cYajycYI43ZbYMXukuopIsqCjh5QzsBCipDtdofHntljDlpccMjIfTy6UOkg+5KPriwYch2bXA=="],
 

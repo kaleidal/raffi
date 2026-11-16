@@ -16,9 +16,9 @@
         border-radius: var(--border-radius);
         background: linear-gradient(
             90deg,
-            rgba(255, 255, 255, 0.05) 25%,
-            rgba(255, 255, 255, 0.1) 50%,
-            rgba(255, 255, 255, 0.05) 75%
+            color-mix(in oklab, var(--raffi-ink) 5%, transparent) 25%,
+            color-mix(in oklab, var(--raffi-ink) 10%, transparent) 50%,
+            color-mix(in oklab, var(--raffi-ink) 5%, transparent) 75%
         );
         background-size: 200% 100%;
         animation: shimmer 1.5s infinite;

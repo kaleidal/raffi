@@ -79,7 +79,7 @@
 {#if visible}
     <div
         use:portal
-        class="raffi-modal-backdrop fixed inset-0 z-50 bg-[#101010]/58 backdrop-blur-xl flex items-center justify-center"
+        class="raffi-modal-backdrop fixed inset-0 z-50 bg-canvas/58 backdrop-blur-xl flex items-center justify-center"
         on:click|self={close}
         on:keydown={(e) => e.key === "Escape" && close()}
         role="button"
@@ -87,10 +87,10 @@
         transition:fade={{ duration: 200 }}
     >
         <div
-            class="w-full max-w-md max-h-[80vh] rounded-[32px] bg-[#303030]/60 backdrop-blur-[40px] p-8 flex flex-col gap-6 overflow-hidden relative shadow-[0_40px_160px_rgba(0,0,0,0.45)]"
+            class="w-full max-w-md max-h-[80vh] rounded-[32px] bg-raised/60 backdrop-blur-[40px] p-8 flex flex-col gap-6 overflow-hidden relative shadow-[0_40px_160px_rgba(0,0,0,0.45)]"
         >
             <button
-                class="absolute top-6 right-6 z-10 text-white/50 hover:text-white cursor-pointer"
+                class="absolute top-6 right-6 z-10 text-ink/50 hover:text-ink cursor-pointer"
                 on:click={close}
                 aria-label="Close"
             >
@@ -112,7 +112,7 @@
                 >
             </button>
 
-            <h2 class="relative z-10 text-white text-2xl font-poppins font-bold">
+            <h2 class="relative z-10 text-ink text-2xl font-bold">
                 Add to List
             </h2>
 
@@ -121,7 +121,7 @@
                     <input
                         type="text"
                         placeholder="+ Create new list"
-                        class="w-full bg-transparent border-2 border-dashed border-white/20 text-white px-4 py-3 rounded-xl outline-none focus:border-white/50 font-poppins transition-colors placeholder:text-white/30"
+                        class="w-full bg-transparent border-2 border-dashed border-ink/20 text-ink px-4 py-3 rounded-xl outline-none focus:border-ink/50 transition-colors placeholder:text-ink/30"
                         bind:value={newListName}
                         on:keydown={(e) =>
                             e.key === "Enter" && handleCreateList()}
@@ -134,21 +134,21 @@
                         <LoadingSpinner size="30px" />
                     </div>
                 {:else if lists.length === 0}
-                    <div class="text-white/50 text-center py-4">
+                    <div class="text-ink/50 text-center py-4">
                         No lists found. Create one above.
                     </div>
                 {:else}
                     {#each lists as list}
                         <button
-                            class="w-full bg-white/5 hover:bg-white/10 p-4 rounded-xl flex flex-row justify-between items-center transition-colors cursor-pointer"
+                            class="w-full bg-ink/5 hover:bg-ink/10 p-4 rounded-xl flex flex-row justify-between items-center transition-colors cursor-pointer"
                             on:click={() => toggleList(list.list_id)}
                         >
-                            <span class="text-white font-medium font-poppins"
+                            <span class="text-ink font-medium "
                                 >{list.name}</span
                             >
                             {#if memberOf.has(list.list_id)}
                                 <div
-                                    class="bg-white text-black p-1 rounded-full"
+                                    class="bg-accent text-on-accent p-1 rounded-full"
                                 >
                                     <svg
                                         width="16"

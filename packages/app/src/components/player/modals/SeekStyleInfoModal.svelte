@@ -26,19 +26,19 @@
 
 <div
     use:fullscreenPortal
-    class="raffi-modal-backdrop fixed inset-0 z-[300] flex items-center justify-center bg-black/90 backdrop-blur-sm"
+    class="raffi-modal-backdrop fixed inset-0 z-[300] flex items-center justify-center bg-canvas/90 backdrop-blur-sm"
     transition:fade={{ duration: 200 }}
 >
     <div
-        class="bg-[#121212] rounded-2xl p-8 max-w-md w-full shadow-2xl flex flex-col gap-6"
+        class="bg-canvas rounded-2xl p-8 max-w-md w-full shadow-2xl flex flex-col gap-6"
         transition:scale={{ duration: 200, start: 0.95 }}
     >
         <div class="flex flex-col gap-3 text-center">
             <div class="flex justify-center mb-2">
-                <div class="p-4 bg-white/10 rounded-full">
+                <div class="p-4 bg-ink/10 rounded-full">
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
-                        class="h-12 w-12 text-white"
+                        class="h-12 w-12 text-ink"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -53,9 +53,9 @@
                 </div>
             </div>
 
-            <h2 class="text-2xl font-bold text-white">Seek Bar Style</h2>
+            <h2 class="text-2xl font-bold text-ink">Seek Bar Style</h2>
 
-            <div class="text-[#878787] leading-relaxed flex flex-col gap-2">
+            <div class="text-ink/55 leading-relaxed flex flex-col gap-2">
                 <p>
                     Raffi uses an inverted seek style:
                 </p>
@@ -70,31 +70,31 @@
 
         <div class="flex flex-col gap-3">
             <div class="flex flex-col gap-2">
-                <div class="text-[#878787] text-sm">Choose your preference</div>
+                <div class="text-ink/55 text-sm">Choose your preference</div>
                 <button
-                    class="relative h-9 w-full rounded-full border border-white/10 transition-colors duration-200 cursor-pointer bg-white/10 p-1"
+                    class="relative h-9 w-full rounded-full border border-ink/10 transition-colors duration-200 cursor-pointer bg-ink/10 p-1"
                     on:click={toggleSeekStyle}
                     aria-label="Toggle Seek Bar Style"
                     type="button"
                 >
                     <div class="relative z-10 flex w-full h-full items-center">
                         <span
-                            class={`flex-1 text-center text-xs font-semibold tracking-wider transition-colors duration-200 ${localStyle === "raffi" ? "text-black" : "text-white/60"}`}
+                            class={`flex-1 text-center text-xs font-semibold tracking-wider transition-colors duration-200 ${localStyle === "raffi" ? "text-on-accent" : "text-ink/60"}`}
                             >RAFFI</span
                         >
                         <span
-                            class={`flex-1 text-center text-xs font-semibold tracking-wider transition-colors duration-200 ${localStyle === "normal" ? "text-black" : "text-white/60"}`}
+                            class={`flex-1 text-center text-xs font-semibold tracking-wider transition-colors duration-200 ${localStyle === "normal" ? "text-on-accent" : "text-ink/60"}`}
                             >NORMAL</span
                         >
                     </div>
                     <div
-                        class={`absolute top-1 bottom-1 left-1 w-[calc(50%-4px)] bg-white rounded-full transition-transform duration-200 ${localStyle === "normal" ? "translate-x-full" : "translate-x-0"}`}
+                        class={`absolute top-1 bottom-1 left-1 w-[calc(50%-4px)] bg-accent rounded-full transition-transform duration-200 ${localStyle === "normal" ? "translate-x-full" : "translate-x-0"}`}
                     ></div>
                 </button>
             </div>
 
             <button
-                class="w-full py-3 px-4 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition-colors cursor-pointer"
+                class="w-full py-3 px-4 bg-accent text-on-accent font-bold rounded-xl hover:bg-accent/85 transition-colors cursor-pointer"
                 on:click={acknowledge}
                 type="button"
             >

@@ -19,6 +19,7 @@ const { registerMainIpcHandlers } = require("./services/mainIpc.cjs");
 const { livePrivilegedScheme, createLiveProxyHandler } = require("./services/live/liveProxy.cjs");
 const { registerDiscordRpcHandlers } = require("./services/integrations/rpc.cjs");
 const { createMainWindow } = require("./services/window.cjs");
+const { registerThemeHandlers } = require("./services/appearance/themes.cjs");
 
 registerPrivilegedSchemes(protocol, [appPrivilegedScheme, livePrivilegedScheme]);
 
@@ -237,6 +238,17 @@ registerMainIpcHandlers({
   scanLibraryRoots,
   localMediaAccess,
   net,
+});
+
+app.whenReady().then(() => {
+  registerThemeHandlers({
+    ipcMain,
+    shell,
+    fs,
+    folder: path.join(app.getPath("userData"), "themes"),
+    getMainWindow: () => mainWindow,
+    logToFile,
+  });
 });
 
 app.on("window-all-closed", () => {

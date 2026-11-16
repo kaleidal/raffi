@@ -1,5 +1,4 @@
 <script lang="ts">
-    import type { ShowResponse } from "../../../lib/library/types/meta_types";
     import { router } from "../../../lib/stores/router";
     import { fade } from "svelte/transition";
     import WatchingContextMenu from "../context_menus/WatchingContextMenu.svelte";
@@ -12,14 +11,16 @@
     import { getPrimaryTrailerId } from "../../../lib/home/trailers";
 
     import { onMount, onDestroy, tick } from "svelte";
-    import { Play, ChevronDown, ChevronLeft, ChevronRight } from "@lucide/svelte";
+    import { ChevronDown, ChevronLeft, ChevronRight } from "@lucide/svelte";
     import PosterImage from "./PosterImage.svelte";
- 
-    export let continueWatchingMeta: (ShowResponse & { libraryItem: any })[] =
-        [];
+    import { resumePoint, type ResumePoint, type WatchingItem } from "../../../lib/home/continueWatching";
+    import { streamsToReopen } from "../../../pages/meta/metaState";
 
-    function navigateToMeta(imdbId: string, type: string) {
-        router.navigate("meta", { imdbId, type });
+    export let continueWatchingMeta: WatchingItem[] = [];
+
+    function resume(item: WatchingItem, point: ResumePoint) {
+        streamsToReopen.set({ imdbId: item.meta.imdb_id, episode: point.episode });
+        router.navigate("meta", { imdbId: item.meta.imdb_id, type: item.meta.type });
     }
     let scrollContainer: HTMLDivElement;
     let showLeftButton = false;
@@ -218,19 +219,17 @@
 {#if continueWatchingMeta.length > 0}
     <div class="home-section w-full h-fit flex flex-col gap-4 relative group overflow-visible">
         <div class="flex flex-row gap-[10px] items-center w-full">
-            <span class="section-icon"><Play size={50} strokeWidth={3} color="#E0E0E6" /></span>
-
-            <h1 class="section-title font-poppins text-[#E0E0E6] font-medium text-[clamp(30px,2.5vw,48px)]">
+            <h2 class="section-title text-ink text-[clamp(28px,2.2vw,44px)] font-semibold">
                 Jump back into it
-            </h1>
+            </h2>
 
             <button
-                class="ml-auto p-2 rounded-full hover:bg-white/10 transition-colors duration-200 group/btn cursor-pointer"
+                class="ml-auto p-2 rounded-full hover:bg-ink/10 transition-colors duration-200 group/btn cursor-pointer"
                 on:click={() => (isExpanded = !isExpanded)}
                 aria-label={isExpanded ? "Collapse" : "Expand"}
             >
                 <div class="transition-transform duration-300 {isExpanded ? 'rotate-180' : ''}">
-                    <span class="expand-icon"><ChevronDown size={32} strokeWidth={2} color="#E0E0E6" /></span>
+                    <span class="expand-icon"><ChevronDown size={32} strokeWidth={2} /></span>
                 </div>
             </button>
         </div>
@@ -238,7 +237,7 @@
         <div class="relative">
             {#if showLeftButton && !isExpanded}
                 <button
-                    class="rail-button absolute inset-y-3 left-0 z-20 flex items-center justify-center rounded-r-2xl bg-gradient-to-r from-black/90 to-black/35 text-white backdrop-blur-sm transition-[background-color,opacity] duration-200 cursor-pointer"
+                    class="rail-button absolute inset-y-3 left-0 z-20 flex items-center justify-center rounded-r-2xl bg-gradient-to-r from-canvas/90 to-canvas/35 text-ink backdrop-blur-sm transition-[background-color,opacity] duration-200 cursor-pointer"
                     on:click={scrollLeft}
                     aria-label="Scroll left"
                     transition:fade={{ duration: 200 }}
@@ -257,24 +256,12 @@
             >
                 {#each renderedItems as title (`${title.meta.type}:${title.meta.imdb_id}`)}
                     {#if title.meta}
-                        {@const progress = title.libraryItem.progress}
-                        {@const isMovie = title.meta.type === "movie"}
-                        {@const movieProgress = isMovie ? progress : null}
-                        {@const isMovieResumable =
-                            isMovie &&
-                            movieProgress &&
-                            !movieProgress.watched &&
-                            movieProgress.time > 0}
+                        {@const point = resumePoint(title)}
 
                         <button
-                            class="w-[clamp(150px,13vw,200px)] aspect-[2/3] h-fit appearance-none border-0 bg-transparent p-0 rounded-[16px] transition-[width,translate,box-shadow] duration-300 ease-out cursor-pointer overflow-clip relative flex-shrink-0 hover:-translate-y-1.5 hover:shadow-[0_14px_30px_rgba(0,0,0,0.35)] focus-visible:-translate-y-1.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white/70"
-                            aria-label={`Open ${title.meta.name || "continue watching title"}`}
-
-                            on:click={() =>
-                                navigateToMeta(
-                                    title.meta.imdb_id,
-                                    title.meta.type,
-                                )}
+                            class="watching-card scheme-dark group/card relative aspect-video h-fit flex-shrink-0 cursor-pointer overflow-clip rounded-[18px] bg-surface p-0 text-left transition-[translate,box-shadow] duration-300 ease-out hover:-translate-y-1.5 hover:shadow-[0_14px_30px_rgba(0,0,0,0.35)] focus-visible:-translate-y-1.5"
+                            aria-label={`Resume ${title.meta.name}`}
+                            on:click={() => resume(title, point)}
                             on:contextmenu={(e) =>
                                 handleContextMenu(
                                     e,
@@ -284,19 +271,31 @@
                                 )}
                         >
                             <PosterImage
-                                src={title.libraryItem.poster ||
-                                    title.meta.poster}
+                                src={point.image || title.libraryItem.poster || title.meta.poster}
                                 title={title.meta.name}
-                                alt={title.meta.name || "Continue Watching poster"}
+                                alt=""
                             />
-                            {#if isMovieResumable}
-                                <div
-                                    class="absolute bottom-0 left-0 h-[4px] bg-[#676767] z-20"
-                                    style="width: {(movieProgress.time /
-                                        movieProgress.duration) *
-                                        100}%"
-                                ></div>
-                            {/if}
+                            <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent"></div>
+                            <div class="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-1.5 p-[clamp(14px,1.1vw,20px)]">
+                                {#if title.meta.logo}
+                                    <img
+                                        src={title.meta.logo}
+                                        alt={title.meta.name}
+                                        class="max-h-[clamp(30px,2.6vw,48px)] max-w-[60%] self-start object-contain object-left drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]"
+                                        loading="lazy"
+                                    />
+                                {:else}
+                                    <p class="line-clamp-1 text-lg font-semibold text-ink">{title.meta.name}</p>
+                                {/if}
+                                {#if point.detail}
+                                    <p class="line-clamp-1 text-sm text-ink/75">{point.detail}</p>
+                                {/if}
+                                {#if point.progress !== null}
+                                    <div class="mt-1 h-1 overflow-hidden rounded-full bg-ink/20">
+                                        <div class="h-full rounded-full bg-accent" style="width: {point.progress * 100}%"></div>
+                                    </div>
+                                {/if}
+                            </div>
                         </button>
                     {/if}
                 {/each}
@@ -304,7 +303,7 @@
 
             {#if showRightButton && !isExpanded}
                 <button
-                    class="rail-button absolute inset-y-3 right-0 z-20 flex items-center justify-center rounded-l-2xl bg-gradient-to-l from-black/90 to-black/35 text-white backdrop-blur-sm transition-[background-color,opacity] duration-200 cursor-pointer"
+                    class="rail-button absolute inset-y-3 right-0 z-20 flex items-center justify-center rounded-l-2xl bg-gradient-to-l from-canvas/90 to-canvas/35 text-ink backdrop-blur-sm transition-[background-color,opacity] duration-200 cursor-pointer"
                     on:click={scrollRight}
                     aria-label="Scroll right"
                     transition:fade={{ duration: 200 }}
@@ -324,16 +323,14 @@
     .section-title {
         transition: font-size 300ms cubic-bezier(0.22, 1, 0.36, 1);
     }
-    .section-icon :global(svg) {
-        width: clamp(32px, 2.6vw, 50px);
-        height: clamp(32px, 2.6vw, 50px);
-        transition: width 300ms cubic-bezier(0.22, 1, 0.36, 1), height 300ms cubic-bezier(0.22, 1, 0.36, 1);
-    }
     .expand-icon :global(svg) {
         width: clamp(24px, 1.7vw, 32px);
         height: clamp(24px, 1.7vw, 32px);
     }
     .rail-button {
         width: clamp(42px, 3vw, 56px);
+    }
+    .watching-card {
+        width: clamp(260px, 22vw, 420px);
     }
 </style>

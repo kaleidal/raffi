@@ -150,7 +150,7 @@
 
 <div
     use:fullscreenPortal
-    class="raffi-modal-backdrop fixed inset-0 z-[100] flex items-center justify-center bg-[#0f0f0f]/58 backdrop-blur-xl cursor-default"
+    class="raffi-modal-backdrop fixed inset-0 z-[100] flex items-center justify-center bg-canvas/58 backdrop-blur-xl cursor-default"
     transition:fade={{ duration: 200 }}
     on:click={close}
     on:keydown={(e) => e.key === "Escape" && close()}
@@ -159,7 +159,7 @@
     aria-label="Close modal"
 >
     <div
-        class="raffi-modal-surface w-full rounded-[clamp(24px,2vw,32px)] bg-[#2a2a2a]/56 backdrop-blur-[40px] p-[clamp(18px,2vw,32px)] overflow-y-auto flex flex-col gap-[clamp(16px,1.5vw,24px)] shadow-[0_40px_160px_rgba(0,0,0,0.45)] {kind === 'subtitles'
+        class="raffi-modal-surface w-full rounded-[clamp(24px,2vw,32px)] bg-raised/56 backdrop-blur-[40px] p-[clamp(18px,2vw,32px)] overflow-y-auto flex flex-col gap-[clamp(16px,1.5vw,24px)] shadow-[0_40px_160px_rgba(0,0,0,0.45)] {kind === 'subtitles'
             ? 'max-w-[680px]'
             : 'max-w-[400px]'}"
         transition:scale={{ duration: 200, start: 0.9 }}
@@ -171,8 +171,8 @@
 
         <div class="flex items-center justify-between">
             <div class="flex flex-col gap-1">
-                <h2 class="text-2xl font-poppins font-bold text-white">{title}</h2>
-                <p class="text-sm text-white/55">
+                <h2 class="text-2xl font-bold text-ink">{title}</h2>
+                <p class="text-sm text-ink/55">
                     {kind === "audio"
                         ? "Choose the audio track you want to hear."
                         : subtitleTools
@@ -181,7 +181,7 @@
                 </p>
             </div>
             <button
-                class="p-2 text-white/50 hover:text-white transition-colors cursor-pointer"
+                class="p-2 text-ink/50 hover:text-ink transition-colors cursor-pointer"
                 on:click={close}
                 aria-label="Close"
             >
@@ -205,31 +205,31 @@
         {#if kind === "subtitles"}
             <div class="flex flex-col gap-4">
                 {#if subtitleTools}
-                <div class="rounded-[24px] bg-white/8 backdrop-blur-2xl p-4 flex items-center justify-between gap-4">
-                    <span class="text-sm font-poppins font-medium text-white/60 shrink-0">
+                <div class="rounded-[24px] bg-ink/8 backdrop-blur-2xl p-4 flex items-center justify-between gap-4">
+                    <span class="text-sm font-medium text-ink/60 shrink-0">
                         Delay
                     </span>
                     <div class="flex flex-wrap items-center justify-end gap-2">
                         <button
                             type="button"
-                            class="px-3 py-1.5 rounded-full text-[11px] font-semibold transition-colors duration-200 cursor-pointer bg-white/10 text-white/70 hover:bg-white/20"
+                            class="px-3 py-1.5 rounded-full text-[11px] font-semibold transition-colors duration-200 cursor-pointer bg-ink/10 text-ink/70 hover:bg-ink/20"
                             on:click={() => setDelay(delaySeconds - 0.25)}
                         >
                             -0.25s
                         </button>
-                        <span class="text-xs text-white/70 w-[72px] text-center">
+                        <span class="text-xs text-ink/70 w-[72px] text-center">
                             {delaySeconds.toFixed(2)}s
                         </span>
                         <button
                             type="button"
-                            class="px-3 py-1.5 rounded-full text-[11px] font-semibold transition-colors duration-200 cursor-pointer bg-white/10 text-white/70 hover:bg-white/20"
+                            class="px-3 py-1.5 rounded-full text-[11px] font-semibold transition-colors duration-200 cursor-pointer bg-ink/10 text-ink/70 hover:bg-ink/20"
                             on:click={() => setDelay(delaySeconds + 0.25)}
                         >
                             +0.25s
                         </button>
                         <button
                             type="button"
-                            class="px-3 py-1.5 rounded-full text-[11px] font-semibold transition-colors duration-200 cursor-pointer bg-white/10 text-white/70 hover:bg-white/20"
+                            class="px-3 py-1.5 rounded-full text-[11px] font-semibold transition-colors duration-200 cursor-pointer bg-ink/10 text-ink/70 hover:bg-ink/20"
                             on:click={() => setDelay(0)}
                         >
                             Reset
@@ -239,12 +239,12 @@
                 {/if}
 
                 <div class="grid gap-3 md:grid-cols-[200px_minmax(0,1fr)] md:h-[440px]">
-                        <div class="rounded-[24px] bg-white/6 backdrop-blur-2xl p-3 flex min-h-0 flex-col gap-3">
-                            <h3 class="text-sm font-poppins font-medium text-white/45">
+                        <div class="rounded-[24px] bg-ink/6 backdrop-blur-2xl p-3 flex min-h-0 flex-col gap-3">
+                            <h3 class="text-sm font-medium text-ink/45">
                                 Languages
                             </h3>
                             <input
-                                class="w-full px-3 py-2 rounded-xl bg-white/8 text-white/80 placeholder-white/30 text-sm outline-none focus:bg-white/12"
+                                class="w-full px-3 py-2 rounded-xl bg-ink/8 text-ink/80 placeholder-ink/30 text-sm outline-none focus:bg-ink/12"
                                 placeholder="Search"
                                 bind:value={languageQuery}
                             />
@@ -254,14 +254,14 @@
                                         type="button"
                                         class="flex items-center justify-between p-3 rounded-xl transition-all duration-200 cursor-pointer {selectedSubtitleLanguage ===
                                         lang
-                                            ? 'bg-white text-black'
-                                            : 'bg-white/8 text-white hover:bg-white/14'}"
+                                            ? 'bg-accent text-on-accent'
+                                            : 'bg-ink/8 text-ink hover:bg-ink/14'}"
                                         on:click={() => {
                                             selectedSubtitleLanguage = lang;
                                             userPinnedLanguage = true;
                                         }}
                                     >
-                                        <span class="font-poppins font-medium">
+                                        <span class="font-medium">
                                             {lang.toUpperCase()}
                                         </span>
                                         <span class="text-xs opacity-70">
@@ -282,7 +282,7 @@
                             />
                             <button
                                 type="button"
-                                class="flex w-full items-center gap-2 rounded-xl bg-white/8 px-3 py-2.5 text-sm font-poppins font-medium text-white/80 transition-colors hover:bg-white/14 disabled:cursor-wait disabled:opacity-50 cursor-pointer"
+                                class="flex w-full items-center gap-2 rounded-xl bg-ink/8 px-3 py-2.5 text-sm font-medium text-ink/80 transition-colors hover:bg-ink/14 disabled:cursor-wait disabled:opacity-50 cursor-pointer"
                                 disabled={uploadInProgress}
                                 on:click={() => subtitleFileInput?.click()}
                             >
@@ -300,27 +300,27 @@
                                 <span>{uploadInProgress ? "Loading…" : "Upload subtitle"}</span>
                             </button>
                             {#if uploadError}
-                                <p class="px-1 text-xs leading-5 text-red-300">
+                                <p class="px-1 text-xs leading-5 text-danger">
                                     {uploadError}
                                 </p>
                             {/if}
                             {/if}
                         </div>
 
-                        <div class="rounded-[24px] bg-white/6 backdrop-blur-2xl p-3 flex min-h-0 flex-col gap-3 min-w-0">
-                            <h3 class="text-sm font-poppins font-medium text-white/45">
+                        <div class="rounded-[24px] bg-ink/6 backdrop-blur-2xl p-3 flex min-h-0 flex-col gap-3 min-w-0">
+                            <h3 class="text-sm font-medium text-ink/45">
                                 Variants
                             </h3>
                             <div class="min-h-0 overflow-y-auto pr-1 pb-3 flex flex-col gap-2">
                                 {#if subtitleOffTrack}
                                     <button
                                         class="flex items-center justify-between p-4 rounded-[20px] transition-all duration-200 cursor-pointer {subtitleOffTrack.selected
-                                            ? 'bg-white text-black'
-                                            : 'bg-white/8 text-white hover:bg-white/14'}"
+                                            ? 'bg-accent text-on-accent'
+                                            : 'bg-ink/8 text-ink hover:bg-ink/14'}"
                                         data-tv-autofocus={subtitleOffTrack.selected || undefined}
                                         on:click={() => select(subtitleOffTrack)}
                                     >
-                                        <span class="font-poppins font-medium truncate" title={subtitleOffTrack.label}>
+                                        <span class="font-medium truncate" title={subtitleOffTrack.label}>
                                             {subtitleOffTrack.label}
                                         </span>
                                         {#if subtitleOffTrack.selected}
@@ -341,24 +341,24 @@
                                 {/if}
 
                                 {#if !selectedSubtitleLanguage}
-                                    <div class="text-white/50 text-sm p-3">
+                                    <div class="text-ink/50 text-sm p-3">
                                         Pick a language.
                                     </div>
                                 {:else if subtitleVariants.length === 0}
-                                    <div class="text-white/50 text-sm p-3">
+                                    <div class="text-ink/50 text-sm p-3">
                                         No variants.
                                     </div>
                                 {:else}
                                     {#each subtitleVariants as track}
                                         <button
                                             class="flex items-center justify-between p-4 rounded-[20px] transition-all duration-200 cursor-pointer {track.selected
-                                                ? 'bg-white text-black'
-                                                : 'bg-white/8 text-white hover:bg-white/14'}"
+                                                ? 'bg-accent text-on-accent'
+                                                : 'bg-ink/8 text-ink hover:bg-ink/14'}"
                                             data-tv-autofocus={track.selected || undefined}
                                             on:click={() => select(track)}
                                         >
                                             <span
-                                                class="font-poppins font-medium truncate"
+                                                class="font-medium truncate"
                                                 title={track.label}
                                             >
                                                 {track.label}
@@ -391,7 +391,7 @@
                 {#each Object.entries(groupedTracks) as [group, groupTracks]}
                     <div class="flex flex-col gap-3">
                         {#if Object.keys(groupedTracks).length > 1}
-                            <h3 class="text-sm font-poppins font-medium text-white/45">
+                            <h3 class="text-sm font-medium text-ink/45">
                                 {group}
                             </h3>
                         {/if}
@@ -399,12 +399,12 @@
                             {#each groupTracks as track}
                                 <button
                                     class="flex items-center justify-between p-4 rounded-[22px] transition-all duration-200 cursor-pointer {track.selected
-                                        ? 'bg-white text-black'
-                                        : 'bg-white/8 text-white hover:bg-white/14'}"
+                                        ? 'bg-accent text-on-accent'
+                                        : 'bg-ink/8 text-ink hover:bg-ink/14'}"
                                     data-tv-autofocus={track.selected || undefined}
                                     on:click={() => select(track)}
                                 >
-                                    <span class="font-poppins font-medium"
+                                    <span class="font-medium"
                                         >{track.label}</span
                                     >
                                     {#if track.selected}

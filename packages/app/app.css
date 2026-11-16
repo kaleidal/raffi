@@ -1,13 +1,75 @@
 @import "tailwindcss" source(none);
-@import "@fontsource/poppins/latin-400.css";
-@import "@fontsource/poppins/latin-500.css";
-@import "@fontsource/poppins/latin-600.css";
-@import "@fontsource/poppins/latin-700.css";
-@import "@fontsource/roboto/latin-500.css";
+@import "@fontsource-variable/onest/wght.css";
 
 @source "./src";
 @source "../../apps/web/src";
 @source "../../apps/desktop";
+
+@theme {
+  --font-sans: "Onest Variable", ui-sans-serif, system-ui, sans-serif;
+}
+
+@theme inline {
+  --color-canvas: var(--raffi-canvas);
+  --color-page: var(--raffi-page);
+  --color-surface: var(--raffi-surface);
+  --color-raised: var(--raffi-raised);
+  --color-ink: var(--raffi-ink);
+  --color-accent: var(--raffi-accent);
+  --color-on-accent: var(--raffi-on-accent);
+  --color-danger: var(--raffi-danger);
+  --color-success: var(--raffi-success);
+  --color-warning: var(--raffi-warning);
+}
+
+:root,
+.scheme-dark {
+  --raffi-canvas: #090909;
+  --raffi-surface: #161616;
+  --raffi-raised: #2b2b2b;
+  --raffi-ink: #ffffff;
+  --raffi-accent: #ebebe8;
+  --raffi-on-accent: #0b0b0b;
+  --raffi-danger: #ff6b6b;
+  --raffi-success: #4ade9b;
+  --raffi-warning: #fcc75a;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --raffi-canvas: #f3f2ee;
+  --raffi-surface: #ffffff;
+  --raffi-raised: #ffffff;
+  --raffi-ink: #161615;
+  --raffi-accent: #1b1b1a;
+  --raffi-on-accent: #f7f6f2;
+  --raffi-danger: #c8322c;
+  --raffi-success: #13845a;
+  --raffi-warning: #9a6200;
+  color-scheme: light;
+}
+
+:root {
+  --raffi-page: var(--raffi-canvas);
+}
+
+.scheme-dark {
+  color: var(--raffi-ink);
+}
+
+.page-fade {
+  background: linear-gradient(
+    to top,
+    var(--raffi-page) 0%,
+    color-mix(in oklab, var(--raffi-page) 98%, transparent) 8%,
+    color-mix(in oklab, var(--raffi-page) 91%, transparent) 20%,
+    color-mix(in oklab, var(--raffi-page) 74%, transparent) 36%,
+    color-mix(in oklab, var(--raffi-page) 48%, transparent) 54%,
+    color-mix(in oklab, var(--raffi-page) 22%, transparent) 72%,
+    color-mix(in oklab, var(--raffi-page) 6%, transparent) 88%,
+    color-mix(in oklab, var(--raffi-page) 0%, transparent) 100%
+  );
+}
 
 :root {
   /*
@@ -30,14 +92,6 @@
   }
 }
 
-.font-poppins {
-  font-family: 'Poppins', sans-serif;
-}
-
-.font-roboto {
-  font-family: 'Roboto', sans-serif;
-}
-
 /* Hide scrollbar for Chrome, Safari and Opera */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
@@ -52,8 +106,8 @@
 }
 
 body {
-  background-color: #090909;
-  color: #ffffff;
+  background-color: var(--raffi-canvas);
+  color: var(--raffi-ink);
   margin: 0;
   min-height: 100vh;
   overflow-x: hidden;
@@ -104,28 +158,19 @@ button:not(:disabled):active,
   }
 }
 
-/* Kill Chromium/Windows accent focus rings — they clash with the UI. */
-:focus,
-:focus-visible {
-  outline: none !important;
+:focus {
+  outline: none;
 }
 
-button:focus,
-button:focus-visible,
-[role="button"]:focus,
-[role="button"]:focus-visible,
-a:focus,
-a:focus-visible,
-input:focus,
+:focus-visible {
+  outline: 2px solid var(--raffi-accent);
+  outline-offset: 3px;
+}
+
 input:focus-visible,
-select:focus,
-select:focus-visible,
-textarea:focus,
 textarea:focus-visible,
-summary:focus,
-summary:focus-visible {
-  outline: none !important;
-  box-shadow: none;
+:root[data-platform="tv"] :focus-visible {
+  outline: none;
 }
 
 /* Globally hide scrollbars */
@@ -148,7 +193,7 @@ summary:focus-visible {
   bottom: calc(anchor(bottom) - 4px);
   z-index: 2147483647;
   box-sizing: border-box;
-  border: 3px solid #ffffff;
+  border: 3px solid var(--raffi-accent);
   pointer-events: none;
 }
 
@@ -170,7 +215,74 @@ summary:focus-visible {
 
 /* Without the blur, a darker backdrop keeps dialogs readable over the page. */
 :root[data-platform="tv"] [data-tv-modal] {
-  background-color: rgb(9 9 9 / 0.96);
+  background-color: color-mix(in oklab, var(--raffi-canvas) 96%, transparent);
+}
+
+.release-notes-content :is(h1, h2, h3, h4) {
+  color: var(--raffi-ink);
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0 0 0.65rem;
+}
+
+.release-notes-content h1 {
+  font-size: 1.15rem;
+}
+
+.release-notes-content h2 {
+  font-size: 1.05rem;
+}
+
+.release-notes-content :is(h3, h4) {
+  font-size: 1rem;
+}
+
+.release-notes-content :is(p, ul, ol, blockquote, pre) {
+  margin: 0 0 0.65rem;
+}
+
+.release-notes-content ul {
+  list-style: disc;
+  padding-left: 1.2rem;
+}
+
+.release-notes-content ol {
+  list-style: decimal;
+  padding-left: 1.2rem;
+}
+
+.release-notes-content li {
+  margin: 0.2rem 0;
+}
+
+.release-notes-content code {
+  background: color-mix(in oklab, var(--raffi-ink) 9%, transparent);
+  border-radius: 0.35rem;
+  padding: 0.1rem 0.35rem;
+  color: var(--raffi-ink);
+  font-size: 0.85em;
+}
+
+.release-notes-content blockquote {
+  border-left: 2px solid color-mix(in oklab, var(--raffi-ink) 30%, transparent);
+  padding-left: 0.65rem;
+  color: color-mix(in oklab, var(--raffi-ink) 72%, transparent);
+}
+
+.release-notes-content a {
+  color: var(--raffi-ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.release-notes-content hr {
+  border: 0;
+  border-top: 1px solid color-mix(in oklab, var(--raffi-ink) 18%, transparent);
+  margin: 0.75rem 0;
+}
+
+.release-notes-content > :last-child {
+  margin-bottom: 0;
 }
 
 body.native-video {

@@ -43,7 +43,6 @@
 
     export let onClose: () => void = () => {};
     export let onStreamClick: (stream: any) => void = () => {};
-    export let onOpenAddons: () => void = () => {};
 
 
     let resolutionFilter: ResolutionFilter = "all";
@@ -129,9 +128,6 @@
         onStreamClick(stream);
     }
 
-    function handleOpenAddons() {
-        onOpenAddons();
-    }
 
     $: filterState = {
         resolutionFilter,
@@ -207,7 +203,7 @@
 {#if streamsPopupVisible}
     <div
         use:portal
-        class="raffi-modal-backdrop fixed inset-0 z-50 bg-[#0f0f0f]/58 backdrop-blur-xl flex items-center justify-center"
+        class="raffi-modal-backdrop fixed inset-0 z-50 bg-canvas/58 backdrop-blur-xl flex items-center justify-center"
         transition:fade={{ duration: 200 }}
         on:click|self={close}
         on:keydown={(e) => e.key === "Escape" && close()}
@@ -216,11 +212,11 @@
         tabindex="0"
     >
         <div
-            class="raffi-modal-surface streams-surface rounded-4xl bg-[#2a2a2a]/56 backdrop-blur-[40px] p-[clamp(18px,2vw,32px)] flex flex-col gap-6 overflow-hidden relative isolate shadow-[0_40px_160px_rgba(0,0,0,0.45)]"
+            class="raffi-modal-surface streams-surface rounded-4xl bg-raised/56 backdrop-blur-[40px] p-[clamp(18px,2vw,32px)] flex flex-col gap-6 overflow-hidden relative isolate shadow-[0_40px_160px_rgba(0,0,0,0.45)]"
             on:wheel|stopPropagation
         >
             <button
-                class="absolute top-6 right-6 z-10 text-white/50 hover:text-white cursor-pointer"
+                class="absolute top-6 right-6 z-10 text-ink/50 hover:text-ink cursor-pointer"
                 on:click={close}
                 aria-label="Close streams"
             >
@@ -239,14 +235,14 @@
 
                 <section class="flex min-h-0 flex-col gap-4">
                     <div class="flex flex-col gap-2 pr-10">
-                        <h2 class="text-white text-2xl font-poppins font-bold">
+                        <h2 class="text-ink text-2xl font-bold">
                             Select Stream
                         </h2>
-                        <p class="text-white/60 text-sm">
+                        <p class="text-ink/60 text-sm">
                             Pick a source to start watching. Some sources may take longer to load.
                         </p>
                         {#if $streamFailureMessage}
-                            <p class="text-red-300/90 text-sm bg-red-500/14 backdrop-blur-xl rounded-xl px-3 py-2">
+                            <p class="text-danger/90 text-sm bg-danger/14 backdrop-blur-xl rounded-xl px-3 py-2">
                                 {$streamFailureMessage}
                             </p>
                         {/if}
@@ -258,8 +254,8 @@
                                 <button
                                     type="button"
                                     class="px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 cursor-pointer whitespace-nowrap backdrop-blur-xl {selectedAddon === addon.transport_url
-                                        ? 'bg-white text-black shadow-lg shadow-white/10'
-                                        : 'bg-white/10 text-white/70 hover:bg-white/18'}"
+                                        ? 'bg-accent text-on-accent shadow-lg shadow-ink/10'
+                                        : 'bg-ink/10 text-ink/70 hover:bg-ink/18'}"
                                     on:click={() => selectAddon(addon)}
                                 >
                                     {addon.manifest.name}
@@ -307,7 +303,6 @@
                         {addonFilteredStreams}
                         {showAddonSetupGuide}
                         onStreamClick={handleStreamClick}
-                        onOpenAddons={handleOpenAddons}
                     />
                 </section>
             </div>

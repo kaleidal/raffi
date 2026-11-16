@@ -57,7 +57,7 @@
 
 <div
     use:portal
-    class="fixed z-[300] context-menu bg-[#181818] rounded-xl py-2 min-w-[200px] flex flex-col"
+    class="fixed z-[300] context-menu bg-surface rounded-xl py-2 min-w-[200px] flex flex-col"
     style={`top: ${y}px; left: ${x}px;`}
     transition:fade={{ duration: 100 }}
     on:contextmenu|preventDefault
@@ -65,28 +65,28 @@
     tabindex="-1"
 >
     <button
-        class="text-left px-4 py-2 text-white/80 hover:text-white hover:bg-white/10 transition-colors font-poppins text-sm flex flex-row gap-2 items-center cursor-pointer"
+        class="text-left px-4 py-2 text-ink/80 hover:text-ink hover:bg-ink/10 transition-colors text-sm flex flex-row gap-2 items-center cursor-pointer"
         on:click={handleWatch}
     >
         <Play size={16} strokeWidth={2} />
         Watch
     </button>
     <button
-        class="text-left px-4 py-2 text-white/80 hover:text-white hover:bg-white/10 transition-colors font-poppins text-sm flex flex-row gap-2 items-center cursor-pointer"
+        class="text-left px-4 py-2 text-ink/80 hover:text-ink hover:bg-ink/10 transition-colors text-sm flex flex-row gap-2 items-center cursor-pointer"
         on:click={handleMarkWatched}
     >
         <Check size={16} strokeWidth={2} />
         Mark as Watched
     </button>
     <button
-        class="text-left px-4 py-2 text-white/80 hover:text-white hover:bg-white/10 transition-colors font-poppins text-sm flex flex-row gap-2 items-center cursor-pointer"
+        class="text-left px-4 py-2 text-ink/80 hover:text-ink hover:bg-ink/10 transition-colors text-sm flex flex-row gap-2 items-center cursor-pointer"
         on:click={handleMarkUnwatched}
     >
         <CircleX size={16} strokeWidth={2} />
         Mark as Unwatched
     </button>
     <button
-        class="text-left px-4 py-2 text-white/80 hover:text-white hover:bg-white/10 transition-colors font-poppins text-sm flex flex-row gap-2 items-center cursor-pointer"
+        class="text-left px-4 py-2 text-ink/80 hover:text-ink hover:bg-ink/10 transition-colors text-sm flex flex-row gap-2 items-center cursor-pointer"
         on:click={() => {
             onMarkSeasonWatched();
             close();
@@ -96,7 +96,7 @@
         Mark Season as Watched
     </button>
     <button
-        class="text-left px-4 py-2 text-white/80 hover:text-white hover:bg-white/10 transition-colors font-poppins text-sm flex flex-row gap-2 items-center cursor-pointer"
+        class="text-left px-4 py-2 text-ink/80 hover:text-ink hover:bg-ink/10 transition-colors text-sm flex flex-row gap-2 items-center cursor-pointer"
         on:click={() => {
             onMarkSeasonUnwatched();
             close();
@@ -105,9 +105,9 @@
         <Ban size={16} strokeWidth={2} />
         Mark Season as Unwatched
     </button>
-    <div class="h-[1px] bg-white/10 my-1"></div>
+    <div class="h-[1px] bg-ink/10 my-1"></div>
     <button
-        class="text-left px-4 py-2 text-[#FF4444] hover:bg-[#FF4444]/10 transition-colors font-poppins text-sm flex flex-row gap-2 items-center cursor-pointer"
+        class="text-left px-4 py-2 text-danger hover:bg-danger/10 transition-colors text-sm flex flex-row gap-2 items-center cursor-pointer"
         on:click={handleResetProgress}
     >
         <Trash size={16} strokeWidth={2} />

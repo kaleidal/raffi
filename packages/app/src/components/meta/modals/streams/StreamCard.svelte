@@ -11,8 +11,8 @@
 
 <button
     class="w-full p-5 rounded-2xl flex flex-col gap-3 text-left transition-all duration-200 {disabled
-        ? 'bg-white/10 backdrop-blur-3xl opacity-45 cursor-not-allowed'
-        : 'bg-white/10 backdrop-blur-3xl hover:bg-white/14 cursor-pointer'}"
+        ? 'bg-ink/10 backdrop-blur-3xl opacity-45 cursor-not-allowed'
+        : 'bg-ink/10 backdrop-blur-3xl hover:bg-ink/14 cursor-pointer'}"
     disabled={disabled}
     on:click={() => {
         if (disabled) return;
@@ -21,22 +21,22 @@
 >
     <div class="flex flex-row justify-between items-start w-full gap-4">
         <div class="flex flex-col gap-1">
-            <span class="text-white text-lg font-semibold">
+            <span class="text-ink text-lg font-semibold">
                 {item.meta.providerLabel}
             </span>
 
             {#if item.meta.infoLine}
-                <span class="text-xs text-white/45">
+                <span class="text-xs text-ink/45">
                     {item.meta.infoLine}
                 </span>
             {/if}
 
             {#if disabled}
-                <span class="text-xs text-red-200/80">Bad stream • select another</span>
+                <span class="text-xs text-danger/80">Bad stream • select another</span>
             {/if}
 
             {#if showPeers && item.meta.isP2P && item.meta.peerCount != null}
-                <span class="flex items-center gap-2 text-xs text-white/70">
+                <span class="flex items-center gap-2 text-xs text-ink/70">
                     <Link2 size={14} color="currentColor" strokeWidth={2} />
                     <span>{item.meta.peerCount} peers online</span>
                 </span>
@@ -49,10 +49,10 @@
                     <span
                         class={`px-3 py-1 rounded-full text-[11px] font-semibold ${badge.variant ===
                         'accent'
-                            ? 'bg-white text-black'
+                            ? 'bg-accent text-on-accent'
                             : badge.variant === 'danger'
-                                ? 'bg-red-500/18 text-red-200'
-                                : 'bg-white/12 text-white/80'}`}
+                                ? 'bg-danger/18 text-danger'
+                                : 'bg-ink/12 text-ink/80'}`}
                     >
                         {badge.label}
                     </span>
@@ -67,10 +67,10 @@
                 <span
                     class={`px-3 py-1 rounded-full text-xs font-medium ${badge.variant ===
                     'accent'
-                        ? 'bg-white text-black'
+                        ? 'bg-accent text-on-accent'
                         : badge.variant === 'muted'
-                            ? 'bg-white/5 text-white/50'
-                            : 'bg-white/10 text-white'}`}
+                            ? 'bg-ink/5 text-ink/50'
+                            : 'bg-ink/10 text-ink'}`}
                 >
                     {badge.label}
                 </span>

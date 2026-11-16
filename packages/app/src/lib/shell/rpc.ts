@@ -22,6 +22,14 @@ declare global {
             enableRPC: () => void;
             disableRPC: () => void;
             usesTitleBarOverlay?: boolean;
+            themes?: {
+                read: () => Promise<string>;
+                openFolder: () => Promise<string>;
+                onChanged: (callback: (css: string) => void) => () => void;
+            };
+            setTheme?: (theme: "dark" | "light") => void;
+            openExternal?: (url: string) => Promise<void>;
+            installUpdate?: () => Promise<void>;
             getPlayableFileUrl?: (file: File) => Promise<string>;
             localLibrary?: {
                 pickFolder: () => Promise<string | null>;

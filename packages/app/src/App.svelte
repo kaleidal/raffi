@@ -1,13 +1,14 @@
 <script lang="ts">
     import Home from "./pages/Home.svelte";
     import { router } from "./lib/stores/router";
-    import { onMount, tick } from "svelte";
+    import { onDestroy, onMount, tick } from "svelte";
     import { get } from "svelte/store";
     import { enableRPC, disableRPC } from "./lib/shell/rpc";
 
 
     import { X } from "@lucide/svelte";
     import LoadingSpinner from "./components/common/LoadingSpinner.svelte";
+    import SettingsModal from "./components/settings/SettingsModal.svelte";
     import {
         initAuth,
         updateStatus,
@@ -16,6 +17,11 @@
     import { warmTraktClientAuth } from "./lib/db/db";
     import { isAndroidPlatform } from "./lib/shell/platform";
     import { nativeVideoVisible } from "./lib/android/nativeVideo";
+    import { applyTheme } from "./lib/appearance/theme";
+    import { loadCustomThemes } from "./lib/appearance/customThemes";
+
+    onDestroy(applyTheme());
+    onDestroy(loadCustomThemes());
 
     type PageComponent = typeof Home | any;
 
@@ -317,7 +323,7 @@
     }
 </script>
 
-<div class="w-screen h-screen overflow-hidden flex flex-col {$nativeVideoVisible ? '' : 'bg-[#090909]'}">
+<div class="w-screen h-screen overflow-hidden flex flex-col {$nativeVideoVisible ? '' : 'bg-canvas'}">
     {#if showTitleBar}
         <div
             class="fixed top-0 left-0 right-0 h-[32px] z-[1000]"
@@ -331,27 +337,29 @@
 
             {#if routeLoading}
                 <div
-                    class="fixed inset-0 z-[400] flex items-center justify-center bg-[#090909]"
+                    class="fixed inset-0 z-[400] flex items-center justify-center bg-canvas"
                     aria-live="polite"
                     aria-label="Loading page"
                 >
-                    <LoadingSpinner size="60px" color="#D8D8D8" />
+                    <LoadingSpinner size="60px" />
                 </div>
             {/if}
         </div>
     </div>
 
 
+    <SettingsModal />
+
     {#if showUpdatePrompt}
         <div
-            class="raffi-modal-backdrop fixed inset-0 z-[500] bg-black/80 backdrop-blur-sm flex items-center justify-center"
+            class="raffi-modal-backdrop fixed inset-0 z-[500] bg-canvas/80 backdrop-blur-sm flex items-center justify-center"
             on:click|self={handleUpdateLater}
             on:keydown={(e) => e.key === "Escape" && handleUpdateLater()}
             role="button"
             tabindex="0"
         >
             <div
-                class="raffi-modal-surface bg-[#121212] w-full max-w-lg rounded-[32px] p-6 md:p-8 flex flex-col gap-5 shadow-[0_40px_160px_rgba(0,0,0,0.55)]"
+                class="raffi-modal-surface bg-canvas w-full max-w-lg rounded-[32px] p-6 md:p-8 flex flex-col gap-5 shadow-[0_40px_160px_rgba(0,0,0,0.55)]"
                 on:click|stopPropagation
                 on:keydown|stopPropagation
                 role="dialog"
@@ -359,17 +367,17 @@
             >
                 <div class="flex items-start justify-between gap-4">
                     <div>
-                        <h2 class="text-white text-2xl font-poppins font-semibold">
+                        <h2 class="text-ink text-2xl font-semibold">
                             Update ready
                         </h2>
                         {#if $updateStatus.version}
-                            <p class="text-white/50 text-sm">
+                            <p class="text-ink/50 text-sm">
                                 Version {$updateStatus.version} is ready to install.
                             </p>
                         {/if}
                     </div>
                     <button
-                        class="text-white/50 hover:text-white transition-colors cursor-pointer"
+                        class="text-ink/50 hover:text-ink transition-colors cursor-pointer"
                         on:click={handleUpdateLater}
                         aria-label="Close update dialog"
                     >
@@ -377,21 +385,21 @@
                     </button>
                 </div>
 
-                <div class="release-notes-content rounded-2xl bg-white/[0.04] p-4 text-white/70 text-sm overflow-y-auto max-h-[40vh]">
+                <div class="release-notes-content rounded-2xl bg-ink/[0.04] p-4 text-ink/70 text-sm overflow-y-auto max-h-[40vh]">
                     {@html formatReleaseNotes($updateStatus.notes || "Release notes unavailable.")}
                 </div>
 
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <p class="text-white/40 text-xs">We’ll remind you in 30 minutes.</p>
+                    <p class="text-ink/40 text-xs">We’ll remind you in 30 minutes.</p>
                     <div class="flex flex-col gap-3 sm:flex-row">
                         <button
-                            class="flex-1 sm:flex-none px-4 py-2 rounded-2xl bg-white/10 text-white font-semibold hover:bg-white/20 transition-colors cursor-pointer"
+                            class="flex-1 sm:flex-none px-4 py-2 rounded-2xl bg-ink/10 text-ink font-semibold hover:bg-ink/20 transition-colors cursor-pointer"
                             on:click={handleUpdateLater}
                         >
                             Later
                         </button>
                         <button
-                            class="flex-1 sm:flex-none px-4 py-2 rounded-2xl bg-white text-black font-semibold hover:bg-white/90 transition-colors cursor-pointer"
+                            class="flex-1 sm:flex-none px-4 py-2 rounded-2xl bg-accent text-on-accent font-semibold hover:bg-accent/85 transition-colors cursor-pointer"
                             on:click={handleUpdateRestart}
                         >
                             Restart now
@@ -403,80 +411,3 @@
     {/if}
 
 </div>
-
-<style>
-    .release-notes-content :global(h1),
-    .release-notes-content :global(h2),
-    .release-notes-content :global(h3),
-    .release-notes-content :global(h4) {
-        color: white;
-        font-weight: 700;
-        line-height: 1.2;
-        margin: 0 0 0.65rem;
-    }
-
-    .release-notes-content :global(h1) {
-        font-size: 1.2rem;
-    }
-
-    .release-notes-content :global(h2) {
-        font-size: 1.075rem;
-    }
-
-    .release-notes-content :global(h3),
-    .release-notes-content :global(h4) {
-        font-size: 1rem;
-    }
-
-    .release-notes-content :global(p),
-    .release-notes-content :global(ul),
-    .release-notes-content :global(ol),
-    .release-notes-content :global(blockquote),
-    .release-notes-content :global(pre) {
-        margin: 0 0 0.65rem;
-    }
-
-    .release-notes-content :global(ul) {
-        list-style: disc;
-        padding-left: 1.2rem;
-    }
-
-    .release-notes-content :global(ol) {
-        list-style: decimal;
-        padding-left: 1.2rem;
-    }
-
-    .release-notes-content :global(li) {
-        margin: 0.2rem 0;
-    }
-
-    .release-notes-content :global(code) {
-        background: rgba(255, 255, 255, 0.09);
-        border-radius: 0.35rem;
-        padding: 0.1rem 0.35rem;
-        color: white;
-        font-size: 0.85em;
-    }
-
-    .release-notes-content :global(blockquote) {
-        border-left: 2px solid rgba(255, 255, 255, 0.3);
-        padding-left: 0.65rem;
-        color: rgba(255, 255, 255, 0.72);
-    }
-
-    .release-notes-content :global(a) {
-        color: white;
-        text-decoration: underline;
-        text-underline-offset: 2px;
-    }
-
-    .release-notes-content :global(hr) {
-        border: 0;
-        border-top: 1px solid rgba(255, 255, 255, 0.18);
-        margin: 0.75rem 0;
-    }
-
-    .release-notes-content :global(*:last-child) {
-        margin-bottom: 0;
-    }
-</style>

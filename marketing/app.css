@@ -1,7 +1,8 @@
 @import "tailwindcss";
+@import "@fontsource-variable/onest/wght.css";
 
 @theme inline {
-    --font-poppins: "Poppins", sans-serif;
+    --font-sans: "Onest Variable", ui-sans-serif, system-ui, sans-serif;
     --color-canvas: var(--canvas);
     --color-well: var(--well);
     --color-ink: var(--ink);
@@ -55,7 +56,7 @@ html {
 body {
     background-color: var(--canvas);
     color: var(--ink);
-    font-family: "Poppins", sans-serif;
+    font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
 }
 

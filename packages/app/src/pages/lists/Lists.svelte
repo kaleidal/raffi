@@ -2,17 +2,16 @@
     import { onMount } from "svelte";
     import { fade } from "svelte/transition";
     import SearchBar from "../../components/home/SearchBar.svelte";
-    import AddonsModal from "../../components/home/modals/AddonsModal.svelte";
     import LoadingSpinner from "../../components/common/LoadingSpinner.svelte";
     import TopGlow from "../../components/common/TopGlow.svelte";
 
     import ListSidebar from "./components/ListSidebar.svelte";
     import ListPreview from "./components/ListPreview.svelte";
+    import ListsEmpty from "./components/ListsEmpty.svelte";
     import ListItemGrid from "./components/ListItemGrid.svelte";
 
     import { loadLists } from "./dataLoader";
-    import { loaded, lists, showAddonsModal, showSettingsModal } from "./listsState";
-    import SettingsModal from "../../components/home/modals/SettingsModal.svelte";
+    import { loaded, lists } from "./listsState";
 
     const HOME_REFRESH_EVENT = "raffi:home-refresh";
 
@@ -40,28 +39,16 @@
     });
 </script>
 
-<AddonsModal bind:showAddonsModal={$showAddonsModal} />
-<SettingsModal bind:showSettings={$showSettingsModal} />
-
 <div
-    class="bg-[#090909] h-[100dvh] min-h-0 w-full flex flex-col overflow-hidden items-center relative"
+    class="bg-canvas h-[100dvh] min-h-0 w-full flex flex-col overflow-hidden items-center relative"
 >
     <SearchBar
         absolute={false}
-        onOpenAddons={() => ($showAddonsModal = true)}
-        onOpenSettings={() => ($showSettingsModal = true)}
     />
 
     {#if $loaded}
         {#if $lists.length === 0}
-            <div class="flex-1 w-full flex items-center justify-center" in:fade={{ duration: 300 }}>
-                <div class="text-center">
-                    <h3 class="text-white text-2xl font-poppins font-semibold">No lists yet</h3>
-                    <p class="text-white/50 text-sm font-poppins mt-2">
-                        Create a list to organize what you want to watch.
-                    </p>
-                </div>
-            </div>
+            <ListsEmpty />
         {:else}
             <div class="relative z-10 flex-1 min-h-0 w-full px-[var(--raffi-page-gutter)] pb-[clamp(14px,1.3vw,20px)] pt-[clamp(20px,2.6vw,40px)]" in:fade={{ duration: 300 }}>
                 <div class="lists-layout mx-auto grid h-full min-h-0 w-full max-w-[1680px] gap-[clamp(14px,1.3vw,20px)]">

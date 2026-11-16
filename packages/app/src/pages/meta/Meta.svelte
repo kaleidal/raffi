@@ -46,8 +46,7 @@
     import ActionButtons from "../../components/meta/ActionButtons.svelte";
     import MetaInfo from "./components/MetaInfo.svelte";
     import UnsupportedTitleModal from "../../components/meta/modals/UnsupportedTitleModal.svelte";
-    import AddonsModal from "../../components/home/modals/AddonsModal.svelte";
-    import { ADDONS_CHANGED_EVENT } from "../../components/home/modals/addons/addonsShared";
+    import { ADDONS_CHANGED_EVENT } from "../../components/settings/addons/addonsShared";
 
     // Router params
     $: imdbID = $router.params.imdbId;
@@ -70,42 +69,11 @@
     let unsupportedReason: string | null = null;
     let partyJoinStreamPromptHandled = false;
 
-    let useOverlayScrollHint = true;
-    let viewportAspect = 16 / 9;
-    let backgroundAspect: number | null = null;
-    let lastBackgroundSrc = "";
-    let showAddonsModal = false;
-    let addonsModalResourceFilter: "all" | "stream" | "subtitles" | "catalog" | "meta" = "all";
-
-    const updateViewportAspect = () => {
-        if (typeof window === "undefined") return;
-        viewportAspect = window.innerWidth / window.innerHeight;
-        useOverlayScrollHint =
-            backgroundAspect != null && backgroundAspect <= viewportAspect;
-    };
-
-    const loadBackgroundAspect = (src: string) => {
-        if (!src || src === lastBackgroundSrc) return;
-        lastBackgroundSrc = src;
-        const img = new Image();
-        img.onload = () => {
-            if (!img.naturalWidth || !img.naturalHeight) return;
-            backgroundAspect = img.naturalWidth / img.naturalHeight;
-            updateViewportAspect();
-        };
-        img.onerror = () => {
-            backgroundAspect = null;
-            useOverlayScrollHint = false;
-        };
-        img.src = src;
-    };
 
     onMount(async () => {
         resetMetaState();
         hydrateStreamFailures();
         await DataLoader.loadAddons();
-        updateViewportAspect();
-        window.addEventListener("resize", updateViewportAspect);
         window.addEventListener(ADDONS_CHANGED_EVENT, handleAddonsChanged);
     });
 
@@ -117,7 +85,6 @@
         if (scrollContainer instanceof HTMLElement) {
             scrollContainer.style.overflow = "";
         }
-        window.removeEventListener("resize", updateViewportAspect);
         window.removeEventListener(ADDONS_CHANGED_EVENT, handleAddonsChanged);
     });
 
@@ -125,10 +92,6 @@
         void DataLoader.loadAddons();
     }
 
-    function openStreamAddons() {
-        addonsModalResourceFilter = "stream";
-        showAddonsModal = true;
-    }
 
     $: if (imdbID) {
         void DataLoader.loadMetaData(imdbID, titleType, expectedName);
@@ -146,14 +109,6 @@
             unsupportedReason = "No episodes found for this series.";
         } else {
             unsupportedReason = null;
-        }
-
-        const background = $metaData.meta?.background;
-        if (background) {
-            loadBackgroundAspect(background);
-        } else {
-            backgroundAspect = null;
-            useOverlayScrollHint = false;
         }
     } else {
         unsupportedReason = null;
@@ -253,8 +208,8 @@
 </script>
 
 {#if $loadedMeta && $metaData && $metaData.meta}
-    <div class="bg-[#090909] flex-1 relative" in:fade={{ duration: 300 }}>
-        <div class="relative min-h-screen w-full overflow-visible">
+    <div class="bg-canvas flex-1 relative" in:fade={{ duration: 300 }}>
+        <div class="scheme-dark relative w-full overflow-visible bg-canvas">
             <div class="absolute inset-0 opacity-60">
                 <MetaBackground
                     background={$metaData.meta.background}
@@ -263,17 +218,17 @@
             </div>
 
             <button
-                class="absolute top-[clamp(24px,3vw,50px)] left-[clamp(24px,3vw,50px)] z-50 bg-[#FFFFFF]/10 hover:bg-[#FFFFFF]/20 backdrop-blur-md p-[clamp(12px,1vw,16px)] rounded-full transition-colors duration-200 cursor-pointer"
+                class="absolute top-[clamp(24px,3vw,50px)] left-[clamp(24px,3vw,50px)] z-50 bg-ink/10 hover:bg-ink/20 backdrop-blur-md p-[clamp(12px,1vw,16px)] rounded-full transition-colors duration-200 cursor-pointer"
                 on:click={() => {
                     router.navigate("home");
                 }}
                 aria-label="Back to Home"
             >
-                <ChevronLeft size={30} strokeWidth={2} color="white" />
+                <ChevronLeft size={30} strokeWidth={2} />
             </button>
 
             <div
-                class="relative z-10 flex min-h-screen w-full flex-col items-stretch justify-between gap-[clamp(28px,3vw,50px)] px-[clamp(32px,6vw,72px)] py-[clamp(72px,10vh,120px)] xl:h-screen xl:min-h-[720px] xl:flex-row xl:px-[9.2vw] xl:pt-[14.8vw] xl:pb-[9.2vw]"
+                class="meta-hero relative z-10 flex w-full {$metaData.meta.type === 'series' ? 'peek-episodes' : ''} flex-col items-stretch justify-between gap-[clamp(28px,3vw,50px)] px-[clamp(32px,6vw,72px)] py-[clamp(72px,10vh,120px)] xl:min-h-[720px] xl:flex-row xl:px-[9.2vw] xl:pt-[14.8vw] xl:pb-[9.2vw]"
             >
                 <div
                     class="flex min-h-[clamp(460px,58vh,620px)] w-full flex-col items-start justify-between gap-[clamp(28px,2.6vw,44px)] xl:min-h-0 xl:w-[40vw]"
@@ -340,7 +295,7 @@
                             />
                         {:else}
                             <h1
-                                class="text-[#E1E1E1] text-[clamp(38px,3.5vw,58px)] font-poppins font-bold leading-tight max-w-200"
+                                class="text-ink/90 text-[clamp(38px,3.5vw,58px)] font-bold leading-tight max-w-200"
                             >
                                 {$metaData.meta.name}
                             </h1>
@@ -369,7 +324,7 @@
                         <div class="relative rounded-[50px] resume-button-shell" data-focus-ring>
                             <button
                                 data-tv-autofocus
-                                class="bg-[#FFFFFF]/80 hover:bg-[#D3D3D3]/80 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-5 text-black font-poppins font-medium w-full transition-colors duration-200 relative z-10 resume-button"
+                                class="bg-accent/85 hover:bg-accent/70 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-5 text-on-accent font-medium w-full transition-colors duration-200 relative z-10 resume-button"
                                 on:click={() =>
                                     StreamLogic.episodeClicked(
                                         resumeEpisode,
@@ -377,7 +332,7 @@
                                     )}
                             >
                                 <div class="resume-button__icon flex items-center justify-center">
-                                    <Play size={48} strokeWidth={2} color="black" fill="black" />
+                                    <Play size={48} strokeWidth={2} fill="currentColor" />
                                 </div>
 
                                 <span class="resume-button__label">
@@ -390,7 +345,7 @@
                             </button>
                             {#if isResumable}
                                 <div
-                                    class="absolute bottom-0 left-0 h-1.5 bg-[#676767] z-20 rounded-full overflow-hidden"
+                                    class="absolute bottom-0 left-0 h-1.5 bg-accent z-20 rounded-full overflow-hidden"
                                     style="width: {(lastEpProgress.time /
                                         lastEpProgress.duration) *
                                         100}%"
@@ -408,7 +363,7 @@
                         <div class="relative rounded-[50px] resume-button-shell" data-focus-ring>
                             <button
                                 data-tv-autofocus
-                                class="bg-[#FFFFFF]/80 hover:bg-[#D3D3D3]/80 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-5 text-black font-poppins font-medium w-full transition-colors duration-200 relative z-10 resume-button"
+                                class="bg-accent/85 hover:bg-accent/70 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-5 text-on-accent font-medium w-full transition-colors duration-200 relative z-10 resume-button"
                                 on:click={() =>
                                     StreamLogic.episodeClicked(
                                         { season: 0, episode: 0 },
@@ -416,7 +371,7 @@
                                     )}
                             >
                                 <div class="resume-button__icon flex items-center justify-center">
-                                    <Play size={48} strokeWidth={2} color="black" fill="black" />
+                                    <Play size={48} strokeWidth={2} fill="currentColor" />
                                 </div>
                                 <span class="resume-button__label">
                                     {#if isMovieResumable}
@@ -428,7 +383,7 @@
                             </button>
                             {#if isMovieResumable}
                                 <div
-                                    class="absolute bottom-0 left-0 h-1.5 bg-[#676767] z-20 rounded-full overflow-hidden"
+                                    class="absolute bottom-0 left-0 h-1.5 bg-accent z-20 rounded-full overflow-hidden"
                                     style="width: {(movieProgress.time /
                                         movieProgress.duration) *
                                         100}%"
@@ -449,31 +404,33 @@
                             $episodes > 0
                                 ? (watchedCount / $episodes) * 100
                                 : 0}
+                        {#if watchedCount > 0}
                         <div
-                            class="px-[clamp(26px,2.4vw,44px)] py-[clamp(20px,1.6vw,30px)] w-full bg-[#FFFFFF]/10 backdrop-blur-lg rounded-[clamp(30px,2.8vw,52px)] flex flex-col gap-4"
+                            class="px-[clamp(26px,2.4vw,44px)] py-[clamp(20px,1.6vw,30px)] w-full bg-ink/10 backdrop-blur-lg rounded-[clamp(30px,2.8vw,52px)] flex flex-col gap-4"
                         >
                             <span
-                                class="text-[#E1E1E1] text-[clamp(21px,1.5vw,28px)] font-poppins font-bold"
-                                >{watchedCount}/{$episodes} episodes watched</span
+                                class="text-ink/90 text-[clamp(21px,1.5vw,28px)] font-bold"
+                                >{watchedCount} of {$episodes} watched</span
                             >
                             <div
-                                class="w-full h-2.5 bg-[#A3A3A3]/30 rounded-full overflow-hidden"
+                                class="w-full h-2.5 bg-ink/20 rounded-full overflow-hidden"
                             >
                                 <div
-                                    class="h-full bg-white rounded-full transition-all duration-300"
+                                    class="h-full bg-accent rounded-full transition-all duration-300"
                                     style="width: {progressPercent}%"
                                 ></div>
                             </div>
                         </div>
+                        {/if}
                     {/if}
 
                     <div
-                        class="px-[clamp(26px,2.4vw,44px)] py-[clamp(20px,1.6vw,30px)] w-full bg-[#FFFFFF]/10 backdrop-blur-lg rounded-[clamp(30px,2.8vw,52px)] flex flex-col gap-4 justify-center"
+                        class="px-[clamp(26px,2.4vw,44px)] py-[clamp(20px,1.6vw,30px)] w-full bg-ink/10 backdrop-blur-lg rounded-[clamp(30px,2.8vw,52px)] flex flex-col gap-4 justify-center"
                     >
                         {#if $metaData.meta.type === "series"}
                             <span
-                                class="text-[#E1E1E1] text-[clamp(21px,1.5vw,28px)] font-poppins font-bold"
-                                >{$episodes} episodes • {$seasons} seasons</span
+                                class="text-ink/90 text-[clamp(21px,1.5vw,28px)] font-bold"
+                                >{$episodes} {$episodes === 1 ? "episode" : "episodes"} · {$seasons} {$seasons === 1 ? "season" : "seasons"}</span
                             >
                         {/if}
 
@@ -481,13 +438,13 @@
                             class="flex flex-row gap-2.5 items-center justify-between"
                         >
                             <span
-                                class="text-[#E8E8E8]/80 text-[clamp(17px,1.15vw,22px)] font-poppins font-medium"
+                                class="text-ink/75 text-[clamp(17px,1.15vw,22px)] font-medium"
                                 >{$metaData.meta.year}</span
                             >
 
                             <div class="flex flex-row gap-2.5 items-center">
                                 <span
-                                    class="text-[#E8E8E8]/80 text-[clamp(17px,1.15vw,22px)] font-poppins font-medium"
+                                    class="text-ink/75 text-[clamp(17px,1.15vw,22px)] font-medium"
                                     >{$metaData.meta.imdbRating}</span
                                 >
 
@@ -513,28 +470,13 @@
 
             {#if $metaData.meta.type === "series"}
                 <div
-                    class="absolute bottom-0 left-0 w-full h-37.5 bg-linear-to-t from-[#090909] to-transparent"
+                    class="page-fade absolute bottom-0 left-0 w-full h-37.5"
                 ></div>
-                {#if useOverlayScrollHint}
-                    <span
-                        class="absolute left-1/2 -translate-x-1/2 text-[#E1E1E1]/60 text-[1rem] font-poppins font-medium pointer-events-none"
-                        style="bottom: clamp(20px, 5vh, 72px);"
-                        >scroll down to view episodes</span
-                    >
-                {/if}
             {/if}
         </div>
 
         {#if $metaData.meta.type === "series"}
-            {#if !useOverlayScrollHint}
-                <div
-                    class="w-full flex justify-center text-[#E1E1E1]/60 text-[1rem] font-poppins font-medium"
-                    style="margin-top: clamp(8px, 2vh, 16px); margin-bottom: clamp(12px, 3vh, 24px);"
-                >
-                    scroll down to view episodes
-                </div>
-            {/if}
-            <div class="w-full p-[clamp(32px,8.3vw,160px)]">
+            <div class="w-full px-[clamp(32px,8.3vw,160px)] pt-2 pb-[clamp(32px,8.3vw,160px)]">
                 <SeasonSelector
                     seasonsArray={$seasonsArray}
                     bind:currentSeason={$currentSeason}
@@ -578,16 +520,11 @@
         onCloseStreamsPopup={StreamLogic.closeStreamsPopup}
         onStreamClick={(stream) =>
             StreamLogic.onStreamClick(stream, $progressMap)}
-        onOpenAddons={openStreamAddons}
         onTorrentConfirm={() =>
             StreamLogic.handleTorrentWarningConfirm($progressMap)}
         onTorrentCancel={StreamLogic.handleTorrentWarningCancel}
     />
 
-    <AddonsModal
-        bind:showAddonsModal
-        initialResourceFilter={addonsModalResourceFilter}
-    />
 
     {#if $showEpisodeContextMenu}
         <EpisodeContextMenu
@@ -627,3 +564,13 @@
         </div>
     {/if}
 {/if}
+
+<style>
+    .meta-hero {
+        min-height: calc(100dvh - var(--episode-peek, 0px));
+    }
+
+    .meta-hero.peek-episodes {
+        --episode-peek: clamp(84px, 11vh, 120px);
+    }
+</style>

@@ -1,103 +1,74 @@
 <script lang="ts">
-    import type { ShowResponse } from "../../lib/library/types/meta_types";
-    import { FileVideo, Eye } from "@lucide/svelte";
+    import type { Episode, ShowResponse } from "../../lib/library/types/meta_types";
+    import { Check, FileVideo } from "@lucide/svelte";
 
     export let metaData: ShowResponse;
     export let currentSeason: number;
     export let progressMap: any = {};
 
-    export let onEpisodeClick: (episode: any) => void = () => {};
-    export let onEpisodeContextMenu: (detail: { event: MouseEvent; episode: any }) => void = () => {};
-
-    function truncateWords(text: string, maxWords: number) {
-        if (!text) return "";
-        const words = text.split(/\s+/);
-        if (words.length <= maxWords) return text;
-        return words.slice(0, maxWords).join(" ") + "…";
-    }
-
-    function handleEpisodeClick(episode: any) {
-        onEpisodeClick(episode);
-    }
+    export let onEpisodeClick: (episode: Episode) => void = () => {};
+    export let onEpisodeContextMenu: (detail: { event: MouseEvent; episode: Episode }) => void = () => {};
 
     let failedImages = new Set<string>();
 
-    function handleImageError(id: string) {
-        failedImages.add(id);
-        failedImages = failedImages; // Trigger reactivity
+    function handleImageError(key: string) {
+        failedImages.add(key);
+        failedImages = failedImages;
     }
+
+    $: episodes = metaData.meta.videos.filter((video) => video.season === currentSeason);
 </script>
 
 <div class="episode-grid">
-    {#each metaData.meta.videos.filter((video) => video.season === currentSeason) as episode (`${episode.season}:${episode.episode}`)}
-        {@const epKey = `${episode.season}:${episode.episode}`}
-        {@const epProgress = progressMap[epKey]}
-        {@const isWatched = epProgress && epProgress.watched}
+    {#each episodes as episode (`${episode.season}:${episode.episode}`)}
+        {@const key = `${episode.season}:${episode.episode}`}
+        {@const progress = progressMap[key]}
+        {@const watched = Boolean(progress?.watched)}
 
         <button
-            class="group appearance-none border-0 p-0 text-left bg-[#121212] rounded-[20px] overflow-hidden cursor-pointer transition-[translate,box-shadow,background-color] duration-200 ease-out relative hover:-translate-y-1.5 hover:shadow-[0_14px_30px_rgba(0,0,0,0.35)] hover:bg-[#171717] {isWatched
-                ? 'opacity-60'
-                : ''}"
-
-            on:click={() => handleEpisodeClick(episode)}
-            on:contextmenu|preventDefault={(e) =>
-                onEpisodeContextMenu({ event: e as MouseEvent, episode })}
+            class="group flex cursor-pointer flex-col gap-3 text-left"
+            on:click={() => onEpisodeClick(episode)}
+            on:contextmenu|preventDefault={(event) => onEpisodeContextMenu({ event, episode })}
         >
             <div
-                class="w-full h-[150px] bg-gradient-to-t from-[#090909] to-transparent absolute bottom-0 left-0 z-10"
-            ></div>
-
-            {#if episode.thumbnail && !failedImages.has(epKey)}
-                <img
-                    src={episode.thumbnail}
-                    alt="Episode Thumbnail"
-                    class="block w-full h-full object-cover aspect-video transition-transform duration-200 relative z-0 {isWatched
-                        ? 'grayscale'
-                        : 'group-hover:scale-[1.02]'}"
-                    on:error={() => handleImageError(epKey)}
-                />
-            {:else}
-                <div
-                    class="w-full aspect-video bg-[#1a1a1a] flex items-start justify-center pt-[30px]"
-                >
-                    <div class="opacity-20">
-                        <FileVideo size={40} strokeWidth={2} color="white" />
-                    </div>
-                </div>
-            {/if}
-
-            {#if isWatched}
-                <div
-                    class="absolute top-2 right-2 bg-black/50 p-1 rounded-full"
-                >
-                    <Eye size={20} strokeWidth={2} color="white" />
-                </div>
-            {/if}
-
-            {#if epProgress && !isWatched && epProgress.time > 0}
-                <div
-                    class="absolute bottom-0 left-0 h-[4px] bg-[#676767] z-20"
-                    style="width: {(epProgress.time / epProgress.duration) *
-                        100}%"
-                ></div>
-            {/if}
-
-            <div
-                class="p-5 flex flex-col justify-end gap-[10px] z-10 absolute w-full h-full top-0 left-0"
+                class="relative aspect-video w-full overflow-hidden rounded-[18px] bg-surface transition-[translate,box-shadow] duration-200 ease-out group-hover:-translate-y-1 group-hover:shadow-[0_14px_30px_rgba(0,0,0,0.3)]"
             >
-                <span
-                    class="text-[#E1E1E1] text-[clamp(14px,0.94vw,18px)] font-poppins font-semibold leading-snug"
-                    >S{episode.season}E{episode.episode} - {episode.name}</span
-                >
-                <span
-                    class="text-[#A3A3A3] text-[clamp(11px,0.73vw,14px)] font-poppins font-medium leading-snug"
-                    >{truncateWords(episode.description ?? "", 10)}</span
-                >
+                {#if episode.thumbnail && !failedImages.has(key)}
+                    <img
+                        src={episode.thumbnail}
+                        alt=""
+                        loading="lazy"
+                        class="h-full w-full object-cover transition-[scale,filter] duration-200 {watched
+                            ? 'brightness-[0.55] grayscale'
+                            : 'group-hover:scale-[1.03]'}"
+                        on:error={() => handleImageError(key)}
+                    />
+                {:else}
+                    <div class="flex h-full w-full items-center justify-center text-ink/25">
+                        <FileVideo size={36} strokeWidth={2} />
+                    </div>
+                {/if}
+
+                {#if watched}
+                    <span class="absolute top-3 right-3 flex size-8 items-center justify-center rounded-full bg-accent text-on-accent">
+                        <Check size={18} strokeWidth={2.5} />
+                    </span>
+                {:else if progress?.time > 0}
+                    <div class="absolute inset-x-3 bottom-3 h-1 overflow-hidden rounded-full bg-white/25">
+                        <div class="h-full rounded-full bg-accent" style="width: {(progress.time / progress.duration) * 100}%"></div>
+                    </div>
+                {/if}
             </div>
-            <div
-                class="pointer-events-none absolute inset-0 z-30 rounded-[inherit] shadow-[inset_0_0_0_1px_rgba(9,9,9,0.88)]"
-                aria-hidden="true"
-            ></div>
+
+            <div class="flex flex-col gap-1 px-1">
+                <p class="text-[clamp(15px,1vw,19px)] leading-snug font-semibold {watched ? 'text-ink/55' : 'text-ink'}">
+                    <span class="text-ink/45">{episode.episode}</span>
+                    {episode.name}
+                </p>
+                {#if episode.description}
+                    <p class="line-clamp-2 text-[clamp(13px,0.8vw,15px)] leading-snug text-ink/55">{episode.description}</p>
+                {/if}
+            </div>
         </button>
     {/each}
 </div>
@@ -105,14 +76,14 @@
 <style>
     .episode-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(clamp(210px, 18vw, 300px), 1fr));
-        gap: clamp(16px, 1.55vw, 30px);
+        grid-template-columns: repeat(auto-fill, minmax(clamp(220px, 18vw, 320px), 1fr));
+        gap: clamp(24px, 2vw, 40px) clamp(16px, 1.55vw, 30px);
     }
 
     @media (orientation: portrait) {
         .episode-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 12px;
+            gap: 20px 12px;
         }
     }
 </style>

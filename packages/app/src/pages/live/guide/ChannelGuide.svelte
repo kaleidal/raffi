@@ -74,9 +74,9 @@
     style="scroll-padding-left:{channelWidth}px;scroll-padding-top:{rulerHeight}px"
 >
     <div class="relative" style="width:{channelWidth + timelineWidth}px;height:{rulerHeight + channels.length * rowHeight}px">
-        <div class="sticky top-0 z-20 bg-[#090909]" style="height:{rulerHeight}px;width:{channelWidth + timelineWidth}px">
+        <div class="sticky top-0 z-20 bg-canvas" style="height:{rulerHeight}px;width:{channelWidth + timelineWidth}px">
             <button
-                class="sticky left-0 z-10 flex h-full items-center bg-[#090909] pl-12 font-poppins text-sm font-medium text-white/60 hover:text-white cursor-pointer"
+                class="sticky left-0 z-10 flex h-full items-center bg-canvas pl-12 text-sm font-medium text-ink/60 hover:text-ink cursor-pointer"
                 style="width:{channelWidth}px"
                 onclick={() => scrollToNow()}
             >
@@ -84,20 +84,20 @@
             </button>
             {#each slots as time (time)}
                 <span
-                    class="absolute top-0 flex h-full items-center border-l border-white/[0.07] px-3 font-poppins text-xs tabular-nums text-white/45"
+                    class="absolute top-0 flex h-full items-center border-l border-ink/[0.07] px-3 text-xs tabular-nums text-ink/45"
                     style="left:{slotX(time)}px"
                 >
                     {slotLabel(time)}
                 </span>
             {/each}
             {#if nowX > channelWidth}
-                <span class="absolute bottom-0 size-2.5 -translate-x-1/2 translate-y-1/2 rounded-full bg-white" style="left:{nowX}px"></span>
+                <span class="absolute bottom-0 size-2.5 -translate-x-1/2 translate-y-1/2 rounded-full bg-ink" style="left:{nowX}px"></span>
             {/if}
         </div>
 
         {#if nowX > channelWidth}
             <div
-                class="pointer-events-none absolute z-[5] w-px -translate-x-1/2 bg-white/70"
+                class="pointer-events-none absolute z-[5] w-px -translate-x-1/2 bg-ink/70"
                 style="left:{nowX}px;top:{rulerHeight}px;height:{channels.length * rowHeight}px"
             ></div>
         {/if}

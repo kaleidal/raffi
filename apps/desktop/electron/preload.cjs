@@ -70,6 +70,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
         return () => ipcRenderer.removeListener('UPDATE_DOWNLOAD_PROGRESS', handler);
     },
     installUpdate: () => ipcRenderer.invoke('UPDATE_INSTALL'),
+    themes: {
+        read: () => ipcRenderer.invoke('THEMES_READ'),
+        openFolder: () => ipcRenderer.invoke('THEMES_OPEN_FOLDER'),
+        onChanged: (callback) => {
+            const handler = (_event, value) => callback(value);
+            ipcRenderer.on('THEMES_CHANGED', handler);
+            return () => ipcRenderer.removeListener('THEMES_CHANGED', handler);
+        },
+    },
+    setTheme: (theme) => ipcRenderer.send('WINDOW_SET_THEME', theme),
     toggleFullscreen: () => ipcRenderer.send('WINDOW_TOGGLE_FULLSCREEN'),
     isFullscreen: () => ipcRenderer.invoke('WINDOW_IS_FULLSCREEN'),
     onFullscreenChanged: (callback) => {

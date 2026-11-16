@@ -1,6 +1,6 @@
 <script lang="ts">
     export let size = "40px";
-    export let color = "#FFFFFF";
+    export let color = "currentColor";
 </script>
 
 <div class="spinner" style="--size: {size}; --color: {color}">

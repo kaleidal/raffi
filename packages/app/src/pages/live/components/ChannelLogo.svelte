@@ -30,5 +30,5 @@
         onerror={() => (failedFor = source ?? "")}
     />
 {:else}
-    <span class="font-poppins font-semibold text-white/40 {size === 'large' ? 'text-3xl' : 'text-sm'}">{initials}</span>
+    <span class="font-semibold text-ink/40 {size === 'large' ? 'text-3xl' : 'text-sm'}">{initials}</span>
 {/if}

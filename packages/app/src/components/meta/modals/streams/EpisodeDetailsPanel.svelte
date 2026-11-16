@@ -82,7 +82,7 @@
 </script>
 
 <aside
-    class="relative isolate w-full h-full min-h-0 rounded-[28px] bg-white/8 backdrop-blur-3xl p-5 lg:p-6 flex flex-col gap-4 overflow-hidden"
+    class="relative isolate w-full h-full min-h-0 rounded-[28px] bg-ink/8 backdrop-blur-3xl p-5 lg:p-6 flex flex-col gap-4 overflow-hidden"
 >
     {#if ambientArtwork}
         <img
@@ -92,14 +92,14 @@
             class="pointer-events-none absolute inset-0 -z-20 h-full w-full scale-110 object-cover opacity-[0.16] blur-[18px] saturate-75"
         />
         <div
-            class="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-[#444]/70 via-[#383838]/88 to-[#2b2b2b]"
+            class="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-ink/20 via-raised/88 to-raised"
         ></div>
     {/if}
 
     {#if selectedEpisode}
         <div class="relative z-10 flex flex-1 min-h-0 flex-col gap-4 min-w-0 overflow-hidden">
             <div
-                class="relative w-full aspect-video rounded-2xl overflow-hidden bg-white/6"
+                class="relative w-full aspect-video rounded-2xl overflow-hidden bg-ink/6"
             >
                 {#if detailsThumbnail && !thumbnailError}
                     <img
@@ -109,7 +109,7 @@
                         on:error={() => (thumbnailError = true)}
                     />
                 {:else}
-                    <div class="w-full h-full flex items-center justify-center text-white/40 text-sm">
+                    <div class="w-full h-full flex items-center justify-center text-ink/40 text-sm">
                         No artwork available
                     </div>
                 {/if}
@@ -118,13 +118,13 @@
                     <div
                         class="absolute bottom-0 left-0 w-full p-3 bg-linear-to-t from-black/80 via-black/40 to-transparent flex flex-col gap-1.5 z-10"
                     >
-                        <div class="flex items-center justify-between text-[11px] text-white/72">
+                        <div class="flex items-center justify-between text-[11px] text-ink/72">
                             <span>Resume</span>
                             <span>{progressDetails.timeLeftLabel}</span>
                         </div>
-                        <div class="h-1.5 bg-white/20 rounded-full overflow-hidden">
+                        <div class="h-1.5 bg-ink/20 rounded-full overflow-hidden">
                             <div
-                                class="h-full bg-white rounded-full"
+                                class="h-full bg-accent rounded-full"
                                 style={`width: ${progressDetails.percent}%`}
                             ></div>
                         </div>
@@ -134,21 +134,21 @@
 
             <div class="flex flex-col gap-3 min-w-0">
                 {#if showEpisodeLabel}
-                    <span class="text-sm text-white/50">
+                    <span class="text-sm text-ink/50">
                         Season {episodeSeasonNumber} / Episode {episodeNumber}
                     </span>
                 {/if}
-                <h3 class="text-white text-2xl font-semibold leading-tight">{episodeTitle}</h3>
+                <h3 class="text-ink text-2xl font-semibold leading-tight">{episodeTitle}</h3>
             </div>
 
             <div class="min-h-0 flex flex-1 flex-col gap-3 overflow-hidden">
                 {#if releaseInfo.absolute}
                     <div class="pt-2 flex flex-col gap-1 flex-none">
-                        <span class="text-xs text-white/45">Released</span>
-                        <span class="text-white text-sm">
+                        <span class="text-xs text-ink/45">Released</span>
+                        <span class="text-ink text-sm">
                             {releaseInfo.absolute}
                             {#if releaseInfo.relative}
-                                <span class="text-white/50">({releaseInfo.relative})</span>
+                                <span class="text-ink/50">({releaseInfo.relative})</span>
                             {/if}
                         </span>
                     </div>
@@ -158,7 +158,7 @@
                     <div class="min-h-0 overflow-y-auto pr-1" bind:this={descriptionContainer}>
                         <p
                             bind:this={descriptionText}
-                            class="text-sm leading-6 text-white/58 {descriptionIsClipped
+                            class="text-sm leading-6 text-ink/58 {descriptionIsClipped
                                 ? 'mask-[linear-gradient(to_bottom,black_0%,black_74%,transparent_100%)]'
                                 : ''}"
                         >
@@ -169,7 +169,7 @@
             </div>
         </div>
     {:else}
-        <div class="relative z-10 flex flex-col items-center justify-center text-center text-white/60 text-sm h-full">
+        <div class="relative z-10 flex flex-col items-center justify-center text-center text-ink/60 text-sm h-full">
             Select an episode to view details.
         </div>
     {/if}

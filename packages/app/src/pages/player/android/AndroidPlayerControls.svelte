@@ -52,8 +52,8 @@
 </script>
 
 <div class="absolute left-0 top-0 z-50 p-10 transition-all duration-300 ease-in-out {slide(visible, 'top')}" inert={!visible}>
-    <button class="{navButton} bg-[#000000]/45" on:click={onClose} aria-label="Close player">
-        <ChevronLeft size={26} color="white" strokeWidth={2} />
+    <button class="{navButton} bg-canvas/45" on:click={onClose} aria-label="Close player">
+        <ChevronLeft size={26} strokeWidth={2} />
     </button>
 </div>
 
@@ -64,8 +64,8 @@
     >
         <button
             class="{navButton} {nextEpisodeHighlighted
-                ? 'scale-105 bg-white shadow-[0_0_0_4px_rgba(255,255,255,0.22),0_0_32px_rgba(255,255,255,0.5)]'
-                : 'bg-[#000000]/45'}"
+                ? 'scale-105 bg-ink shadow-[0_0_0_4px_rgba(255,255,255,0.22),0_0_32px_rgba(255,255,255,0.5)]'
+                : 'bg-canvas/45'}"
             on:click={onNextEpisode}
             aria-label="Next episode"
         >
@@ -78,7 +78,7 @@
     <div
         class="pointer-events-none absolute inset-x-28 top-10 z-50 flex h-[62px] items-center justify-center transition-all duration-300 ease-in-out {slide(visible, 'top')}"
     >
-        <span class="inline-flex min-h-[62px] max-w-[40rem] items-center truncate rounded-full bg-[#000000]/45 px-8 text-[1.125rem] font-medium leading-6 text-white">
+        <span class="inline-flex min-h-[62px] max-w-[40rem] items-center truncate rounded-full bg-canvas/45 px-8 text-[1.125rem] font-medium leading-6 text-ink">
             {nowPlaying}
         </span>
     </div>

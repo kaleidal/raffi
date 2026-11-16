@@ -30,7 +30,7 @@
     <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div
         use:portal
-        class="raffi-modal-backdrop fixed inset-0 z-[220] flex items-center justify-center bg-black/80 backdrop-blur-sm"
+        class="raffi-modal-backdrop scheme-dark fixed inset-0 z-[220] flex items-center justify-center bg-canvas/80 backdrop-blur-sm"
         transition:fade={{ duration: 200 }}
         on:click|self={close}
     >
@@ -39,7 +39,7 @@
             transition:scale={{ duration: 200, start: 0.95 }}
         >
             <button
-                class="absolute top-4 right-4 z-10 p-2 bg-black/50 hover:bg-black/80 rounded-full text-white transition-colors cursor-pointer"
+                class="absolute top-4 right-4 z-10 p-2 bg-canvas/50 hover:bg-canvas/80 rounded-full text-ink transition-colors cursor-pointer"
                 on:click={close}
                 aria-label="Close Trailer"
             >

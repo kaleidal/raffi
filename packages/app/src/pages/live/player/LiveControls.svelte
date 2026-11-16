@@ -1,7 +1,7 @@
 <script lang="ts">
     import { Maximize, Star, ZoomIn, ZoomOut } from "@lucide/svelte";
-    import IconButton from "../../../components/common/IconButton.svelte";
-    import Slider from "../../../components/common/Slider.svelte";
+    import IconButton from "../../../components/common/controls/IconButton.svelte";
+    import Slider from "../../../components/common/controls/Slider.svelte";
     import PlayPauseIcon from "../../../components/player/PlayPauseIcon.svelte";
     import ChannelLogo from "../components/ChannelLogo.svelte";
     import { isAndroidPlatform } from "../../../lib/shell/platform";
@@ -23,28 +23,28 @@
     export let toggleFullscreen: () => void;
 </script>
 
-<div class="live-controls relative z-10 flex items-center text-white overflow-hidden">
-    <div class="absolute inset-0 rounded-[inherit] bg-[#000000]/10 backdrop-blur-xl pointer-events-none"></div>
+<div class="live-controls relative z-10 flex items-center text-ink overflow-hidden">
+    <div class="absolute inset-0 rounded-[inherit] bg-canvas/10 backdrop-blur-xl pointer-events-none"></div>
 
     <button class="live-play relative rounded-full cursor-pointer hover:opacity-80" onclick={togglePlay} aria-label={playing ? "Pause" : "Play"}>
         <PlayPauseIcon {playing} />
     </button>
 
     <div class="relative flex min-w-0 flex-1 items-center gap-3">
-        <span class="flex h-11 aspect-[3/2] shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/[0.08]">
+        <span class="flex h-11 aspect-[3/2] shrink-0 items-center justify-center overflow-hidden rounded-xl bg-ink/[0.08]">
             <ChannelLogo {channel} />
         </span>
         <span class="flex min-w-0 flex-col">
-            <span class="truncate font-poppins text-[0.95rem] font-medium">
-                {#if channel.number}<span class="mr-2 tabular-nums text-white/45">{channel.number}</span>{/if}{channel.name}
+            <span class="truncate text-[0.95rem] font-medium">
+                {#if channel.number}<span class="mr-2 tabular-nums text-ink/45">{channel.number}</span>{/if}{channel.name}
             </span>
             {#if airing}
-                <span class="flex min-w-0 items-center gap-2 font-poppins text-xs text-white/55">
+                <span class="flex min-w-0 items-center gap-2 text-xs text-ink/55">
                     <span class="truncate">{airing.title}</span>
-                    <span class="h-[3px] w-14 shrink-0 overflow-hidden rounded-full bg-white/15">
-                        <span class="block h-full origin-left bg-white/75" style="transform:scaleX({progressThrough(airing, now)})"></span>
+                    <span class="h-[3px] w-14 shrink-0 overflow-hidden rounded-full bg-ink/15">
+                        <span class="block h-full origin-left bg-ink/75" style="transform:scaleX({progressThrough(airing, now)})"></span>
                     </span>
-                    <span class="shrink-0 tabular-nums text-white/40">{formatClock(airing.stop)}</span>
+                    <span class="shrink-0 tabular-nums text-ink/40">{formatClock(airing.stop)}</span>
                 </span>
             {/if}
         </span>
@@ -52,18 +52,18 @@
 
     <div class="relative flex shrink-0 items-center gap-[10px]">
         <IconButton label={favourite ? "Remove from Favourites" : "Add to Favourites"} onClick={toggleFavourite}>
-            <Star size={20} color="#E9E9E9" fill={favourite ? "#E9E9E9" : "none"} strokeWidth={2} />
+            <Star size={20} fill={favourite ? "currentColor" : "none"} strokeWidth={2} />
         </IconButton>
         <IconButton label={objectFit === "contain" ? "Zoom" : "Fit"} onClick={toggleObjectFit}>
             {#if objectFit === "contain"}
-                <ZoomIn size={20} color="#E9E9E9" strokeWidth={2} />
+                <ZoomIn size={20} strokeWidth={2} />
             {:else}
-                <ZoomOut size={20} color="#E9E9E9" strokeWidth={2} />
+                <ZoomOut size={20} strokeWidth={2} />
             {/if}
         </IconButton>
         {#if !isAndroidPlatform}
             <IconButton label="Fullscreen" onClick={toggleFullscreen}>
-                <Maximize size={22} color="#E9E9E9" strokeWidth={2} />
+                <Maximize size={22} strokeWidth={2} />
             </IconButton>
             <div class="live-volume">
                 <Slider onInput={onVolumeChange} value={volume} label="Volume" />

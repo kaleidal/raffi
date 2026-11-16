@@ -50,7 +50,7 @@
 
 <button
     bind:this={button}
-    class="flex min-w-0 items-center gap-2 rounded-full bg-white/[0.07] px-5 py-2.5 font-poppins text-[0.95rem] font-medium text-white/85 hover:bg-white/[0.12] cursor-pointer"
+    class="flex min-w-0 items-center gap-2 rounded-full bg-ink/[0.07] px-5 py-2.5 text-[0.95rem] font-medium text-ink/85 hover:bg-ink/[0.12] cursor-pointer"
     onclick={toggle}
     aria-haspopup="listbox"
     aria-expanded={open}
@@ -63,7 +63,7 @@
     <div
         use:portal
         use:closeOutside
-        class="fixed z-[400] flex max-h-[min(30rem,70vh)] w-[min(22rem,calc(100vw-24px))] flex-col gap-1 rounded-2xl bg-[#181818] p-2 shadow-[0_20px_60px_rgba(0,0,0,0.45)]"
+        class="fixed z-[400] flex max-h-[min(30rem,70vh)] w-[min(22rem,calc(100vw-24px))] flex-col gap-1 rounded-2xl bg-surface p-2 shadow-[0_20px_60px_rgba(0,0,0,0.45)]"
         style={position}
         transition:fade={{ duration: 120 }}
         role="listbox"
@@ -75,25 +75,25 @@
             bind:value={query}
             type="text"
             placeholder="Filter groups"
-            class="mb-1 w-full rounded-xl bg-white/[0.06] px-3 py-2 font-poppins text-sm text-white placeholder:text-white/35 outline-none"
+            class="mb-1 w-full rounded-xl bg-ink/[0.06] px-3 py-2 text-sm text-ink placeholder:text-ink/35 outline-none"
         />
         <div class="min-h-0 overflow-y-auto no-scrollbar">
             {#each shown as group (group)}
                 <button
-                    class="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left font-poppins text-sm cursor-pointer {group === value
-                        ? 'bg-white text-black'
-                        : 'text-white/78 hover:bg-white/8 hover:text-white'}"
+                    class="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm cursor-pointer {group === value
+                        ? 'bg-accent text-on-accent'
+                        : 'text-ink/78 hover:bg-ink/8 hover:text-ink'}"
                     onclick={() => choose(group)}
                     role="option"
                     aria-selected={group === value}
                 >
                     <span class="truncate">{group}</span>
                     {#if counts.has(group)}
-                        <span class="shrink-0 tabular-nums {group === value ? 'text-black/45' : 'text-white/30'}">{counts.get(group)}</span>
+                        <span class="shrink-0 tabular-nums {group === value ? 'text-canvas/45' : 'text-ink/30'}">{counts.get(group)}</span>
                     {/if}
                 </button>
             {:else}
-                <p class="px-3 py-2 font-poppins text-sm text-white/40">No groups match.</p>
+                <p class="px-3 py-2 text-sm text-ink/40">No groups match.</p>
             {/each}
         </div>
     </div>

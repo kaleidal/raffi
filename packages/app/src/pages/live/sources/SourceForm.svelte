@@ -21,7 +21,7 @@
     let error = "";
 
     const input =
-        "min-h-11 rounded-2xl bg-white/8 px-4 text-sm text-white outline-none placeholder:text-white/30 focus:bg-white/12";
+        "min-h-11 rounded-2xl bg-ink/8 px-4 text-sm text-ink outline-none placeholder:text-ink/30 focus:bg-ink/12";
 
     const isWebAddress = (value: string) => /^https?:\/\/\S+$/i.test(value.trim());
 
@@ -82,14 +82,14 @@
 </script>
 
 <form class="flex min-h-0 flex-col gap-4" onsubmit={submit}>
-    <div class="relative grid h-11 w-full grid-cols-2 rounded-full bg-white/8 p-1">
+    <div class="relative grid h-11 w-full grid-cols-2 rounded-full bg-ink/8 p-1">
         <span
-            class="absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-full bg-white transition-transform duration-200 {kind === 'xtream' ? 'translate-x-full' : ''}"
+            class="absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-full bg-accent transition-transform duration-200 {kind === 'xtream' ? 'translate-x-full' : ''}"
         ></span>
         {#each [["m3u", "Playlist"], ["xtream", "Xtream Codes"]] as [value, label] (value)}
             <button
                 type="button"
-                class="relative z-10 rounded-full text-sm font-semibold cursor-pointer transition-colors duration-200 {kind === value ? 'text-black' : 'text-white/60 hover:text-white'}"
+                class="relative z-10 rounded-full text-sm font-semibold cursor-pointer transition-colors duration-200 {kind === value ? 'text-on-accent' : 'text-ink/60 hover:text-ink'}"
                 onclick={() => (kind = value as LiveSourceKind)}
             >
                 {label}
@@ -98,55 +98,55 @@
     </div>
 
     <label class="flex flex-col gap-2">
-        <span class="text-xs text-white/45">Name</span>
+        <span class="text-xs text-ink/45">Name</span>
         <input class={input} bind:value={name} placeholder="Optional" autocomplete="off" />
     </label>
 
     {#if kind === "m3u"}
         <label class="flex flex-col gap-2">
-            <span class="text-xs text-white/45">Playlist</span>
+            <span class="text-xs text-ink/45">Playlist</span>
             <input class={input} bind:value={playlistUrl} placeholder="https://example.com/playlist.m3u" autocomplete="off" />
         </label>
         <label class="flex flex-col gap-2">
-            <span class="text-xs text-white/45">Guide</span>
+            <span class="text-xs text-ink/45">Guide</span>
             <input class={input} bind:value={guideUrl} placeholder="Optional XMLTV address" autocomplete="off" />
         </label>
     {:else}
         <label class="flex flex-col gap-2">
-            <span class="text-xs text-white/45">Server</span>
+            <span class="text-xs text-ink/45">Server</span>
             <input class={input} bind:value={serverUrl} placeholder="http://example.com:8080" autocomplete="off" />
         </label>
         <div class="grid gap-4 sm:grid-cols-2">
             <label class="flex flex-col gap-2">
-                <span class="text-xs text-white/45">Username</span>
+                <span class="text-xs text-ink/45">Username</span>
                 <input class={input} bind:value={username} autocomplete="off" />
             </label>
             <label class="flex flex-col gap-2">
-                <span class="text-xs text-white/45">Password</span>
+                <span class="text-xs text-ink/45">Password</span>
                 <input class={input} bind:value={password} type="password" autocomplete="off" />
             </label>
         </div>
     {/if}
 
     {#if error}
-        <p class="text-sm text-red-300">{error}</p>
+        <p class="text-sm text-danger">{error}</p>
     {/if}
 
     <div class="flex justify-end gap-3 pt-2">
         <button
             type="button"
-            class="rounded-2xl bg-white/10 px-4 py-2 font-semibold text-white hover:bg-white/20 cursor-pointer"
+            class="rounded-2xl bg-ink/10 px-4 py-2 font-semibold text-ink hover:bg-ink/20 cursor-pointer"
             onclick={onCancel}
         >
             Cancel
         </button>
         <button
             type="submit"
-            class="flex min-w-24 items-center justify-center gap-2 rounded-2xl bg-white px-4 py-2 font-semibold text-black hover:bg-white/90 cursor-pointer disabled:cursor-wait disabled:opacity-70"
+            class="flex min-w-24 items-center justify-center gap-2 rounded-2xl bg-accent px-4 py-2 font-semibold text-on-accent hover:bg-accent/85 cursor-pointer disabled:cursor-wait disabled:opacity-70"
             disabled={saving}
         >
             {#if saving}
-                <LoadingSpinner size="16px" color="#000000" />
+                <LoadingSpinner size="16px" />
                 Loading channels
             {:else}
                 Save

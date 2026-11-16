@@ -247,7 +247,7 @@
         />
     {:else if $status.buffering}
         <div class="pointer-events-none absolute inset-0 flex items-center justify-center" transition:fade={{ duration: 150 }}>
-            <LoadingSpinner size="56px" color="#D8D8D8" />
+            <LoadingSpinner size="56px" />
         </div>
     {/if}
 
@@ -257,11 +257,11 @@
             : 'pointer-events-none -translate-y-10 opacity-0'}"
     >
         <button
-            class="grid size-[clamp(44px,3.2vw,54px)] place-items-center rounded-full bg-[#000000]/20 backdrop-blur-md transition-colors duration-200 hover:bg-[#FFFFFF]/20 cursor-pointer"
+            class="grid size-[clamp(44px,3.2vw,54px)] place-items-center rounded-full bg-canvas/20 backdrop-blur-md transition-colors duration-200 hover:bg-ink/20 cursor-pointer"
             onclick={close}
             aria-label="Close player"
         >
-            <ChevronLeft size={26} color="white" strokeWidth={2} />
+            <ChevronLeft size={26} strokeWidth={2} />
         </button>
     </div>
 

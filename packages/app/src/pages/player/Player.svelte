@@ -1825,11 +1825,11 @@
                 : '-translate-y-10 opacity-0 pointer-events-none'} will-change-transform will-change-opacity"
         >
             <button
-                class="player-nav-button bg-[#000000]/20 backdrop-blur-md hover:bg-[#FFFFFF]/20 transition-colors duration-200 rounded-full cursor-pointer"
+                class="player-nav-button bg-canvas/20 backdrop-blur-md hover:bg-ink/20 transition-colors duration-200 rounded-full cursor-pointer"
                 on:click={handleClose}
                 aria-label="Close player"
             >
-                <ChevronLeft size={26} color="white" strokeWidth={2} />
+                <ChevronLeft size={26} strokeWidth={2} />
             </button>
         </div>
 
@@ -1841,8 +1841,8 @@
             >
                 <button
                     class="player-nav-button backdrop-blur-md transition-all duration-200 rounded-full cursor-pointer {nextEpisodeHighlighted
-                        ? 'bg-white shadow-[0_0_0_4px_rgba(255,255,255,0.22),0_0_32px_rgba(255,255,255,0.5)] scale-105'
-                        : 'bg-[#000000]/20 hover:bg-[#FFFFFF]/20'}"
+                        ? 'bg-ink shadow-[0_0_0_4px_rgba(255,255,255,0.22),0_0_32px_rgba(255,255,255,0.5)] scale-105'
+                        : 'bg-canvas/20 hover:bg-ink/20'}"
                     on:click={handleNextEpisodeClick}
                     aria-label="Next episode"
                     title={nextEpisodeHighlighted ? "Next Episode — Outro" : "Next Episode"}
@@ -1859,7 +1859,7 @@
                     : '-translate-y-10 opacity-0'} will-change-transform will-change-opacity"
             >
                 <span
-                    class="inline-flex min-h-[clamp(48px,3.23vw,62px)] max-w-full items-center truncate rounded-full bg-[#000000]/20 p-4 text-[1rem] leading-6 font-medium text-white backdrop-blur-md transition-colors duration-200 sm:max-w-[40rem] sm:px-8 sm:text-[1.125rem] {$controlsVisible
+                    class="inline-flex min-h-[clamp(48px,3.23vw,62px)] max-w-full items-center truncate rounded-full bg-black/20 p-4 text-[1rem] leading-6 font-medium text-ink backdrop-blur-md transition-colors duration-200 sm:max-w-[40rem] sm:px-8 sm:text-[1.125rem] {$controlsVisible
                         ? 'pointer-events-auto'
                         : 'pointer-events-none'}"
                     title={nowPlayingLabel}

@@ -27,7 +27,7 @@
   <main class="relative">
     <section class="mx-auto max-w-6xl px-6 pb-14 pt-14 md:pb-20 md:pt-20">
       <div class="max-w-3xl">
-        <h1 class="font-poppins text-[44px] leading-[1.02] tracking-[-0.04em] md:text-[64px]">
+        <h1 class="text-[44px] leading-[1.02] tracking-[-0.04em] md:text-[64px]">
           Privacy,
           <span class="text-ink-muted">without the fog.</span>
         </h1>
@@ -40,15 +40,15 @@
 
       <div class="mt-12 grid gap-8 border-y border-well py-8 sm:grid-cols-3 sm:gap-10">
         <div>
-          <p class="font-poppins text-[18px] font-medium tracking-[-0.02em]">Local by default</p>
+          <p class="text-[18px] font-medium tracking-[-0.02em]">Local by default</p>
           <p class="mt-2 text-[14px] leading-6 text-ink-soft">An account is optional. Local mode keeps your library and preferences on your device.</p>
         </div>
         <div>
-          <p class="font-poppins text-[18px] font-medium tracking-[-0.02em]">No analytics</p>
+          <p class="text-[18px] font-medium tracking-[-0.02em]">No analytics</p>
           <p class="mt-2 text-[14px] leading-6 text-ink-soft">Raffi does not use advertising trackers, behavioral analytics, or sell personal information.</p>
         </div>
         <div>
-          <p class="font-poppins text-[18px] font-medium tracking-[-0.02em]">Integrations are optional</p>
+          <p class="text-[18px] font-medium tracking-[-0.02em]">Integrations are optional</p>
           <p class="mt-2 text-[14px] leading-6 text-ink-soft">Trakt, Stremio, Discord, direct players, and torrenting are features you control.</p>
         </div>
       </div>
@@ -269,7 +269,7 @@
             top and provide additional notice when a change materially affects how personal information is handled.
           </p>
           <div class="mt-8 border-t border-well pt-8">
-            <p class="font-poppins text-[18px] font-medium tracking-[-0.02em] text-ink">Questions or requests?</p>
+            <p class="text-[18px] font-medium tracking-[-0.02em] text-ink">Questions or requests?</p>
             <p class="mt-2">Email <a href="mailto:hello@kaleid.al">hello@kaleid.al</a>.</p>
           </div>
         </section>
@@ -286,7 +286,6 @@
 
   article h2 {
     color: var(--ink);
-    font-family: "Poppins", sans-serif;
     font-size: clamp(1.65rem, 3vw, 2rem);
     font-weight: 500;
     letter-spacing: -0.03em;
@@ -296,7 +295,6 @@
 
   article h3 {
     color: var(--ink);
-    font-family: "Poppins", sans-serif;
     font-size: 1rem;
     font-weight: 500;
     letter-spacing: -0.015em;

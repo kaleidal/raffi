@@ -43,7 +43,7 @@
 
 <button
     bind:this={button}
-    class="source-picker flex w-[clamp(56px,4vw,80px)] shrink-0 items-center justify-center bg-[#181818]/50 font-poppins text-[clamp(18px,1.4vw,26px)] font-semibold text-[#C3C3C3] hover:bg-[#262626]/60 cursor-pointer"
+    class="source-picker flex w-[clamp(56px,4vw,80px)] shrink-0 items-center justify-center bg-surface/50 text-[clamp(18px,1.4vw,26px)] font-semibold text-ink/75 hover:bg-raised/60 cursor-pointer"
     aria-label={sources.length ? "Switch source" : "Add a source"}
     aria-haspopup={sources.length ? "menu" : undefined}
     aria-expanded={open}
@@ -60,7 +60,7 @@
     <div
         use:portal
         use:closeOutside
-        class="fixed z-[400] flex w-[min(20rem,calc(100vw-24px))] flex-col gap-1 rounded-2xl bg-[#181818] p-2 shadow-[0_20px_60px_rgba(0,0,0,0.45)]"
+        class="fixed z-[400] flex w-[min(20rem,calc(100vw-24px))] flex-col gap-1 rounded-2xl bg-surface p-2 shadow-[0_20px_60px_rgba(0,0,0,0.45)]"
         style={position}
         transition:fade={{ duration: 120 }}
         role="menu"
@@ -68,21 +68,21 @@
     >
         {#each sources as source, index (source.id)}
             <button
-                class="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left font-poppins text-sm cursor-pointer {source.id === activeId
-                    ? 'bg-white text-black'
-                    : 'text-white/78 hover:bg-white/8 hover:text-white'}"
+                class="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm cursor-pointer {source.id === activeId
+                    ? 'bg-accent text-on-accent'
+                    : 'text-ink/78 hover:bg-ink/8 hover:text-ink'}"
                 onclick={() => {
                     open = false;
                     onSelect(source);
                 }}
                 role="menuitem"
             >
-                <span class="w-4 shrink-0 tabular-nums font-semibold {source.id === activeId ? 'text-black/50' : 'text-white/35'}">{index + 1}</span>
+                <span class="w-4 shrink-0 tabular-nums font-semibold {source.id === activeId ? 'text-canvas/50' : 'text-ink/35'}">{index + 1}</span>
                 <span class="truncate">{source.name}</span>
             </button>
         {/each}
         <button
-            class="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left font-poppins text-sm text-white/60 hover:bg-white/8 hover:text-white cursor-pointer"
+            class="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-ink/60 hover:bg-ink/8 hover:text-ink cursor-pointer"
             onclick={() => {
                 open = false;
                 onManage();
