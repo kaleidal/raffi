@@ -53,7 +53,6 @@
         sessionData,
         pendingSeek,
         seekGuard,
-        showSeekStyleModal,
         hasStarted as hasStartedStore,
         currentChapter,
         resetPlayerState,
@@ -66,13 +65,6 @@
     import * as IntroDb from "./chapters/introdb";
     import * as Discord from "./integrations/discord";
     import * as MediaSession from "./integrations/mediaSession";
-    import {
-        acknowledgeSeekStyleInfo,
-        getSeekBarStyleFromStorage,
-        persistSeekBarStyle,
-        shouldShowSeekStyleInfoModal,
-        type SeekBarStyle,
-    } from "./controls/seekStyle";
     import { createTraktScrobbler, TRAKT_COMPLETION_THRESHOLD } from "./integrations/traktScrobbleManager";
     import { createEmbedPlayback } from "./integrations/embedPlayback";
     import { createTorrentStatusPoller } from "./session/torrentStatusPolling";
@@ -126,8 +118,6 @@
     let errorModalOpen = false;
     let reprobeAttempted = false;
     let torrentFailureExitTimeout: ReturnType<typeof setTimeout> | null = null;
-    let seekBarStyle: SeekBarStyle = "raffi";
-    let pendingStartAfterSeekStyleModal = false;
     let introDbChapters: Chapter[] = [];
     let effectiveChapterMarkers: Chapter[] = [];
     let skipButtonLabel = "Skip Intro";
@@ -171,19 +161,6 @@
             console.warn("Failed to fetch IntroDB chapters", error);
             return [] as Chapter[];
         });
-    };
-
-    const handleSeekStyleChange = (style: SeekBarStyle) => {
-        seekBarStyle = style;
-        persistSeekBarStyle(style);
-    };
-
-    const handleSeekStyleAcknowledge = () => {
-        acknowledgeSeekStyleInfo();
-        showSeekStyleModal.set(false);
-        if (!pendingStartAfterSeekStyleModal) return;
-        pendingStartAfterSeekStyleModal = false;
-        void videoElem?.play();
     };
 
     const handleToggleObjectFit = () => {
@@ -305,8 +282,6 @@
         getPlaybackController: () => playbackController,
         setPlaybackController: (value) => (playbackController = value),
         getCueLinePercent: () => cueLinePercent,
-        shouldShowSeekStyleInfoModal,
-        setPendingStartAfterSeekStyleModal: (value) => (pendingStartAfterSeekStyleModal = value),
         setHasStarted: (value) => (hasStarted = value),
         setIntroDbChapters: (chapters) => (introDbChapters = chapters),
         handleProviderStatusMedia: ({ source, meta }) => {
@@ -376,12 +351,7 @@
     };
 
     const togglePlayWithFeedback = () => {
-        if (!videoElem || $showSeekStyleModal) return;
-        if (shouldShowSeekStyleInfoModal()) {
-            showSeekStyleModal.set(true);
-            pendingStartAfterSeekStyleModal = true;
-            return;
-        }
+        if (!videoElem) return;
         if (playPauseFeedbackTimeout) clearTimeout(playPauseFeedbackTimeout);
         playPauseFeedback = { type: videoElem.paused ? "play" : "pause", id: Date.now() };
         playPauseFeedbackTimeout = setTimeout(() => (playPauseFeedback = null), 450);
@@ -627,7 +597,6 @@
         loadingStage.set("Loading...");
         loadingDetails.set("");
         loadingProgress.set(null);
-        seekBarStyle = getSeekBarStyleFromStorage();
         window.addEventListener("message", embedPlayback.handleMessage);
         metadataCheckInterval = setInterval(checkMetadata, 1000);
         return () => {
@@ -797,7 +766,6 @@
             pendingSeek={$pendingSeek}
             loading={$loading}
             isPlaying={$isPlaying}
-            {seekBarStyle}
             onTogglePlayback={togglePlaybackFromMiniPlayer}
             onSeekInput={(time) => controlsManager.onSeekInput(time, pendingSeek.set)}
             onSeekChange={(time) => controlsManager.onSeekChange(time, seekToTime)}
@@ -805,7 +773,7 @@
     {/if}
 
     {#if $seekFeedback && !embedSrc}
-        <SeekFeedback type={$seekFeedback.type} {seekBarStyle} id={$seekFeedback.id} />
+        <SeekFeedback type={$seekFeedback.type} id={$seekFeedback.id} />
     {/if}
 
     <PlayerLoadingScreen
@@ -832,10 +800,6 @@
         noticeSecondaryLabel={streamAvailability?.dashboardUrl ? "Open Dashboard" : ""}
         onNoticePrimary={returnToStreams}
         onNoticeSecondary={() => streamAvailability?.dashboardUrl && void openExternal(streamAvailability.dashboardUrl)}
-        showSeekStyle={$showSeekStyleModal && !hasStarted && !miniPlayerActive}
-        {seekBarStyle}
-        onSeekStyleChange={handleSeekStyleChange}
-        onSeekStyleAcknowledge={handleSeekStyleAcknowledge}
     />
 
     {#if $playbackBuffering && !$loading && !miniPlayerActive && !embedSrc}
@@ -870,7 +834,6 @@
                 currentTime: $currentTime,
                 pendingSeek: $pendingSeek,
                 volume: $volume,
-                seekBarStyle,
                 chapterMarkers: effectiveChapterMarkers,
                 seekPreview,
                 buffered: bufferedRanges,
@@ -897,14 +860,10 @@
         showAudioSelection={$showAudioSelection}
         showSubtitleSelection={$showSubtitleSelection}
         showError={$showError && (hasStarted || miniPlayerActive)}
-        showSeekStyleModal={$showSeekStyleModal && (hasStarted || miniPlayerActive)}
         audioTracks={$audioTracks}
         subtitleTracks={$subtitleTracks}
         errorMessage={$errorMessage}
         errorDetails={$errorDetails}
-        {seekBarStyle}
-        onSeekStyleChange={handleSeekStyleChange}
-        onSeekStyleAcknowledge={handleSeekStyleAcknowledge}
         onAudioSelect={modalHandlers.onAudioSelect}
         onSubtitleSelect={modalHandlers.onSubtitleSelect}
         onSubtitleUpload={modalHandlers.onSubtitleUpload}

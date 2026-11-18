@@ -17,7 +17,6 @@
 
     export let duration = 0;
     export let time = 0;
-    export let inverted = false;
     export let chapters: Chapter[] = [];
     export let buffered: TimeRange[] = [];
     export let seekPreview: SeekPreview | null = null;
@@ -37,9 +36,9 @@
     let previewFrame: ImageBitmap | null = null;
     let previewRequest = 0;
 
-    $: segments = trackSegments(chapters, duration, inverted);
-    $: cursor = timeToFraction(time, duration, inverted);
-    $: bufferedBar = bufferedFractions(buffered, duration, inverted);
+    $: segments = trackSegments(chapters, duration);
+    $: cursor = timeToFraction(time, duration);
+    $: bufferedBar = bufferedFractions(buffered, duration);
     $: active = hovering || dragging || emphasized;
     $: hoverChapter = chapters.find((chapter) => hoverTime >= chapter.startTime && hoverTime < chapter.endTime) ?? null;
 
@@ -76,12 +75,12 @@
     const trackHover = ({ ratio, rect }: ScrubPosition) => {
         if (!hovering && !dragging) hoverTop = rect.top;
         hovering = true;
-        hoverTime = fractionToTime(ratio, duration, inverted);
+        hoverTime = fractionToTime(ratio, duration);
         hoverX = rect.left + ratio * rect.width;
         if (seekPreview) showPreview(seekPreview, hoverTime);
     };
 
-    const scrubTo = ({ ratio }: ScrubPosition) => onScrub(fractionToTime(ratio, duration, inverted));
+    const scrubTo = ({ ratio }: ScrubPosition) => onScrub(fractionToTime(ratio, duration));
 </script>
 
 <div
@@ -105,7 +104,7 @@
         onMove: scrubTo,
         onEnd: (position) => {
             dragging = false;
-            onCommit(fractionToTime(position.ratio, duration, inverted));
+            onCommit(fractionToTime(position.ratio, duration));
         },
     }}
 >

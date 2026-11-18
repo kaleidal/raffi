@@ -9,7 +9,6 @@
         currentTime: number;
         pendingSeek: number | null;
         volume: number;
-        seekBarStyle: "raffi" | "normal";
         chapterMarkers: Chapter[];
         seekPreview?: SeekPreview | null;
         buffered: TimeRange[];
@@ -36,6 +35,7 @@
     import { AudioLines, Download, Maximize, Scissors, Subtitles, ZoomIn, ZoomOut } from "@lucide/svelte";
     import { isAndroidPlatform } from "../../../lib/shell/platform";
     import { formatTime } from "../../../lib/utils/time";
+    import { persistShowRemaining, readShowRemaining } from "../../../pages/player/controls/timeDisplay";
     import ClipPanel from "../clip/ClipPanel.svelte";
     import PlayPauseIcon from "../PlayPauseIcon.svelte";
     import SeekBar from "../seek/SeekBar.svelte";
@@ -48,7 +48,6 @@
         currentTime,
         pendingSeek,
         volume,
-        seekBarStyle,
         chapterMarkers,
         seekPreview = null,
         buffered,
@@ -73,7 +72,12 @@
     let clipPanelOpen = $state(false);
 
     const displayedTime = $derived(pendingSeek ?? currentTime);
-    const inverted = $derived(seekBarStyle !== "normal");
+    let showRemaining = $state(readShowRemaining());
+
+    function toggleRemaining() {
+        showRemaining = !showRemaining;
+        persistShowRemaining(showRemaining);
+    }
 
     function setClipPanelOpen(open: boolean) {
         clipPanelOpen = open;
@@ -84,7 +88,7 @@
 <div class="flex w-full flex-col gap-[clamp(4px,0.5vw,10px)]">
     <div class="flex items-center gap-[clamp(12px,1vw,20px)]">
         <span class="player-time text-left font-medium text-ink/80 tabular-nums">
-            {formatTime(inverted ? Math.max(0, duration - displayedTime) : displayedTime)}
+            {formatTime(displayedTime)}
         </span>
         <div class="min-w-0 flex-1">
             {#if seek}
@@ -93,7 +97,6 @@
                 <SeekBar
                     {duration}
                     time={displayedTime}
-                    {inverted}
                     chapters={chapterMarkers}
                     {buffered}
                     {seekPreview}
@@ -103,7 +106,13 @@
                 />
             {/if}
         </div>
-        <span class="player-time text-right font-medium text-ink/80 tabular-nums">{formatTime(duration)}</span>
+        <button
+            class="player-time cursor-pointer text-right font-medium text-ink/80 tabular-nums transition-colors hover:text-ink"
+            aria-label={showRemaining ? "Show total time" : "Show time left"}
+            onclick={toggleRemaining}
+        >
+            {showRemaining ? `-${formatTime(Math.max(0, duration - displayedTime))}` : formatTime(duration)}
+        </button>
     </div>
 
     <div class="flex items-center justify-between gap-4">
@@ -155,7 +164,6 @@
         {videoSrc}
         {duration}
         currentTime={displayedTime}
-        {inverted}
         onClose={() => setClipPanelOpen(false)}
     />
 </div>

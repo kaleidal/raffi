@@ -16,7 +16,6 @@
     export let videoSrc: string | null = null;
     export let duration = 0;
     export let currentTime = 0;
-    export let inverted = false;
 
     export let onClose: () => void = () => {};
 
@@ -43,18 +42,6 @@
 
     let dragHandle: "start" | "end" | null = null;
 
-    const formatClipTimeLabel = (t: number) => {
-        // If the main seekbar is inverted and we know duration, mirror that style:
-        // show remaining as a negative value (e.g. -3:03).
-        if (inverted && duration > 0 && isFinite(duration)) {
-            const remaining = Math.max(0, duration - t);
-            return `-${formatTime(remaining)}`;
-        }
-        return formatTime(t);
-    };
-
-    const toSliderValue = (t: number) => (inverted ? clipMax - t : t);
-    const fromSliderValue = (v: number) => (inverted ? clipMax - v : v);
 
     const normalizeView = () => {
         ({ min: viewMinSlider, max: viewMaxSlider } = normalizeClipView(
@@ -88,8 +75,8 @@
         viewMaxSlider = clipMax;
         normalizeView();
 
-        startSlider = toSliderValue(clipStart);
-        endSlider = toSliderValue(clipEnd);
+        startSlider = clipStart;
+        endSlider = clipEnd;
     };
 
     $: if (open) resetDefaults();
@@ -101,22 +88,22 @@
 
     const onClipStartInput = (e: Event) => {
         const v = Number((e.target as HTMLInputElement).value);
-        let t = fromSliderValue(v);
+        let t = v;
         t = clamp(t, 0, clipMax);
         t = Math.min(t, clipEnd - MIN_CLIP_GAP);
         clipStart = t;
         normalizeRange();
-        startSlider = toSliderValue(clipStart);
+        startSlider = clipStart;
     };
 
     const onClipEndInput = (e: Event) => {
         const v = Number((e.target as HTMLInputElement).value);
-        let t = fromSliderValue(v);
+        let t = v;
         t = clamp(t, 0, clipMax);
         t = Math.max(t, clipStart + MIN_CLIP_GAP);
         clipEnd = t;
         normalizeRange();
-        endSlider = toSliderValue(clipEnd);
+        endSlider = clipEnd;
     };
 
     const applyTrackClickTime = (t: number) => {
@@ -134,8 +121,8 @@
         }
 
         normalizeRange();
-        startSlider = toSliderValue(clipStart);
-        endSlider = toSliderValue(clipEnd);
+        startSlider = clipStart;
+        endSlider = clipEnd;
     };
 
     const getPointerTime = (e: PointerEvent) => {
@@ -146,7 +133,7 @@
         const x = clamp(e.clientX - rect.left, 0, rect.width);
         const span = Math.max(0.0001, viewMaxSlider - viewMinSlider);
         const sliderV = viewMinSlider + (x / rect.width) * span;
-        const t = clamp(fromSliderValue(sliderV), 0, clipMax);
+        const t = clamp(sliderV, 0, clipMax);
         return { rect, x, t };
     };
 
@@ -157,8 +144,8 @@
             clipEnd = Math.max(clamp(t, 0, clipMax), clipStart + MIN_CLIP_GAP);
         }
         normalizeRange();
-        startSlider = toSliderValue(clipStart);
-        endSlider = toSliderValue(clipEnd);
+        startSlider = clipStart;
+        endSlider = clipEnd;
     };
 
     const onBarPointerDown = (e: PointerEvent) => {
@@ -279,15 +266,14 @@
 
     // Keep slider positions aligned to the shared 0..clipMax scale.
     $: if (open) {
-        startSlider = toSliderValue(clipStart);
-        endSlider = toSliderValue(clipEnd);
+        startSlider = clipStart;
+        endSlider = clipEnd;
     }
 
-    $: nowSlider = toSliderValue(Math.min(Math.max(0, currentTime), clipMax));
+    $: nowSlider = Math.min(Math.max(0, currentTime), clipMax);
     $: nowLeft = clamp(viewPercent(nowSlider, { min: viewMinSlider, max: viewMaxSlider }), 0, 100);
 
-    // Selection is rendered based on slider positions so it always matches the thumbs
-    // (including inverted mode).
+    // Selection is rendered based on slider positions so it always matches the thumbs.
     $: {
         const view = { min: viewMinSlider, max: viewMaxSlider };
         const left = clamp(viewPercent(Math.min(startSlider, endSlider), view), 0, 100);
@@ -315,12 +301,12 @@
                     <span
                         class="text-[1rem] font-[500] text-ink"
                         style="font-variant-numeric: tabular-nums; font-feature-settings:'tnum';"
-                    >{formatClipTimeLabel(clipStart)}</span>
+                    >{formatTime(clipStart)}</span>
                     <span class="text-[1rem] font-[500] text-ink/85">End</span>
                     <span
                         class="text-[1rem] font-[500] text-ink"
                         style="font-variant-numeric: tabular-nums; font-feature-settings:'tnum';"
-                    >{formatClipTimeLabel(clipEnd)}</span>
+                    >{formatTime(clipEnd)}</span>
                 </div>
 
                 <div class="flex items-center gap-3">

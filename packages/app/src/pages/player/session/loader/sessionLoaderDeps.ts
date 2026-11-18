@@ -15,8 +15,6 @@ export type PlayerSessionLoaderDeps = {
     getPlaybackController: () => ClientPlaybackController | null;
     setPlaybackController: (value: ClientPlaybackController | null) => void;
     getCueLinePercent: () => number;
-    shouldShowSeekStyleInfoModal: () => boolean;
-    setPendingStartAfterSeekStyleModal: (value: boolean) => void;
     setHasStarted: (value: boolean) => void;
     setIntroDbChapters: (chapters: Chapter[]) => void;
     resolvePlaybackStart: (context: {

@@ -20,7 +20,6 @@
     import * as IntroDb from "../chapters/introdb";
     import PlayerLoadingScreen from "../components/PlayerLoadingScreen.svelte";
     import { loadingDetails, loadingProgress, loadingStage } from "../playerState";
-    import { getSeekBarStyleFromStorage } from "../controls/seekStyle";
     import { createTraktScrobbler } from "../integrations/traktScrobbleManager";
     import * as Subtitles from "../subtitles/subtitles";
     import type { Chapter, Track } from "../types";
@@ -45,7 +44,6 @@
     const playback = createNativePlayback();
     const torrent = createLimboTorrentStream();
     const { state: playbackState, tracks, error } = playback;
-    const seekBarStyle = getSeekBarStyleFromStorage();
 
     let sessionKey: string | null = null;
     let sessionRun = 0;
@@ -386,7 +384,6 @@
             {season}
             {episode}
             chapters={Chapters.getEffectiveChapterSegments(null, introDbChapters)}
-            {seekBarStyle}
             audioLabel={selectedLabel(audioOptions, "Audio")}
             subtitleLabel={selectedLabel(subtitleOptions, "Off")}
             {skipLabel}

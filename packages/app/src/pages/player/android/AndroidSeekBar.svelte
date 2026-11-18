@@ -11,7 +11,6 @@
     export let duration = 0;
     export let buffered: TimeRange[] = [];
     export let chapters: Chapter[] = [];
-    export let inverted = false;
     export let element: HTMLDivElement | null = null;
     export let onCommit: (time: number) => void;
     /** The time being scrubbed to, or null once the scrub is committed. */
@@ -42,10 +41,9 @@
 
     /** Moves the knob one step left or right, speeding up while the button is held. */
     export function nudge(rightward: boolean) {
-        const forward = inverted ? !rightward : rightward;
         const multiplier = Math.min(MAX_STEP_MULTIPLIER, 1 + Math.floor(presses / PRESSES_PER_SPEEDUP));
         presses += 1;
-        const target = (scrubTime ?? time) + (forward ? 1 : -1) * STEP_SECONDS * multiplier;
+        const target = (scrubTime ?? time) + (rightward ? 1 : -1) * STEP_SECONDS * multiplier;
         scrubTime = Math.max(0, Math.min(duration, target));
         onScrub(scrubTime);
         if (commitTimer) clearTimeout(commitTimer);
@@ -106,7 +104,6 @@
     <SeekBar
         {duration}
         time={shownTime}
-        {inverted}
         {chapters}
         {buffered}
         disabled={isTvPlatform}

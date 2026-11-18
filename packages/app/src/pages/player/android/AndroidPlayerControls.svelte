@@ -1,7 +1,6 @@
 <script lang="ts">
     import PlayerChrome from "../../../components/player/chrome/PlayerChrome.svelte";
     import type { ShowResponse } from "../../../lib/library/types/meta_types";
-    import type { SeekBarStyle } from "../controls/seekStyle";
     import type { Chapter } from "../types";
     import AndroidSeekBar from "./AndroidSeekBar.svelte";
     import type { NativePlaybackState } from "./nativePlayback";
@@ -12,7 +11,6 @@
     export let season: number | null;
     export let episode: number | null;
     export let chapters: Chapter[] = [];
-    export let seekBarStyle: SeekBarStyle;
     export let audioLabel: string;
     export let subtitleLabel: string;
     export let skipLabel: string | null;
@@ -63,7 +61,6 @@
         currentTime: state.position,
         pendingSeek: scrubTime,
         volume: 1,
-        seekBarStyle,
         chapterMarkers: chapters,
         buffered,
         visible,
@@ -89,7 +86,6 @@
             duration={state.duration}
             {buffered}
             {chapters}
-            inverted={seekBarStyle !== "normal"}
             onCommit={onSeek}
             onScrub={handleScrub}
         />

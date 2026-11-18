@@ -97,36 +97,12 @@ export function createControlsManager(
         if (event.code === "Space") {
             event.preventDefault();
             togglePlayFn();
-        } else if (event.code === "ArrowLeft") {
-            const seekBarStyle = localStorage.getItem("seek_bar_style") || "raffi";
-            if (seekBarStyle === "normal") {
-                // Backward 5s
-                performSeek(currentTime - 5);
-                if (seekFeedbackTimeout) clearTimeout(seekFeedbackTimeout);
-                setSeekFeedback({ type: "backward", id: Date.now() });
-                seekFeedbackTimeout = setTimeout(() => setSeekFeedback(null), 500);
-            } else {
-                // Forward 5s (inverted)
-                performSeek(currentTime + 5);
-                if (seekFeedbackTimeout) clearTimeout(seekFeedbackTimeout);
-                setSeekFeedback({ type: "forward", id: Date.now() });
-                seekFeedbackTimeout = setTimeout(() => setSeekFeedback(null), 500);
-            }
-        } else if (event.code === "ArrowRight") {
-            const seekBarStyle = localStorage.getItem("seek_bar_style") || "raffi";
-            if (seekBarStyle === "normal") {
-                // Forward 5s
-                performSeek(currentTime + 5);
-                if (seekFeedbackTimeout) clearTimeout(seekFeedbackTimeout);
-                setSeekFeedback({ type: "forward", id: Date.now() });
-                seekFeedbackTimeout = setTimeout(() => setSeekFeedback(null), 500);
-            } else {
-                // Backward 5s (inverted)
-                performSeek(currentTime - 5);
-                if (seekFeedbackTimeout) clearTimeout(seekFeedbackTimeout);
-                setSeekFeedback({ type: "backward", id: Date.now() });
-                seekFeedbackTimeout = setTimeout(() => setSeekFeedback(null), 500);
-            }
+        } else if (event.code === "ArrowLeft" || event.code === "ArrowRight") {
+            const type = event.code === "ArrowRight" ? "forward" : "backward";
+            performSeek(currentTime + (type === "forward" ? 5 : -5));
+            if (seekFeedbackTimeout) clearTimeout(seekFeedbackTimeout);
+            setSeekFeedback({ type, id: Date.now() });
+            seekFeedbackTimeout = setTimeout(() => setSeekFeedback(null), 500);
         } else if (event.code === "ArrowUp") {
             const newVolume = Math.min(1, volume + 0.1);
             setVolume(newVolume);

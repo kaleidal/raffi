@@ -43,7 +43,6 @@ import {
     pendingSeek,
     seekGuard,
     firstSeekLoad,
-    showSeekStyleModal,
     currentChapter,
 } from "../playerState";
 
@@ -308,13 +307,6 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                 // ignore
             }
 
-            const needsSeekStyleModal =
-                !!deps.autoPlay && deps.shouldShowSeekStyleInfoModal();
-            if (needsSeekStyleModal) {
-                showSeekStyleModal.set(true);
-                deps.setPendingStartAfterSeekStyleModal(true);
-            }
-
             if (useClientPlayback && clientPlayback) {
                 await attachClientPlayback({
                     videoElem,
@@ -322,7 +314,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                     sessionSource,
                     session: result,
                     effectiveStartTime,
-                    autoStart: !needsSeekStyleModal && deps.autoPlay,
+                    autoStart: deps.autoPlay,
                     signal: abortController.signal,
                     isStale,
                     deps,

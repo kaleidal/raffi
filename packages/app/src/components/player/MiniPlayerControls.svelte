@@ -8,7 +8,6 @@
     export let pendingSeek: number | null = null;
     export let loading = false;
     export let isPlaying = false;
-    export let seekBarStyle: "raffi" | "normal" = "raffi";
     export let onSeekInput: (time: number) => void;
     export let onSeekChange: (time: number) => void;
     export let onTogglePlayback: () => void;
@@ -16,10 +15,9 @@
     let hovering = false;
 
     $: displayedTime = pendingSeek ?? currentTime;
-    $: inverted = seekBarStyle !== "normal";
-    $: fill = timeToFraction(displayedTime, duration, inverted);
+    $: fill = timeToFraction(displayedTime, duration);
 
-    const timeAt = ({ ratio }: ScrubPosition) => fractionToTime(ratio, duration, inverted);
+    const timeAt = ({ ratio }: ScrubPosition) => fractionToTime(ratio, duration);
 </script>
 
 <div

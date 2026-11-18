@@ -15,11 +15,11 @@
         <img
             src={meta.logo}
             alt={meta.name}
-            class="h-[clamp(36px,3.4vw,64px)] w-auto max-w-[min(340px,60vw)] object-contain object-left"
+            class="h-[clamp(64px,6vw,120px)] w-auto max-w-[min(480px,55vw)] object-contain object-left"
             onerror={() => (logoFailed = true)}
         />
     {:else}
-        <span class="truncate text-[clamp(20px,1.7vw,30px)] font-semibold text-ink">{meta.name}</span>
+        <span class="truncate text-[clamp(26px,2.4vw,42px)] font-bold text-ink">{meta.name}</span>
     {/if}
     {#if line}
         <span class="max-w-full truncate text-[clamp(14px,1vw,18px)] font-medium whitespace-pre text-ink/75">{line}</span>

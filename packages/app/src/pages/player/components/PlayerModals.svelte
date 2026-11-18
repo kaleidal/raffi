@@ -1,17 +1,14 @@
 <script lang="ts">
     import TrackSelectionModal from "../../../components/player/TrackSelectionModal.svelte";
     import PlayerErrorModal from "../../../components/player/modals/PlayerErrorModal.svelte";
-    import SeekStyleInfoModal from "../../../components/player/modals/SeekStyleInfoModal.svelte";
 
     export let showAudioSelection: boolean;
     export let showSubtitleSelection: boolean;
     export let showError: boolean;
-    export let showSeekStyleModal: boolean = false;
     export let audioTracks: any[];
     export let subtitleTracks: any[];
     export let errorMessage: string;
     export let errorDetails: string;
-    export let seekBarStyle: "raffi" | "normal" = "raffi";
 
     export let onAudioSelect: (detail: any) => void;
     export let onSubtitleSelect: (detail: any) => void;
@@ -23,8 +20,6 @@
     export let onCloseAudio: () => void;
     export let onCloseSubtitle: () => void;
 
-    export let onSeekStyleAcknowledge: () => void = () => {};
-    export let onSeekStyleChange: (style: "raffi" | "normal") => void = () => {};
 </script>
 
 {#if showAudioSelection}
@@ -58,10 +53,3 @@
     />
 {/if}
 
-{#if showSeekStyleModal}
-    <SeekStyleInfoModal
-        {seekBarStyle}
-        onStyleChange={onSeekStyleChange}
-        onAcknowledge={onSeekStyleAcknowledge}
-    />
-{/if}

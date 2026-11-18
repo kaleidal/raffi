@@ -7,7 +7,6 @@
     import LoadingSpinner from "../../../components/common/LoadingSpinner.svelte";
     import TitleLogo from "../../../components/common/TitleLogo.svelte";
     import { episodeLine } from "../../../components/player/chrome/episodeLine";
-    import SeekStyleChoice from "./SeekStyleChoice.svelte";
 
     let {
         loading,
@@ -33,10 +32,6 @@
         noticeSecondaryLabel = "",
         onNoticePrimary = () => {},
         onNoticeSecondary = () => {},
-        showSeekStyle = false,
-        seekBarStyle = "raffi",
-        onSeekStyleChange = () => {},
-        onSeekStyleAcknowledge = () => {},
     }: {
         loading: boolean;
         onClose: () => void;
@@ -61,21 +56,17 @@
         noticeSecondaryLabel?: string;
         onNoticePrimary?: () => void;
         onNoticeSecondary?: () => void;
-        showSeekStyle?: boolean;
-        seekBarStyle?: "raffi" | "normal";
-        onSeekStyleChange?: (style: "raffi" | "normal") => void;
-        onSeekStyleAcknowledge?: () => void;
     } = $props();
 
     let logoFailed = $state(false);
 
-    const blocked = $derived(showError || showNotice || showSeekStyle);
+    const blocked = $derived(showError || showNotice);
     const resuming = $derived(backdropMode === "frame" && Boolean(backdropSrc) && !blocked);
     const backdrop = $derived(backdropSrc ?? metaData?.meta?.background ?? metaData?.meta?.poster ?? null);
     const fill = $derived(progress === null ? null : Math.max(0, Math.min(1, progress)));
     const line = $derived(episodeLine(metaData, season, episode));
     const label = $derived(
-        showError ? errorMessage || "Playback error" : showNotice ? noticeTitle : showSeekStyle ? "Choose seek bar style" : stage || "Loading video",
+        showError ? errorMessage || "Playback error" : showNotice ? noticeTitle : stage || "Loading video",
     );
 
     const button = "flex cursor-pointer items-center justify-center gap-2 rounded-full px-7 py-3 text-[15px] font-semibold whitespace-nowrap transition-colors";
@@ -159,8 +150,6 @@
                             {/if}
                         </div>
                     </div>
-                {:else if showSeekStyle}
-                    <SeekStyleChoice style={seekBarStyle} onChange={onSeekStyleChange} onContinue={onSeekStyleAcknowledge} />
                 {:else}
                     <div class="flex flex-col gap-1.5" in:fade={{ duration: 200 }}>
                         {#if line}
