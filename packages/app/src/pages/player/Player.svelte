@@ -135,6 +135,7 @@
     let isTearingDown = false;
     let miniPlayerActive = false;
     let loadingBackdrop: LoadingBackdrop = { src: null, mode: "art" };
+    let pictureAspect: number | null = null;
     let clipPanelOpen = false;
     let cueLinePercent = 92;
     let resizeCounter = 0;
@@ -531,6 +532,7 @@
     const handlePlaying = () => {
         handlePlay();
         hasStarted = true;
+        pictureAspect = videoElem.videoHeight ? videoElem.videoWidth / videoElem.videoHeight : null;
         clearWatchedProgressOnStart();
         void traktScrobbler.send("start");
         Discord.updateDiscordActivity(metaData, season, episode, $duration, $currentTime, true);
@@ -860,6 +862,7 @@
             }}
             onKeepWatching={playbackHealth.dismiss}
             onClose={handleClose}
+            {pictureAspect}
             bind:panel={controlsPanel}
             controls={embedSrc ? null : {
                 isPlaying: $isPlaying,
