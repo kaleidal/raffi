@@ -118,11 +118,11 @@ describe("Raffi Sync authentication", () => {
 			invalidations += 1;
 		});
 		globalThis.fetch = (async () => Response.json(
-			{ error: "Join the party to view members" },
+			{ error: "This list belongs to someone else" },
 			{ status: 403 },
 		)) as typeof fetch;
 
-		await expect(syncGet("/watch-parties/example")).rejects.toThrow("Join the party to view members");
+		await expect(syncGet("/lists/example")).rejects.toThrow("This list belongs to someone else");
 		expect(refreshes).toBe(0);
 		expect(invalidations).toBe(0);
 	});

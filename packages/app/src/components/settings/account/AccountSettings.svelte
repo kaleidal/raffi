@@ -4,7 +4,7 @@
 	import AccountStateMismatchSection from "./AccountStateMismatchSection.svelte";
 	import LocalModeSignInSection from "./LocalModeSignInSection.svelte";
 	import SignOutDialog from "./SignOutDialog.svelte";
-	import StremioImportModal from "./StremioImportModal.svelte";
+	import StremioImportModal from "./stremioImport/StremioImportModal.svelte";
 	import {
 		clearLocalState,
 		getLibrary,

@@ -7,7 +7,6 @@
     export let videoSrc: string | null = null;
     export let duration = 0;
     export let currentTime = 0;
-    export let isWatchPartyMember = false;
     export let inverted = false;
 
     export let onClose: () => void = () => {};
@@ -346,7 +345,7 @@
     $: endVisible = endLeft >= 0 && endLeft <= 100;
 </script>
 
-{#if open && !isWatchPartyMember}
+{#if open}
     <div
         in:slide={{ duration: 200, axis: "y" }}
         out:slide={{ duration: 200, axis: "y" }}

@@ -101,7 +101,6 @@
             currentAudioLabel={audioLabel}
             currentSubtitleLabel={subtitleLabel}
             objectFit={fit}
-            showWatchParty={false}
             togglePlay={onToggle}
             onSeekInput={() => {}}
             onSeekChange={onSeek}

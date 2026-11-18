@@ -2,7 +2,7 @@
 
 ![Raffi](preview.png)
 
-Raffi is a streaming app built around Stremio addons. Add the addons you already use, and everything they offer shows up in one library with a fast player, progress tracking and watch parties.
+Raffi is a streaming app built around Stremio addons. Add the addons you already use, and everything they offer shows up in one library with a fast player and progress tracking.
 
 Raffi doesn't come with anything to stream. What you can watch depends on the addons you add.
 
@@ -14,7 +14,6 @@ Raffi doesn't come with anything to stream. What you can watch depends on the ad
 - **Player:** switch audio and subtitle tracks, adjust subtitle delay, preview frames on the seek bar, skip intros and recaps, save clips, and keep watching in a mini player.
 - **Audio:** Dolby Digital, Dolby Digital Plus, DTS and TrueHD all play in the app on desktop, and every text subtitle track in an MKV is available as it streams.
 - **Library:** continue watching, per-episode progress, and your own lists, synced across devices with an account or kept on your device in local mode.
-- **Watch parties:** synced playback with host controls.
 - **Trakt:** connect with a short code to send your progress to your profile.
 - **Torrents:** stream through [Limbo](https://limbo.kaleid.al), on the same computer or, for Android, on a paired computer on your network.
 - **Live TV:** add M3U playlists or Xtream Codes accounts and browse channels in a guide or a grid, with XMLTV programme data, favourites and channel up and down in the player. Turn it on in Settings under Live TV.
@@ -62,7 +61,6 @@ Not everything works everywhere yet:
 | Torrents through Limbo | Yes | No | Yes |
 | Local files | Yes | No | No |
 | Saving clips | Yes | No | No |
-| Watch parties | Yes | Yes | No |
 | Live TV | Yes | Only servers that allow browser access | Yes |
 
 ## Development
@@ -98,7 +96,7 @@ bun run validate
 | [`apps/desktop`](apps/desktop) | Electron shell |
 | [`apps/web`](apps/web/README.md) | SvelteKit build, live at [web.raffi.al](https://web.raffi.al) |
 | [`apps/android`](apps/android/README.md) | Kotlin host for phones and TVs, with native playback through Media3 |
-| [`services/sync`](services/sync/README.md) | Accounts, cloud sync, Trakt and watch parties, on Cloudflare Workers |
+| [`services/sync`](services/sync/README.md) | Accounts, cloud sync and Trakt, on Cloudflare Workers |
 | [`marketing`](marketing) | The [raffi.al](https://raffi.al) site |
 
 ### Playback

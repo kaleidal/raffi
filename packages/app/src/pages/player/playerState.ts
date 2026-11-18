@@ -55,11 +55,6 @@ export const pendingSeek = writable<number | null>(null);
 export const seekGuard = writable(false);
 export const firstSeekLoad = writable(false);
 
-// Watch party state
-export const showWatchPartyModal = writable(false);
-export const showPartyEndModal = writable(false);
-export const partyEndReason = writable<"host_left" | "party_deleted">("host_left");
-
 export function resetPlayerState() {
     isPlaying.set(false);
     loading.set(true);
@@ -92,7 +87,4 @@ export function resetPlayerState() {
     pendingSeek.set(null);
     seekGuard.set(false);
     firstSeekLoad.set(false);
-    showWatchPartyModal.set(false);
-    showPartyEndModal.set(false);
-    partyEndReason.set("host_left");
 }

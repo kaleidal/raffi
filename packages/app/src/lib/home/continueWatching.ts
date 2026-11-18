@@ -1,4 +1,7 @@
 import type { Episode, ShowResponse } from "../library/types/meta_types";
+import type { LibraryItem } from "../db/types";
+import { updateLibraryPoster } from "../db/db";
+import { getCachedMetaData } from "../library/metaCache";
 import type { ProgressItem } from "../../pages/meta/types";
 import { getSeriesResumeEpisode } from "../../pages/meta/episodeSelection";
 
@@ -56,4 +59,92 @@ function seriesResume(item: WatchingItem): ResumePoint {
 
 export function resumePoint(item: WatchingItem): ResumePoint {
     return item.meta.type === "movie" ? movieResume(item) : seriesResume(item);
+}
+
+export type LoadedWatchingItem = ShowResponse & { libraryItem: any };
+
+export async function loadWatchingItem(
+    item: LibraryItem,
+    previous: LoadedWatchingItem | undefined,
+): Promise<LoadedWatchingItem | null> {
+    try {
+        let meta: ShowResponse;
+        if (item.type) {
+            meta = await getCachedMetaData(item.imdb_id, item.type, {
+                allowStale: true,
+            });
+        } else {
+            try {
+                meta = await getCachedMetaData(
+                    item.imdb_id,
+                    "series",
+                    { allowStale: true },
+                );
+            } catch {
+                meta = await getCachedMetaData(
+                    item.imdb_id,
+                    "movie",
+                    { allowStale: true },
+                );
+            }
+        }
+
+        if (meta && meta.meta) {
+            if (!item.poster && meta.meta.poster) {
+                try {
+                    await updateLibraryPoster(
+                        item.imdb_id,
+                        meta.meta.poster,
+                    );
+                    item.poster = meta.meta.poster;
+                } catch (e) {
+                    console.error("Failed to backfill poster", e);
+                }
+            }
+
+            return {
+                ...meta,
+                meta: {
+                    ...meta.meta,
+                    poster: item.poster || meta.meta.poster,
+                },
+                libraryItem: item,
+            };
+        } else {
+            console.warn("No meta found for:", item.imdb_id);
+        }
+    } catch (e) {
+        console.error(`Failed to load meta for ${item.imdb_id}`, e);
+
+        if (previous) {
+            return {
+                ...previous,
+                meta: {
+                    ...previous.meta,
+                    poster: item.poster || previous.meta.poster,
+                },
+                libraryItem: item,
+            };
+        }
+
+        if (item.poster) {
+            return {
+                meta: {
+                    poster: item.poster,
+                    imdb_id: item.imdb_id,
+                    type: item.type,
+                    name: "",
+                    id: item.imdb_id,
+                    genres: [],
+                    releaseInfo: "",
+                    description: "",
+                    cast: [],
+                    videos: [],
+                    popularities: {} as any,
+                } as any,
+                libraryItem: item,
+            };
+        }
+    }
+    return null;
 }

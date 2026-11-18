@@ -6,11 +6,13 @@
 		getTraktStatus,
 		startTraktDeviceSignIn,
 		disconnectTrakt as disconnectTraktFromDb,
+	} from "../../../lib/db/db";
+	import {
 		getStremioStatus,
 		syncStremioLibrary,
 		disconnectStremio,
-		type StremioConnectionStatus,
-	} from "../../../lib/db/db";
+	} from "../../../lib/import/stremioAccount";
+	import type { StremioConnectionStatus } from "../../../lib/import/stremioConnection";
 	import { openTraktActivation, waitForTraktApproval } from "../../../lib/auth/traktAuth";
 	import { onDestroy } from "svelte";
 	import AccountProfile from "./AccountProfile.svelte";

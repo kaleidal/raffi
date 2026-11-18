@@ -1,7 +1,7 @@
 <script lang="ts">
     import { fade } from "svelte/transition";
     import Skeleton from "../../common/Skeleton.svelte";
-    import type { SearchTitleResult, SplitSearchResults } from "../../../lib/library/library";
+    import type { SearchTitleResult, SplitSearchResults } from "../../../lib/library/titleSearch";
 
     export let results: SplitSearchResults;
     export let loading = false;

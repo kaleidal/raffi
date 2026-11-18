@@ -4,7 +4,7 @@ import {
     hasSupportedStremioAddonResources,
     normalizeStremioTransportUrl,
 } from "./stremioAddons";
-import type { StremioImportPreviewItem } from "./stremioImport";
+import type { StremioImportPreviewItem } from "./stremioLibrary/types";
 
 export interface StremioAddonPreviewItem {
     id: string;

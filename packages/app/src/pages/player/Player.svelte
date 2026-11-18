@@ -10,12 +10,10 @@
     import PlayerVideo from "./components/PlayerVideo.svelte";
     import PlayerLoadingScreen from "./components/PlayerLoadingScreen.svelte";
     import PlayerModals from "./components/PlayerModals.svelte";
-    import PlayerWatchParty from "./components/PlayerWatchParty.svelte";
     import LoadingSpinner from "../../components/common/LoadingSpinner.svelte";
     import type { ShowResponse } from "../../lib/library/types/meta_types";
-    import { watchParty } from "../../lib/watchParty/store";
     import { localMode } from "../../lib/stores/authStore";
-    import { cloudSyncStatus, flushPendingLibraryProgress } from "../../lib/db/db";
+    import { flushPendingLibraryProgress } from "../../lib/db/db";
     import {
         autoSkipIntros,
         miniPlayerOnMinimize,
@@ -55,9 +53,6 @@
         showError,
         errorMessage,
         errorDetails,
-        showWatchPartyModal,
-        showPartyEndModal,
-        partyEndReason,
         showAudioSelection,
         showSubtitleSelection,
         audioTracks,
@@ -79,7 +74,6 @@
     import * as IntroDb from "./chapters/introdb";
     import * as Discord from "./integrations/discord";
     import * as MediaSession from "./integrations/mediaSession";
-    import * as WatchParty from "./integrations/watchParty";
     import {
         acknowledgeSeekStyleInfo,
         getSeekBarStyleFromStorage,
@@ -127,8 +121,6 @@
     export let startTime: number = 0;
     export let season: number | null = null;
     export let episode: number | null = null;
-    export let joinPartyId: string | null = null;
-    export let autoJoin: boolean = false;
     export let streamAvailability: StreamAvailabilityHint | null = null;
 
     const imdbID = metaData?.meta?.imdb_id || null;
@@ -262,7 +254,6 @@
         pendingStartAfterSeekStyleModal = false;
 
         if (!videoElem) return;
-        if ($watchParty.isActive && !$watchParty.isHost) return;
         try {
             await videoElem.play();
         } catch {
@@ -313,14 +304,6 @@
 
     const openSubtitleSelection = () => {
         showSubtitleSelection.set(true);
-    };
-
-    const openWatchPartyModal = () => {
-        if (embedSrc || $localMode || !$cloudSyncStatus.cloudFeaturesAvailable) {
-            showWatchPartyModal.set(false);
-            return;
-        }
-        showWatchPartyModal.set(true);
     };
 
     const openDesktopDownload = () => {
@@ -510,8 +493,7 @@
 
     $: bingeNextSupported =
         metaData?.meta?.type === "series" &&
-        Boolean($selectedStream?.behaviorHints?.bingeGroup) &&
-        !$watchParty.isActive;
+        Boolean($selectedStream?.behaviorHints?.bingeGroup);
 
     $: nextEpisodePrefetchWindow = Chapters.getNextEpisodePrefetchWindow(
         $duration,
@@ -692,9 +674,6 @@
                     $isPlaying,
                 );
             },
-            isWatchPartyHost: $watchParty.isHost,
-            isPlaying: $isPlaying,
-            updatePlaybackState: WatchParty.updatePlaybackState,
             setPendingSeek: pendingSeek.set,
             setCurrentTime: currentTime.set,
             setShowCanvas: showCanvas.set,
@@ -711,8 +690,6 @@
     };
 
     const togglePlayWithFeedback = () => {
-        if ($watchParty.isActive && !$watchParty.isHost) return;
-
         if (!videoElem) return;
 
         if ($showSeekStyleModal) return;
@@ -728,7 +705,6 @@
     };
 
     const togglePlaybackFromMiniPlayer = () => {
-        if ($watchParty.isActive && !$watchParty.isHost) return;
         if (!videoElem) return;
 
         if (videoElem.paused) {
@@ -783,12 +759,7 @@
 
     $: hasStartedStore.set(hasStarted);
 
-    $: controlsManager = Controls.createControlsManager(
-        playerContainer,
-        videoElem,
-        $watchParty.isActive,
-        $watchParty.isHost,
-    );
+    $: controlsManager = Controls.createControlsManager(playerContainer, videoElem);
 
     // When clipping is open, keep controls visible (no idle auto-hide).
     $: if (controlsManager?.setPinned) {
@@ -798,7 +769,6 @@
     onMount(() => {
         resetPlayerState();
         hasStarted = false;
-        pendingAutoJoin = Boolean(joinPartyId && autoJoin);
 
         const windowControls = getWindowControls();
         const removeMiniPlayerChanged =
@@ -815,19 +785,6 @@
         loadingProgress.set(null);
 
         seekBarStyle = getSeekBarStyleFromStorage();
-
-        const stopFollowingParty = WatchParty.followWatchParty({
-            video: videoElem,
-            seek: seekToTime,
-            currentTime: () => $currentTime,
-            isPlaying: () => $isPlaying,
-            isBusy: () => $loading || $playbackBuffering || $pendingSeek != null || $seekGuard,
-        });
-
-        WatchParty.setupPartyEndCallback(
-            showPartyEndModal.set,
-            partyEndReason.set,
-        );
 
         window.addEventListener("message", handleEmbedMessage);
 
@@ -858,7 +815,6 @@
         }, 1000);
 
         return () => {
-            stopFollowingParty();
             if (typeof removeMiniPlayerChanged === "function") {
                 removeMiniPlayerChanged();
             }
@@ -902,8 +858,6 @@
         Session.cleanupSession(
             hls,
             Discord.clearDiscordActivity,
-            WatchParty.leaveWatchParty,
-            $watchParty.isActive,
             videoElem,
         );
         resetPlayerState();
@@ -973,7 +927,6 @@
             if (
                 imdbID &&
                 hasNextEpisode &&
-                !$watchParty.isActive &&
                 !nextEpisodePrefetchDispose &&
                 !nextEpisodePrefetchStarting &&
                 !nextEpisodePrefetchResolved &&
@@ -1057,9 +1010,6 @@
             $currentTime,
             true,
         );
-        if ($watchParty.isHost) {
-            WatchParty.updatePlaybackState($currentTime, true);
-        }
         playbackBuffering.set(false);
         loading.set(false);
         loadingStage.set("");
@@ -1071,7 +1021,7 @@
 
     const handlePause = () => {
         // Hard seeks pause the element on purpose while remux/HLS rebuilds —
-        // don't treat that as a user pause (Trakt / Discord / watch party).
+        // don't treat that as a user pause (Trakt / Discord).
         if (get(seekGuard) || get(pendingSeek) != null) {
             return;
         }
@@ -1097,9 +1047,6 @@
             $currentTime,
             false,
         );
-        if ($watchParty.isHost) {
-            WatchParty.updatePlaybackState($currentTime, false);
-        }
     };
 
     const handleBufferStart = () => {
@@ -1209,8 +1156,6 @@
         Session.cleanupSession(
             hls,
             Discord.clearDiscordActivity,
-            WatchParty.leaveWatchParty,
-            $watchParty.isActive,
             videoElem,
         );
         loadVideo(currentVideoSrc, { startTime: resumeAt });
@@ -1234,11 +1179,7 @@
         Discord.clearDiscordActivity();
     }
 
-    $: canControlPlayback = !$watchParty.isActive || $watchParty.isHost;
-
-    const seekWithMediaKeys = (time: number) => {
-        if (canControlPlayback) seekToTime(Math.max(0, Math.min(time, $duration)));
-    };
+    const seekWithMediaKeys = (time: number) => seekToTime(Math.max(0, Math.min(time, $duration)));
 
     $: MediaSession.setNowPlaying(metaData, season, episode);
 
@@ -1246,7 +1187,7 @@
         togglePlay: togglePlayWithFeedback,
         seekTo: seekWithMediaKeys,
         seekBy: (seconds) => seekWithMediaKeys($currentTime + seconds),
-        nextEpisode: hasNextEpisode && canControlPlayback ? handleNextEpisodeClick : null,
+        nextEpisode: hasNextEpisode ? handleNextEpisodeClick : null,
     });
 
     const showActionLoading = (actionLabel: string, err: unknown) => {
@@ -1307,7 +1248,6 @@
     let resizeCounter = 0;
     let cueRecalcTimeout: number | null = null;
     let lastControlsVisible: boolean | null = null;
-    let pendingAutoJoin = false;
 
     const SUBTITLE_CONTROLS_MARGIN_PX = 26;
 
@@ -1339,8 +1279,6 @@
         Session.cleanupSession(
             hls,
             Discord.clearDiscordActivity,
-            WatchParty.leaveWatchParty,
-            $watchParty.isActive,
             videoElem,
         );
         hls = null;
@@ -1444,8 +1382,6 @@
         Session.cleanupSession(
             null,
             Discord.clearDiscordActivity,
-            WatchParty.leaveWatchParty,
-            $watchParty.isActive,
             canReuseHandoff ? null : videoElem,
         );
         loadVideo(nextVideoSrc, reuseSession ? { reuseSession } : undefined);
@@ -1636,15 +1572,6 @@
         resizeCounter += 1;
     }
 
-    $: if (pendingAutoJoin && joinPartyId && autoJoin && !$localMode && $cloudSyncStatus.cloudFeaturesAvailable) {
-        showWatchPartyModal.set(true);
-        pendingAutoJoin = false;
-    }
-
-    $: if ($showWatchPartyModal && (embedSrc || !$cloudSyncStatus.cloudFeaturesAvailable)) {
-        showWatchPartyModal.set(false);
-    }
-
     $: {
         resizeCounter;
         cueLinePercent = Subtitles.computeCueLinePercent(
@@ -1833,7 +1760,7 @@
             </button>
         </div>
 
-        {#if metaData?.meta?.type === "series" && hasNextEpisode && !(!$localMode && $watchParty.isActive && !$watchParty.isHost)}
+        {#if metaData?.meta?.type === "series" && hasNextEpisode}
             <div
                 class="absolute right-0 top-0 p-4 sm:p-10 z-50 transition-all duration-300 ease-in-out transform {nextEpisodeHighlighted || $controlsVisible
                     ? 'translate-y-0 opacity-100'
@@ -1875,7 +1802,6 @@
             >
                 <PlayerOverlays
                     showSkipIntro={$showSkipIntro}
-                    isWatchPartyMember={!$localMode && $watchParty.isActive && !$watchParty.isHost}
                     skipLabel={skipButtonLabel}
                     skipChapter={handleSkipIntro}
                     showPlaybackHealthPrompt={playbackHealthPromptVisible}
@@ -1904,8 +1830,7 @@
                         {metaData}
                         currentAudioLabel={$currentAudioLabel}
                         currentSubtitleLabel={$currentSubtitleLabel}
-                        isWatchPartyMember={!$localMode && $watchParty.isActive && !$watchParty.isHost}
-                        togglePlay={togglePlayWithFeedback}
+                            togglePlay={togglePlayWithFeedback}
                         onSeekInput={(time) =>
                             controlsManager.onSeekInput(time, pendingSeek.set)}
                         onSeekChange={(time) =>
@@ -1914,16 +1839,8 @@
                         toggleFullscreen={handleToggleFullscreen}
                         objectFit={$objectFit}
                         toggleObjectFit={handleToggleObjectFit}
-                        showWatchParty={!$localMode && $cloudSyncStatus.cloudFeaturesAvailable && !embedSrc}
                         onAudioClick={openAudioSelection}
                         onSubtitleClick={openSubtitleSelection}
-                        onWatchPartyClick={() => {
-                            if (!$localMode && $cloudSyncStatus.cloudFeaturesAvailable && !embedSrc) {
-                                openWatchPartyModal();
-                            } else {
-                                showWatchPartyModal.set(false);
-                            }
-                        }}
                         onClipPanelOpenChange={(detail) => {
                             clipPanelOpen = !!detail?.open;
                             controlsManager?.setPinned?.(clipPanelOpen, controlsVisible.set);
@@ -1938,18 +1855,12 @@
         showAudioSelection={$showAudioSelection}
         showSubtitleSelection={$showSubtitleSelection}
         showError={$showError && (hasStarted || miniPlayerActive)}
-        showWatchPartyModal={$showWatchPartyModal && !$localMode && $cloudSyncStatus.cloudFeaturesAvailable && !embedSrc}
         showSeekStyleModal={$showSeekStyleModal && (hasStarted || miniPlayerActive)}
         audioTracks={$audioTracks}
         subtitleTracks={$subtitleTracks}
         errorMessage={$errorMessage}
         errorDetails={$errorDetails}
         {seekBarStyle}
-        {metaData}
-        {season}
-        {episode}
-        videoSrc={videoSrc || embedSrc}
-        {fileIdx}
         onSeekStyleChange={handleSeekStyleChange}
         onSeekStyleAcknowledge={handleSeekStyleAcknowledge}
         onAudioSelect={modalHandlers.onAudioSelect}
@@ -1961,20 +1872,6 @@
         onDownloadDesktop={openDesktopDownload}
         onCloseAudio={modalHandlers.onCloseAudio}
         onCloseSubtitle={modalHandlers.onCloseSubtitle}
-        onCloseWatchParty={modalHandlers.onCloseWatchParty}
-        initialPartyCode={joinPartyId}
-        autoJoin={autoJoin}
-        onFileSelected={modalHandlers.onFileSelected}
-    />
-
-    <PlayerWatchParty
-        showPartyEndModal={$showPartyEndModal}
-        partyEndReason={$partyEndReason}
-        onContinue={() => showPartyEndModal.set(false)}
-        onLeave={() => {
-            showPartyEndModal.set(false);
-            void handleClose();
-        }}
     />
 </div>
 

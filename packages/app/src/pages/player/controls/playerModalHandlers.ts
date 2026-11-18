@@ -10,7 +10,6 @@ import {
 	showAudioSelection,
 	showError,
 	showSubtitleSelection,
-	showWatchPartyModal,
 	subtitleTracks,
 } from "../playerState";
 import * as Session from "../session/videoSession";
@@ -123,13 +122,6 @@ export const createPlayerModalHandlers = ({
 
 	const onCloseAudio = () => showAudioSelection.set(false);
 	const onCloseSubtitle = () => showSubtitleSelection.set(false);
-	const onCloseWatchParty = () => showWatchPartyModal.set(false);
-
-	const onFileSelected = (file: { path?: string } | null) => {
-		if (file?.path) {
-			void loadVideo(file.path);
-		}
-	};
 
 	return {
 		onAudioSelect,
@@ -140,7 +132,5 @@ export const createPlayerModalHandlers = ({
 		onErrorBack,
 		onCloseAudio,
 		onCloseSubtitle,
-		onCloseWatchParty,
-		onFileSelected,
 	};
 };

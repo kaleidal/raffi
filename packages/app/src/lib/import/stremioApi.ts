@@ -1,4 +1,4 @@
-import type { StremioLibraryEntry } from "./stremioImport";
+import type { StremioLibraryEntry } from "./stremioLibrary/types";
 import { normalizeStremioAddonDescriptors } from "./stremioAddons";
 
 const DEFAULT_ENDPOINT = "https://api.strem.io";

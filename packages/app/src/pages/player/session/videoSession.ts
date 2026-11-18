@@ -197,9 +197,6 @@ export function performSeek({
 	videoElem,
 	captureFrame,
 	onAfterSeek,
-	isWatchPartyHost,
-	isPlaying,
-	updatePlaybackState,
 	setPendingSeek,
 	setCurrentTime,
 	setShowCanvas,
@@ -210,9 +207,6 @@ export function performSeek({
 	videoElem: HTMLVideoElement;
 	captureFrame: () => void;
 	onAfterSeek: () => void;
-	isWatchPartyHost: boolean;
-	isPlaying: boolean;
-	updatePlaybackState: (time: number, playing: boolean) => void;
 	setPendingSeek: (seek: number | null) => void;
 	setCurrentTime: (time: number) => void;
 	setShowCanvas: (show: boolean) => void;
@@ -240,10 +234,6 @@ export function performSeek({
 	}
 	setCurrentTime(target);
 	onAfterSeek();
-
-	if (isWatchPartyHost) {
-		updatePlaybackState(target, isPlaying);
-	}
 }
 
 export function createSeekHandler(
@@ -412,15 +402,9 @@ export function createSeekHandler(
 export function cleanupSession(
 	hls: Hls | null,
 	clearActivity: () => void,
-	leaveWatchParty: () => void,
-	isWatchPartyActive: boolean,
 	videoElem?: HTMLVideoElement | null,
 ) {
 	clearActivity();
-
-	if (isWatchPartyActive) {
-		leaveWatchParty();
-	}
 
 	if (hls) {
 		hls.destroy();

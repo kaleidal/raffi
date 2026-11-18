@@ -111,8 +111,7 @@
             <li>active sign-in sessions, including the IP address and user agent that created each session;</li>
             <li>installed add-on addresses and manifests;</li>
             <li>title identifiers, posters, watch progress, completion state, and timestamps;</li>
-            <li>lists, list items, and synchronized preferences;</li>
-            <li>temporary watch-party membership and playback state; and</li>
+            <li>lists, list items, and synchronized preferences; and</li>
             <li>Trakt account identifiers and OAuth tokens if you connect Trakt.</li>
           </ul>
           <p>Raffi does not upload your video files, downloaded media, local file paths, or uploaded subtitle files to cloud sync.</p>
@@ -131,7 +130,7 @@
           <ul>
             <li>authenticate you and maintain your session;</li>
             <li>sync your library, lists, settings, and watch progress;</li>
-            <li>run watch parties and the integrations you request;</li>
+            <li>run the integrations you request;</li>
             <li>find metadata, subtitles, and playback sources through providers you use;</li>
             <li>deliver downloads and application updates; and</li>
             <li>protect, debug, and operate Raffi.</li>
@@ -150,7 +149,7 @@
           <div class="divide-y divide-well border-y border-well">
             <div class="service-row">
               <h3><a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noreferrer">Cloudflare</a></h3>
-              <p>Hosts Raffi’s website, web app, sync database, profile photos, and watch-party coordination, and delivers sign-in code emails. Cloudflare may process request and security metadata.</p>
+              <p>Hosts Raffi’s website, web app, sync database and profile photos, and delivers sign-in code emails. Cloudflare may process request and security metadata.</p>
             </div>
             <div class="service-row">
               <h3><a href="https://trakt.tv/privacy" target="_blank" rel="noreferrer">Trakt</a></h3>
@@ -206,7 +205,6 @@
             <li>A saved Stremio session remains locally until you disconnect it or clear app data.</li>
             <li>Trakt tokens remain in Raffi’s sync database until you disconnect Trakt or request deletion.</li>
             <li>Cloud-synced account data remains while your Raffi account data is active or until you request deletion.</li>
-            <li>Watch-party state is temporary and is removed when the party ends or expires.</li>
             <li>Infrastructure logs and backups may remain for limited operational, security, and recovery periods set by our service providers.</li>
           </ul>
           <p>

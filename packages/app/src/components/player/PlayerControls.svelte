@@ -16,7 +16,6 @@
         ZoomOut,
         AudioWaveform,
         Subtitles,
-        Users,
         Download,
         Scissors,
     } from "@lucide/svelte";
@@ -31,8 +30,6 @@
     export let currentSubtitleLabel: string = "";
     export let objectFit: "contain" | "cover" = "contain";
     export let pendingSeek: number | null = null;
-    export let isWatchPartyMember = false;
-    export let showWatchParty = true;
     export let chapterMarkers: Chapter[] = [];
     export let seekPreview: SeekPreview | null = null;
     export let visible = true;
@@ -49,7 +46,6 @@
 
     export let onAudioClick: () => void = () => {};
     export let onSubtitleClick: () => void = () => {};
-    export let onWatchPartyClick: () => void = () => {};
     export let onClipPanelOpenChange: (detail: { open: boolean }) => void = () => {};
 
     $: displayedTime = pendingSeek ?? currentTime;
@@ -70,15 +66,13 @@
 
     <div class="relative z-10 flex flex-col gap-2 w-full">
         <div class="player-seek-row flex flex-row items-center w-full">
-            {#if !isWatchPartyMember}
-                <button
-                    on:click={togglePlay}
-                    class="player-play-button rounded-full cursor-pointer hover:opacity-80"
-                    aria-label={isPlaying ? "Pause" : "Play"}
-                >
-                    <PlayPauseIcon playing={isPlaying} />
-                </button>
-            {/if}
+            <button
+                on:click={togglePlay}
+                class="player-play-button rounded-full cursor-pointer hover:opacity-80"
+                aria-label={isPlaying ? "Pause" : "Play"}
+            >
+                <PlayPauseIcon playing={isPlaying} />
+            </button>
 
             <span
                 class="inline-block tabular-nums text-[clamp(14px,1.15vw,22px)] font-medium text-ink/85 text-center"
@@ -96,7 +90,6 @@
                         chapters={chapterMarkers}
                         {buffered}
                         {seekPreview}
-                        disabled={isWatchPartyMember}
                         {visible}
                         onScrub={onSeekInput}
                         onCommit={onSeekChange}
@@ -134,14 +127,12 @@
                 {/if}
             </IconButton>
 
-            {#if !isWatchPartyMember}
-                <IconButton
-                    label={currentAudioLabel || "Audio"}
-                    onClick={onAudioClick}
-                >
-                    <AudioWaveform size={20} strokeWidth={2} />
-                </IconButton>
-            {/if}
+            <IconButton
+                label={currentAudioLabel || "Audio"}
+                onClick={onAudioClick}
+            >
+                <AudioWaveform size={20} strokeWidth={2} />
+            </IconButton>
 
             <IconButton
                 label={currentSubtitleLabel || "Subtitles: Off"}
@@ -149,15 +140,6 @@
             >
                 <Subtitles size={20} strokeWidth={2} />
             </IconButton>
-
-            {#if metaData && showWatchParty}
-                <IconButton
-                    label="Watch Party"
-                    onClick={onWatchPartyClick}
-                >
-                    <Users size={20} strokeWidth={2} />
-                </IconButton>
-            {/if}
 
             {#if metaData && !isAndroidPlatform}
             <IconButton
@@ -170,7 +152,7 @@
             </IconButton>
             {/if}
 
-            {#if !isWatchPartyMember && !isAndroidPlatform}
+            {#if !isAndroidPlatform}
                 <IconButton
                     label="Clip"
                     onClick={() => setClipPanelOpen(!showClipPanel)}
@@ -196,7 +178,6 @@
             {duration}
             currentTime={displayedTime}
             inverted={seekBarStyle !== "normal"}
-            {isWatchPartyMember}
             onClose={() => setClipPanelOpen(false)}
         />
     </div>

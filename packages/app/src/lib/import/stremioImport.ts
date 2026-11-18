@@ -1,635 +1,307 @@
 import type { LibraryItem } from "../db/types";
+import {
+    LOCAL_LIBRARY_KEY,
+    getLocalUserId,
+    isCloudBackupEnabled,
+    markDirty,
+    pauseCloudSync,
+    publishCloudSyncStatus,
+    readLocal,
+    resumeCloudSync,
+    writeLocal,
+} from "../db/state";
+import { syncCloudBackupNow } from "../db/sync";
+import { addAddon, getAddons } from "../db/data";
+import { mergeStremioImportIntoLibrary } from "./stremioLibrary/merge";
+import { parseStremioExport, parseStremioLibrary } from "./stremioLibrary/parse";
+import type {
+    StremioImportPreviewItem,
+    StremioImportSummary,
+    StremioLibraryEntry,
+} from "./stremioLibrary/types";
+import {
+    importStremioAddons,
+    normalizeStremioTransportUrl,
+    parseStremioAddonsFromExport,
+    type StremioAddonDescriptor,
+    type StremioAddonImportResult,
+} from "./stremioAddons";
 
-export type StremioLibraryType = "movie" | "series" | "channel" | "tv" | string;
+export type StremioImportProgressEvent =
+    | { phase: "fetching" }
+    | { phase: "parsing"; rawCount?: number }
+    | { phase: "importing_addons" }
+    | { phase: "applying"; processed: number; total: number; current?: string }
+    | { phase: "reconciling" }
+    | { phase: "uploading"; uploaded: number; total: number }
+    | { phase: "done" }
+    | { phase: "error"; message: string };
 
-export interface StremioLibraryState {
-    lastWatched?: string | null;
-    season?: number | string | null;
-    episode?: number | string | null;
-    timeWatched?: number | null;
-    duration?: number | null;
-    watched?: string | number | boolean | null;
-    timesWatched?: number | null;
-    timeOffset?: number | null;
-    overallTimeWatched?: number | null;
-    flaggedWatched?: number | null;
-    noNotif?: boolean;
-    video_id?: string | null;
-    [key: string]: unknown;
+export interface StremioImportOptions {
+    onProgress?: (event: StremioImportProgressEvent) => void;
+    signal?: AbortSignal;
+    pushToCloud?: boolean;
+    addons?: StremioAddonDescriptor[];
+    libraryPreviews?: StremioImportPreviewItem[];
+    initialWarnings?: string[];
 }
 
-export interface StremioLibraryEntry {
-    __id?: string;
-    _id?: string;
-    d?: {
-        _id?: string;
-        name?: string;
-        type?: StremioLibraryType;
-        poster?: string;
-        posterShape?: string;
-        background?: string;
-        logo?: string;
-        year?: string;
-        state?: StremioLibraryState;
-        [key: string]: unknown;
-    };
-    [key: string]: unknown;
-}
+const emptyAddonSummary = (): Pick<
+    StremioImportSummary,
+    "addonsTotal" | "addonsAdded" | "addonsSkipped" | "addonsUnsupported"
+> => ({
+    addonsTotal: 0,
+    addonsAdded: 0,
+    addonsSkipped: 0,
+    addonsUnsupported: 0,
+});
 
-export interface StremioExport {
-    addons?: unknown;
-    library?: StremioLibraryEntry[];
-    nif?: unknown;
-    nim?: unknown;
-    user?: unknown;
-    [key: string]: unknown;
-}
+const applyAddonImport = (
+    summary: StremioImportSummary,
+    addonResult: StremioAddonImportResult,
+): StremioImportSummary => ({
+    ...summary,
+    addonsTotal: addonResult.total,
+    addonsAdded: addonResult.added,
+    addonsSkipped: addonResult.skipped,
+    addonsUnsupported: addonResult.unsupported,
+    warnings: [...summary.warnings, ...addonResult.warnings],
+});
 
-export interface StremioImportProgressEntry {
-    time: number;
-    duration: number;
-    watched: boolean;
-    updatedAt: number;
-}
+const runStremioAddonImport = async (
+    descriptors: StremioAddonDescriptor[],
+    options: StremioImportOptions,
+    report: (event: StremioImportProgressEvent) => void,
+) => {
+    const uniqueDescriptors = (() => {
+        const seen = new Set<string>();
+        return descriptors.filter((descriptor) => {
+            const transportUrl = normalizeStremioTransportUrl(descriptor.transportUrl);
+            if (!transportUrl || seen.has(transportUrl)) return false;
+            seen.add(transportUrl);
+            return true;
+        });
+    })();
 
-export type StremioImportProgress =
-    | StremioImportProgressEntry
-    | Record<string, StremioImportProgressEntry>;
-
-export interface StremioImportPreviewItem {
-    imdbId: string;
-    name: string;
-    type: "movie" | "series";
-    poster: string | undefined;
-    lastWatched: string | null;
-    progress: StremioImportProgress;
-    watched: boolean;
-    timeWatched: number;
-    duration: number;
-    season: number | null;
-    episode: number | null;
-}
-
-export interface StremioImportResultItem extends StremioImportPreviewItem {
-    progressChanged: boolean;
-    mergedProgress: StremioImportProgress;
-    newLastWatched: string | null;
-    completedAt: string | null;
-    action: "added" | "merged" | "skipped";
-}
-
-export interface StremioImportSummary {
-    total: number;
-    rawCount: number;
-    added: number;
-    merged: number;
-    skipped: number;
-    movies: number;
-    series: number;
-    watched: number;
-    addonsTotal: number;
-    addonsAdded: number;
-    addonsSkipped: number;
-    addonsUnsupported: number;
-    items: StremioImportResultItem[];
-    lastWatched: string | null;
-    poster: string | null;
-    warnings: string[];
-}
-
-const isPlainObject = (value: unknown): value is Record<string, any> =>
-    Boolean(value) && typeof value === "object" && !Array.isArray(value);
-
-const toFiniteNumber = (value: unknown, fallback = 0): number => {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : fallback;
-};
-
-const toIsoString = (value: unknown): string | null => {
-    if (!value) return null;
-    if (value instanceof Date) {
-        const ms = value.getTime();
-        return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
-    }
-    if (typeof value === "number") {
-        if (!Number.isFinite(value)) return null;
-        return new Date(value).toISOString();
-    }
-    if (typeof value === "string") {
-        const trimmed = value.trim();
-        if (!trimmed) return null;
-        const parsed = Date.parse(trimmed);
-        if (Number.isFinite(parsed)) return new Date(parsed).toISOString();
-        return null;
-    }
-    return null;
-};
-
-const normalizeType = (value: unknown): "movie" | "series" | null => {
-    if (typeof value !== "string") return null;
-    const lower = value.toLowerCase().trim();
-    if (lower === "movie" || lower === "film") return "movie";
-    if (lower === "series" || lower === "show" || lower === "tv") return "series";
-    return null;
-};
-
-const isStremioWatchedFlag = (value: unknown): boolean => {
-    if (value === true || value === 1) return true;
-    if (typeof value === "string") {
-        const trimmed = value.trim();
-        if (!trimmed) return false;
-        if (trimmed === "1" || trimmed.toLowerCase() === "true") return true;
-        if (Date.parse(trimmed)) return true;
-    }
-    return false;
-};
-
-const buildProgressEntry = (
-    timeWatched: number,
-    duration: number,
-    watchedFlag: boolean,
-    lastWatchedIso: string | null,
-): StremioImportProgressEntry => {
-    const safeTime = Math.max(0, toFiniteNumber(timeWatched, 0));
-    const safeDuration = Math.max(0, toFiniteNumber(duration, 0));
-    const completionThreshold = safeDuration > 0 ? safeDuration * 0.9 : 0;
-    const watched = Boolean(watchedFlag) || (safeDuration > 0 && safeTime >= completionThreshold) || (safeDuration === 0 && safeTime === 0 && watchedFlag);
-    const updatedAt = lastWatchedIso ? Date.parse(lastWatchedIso) || Date.now() : Date.now();
-    return {
-        time: safeTime,
-        duration: safeDuration,
-        watched,
-        updatedAt: Number.isFinite(updatedAt) ? updatedAt : Date.now(),
-    };
-};
-
-const readStateField = (state: StremioLibraryState, ...keys: string[]): unknown => {
-    for (const key of keys) {
-        if (key in state && state[key] !== undefined && state[key] !== null) {
-            return state[key];
-        }
-    }
-    return undefined;
-};
-
-const parseVideoIdSeasonEpisode = (videoId: unknown): { season: number | null; episode: number | null } => {
-    if (typeof videoId !== "string") return { season: null, episode: null };
-    const parts = videoId.split(":").map((part) => part.trim()).filter(Boolean);
-    if (parts.length < 3) return { season: null, episode: null };
-    const season = Number(parts[parts.length - 2]);
-    const episode = Number(parts[parts.length - 1]);
-    if (!Number.isFinite(season) || !Number.isFinite(episode) || season <= 0 || episode <= 0) {
-        return { season: null, episode: null };
-    }
-    return { season, episode };
-};
-
-const normalizeLibraryState = (state: unknown): StremioLibraryState => {
-    if (!isPlainObject(state)) return {};
-    return {
-        lastWatched: readStateField(state, "lastWatched", "last_watched") as StremioLibraryState["lastWatched"],
-        season: readStateField(state, "season") as StremioLibraryState["season"],
-        episode: readStateField(state, "episode") as StremioLibraryState["episode"],
-        timeWatched: readStateField(state, "timeWatched", "time_watched") as StremioLibraryState["timeWatched"],
-        duration: readStateField(state, "duration") as StremioLibraryState["duration"],
-        watched: readStateField(state, "watched") as StremioLibraryState["watched"],
-        timesWatched: readStateField(state, "timesWatched", "times_watched") as StremioLibraryState["timesWatched"],
-        timeOffset: readStateField(state, "timeOffset", "time_offset") as StremioLibraryState["timeOffset"],
-        overallTimeWatched: readStateField(state, "overallTimeWatched", "overall_time_watched") as StremioLibraryState["overallTimeWatched"],
-        flaggedWatched: readStateField(state, "flaggedWatched", "flagged_watched") as StremioLibraryState["flaggedWatched"],
-        noNotif: Boolean(readStateField(state, "noNotif", "no_notif")),
-        video_id: readStateField(state, "video_id", "videoId") as StremioLibraryState["video_id"],
-    };
-};
-
-const buildSeriesProgressFromState = (
-    state: StremioLibraryState,
-): { progress: Record<string, StremioImportProgressEntry>; lastWatched: string | null; season: number | null; episode: number | null; } => {
-    let seasonRaw = state.season;
-    let episodeRaw = state.episode;
-    if ((seasonRaw === undefined || seasonRaw === null) && (episodeRaw === undefined || episodeRaw === null)) {
-        const fromVideo = parseVideoIdSeasonEpisode(state.video_id);
-        seasonRaw = fromVideo.season ?? seasonRaw;
-        episodeRaw = fromVideo.episode ?? episodeRaw;
-    }
-    const seasonNumber = Number(seasonRaw);
-    const episodeNumber = Number(episodeRaw);
-    if (!Number.isFinite(seasonNumber) || !Number.isFinite(episodeNumber) || seasonNumber <= 0 || episodeNumber <= 0) {
-        return { progress: {}, lastWatched: toIsoString(state.lastWatched), season: null, episode: null };
-    }
-    const key = `${seasonNumber}:${episodeNumber}`;
-    const time = toFiniteNumber(state.timeWatched, 0);
-    const duration = toFiniteNumber(state.duration, 0);
-    const watched = isStremioWatchedFlag(state.watched) || toFiniteNumber(state.flaggedWatched, 0) > 0;
-    const lastWatchedIso = toIsoString(state.lastWatched);
-    const entry = buildProgressEntry(time, duration, watched, lastWatchedIso);
-    return {
-        progress: { [key]: entry },
-        lastWatched: lastWatchedIso,
-        season: seasonNumber,
-        episode: episodeNumber,
-    };
-};
-
-const buildMovieProgressFromState = (state: StremioLibraryState): StremioImportProgressEntry => {
-    const time = toFiniteNumber(state.timeWatched, 0);
-    const duration = toFiniteNumber(state.duration, 0);
-    const watched = isStremioWatchedFlag(state.watched) || toFiniteNumber(state.flaggedWatched, 0) > 0;
-    const lastWatchedIso = toIsoString(state.lastWatched);
-    return buildProgressEntry(time, duration, watched, lastWatchedIso);
-};
-
-const resolveLibraryEntryData = (entry: StremioLibraryEntry): Record<string, unknown> | null => {
-    if (!isPlainObject(entry)) return null;
-    if (isPlainObject(entry.d)) return entry.d as Record<string, unknown>;
-    if (entry._id || entry.name || entry.type) return entry as Record<string, unknown>;
-    return null;
-};
-
-const convertEntryToPreview = (entry: StremioLibraryEntry): StremioImportPreviewItem | null => {
-    const data = resolveLibraryEntryData(entry);
-    if (!data) return null;
-    if (data.removed === true) return null;
-
-    const imdbId = String(
-        (data._id as string | undefined)
-            || entry.__id
-            || entry._id
-            || "",
-    ).trim();
-    if (!imdbId) return null;
-    const type = normalizeType(data.type);
-    if (!type) return null;
-    const state = normalizeLibraryState(data.state);
-    const lastWatched = toIsoString(state.lastWatched);
-    const poster = typeof data.poster === "string" && data.poster.trim() ? data.poster.trim() : undefined;
-    const name = typeof data.name === "string" ? data.name : imdbId;
-
-    if (type === "series") {
-        const { progress, lastWatched: derivedLastWatched, season, episode } = buildSeriesProgressFromState(state);
-        const progressKeys = Object.keys(progress);
-        const watched = progressKeys.length > 0 && progress[progressKeys[0]].watched;
-        const firstKey = progressKeys[0];
+    if (!uniqueDescriptors.length) {
         return {
-            imdbId,
-            name,
-            type,
-            poster,
-            lastWatched: lastWatched || derivedLastWatched,
-            progress,
-            watched: Boolean(watched),
-            timeWatched: firstKey ? progress[firstKey].time : 0,
-            duration: firstKey ? progress[firstKey].duration : 0,
-            season,
-            episode,
+            total: 0,
+            added: 0,
+            skipped: 0,
+            unsupported: 0,
+            warnings: [] as string[],
         };
     }
 
-    const entryProgress = buildMovieProgressFromState(state);
-    return {
-        imdbId,
-        name,
-        type,
-        poster,
-        lastWatched,
-        progress: entryProgress,
-        watched: entryProgress.watched,
-        timeWatched: entryProgress.time,
-        duration: entryProgress.duration,
-        season: null,
-        episode: null,
-    };
+    report({ phase: "importing_addons" });
+    return await importStremioAddons(uniqueDescriptors, {
+        getAddons,
+        addAddon,
+        signal: options.signal,
+    });
 };
 
-const dedupeByImdb = (items: StremioImportPreviewItem[]): StremioImportPreviewItem[] => {
-    const map = new Map<string, StremioImportPreviewItem>();
-    for (const item of items) {
-        const existing = map.get(item.imdbId);
-        if (!existing) {
-            map.set(item.imdbId, item);
-            continue;
-        }
-        const existingTs = existing.lastWatched ? Date.parse(existing.lastWatched) : 0;
-        const nextTs = item.lastWatched ? Date.parse(item.lastWatched) : 0;
-        if (nextTs >= existingTs) {
-            map.set(item.imdbId, { ...existing, ...item });
-        }
-    }
-    return Array.from(map.values());
-};
-
-export interface StremioParseResult {
-    items: StremioImportPreviewItem[];
-    warnings: string[];
-    rawCount: number;
-    skippedCount: number;
-    duplicateCount: number;
-}
-
-export const parseStremioLibrary = (library: StremioLibraryEntry[]): StremioParseResult => {
-    const warnings: string[] = [];
-    if (!library.length) {
-        warnings.push("No library entries were found in your Stremio account.");
-    }
-
-    const previews: StremioImportPreviewItem[] = [];
-    let skippedCount = 0;
-    for (const rawEntry of library) {
-        const preview = convertEntryToPreview(rawEntry);
-        if (!preview) {
-            skippedCount += 1;
-            continue;
-        }
-        previews.push(preview);
-    }
-
-    const unique = dedupeByImdb(previews);
-    const duplicateCount = previews.length - unique.length;
-    if (duplicateCount > 0) {
-        warnings.push(`Collapsed ${duplicateCount} duplicate ${duplicateCount === 1 ? "entry" : "entries"} with the same IMDb id.`);
-    }
-    if (skippedCount > 0) {
-        warnings.push(`Skipped ${skippedCount} ${skippedCount === 1 ? "entry" : "entries"} that were not recognized as movies or series.`);
-    }
-
-    return {
-        items: unique,
-        warnings,
-        rawCount: library.length,
-        skippedCount,
-        duplicateCount,
-    };
-};
-
-export const parseStremioExport = (raw: string | unknown): StremioParseResult => {
-    let parsed: StremioExport;
-    if (typeof raw === "string") {
-        try {
-            parsed = JSON.parse(raw) as StremioExport;
-        } catch (error) {
-            throw new Error("Could not parse the Stremio export file. Make sure it is a valid JSON file.");
-        }
-    } else if (isPlainObject(raw)) {
-        parsed = raw as StremioExport;
+const yieldToBrowser = () => new Promise<void>((resolve) => {
+    if (typeof requestAnimationFrame === "function") {
+        requestAnimationFrame(() => resolve());
     } else {
-        throw new Error("Unsupported Stremio export format.");
+        setTimeout(resolve, 0);
     }
+});
 
-    if (!isPlainObject(parsed)) {
-        throw new Error("Stremio export must be a JSON object.");
+export const importStremioLibrary = async (
+    raw: string | unknown | StremioLibraryEntry[],
+    options: StremioImportOptions = {},
+): Promise<StremioImportSummary> => {
+    const { onProgress, signal, pushToCloud = true } = options;
+    const report = (event: StremioImportProgressEvent) => {
+        if (onProgress) onProgress(event);
+    };
+
+    report({ phase: "parsing" });
+    const exportAddons = !options.libraryPreviews && !Array.isArray(raw)
+        ? parseStremioAddonsFromExport(raw)
+        : [];
+    const addonDescriptors = [...(options.addons ?? []), ...exportAddons];
+
+    let previews: StremioImportPreviewItem[];
+    let warnings: string[];
+    let rawCount: number;
+
+    if (options.libraryPreviews) {
+        previews = options.libraryPreviews;
+        warnings = [...(options.initialWarnings ?? [])];
+        rawCount = previews.length;
+    } else {
+        const parsed = Array.isArray(raw)
+            ? parseStremioLibrary(raw)
+            : parseStremioExport(raw);
+        previews = parsed.items;
+        warnings = [...(options.initialWarnings ?? []), ...parsed.warnings];
+        rawCount = parsed.rawCount;
     }
-
-    const library = Array.isArray(parsed.library) ? parsed.library : [];
-    const parsedLibrary = parseStremioLibrary(library as StremioLibraryEntry[]);
-    if (!library.length) {
-        return {
-            ...parsedLibrary,
-            warnings: ["No library entries were found in the export.", ...parsedLibrary.warnings],
+    if (signal?.aborted) {
+        throw new Error("Import was cancelled.");
+    }
+    report({ phase: "parsing", rawCount });
+    if (previews.length === 0) {
+        const addonResult = await runStremioAddonImport(addonDescriptors, options, report);
+        const summary: StremioImportSummary = {
+            total: 0,
+            rawCount,
+            added: 0,
+            merged: 0,
+            skipped: 0,
+            movies: 0,
+            series: 0,
+            watched: 0,
+            ...emptyAddonSummary(),
+            items: [],
+            lastWatched: null,
+            poster: null,
+            warnings,
         };
-    }
-    return parsedLibrary;
-};
-
-const normalizeLocalProgressEntry = (value: unknown): StremioImportProgressEntry | null => {
-    if (!isPlainObject(value)) return null;
-    const time = Math.max(0, toFiniteNumber((value as any).time, 0));
-    const duration = Math.max(0, toFiniteNumber((value as any).duration, 0));
-    const watched = Boolean((value as any).watched);
-    const updatedAt = toFiniteNumber((value as any).updatedAt, 0);
-    return { time, duration, watched, updatedAt: Number.isFinite(updatedAt) ? updatedAt : 0 };
-};
-
-const isEpisodeProgressMap = (value: unknown): value is Record<string, StremioImportProgressEntry> => {
-    if (!isPlainObject(value)) return false;
-    return Object.values(value).some((entry) => isPlainObject(entry) && ("time" in entry || "watched" in entry));
-};
-
-const compareProgressEntries = (left: StremioImportProgressEntry, right: StremioImportProgressEntry): number => {
-    if (left.updatedAt !== right.updatedAt) {
-        return left.updatedAt > right.updatedAt ? 1 : -1;
-    }
-    if (left.watched !== right.watched) {
-        return left.watched ? 1 : -1;
-    }
-    const leftRatio = left.duration > 0 ? left.time / left.duration : 0;
-    const rightRatio = right.duration > 0 ? right.time / right.duration : 0;
-    if (Math.abs(leftRatio - rightRatio) > 0.005) {
-        return leftRatio > rightRatio ? 1 : -1;
-    }
-    if (Math.abs(left.time - right.time) > 1) {
-        return left.time > right.time ? 1 : -1;
-    }
-    return 0;
-};
-
-const chooseProgressEntry = (
-    local: StremioImportProgressEntry | null,
-    incoming: StremioImportProgressEntry,
-): StremioImportProgressEntry => {
-    if (!local) return incoming;
-    return compareProgressEntries(incoming, local) >= 0 ? { ...local, ...incoming } : { ...incoming, ...local };
-};
-
-const mergeSeriesProgress = (
-    localProgress: unknown,
-    incoming: Record<string, StremioImportProgressEntry>,
-): { merged: Record<string, StremioImportProgressEntry>; changed: boolean } => {
-    const localMap = isEpisodeProgressMap(localProgress) ? localProgress : {};
-    const merged: Record<string, StremioImportProgressEntry> = { ...localMap };
-    let changed = false;
-    for (const [key, incomingEntry] of Object.entries(incoming)) {
-        const localEntry = normalizeLocalProgressEntry(merged[key]);
-        const next = chooseProgressEntry(localEntry, incomingEntry);
-        if (!localEntry || compareProgressEntries(next, localEntry) !== 0) {
-            changed = true;
-        }
-        merged[key] = next;
-    }
-    return { merged, changed };
-};
-
-const mergeMovieProgress = (
-    localProgress: unknown,
-    incoming: StremioImportProgressEntry,
-): { merged: StremioImportProgressEntry; changed: boolean } => {
-    const localEntry = normalizeLocalProgressEntry(localProgress);
-    const merged = chooseProgressEntry(localEntry, incoming);
-    const changed = !localEntry || compareProgressEntries(merged, localEntry) !== 0;
-    return { merged, changed };
-};
-
-export const mergeStremioImportIntoLibrary = (
-    existing: LibraryItem[],
-    previews: StremioImportPreviewItem[],
-): { library: LibraryItem[]; summary: StremioImportSummary } => {
-    const libraryById = new Map<string, LibraryItem>();
-    for (const item of existing) {
-        libraryById.set(item.imdb_id, item);
+        report({ phase: "done" });
+        return applyAddonImport(summary, addonResult);
     }
 
-    const items: StremioImportResultItem[] = [];
-    let added = 0;
-    let merged = 0;
-    let skipped = 0;
-    let lastWatched: string | null = null;
-    let poster: string | null = null;
+    const shouldPauseCloud = pushToCloud && isCloudBackupEnabled();
+    if (shouldPauseCloud) pauseCloudSync();
+    publishCloudSyncStatus();
 
-    for (const preview of previews) {
-        const current = libraryById.get(preview.imdbId);
-        const isSeries = preview.type === "series";
-        const incomingProgress = preview.progress;
+    try {
+        const existingLibrary = readLocal<LibraryItem[]>(LOCAL_LIBRARY_KEY, []);
+        const total = previews.length;
+        let processed = 0;
+        let lastYielded = 0;
+        const userId = getLocalUserId();
+        const nextLibrary: LibraryItem[] = [...existingLibrary];
+        const summary: StremioImportSummary = {
+            total,
+            rawCount,
+            added: 0,
+            merged: 0,
+            skipped: 0,
+            movies: previews.filter((item) => item.type === "movie").length,
+            series: previews.filter((item) => item.type === "series").length,
+            watched: previews.filter((item) => item.watched).length,
+            ...emptyAddonSummary(),
+            items: [],
+            lastWatched: null,
+            poster: null,
+            warnings,
+        };
 
-        if (!current) {
-            const completedAt = isSeries
-                ? null
-                : (incomingProgress as StremioImportProgressEntry).watched
-                    ? (preview.lastWatched || new Date().toISOString())
-                    : null;
+        for (const preview of previews) {
+            if (signal?.aborted) {
+                throw new Error("Import was cancelled.");
+            }
+
+            processed += 1;
+            report({
+                phase: "applying",
+                processed,
+                total,
+                current: preview.name,
+            });
+
+            const existingIndex = nextLibrary.findIndex((item) => item.imdb_id === preview.imdbId);
+            const existing = existingIndex >= 0 ? nextLibrary[existingIndex] : null;
+            const lastWatched = preview.lastWatched || new Date().toISOString();
+
+            const baseLastWatched = existing?.last_watched || "";
+            const nextLastWatched = (() => {
+                if (!baseLastWatched) return lastWatched;
+                const a = Date.parse(baseLastWatched) || 0;
+                const b = Date.parse(lastWatched) || 0;
+                return b > a ? lastWatched : baseLastWatched;
+            })();
+
+            const { library, summary: mergeSummary } = mergeStremioImportIntoLibrary(
+                existing ? [existing] : [],
+                [preview],
+            );
+            const mergedItem = library.find((item) => item.imdb_id === preview.imdbId);
+            const mergedProgress = mergedItem?.progress ?? existing?.progress;
+            const completedAt = mergedItem
+                ? mergedItem.completed_at
+                : existing?.completed_at ?? null;
+            const progressChanged = Boolean(mergeSummary.items[0]?.progressChanged);
+
+            let action: "added" | "merged" | "skipped";
+            if (!existing) {
+                action = "added";
+                summary.added += 1;
+            } else if (progressChanged || nextLastWatched !== baseLastWatched) {
+                action = "merged";
+                summary.merged += 1;
+            } else {
+                action = "skipped";
+                summary.skipped += 1;
+            }
+
             const nextItem: LibraryItem = {
+                user_id: userId,
                 imdb_id: preview.imdbId,
-                progress: isSeries
-                    ? (incomingProgress as Record<string, StremioImportProgressEntry>)
-                    : (incomingProgress as StremioImportProgressEntry),
-                last_watched: preview.lastWatched || new Date().toISOString(),
+                progress: mergedProgress,
+                last_watched: nextLastWatched,
                 completed_at: completedAt,
                 type: preview.type,
-                shown: true,
-                poster: preview.poster,
-                user_id: "",
-                updated_at: preview.lastWatched || new Date().toISOString(),
-            };
-            libraryById.set(preview.imdbId, nextItem);
-            added += 1;
-            if (!lastWatched || (preview.lastWatched && preview.lastWatched > lastWatched)) {
-                lastWatched = preview.lastWatched;
-            }
-            if (!poster && preview.poster) poster = preview.poster;
-            items.push({
-                ...preview,
-                progressChanged: true,
-                mergedProgress: nextItem.progress as StremioImportProgress,
-                newLastWatched: nextItem.last_watched,
-                completedAt: nextItem.completed_at,
-                action: "added",
-            });
-            continue;
-        }
-
-        const existingLastWatched = current.last_watched || "";
-        const nextLastWatched = pickLatestTimestamp(existingLastWatched, preview.lastWatched);
-        const localProgress = current.progress;
-
-        if (isSeries) {
-            const incomingMap = incomingProgress as Record<string, StremioImportProgressEntry>;
-            const { merged: mergedProgress, changed: progressChanged } = mergeSeriesProgress(localProgress, incomingMap);
-            if (!progressChanged && nextLastWatched === existingLastWatched) {
-                skipped += 1;
-                items.push({
-                    ...preview,
-                    progressChanged: false,
-                    mergedProgress: mergedProgress as StremioImportProgress,
-                    newLastWatched: existingLastWatched,
-                    completedAt: current.completed_at,
-                    action: "skipped",
-                });
-                continue;
-            }
-            const updated: LibraryItem = {
-                ...current,
-                type: preview.type,
-                last_watched: nextLastWatched || existingLastWatched,
-                progress: mergedProgress,
-                poster: current.poster || preview.poster,
-                completed_at: Object.values(mergedProgress).some((entry) => !entry.watched)
-                    ? null
-                    : current.completed_at,
+                shown: existing?.shown !== false,
+                poster: existing?.poster || preview.poster,
                 updated_at: new Date().toISOString(),
             };
-            libraryById.set(preview.imdbId, updated);
-            merged += 1;
-            if (!lastWatched || (updated.last_watched && updated.last_watched > lastWatched)) {
-                lastWatched = updated.last_watched;
-            }
-            if (!poster && updated.poster) poster = updated.poster;
-            items.push({
+
+            if (existingIndex >= 0) nextLibrary[existingIndex] = nextItem;
+            else nextLibrary.push(nextItem);
+
+            summary.items.push({
                 ...preview,
                 progressChanged,
-                mergedProgress: mergedProgress as StremioImportProgress,
-                newLastWatched: updated.last_watched,
-                completedAt: updated.completed_at,
-                action: "merged",
-            });
-            continue;
-        }
-
-        const incomingEntry = incomingProgress as StremioImportProgressEntry;
-        const { merged: mergedProgress, changed: progressChanged } = mergeMovieProgress(localProgress, incomingEntry);
-        if (!progressChanged && nextLastWatched === existingLastWatched) {
-            skipped += 1;
-            items.push({
-                ...preview,
-                progressChanged: false,
                 mergedProgress,
-                newLastWatched: existingLastWatched,
-                completedAt: current.completed_at,
-                action: "skipped",
+                newLastWatched: nextLastWatched,
+                completedAt,
+                action,
             });
-            continue;
+            if (!summary.lastWatched || (nextLastWatched && nextLastWatched > summary.lastWatched)) {
+                summary.lastWatched = nextLastWatched;
+            }
+            if (!summary.poster && nextItem.poster) summary.poster = nextItem.poster;
+
+            if (processed - lastYielded >= 25 || processed === total) {
+                lastYielded = processed;
+                await yieldToBrowser();
+            }
         }
-        const completedAt = mergedProgress.watched
-            ? (current.completed_at || preview.lastWatched || new Date().toISOString())
-            : (mergedProgress.watched ? null : null);
-        const updated: LibraryItem = {
-            ...current,
-            type: preview.type,
-            last_watched: nextLastWatched || existingLastWatched,
-            progress: mergedProgress,
-            poster: current.poster || preview.poster,
-            completed_at: completedAt,
-            updated_at: new Date().toISOString(),
-        };
-        libraryById.set(preview.imdbId, updated);
-        merged += 1;
-        if (!lastWatched || (updated.last_watched && updated.last_watched > lastWatched)) {
-            lastWatched = updated.last_watched;
+
+        writeLocal(LOCAL_LIBRARY_KEY, nextLibrary);
+        for (const preview of previews) {
+            markDirty("library", preview.imdbId);
         }
-        if (!poster && updated.poster) poster = updated.poster;
-        items.push({
-            ...preview,
-            progressChanged,
-            mergedProgress,
-            newLastWatched: updated.last_watched,
-            completedAt: updated.completed_at,
-            action: "merged",
-        });
+        publishCloudSyncStatus();
+        report({ phase: "reconciling" });
+
+        if (pushToCloud && isCloudBackupEnabled()) {
+            try {
+                const result = await syncCloudBackupNow();
+                report({
+                    phase: "uploading",
+                    uploaded: summary.added + summary.merged,
+                    total: summary.added + summary.merged,
+                });
+                if (!result?.ok && (result as { reason?: string })?.reason !== "paused") {
+                    console.warn("Stremio import cloud push did not complete cleanly", result);
+                }
+            } catch (error) {
+                console.warn("Stremio import cloud push failed", error);
+            }
+        }
+
+        const addonResult = await runStremioAddonImport(addonDescriptors, options, report);
+        report({ phase: "done" });
+        return applyAddonImport(summary, addonResult);
+    } finally {
+        if (shouldPauseCloud) resumeCloudSync();
+        publishCloudSyncStatus();
     }
-
-    const summary: StremioImportSummary = {
-        total: previews.length,
-        rawCount: previews.length,
-        added,
-        merged,
-        skipped,
-        movies: previews.filter((item) => item.type === "movie").length,
-        series: previews.filter((item) => item.type === "series").length,
-        watched: previews.filter((item) => item.watched).length,
-        addonsTotal: 0,
-        addonsAdded: 0,
-        addonsSkipped: 0,
-        addonsUnsupported: 0,
-        items,
-        lastWatched,
-        poster,
-        warnings: [],
-    };
-
-    return { library: Array.from(libraryById.values()), summary };
-};
-
-const pickLatestTimestamp = (a: string, b: string | null): string => {
-    if (!a) return b || "";
-    if (!b) return a;
-    const aTs = Date.parse(a) || 0;
-    const bTs = Date.parse(b) || 0;
-    return bTs > aTs ? b : a;
 };

@@ -6,8 +6,6 @@ const IDLE_DELAY = 5000;
 export function createControlsManager(
     playerContainer: HTMLDivElement | null,
     videoElem: HTMLVideoElement | null,
-    isWatchPartyActive: boolean,
-    isWatchPartyHost: boolean
 ) {
     let hideTimeout: ReturnType<typeof setTimeout> | null = null;
     let seekFeedbackTimeout: any = null;
@@ -50,8 +48,6 @@ export function createControlsManager(
 
     function togglePlay(setControlsVisible: (visible: boolean) => void) {
         if (!videoElem) return;
-        // Disable for participants
-        if (isWatchPartyActive && !isWatchPartyHost) return;
 
         if (videoElem.paused) {
             void videoElem.play();
@@ -62,12 +58,10 @@ export function createControlsManager(
     }
 
     function onSeekInput(time: number, setPendingSeek: (time: number) => void) {
-        if (isWatchPartyActive && !isWatchPartyHost) return;
         setPendingSeek(time);
     }
 
     function onSeekChange(time: number, performSeek: (time: number) => void) {
-        if (isWatchPartyActive && !isWatchPartyHost) return;
         performSeek(time);
     }
 
@@ -100,9 +94,6 @@ export function createControlsManager(
         setSeekFeedback: (feedback: SeekFeedback | null) => void,
         togglePlayFn: () => void
     ) {
-        // Disable controls for participants
-        if (isWatchPartyActive && !isWatchPartyHost) return;
-
         if (event.code === "Space") {
             event.preventDefault();
             togglePlayFn();

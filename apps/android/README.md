@@ -14,7 +14,7 @@ The app is a small Kotlin host around the shared `@raffi/app` interface. The int
 - **Playback**: streams play through Media3 (ExoPlayer) on a surface beneath the transparent page, while the page draws the controls. MKV and MP4 play directly with hardware decoding, including HEVC and HDR where the device supports them, and Dolby audio passes through to the TV or receiver over HDMI. Audio the device can't play itself, such as DTS and Dolby TrueHD, is decoded in software, so every track in a release can be picked. Raffi starts with the track in the device's language, falling back to English. Embedded subtitles show up alongside addon subtitles, which are fetched only when picked.
 - **Bridge**: the page and the host talk over `window.raffiAndroid`, a JSON message channel. The host also makes requests on the page's behalf, for the few services that don't allow browser origins and for Limbo on your network.
 
-Debrid, direct HTTP, and torrent streams play. Provider web players, local files and watch parties aren't supported on Android yet.
+Debrid, direct HTTP, and torrent streams play. Provider web players and local files aren't supported on Android yet.
 
 ## Torrents
 

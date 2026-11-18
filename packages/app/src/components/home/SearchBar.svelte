@@ -2,20 +2,21 @@
     import { onMount } from "svelte";
     import { Search, Mic } from "@lucide/svelte";
     import {
+        mergeSearchRows,
         searchAddonTitlesSplit,
         searchTitlesSplit,
         type SearchTitleResult,
         type SplitSearchResults,
-    } from "../../lib/library/library";
-    import { getCachedMetaData } from "../../lib/library/metaCache";
+    } from "../../lib/library/titleSearch";
+    import { findCorrectedTitleType } from "../../lib/library/titleType";
     import { router } from "../../lib/stores/router";
     import { isTvPlatform } from "../../lib/shell/platform";
     import { listenForSpeech } from "../../lib/android/voice";
     import { channelQuery } from "../../lib/live/library";
     import { fade } from "svelte/transition";
+    import { portalToBody } from "../common/portal";
 	import TitleContextMenu from "./context_menus/TitleContextMenu.svelte";
 	import ListsPopup from "../meta/modals/ListsPopup.svelte";
-	import PlayModal from "./modals/PlayModal.svelte";
 	import HeaderActions from "./header/HeaderActions.svelte";
 	import RaffiMark from "../common/RaffiMark.svelte";
 	import SearchResults from "./header/SearchResults.svelte";
@@ -58,51 +59,11 @@
     let selectedType = "movie"; // Default to movie for search results
     let selectedTitle = ""; // Store title for verification
     let showListsPopup = false;
-    let showPlayModal = false;
     let scrollContainer: HTMLElement | null = null;
     let portalSearchDock = false;
     let homeOverlayMode = false;
     const HEADER_SCROLL_ENTER_THRESHOLD = 140;
     const HEADER_SCROLL_LEAVE_THRESHOLD = 96;
-
-    const portalToBody = (node: HTMLElement, enabled: boolean) => {
-        if (typeof document === "undefined") {
-            return { update() {}, destroy() {} };
-        }
-
-        const placeholder = document.createComment("search-dock-portal");
-        let isPortaled = false;
-
-        const mountToBody = () => {
-            if (isPortaled) return;
-            const parent = node.parentNode;
-            if (!parent) return;
-            parent.insertBefore(placeholder, node);
-            document.body.appendChild(node);
-            isPortaled = true;
-        };
-
-        const restoreToParent = () => {
-            if (!isPortaled) return;
-            const parent = placeholder.parentNode;
-            if (!parent) return;
-            parent.insertBefore(node, placeholder);
-            parent.removeChild(placeholder);
-            isPortaled = false;
-        };
-
-        if (enabled) mountToBody();
-
-        return {
-            update(next: boolean) {
-                if (next) mountToBody();
-                else restoreToParent();
-            },
-            destroy() {
-                restoreToParent();
-            },
-        };
-    };
 
     function updateAutoDockPosition() {
         if (searchBarPositionPreference !== HOME_SEARCH_BAR_POSITION_AUTO) {
@@ -152,20 +113,6 @@
 				return false;
 		}
 	};
-
-    function mergeSearchRows(
-        primary: SearchTitleResult[],
-        secondary: SearchTitleResult[],
-    ) {
-        const merged = new Map<string, SearchTitleResult>();
-        for (const item of primary) {
-            if (!merged.has(item.id)) merged.set(item.id, item);
-        }
-        for (const item of secondary) {
-            if (!merged.has(item.id)) merged.set(item.id, item);
-        }
-        return Array.from(merged.values());
-    }
 
 	const handleCommandEnter = () => {
 		const trimmed = searchQuery.trim();
@@ -298,10 +245,6 @@
 		router.navigate("meta", { imdbId, type, name });
 	}
 
-	function openPlayModal() {
-		showPlayModal = true;
-	}
-
 	function handleContextMenu(
 		e: MouseEvent,
 		result: SearchTitleResult,
@@ -369,61 +312,12 @@
     async function handleAddToList() {
         showContextMenu = false;
 
-        // Verify type before showing popup
-        // Search results default to "movie", but might be "series"
-        // We use the same heuristic as Meta page
-        try {
-            let metaData = await getCachedMetaData(
-                selectedImdbId,
-                selectedType,
-            );
-
-            let typeChanged = false;
-            if (selectedTitle && metaData.meta.name !== selectedTitle) {
-                console.warn(
-                    `Name mismatch: expected "${selectedTitle}", got "${metaData.meta.name}". Trying fallback type.`,
-                );
-                typeChanged = true;
-            } else if (!metaData.meta.logo && !metaData.meta.background) {
-                console.warn(
-                    "Missing logo or background. Trying fallback type.",
-                );
-                typeChanged = true;
-            }
-
-            if (typeChanged) {
-                const fallbackType =
-                    selectedType === "movie" ? "series" : "movie";
-                try {
-                    const fallbackMeta = await getCachedMetaData(
-                        selectedImdbId,
-                        fallbackType,
-                    );
-                    if (fallbackMeta && fallbackMeta.meta) {
-                        selectedType = fallbackType;
-                    }
-                } catch (e) {
-                    console.error("Failed to load fallback meta", e);
-                }
-            }
-        } catch (e) {
-            console.warn(
-                `Failed to load meta for ${selectedType}, trying fallback`,
-            );
-            try {
-                const fallbackType =
-                    selectedType === "movie" ? "series" : "movie";
-                const fallbackMeta = await getCachedMetaData(
-                    selectedImdbId,
-                    fallbackType,
-                );
-                if (fallbackMeta && fallbackMeta.meta) {
-                    selectedType = fallbackType;
-                }
-            } catch (e2) {
-                console.error("Failed to load meta (fallback)", e2);
-            }
-        }
+        const correctedType = await findCorrectedTitleType(
+            selectedImdbId,
+            selectedType,
+            selectedTitle,
+        );
+        if (correctedType) selectedType = correctedType;
 
         showListsPopup = true;
     }
@@ -551,10 +445,6 @@
         />
     {/if}
 
-    {#if showPlayModal}
-        <PlayModal onClose={() => showPlayModal = false} />
-    {/if}
-
 
     <ListsPopup
         bind:visible={showListsPopup}
@@ -562,7 +452,7 @@
         type={selectedType}
     />
 
-    <HeaderActions onOpenPlay={openPlayModal} />
+    <HeaderActions />
 </div>
 
 <style>

@@ -1,23 +1,17 @@
 <script lang="ts">
-    import { Library, Play, Settings, Tv } from "@lucide/svelte";
+    import { FileVideo, Library, Settings, Tv } from "@lucide/svelte";
     import LoadingSpinner from "../../common/LoadingSpinner.svelte";
     import { router, type Route } from "../../../lib/stores/router";
-    import { isAndroidPlatform, isDesktopPlatform } from "../../../lib/shell/platform";
-    import { cloudSyncStatus } from "../../../lib/db/db";
+    import { isDesktopPlatform } from "../../../lib/shell/platform";
+    import { playLocalFile } from "../../../lib/shell/localFile";
     import { showLiveInHeader } from "../../../lib/live/preferences";
     import { openSettings } from "../../../lib/stores/settings";
-    import { currentUser, authInitializing, localMode, updateStatus } from "../../../lib/stores/authStore";
+    import { currentUser, authInitializing, updateStatus } from "../../../lib/stores/authStore";
 
-    let { onOpenPlay }: { onOpenPlay: () => void } = $props();
-
-    type NavItem = { label: string; icon: typeof Play; page?: Route; onSelect: () => void };
-
-    const canPlay = $derived(
-        !isAndroidPlatform && (isDesktopPlatform || (!$localMode && $cloudSyncStatus.cloudFeaturesAvailable)),
-    );
+    type NavItem = { label: string; icon: typeof Library; page?: Route; onSelect: () => void };
 
     const items = $derived<NavItem[]>([
-        ...(canPlay ? [{ label: "Play", icon: Play, onSelect: onOpenPlay }] : []),
+        ...(isDesktopPlatform ? [{ label: "Open file", icon: FileVideo, onSelect: playLocalFile }] : []),
         { label: "Lists", icon: Library, page: "lists", onSelect: () => router.navigate("lists") },
         ...($showLiveInHeader ? [{ label: "Live", icon: Tv, page: "live" as Route, onSelect: () => router.navigate("live") }] : []),
     ]);

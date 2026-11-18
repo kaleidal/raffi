@@ -2,7 +2,6 @@
     import { fade, fly } from "svelte/transition";
 
     export let showSkipIntro = false;
-    export let isWatchPartyMember = false;
     export let skipLabel = "Skip Intro";
     export let skipChapter: () => void;
     export let showPlaybackHealthPrompt = false;
@@ -44,7 +43,7 @@
         </div>
     {/if}
 
-    {#if showSkipIntro && !isWatchPartyMember}
+    {#if showSkipIntro}
         <button
             class="bg-accent text-on-accent px-6 py-2 rounded-full font-bold hover:bg-accent/85 cursor-pointer transition-colors flex items-center gap-2"
             on:click={skipChapter}
