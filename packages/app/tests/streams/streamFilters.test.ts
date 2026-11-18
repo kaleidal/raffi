@@ -3,8 +3,9 @@ import {
     applyStreamFilters,
     buildEnrichedStreams,
     getAvailableStreamFilterOptions,
-    parseStreamMetadata,
 } from "../../src/components/meta/modals/streams/streamFilters";
+import { parseStreamMetadata } from "../../src/lib/streams/ranking/streamParsing";
+import { pickBestStream, type RankingContext } from "../../src/lib/streams/ranking/streamRanking";
 import type { StreamFilterState } from "../../src/components/meta/modals/streams/types";
 
 const cachedCometStream = {
@@ -64,6 +65,8 @@ const pirateBayStream = {
     tag: "4k",
 };
 
+const ranking: RankingContext = { screenRank: 3, language: "EN", hdrDisplay: false };
+
 const defaultFilters: StreamFilterState = {
     resolutionFilter: "all",
     audioLanguageFilter: "all",
@@ -106,8 +109,8 @@ describe("Comet stream metadata", () => {
     test("filters by cache state and maximum file size", () => {
         const streams = buildEnrichedStreams([cachedCometStream, uncachedCometStream]);
 
-        expect(applyStreamFilters(streams, { ...defaultFilters, availabilityFilter: "cached" })).toHaveLength(1);
-        expect(applyStreamFilters(streams, { ...defaultFilters, sizeFilter: "2gb" })[0].meta.providerLabel).toBe("DMM");
+        expect(applyStreamFilters(streams, { ...defaultFilters, availabilityFilter: "cached" }, ranking)).toHaveLength(1);
+        expect(applyStreamFilters(streams, { ...defaultFilters, sizeFilter: "2gb" }, ranking)[0].meta.providerLabel).toBe("DMM");
     });
 });
 
@@ -134,5 +137,37 @@ describe("public torrent addon metadata", () => {
         expect(meta.releaseTypeLabel).toBe("BluRay");
         expect(meta.peerCount).toBe(68);
         expect(meta.sizeInMb).toBeCloseTo(17.32 * 1024, 2);
+    });
+});
+
+const debridStream = (resolution: string, filename: string, flags: string, cached = true) => ({
+    name: `[TB${cached ? "⚡" : "⬇️"}] Comet ${resolution}`,
+    description: [`📄 ${filename}`, "💾 4.2 GB 🔎 StremThru", flags].join("\n"),
+    url: `https://example.invalid/${filename}`,
+    behaviorHints: { filename, videoSize: 4.2 * 1024 * 1024 * 1024 },
+});
+
+const pick = (...streams: object[]) => pickBestStream(buildEnrichedStreams(streams), ranking)?.stream.url;
+
+describe("best stream for one-click play", () => {
+    const uhd = debridStream("2160p", "Show.S01E01.2160p.WEB-DL.x265.mkv", "🌎/🇬🇧");
+    const fullHd = debridStream("1080p", "Show.S01E01.1080p.WEB-DL.x264.mkv", "🌎/🇬🇧");
+    const italianOnly = debridStream("1080p", "Show.S01E01.ITA.1080p.WEB-DL.x264.mkv", "🌎/🇮🇹");
+    const englishHd = debridStream("720p", "Show.S01E01.720p.WEB-DL.x264.mkv", "🌎/🇬🇧");
+
+    test("never goes above the screen while a source that fits is ready", () => {
+        expect(pick(uhd, fullHd)).toBe(fullHd.url);
+    });
+
+    test("goes above the screen when nothing else is ready", () => {
+        expect(pick(uhd, debridStream("1080p", "Show.S01E01.1080p.mkv", "🌎/🇬🇧", false))).toBe(uhd.url);
+    });
+
+    test("prefers the viewer's language over a sharper foreign-only release", () => {
+        expect(pick(italianOnly, englishHd)).toBe(englishHd.url);
+    });
+
+    test("leaves the choice to the viewer when every release is foreign or not cached", () => {
+        expect(pick(italianOnly, debridStream("1080p", "Show.S01E01.1080p.mkv", "🌎/🇬🇧", false))).toBeUndefined();
     });
 });

@@ -19,11 +19,6 @@ export const getStandardEpisodes = <T extends EpisodeLike>(videos: T[] | null | 
     return videos.filter(isStandardEpisode).slice().sort(compareEpisodes);
 };
 
-export const getFirstStandardEpisode = <T extends EpisodeLike>(videos: T[] | null | undefined): T | null => {
-    const standardEpisodes = getStandardEpisodes(videos);
-    return standardEpisodes[0] ?? null;
-};
-
 export const getSeriesResumeEpisode = <T extends EpisodeLike>(
     videos: T[] | null | undefined,
     lastWatched: LastWatched,

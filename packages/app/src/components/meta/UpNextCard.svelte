@@ -1,9 +1,15 @@
 <script lang="ts">
     import { Play } from "@lucide/svelte";
+    import LoadingSpinner from "../common/LoadingSpinner.svelte";
     import type { Episode } from "../../lib/library/types/meta_types";
     import type { ProgressItem } from "../../pages/meta/types";
 
-    let { episode, progress, onPlay }: { episode: Episode; progress: ProgressItem | undefined; onPlay: () => void } = $props();
+    let {
+        episode,
+        progress,
+        starting,
+        onPlay,
+    }: { episode: Episode; progress: ProgressItem | undefined; starting: boolean; onPlay: () => void } = $props();
 
     const started = $derived(Boolean(progress && !progress.watched && progress.time > 0 && progress.duration > 0));
     const minutesLeft = $derived(
@@ -15,8 +21,9 @@
 <button
     data-tv-autofocus
     data-focus-ring
-    class="group flex w-full max-w-[640px] cursor-pointer items-center gap-[clamp(18px,1.6vw,28px)] text-left"
+    class="group flex w-full max-w-[640px] cursor-pointer items-center gap-[clamp(18px,1.6vw,28px)] text-left disabled:cursor-wait"
     aria-label="{started ? 'Resume' : 'Play'} {code}"
+    disabled={starting}
     onclick={onPlay}
 >
     <span
@@ -29,7 +36,11 @@
             <span
                 class="flex size-[clamp(46px,3.3vw,60px)] items-center justify-center rounded-full bg-accent text-on-accent transition-transform duration-200 group-hover:scale-110"
             >
-                <Play size={24} strokeWidth={2.5} fill="currentColor" class="translate-x-px" />
+                {#if starting}
+                    <LoadingSpinner size="26px" />
+                {:else}
+                    <Play size={24} strokeWidth={2.5} fill="currentColor" class="translate-x-px" />
+                {/if}
             </span>
         </span>
         {#if started && progress}

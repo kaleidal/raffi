@@ -2,7 +2,7 @@
     import { openSettings } from "../../../../lib/stores/settings";
     import LoadingSpinner from "../../../common/LoadingSpinner.svelte";
     import StreamRow from "./StreamRow.svelte";
-    import type { EnrichedStream } from "./types";
+    import type { EnrichedStream } from "../../../../lib/streams/ranking/types";
 
     export let loadingStreams = false;
     export let streams: any[] = [];

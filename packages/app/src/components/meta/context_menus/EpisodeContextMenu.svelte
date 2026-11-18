@@ -2,13 +2,14 @@
     import { portal } from "../../common/portal";
     import { onMount } from "svelte";
     import { fade } from "svelte/transition";
-    import { Play, Check, CircleX, CheckCircle, Ban, Trash } from "@lucide/svelte";
+    import { Play, ListVideo, Check, CircleX, CheckCircle, Ban, Trash } from "@lucide/svelte";
 
     export let x: number;
     export let y: number;
 
     export let onClose: () => void = () => {};
     export let onWatch: () => void = () => {};
+    export let onChooseSource: () => void = () => {};
     export let onMarkWatched: () => void = () => {};
     export let onMarkUnwatched: () => void = () => {};
     export let onResetProgress: () => void = () => {};
@@ -70,6 +71,16 @@
     >
         <Play size={16} strokeWidth={2} />
         Watch
+    </button>
+    <button
+        class="text-left px-4 py-2 text-ink/80 hover:text-ink hover:bg-ink/10 transition-colors text-sm flex flex-row gap-2 items-center cursor-pointer"
+        on:click={() => {
+            onChooseSource();
+            close();
+        }}
+    >
+        <ListVideo size={16} strokeWidth={2} />
+        Choose Source
     </button>
     <button
         class="text-left px-4 py-2 text-ink/80 hover:text-ink hover:bg-ink/10 transition-colors text-sm flex flex-row gap-2 items-center cursor-pointer"

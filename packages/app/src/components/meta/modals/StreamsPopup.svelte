@@ -7,7 +7,7 @@
     import { failedStreamKeys, streamFailureMessage } from "../../../pages/meta/metaState";
     import type { Addon } from "../../../lib/db/db";
     import type { ShowResponse } from "../../../lib/library/types/meta_types";
-    import type { ProgressItem, ProgressMap, Stream } from "../../../pages/meta/types";
+    import type { ProgressItem, ProgressMap } from "../../../pages/meta/types";
     import { allowTorrenting, isTorrentSource } from "../../../lib/stores/torrenting";
     import EpisodeHeader from "./streams/EpisodeHeader.svelte";
     import StreamsToolbar from "./streams/StreamsToolbar.svelte";
@@ -20,12 +20,13 @@
         STREAM_SORT_OPTIONS,
         applyStreamFilters,
         buildEnrichedStreams,
-        preferredResolutionRank,
     } from "./streams/streamFilters";
+    import { withAvailabilityHint } from "../../../lib/streams/ranking/streamSelection";
+    import { rankingContext } from "../../../lib/streams/ranking/streamRanking";
+    import type { EnrichedStream } from "../../../lib/streams/ranking/types";
     import { computeProgressDetails, getProgressEntry, getReleaseInfo } from "./streams/episodeDetails";
     import type {
         EpisodeProgressDetails,
-        EnrichedStream,
         ResolutionFilter,
         StreamSortOption,
         VideoCodecFilter,
@@ -117,18 +118,7 @@
     }
 
     function handleStreamClick(item: EnrichedStream) {
-        const stream: Stream = {
-            ...item.stream,
-            raffiAvailability: {
-                cacheHint: item.meta.isCached,
-                providerLabel: item.meta.debridServiceLabel,
-                dashboardUrl: item.meta.debridDashboardUrl,
-                expectedSizeBytes: item.meta.sizeInMb == null
-                    ? null
-                    : item.meta.sizeInMb * 1024 * 1024,
-            },
-        };
-        onStreamClick(stream);
+        onStreamClick(withAvailabilityHint(item));
     }
 
 
@@ -168,9 +158,9 @@
         sizeFilter = "all";
     }
 
-    const preferredRank = preferredResolutionRank();
+    const ranking = rankingContext();
 
-    $: filteredStreams = applyStreamFilters(enrichedStreams, filterState, preferredRank);
+    $: filteredStreams = applyStreamFilters(enrichedStreams, filterState, ranking);
     $: ({ localFilteredStreams, addonFilteredStreams } = splitStreamsBySource(filteredStreams));
     $: bestStream = filteredStreams.find((item) => !item.isFailed) ?? null;
     $: hasDirectStream = visibleStreams.some((stream) => stream?.raffiSource === "direct");

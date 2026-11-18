@@ -6,8 +6,13 @@ import {
     streamFailureMessage,
     progressMap,
     streamsToReopen,
+    failedStreamKeys,
+    startingPlayback,
 } from "./metaState";
 import { router } from "../../lib/stores/router";
+import { buildEnrichedStreams } from "../../components/meta/modals/streams/streamFilters";
+import { pickBestStream, rankingContext } from "../../lib/streams/ranking/streamRanking";
+import { withAvailabilityHint } from "../../lib/streams/ranking/streamSelection";
 
 import type { Stream } from "./types";
 import { getLocalStreamsFor } from "../../lib/library/localLibrary";
@@ -27,6 +32,9 @@ import {
 } from "../../lib/stores/torrenting";
 
 let streamFetchGeneration = 0;
+let shownStreamsKey = "";
+
+const streamsKey = (episode: any) => `${get(selectedAddon)}|${episode?.season}:${episode?.episode}`;
 
 const isStaleStreamFetch = (requestId: number) => requestId !== streamFetchGeneration;
 
@@ -52,6 +60,8 @@ export const fetchStreams = async (
     imdbID: string,
 ) => {
     const requestId = ++streamFetchGeneration;
+    shownStreamsKey = streamsKey(episode);
+    if (!silent) startingPlayback.set(false);
     loadingStreams.set(true);
     streams.set([]);
 
@@ -214,6 +224,25 @@ export const episodeClicked = async (episode: any, imdbID: string) => {
     await fetchStreams(episode, false, true, imdbID);
 };
 
+export const refreshStreamsForAddon = (episode: any, imdbID: string) => {
+    if (streamsKey(episode) !== shownStreamsKey) void fetchStreams(episode, false, false, imdbID);
+};
+
+export const playBestStream = async (episode: any, imdbID: string) => {
+    const settings = await getStreamingSourceSettings();
+    if (settings.mode === "direct") return episodeClicked(episode, imdbID);
+
+    const generation = streamFetchGeneration + 1;
+    startingPlayback.set(true);
+    const candidates = await fetchStreams(episode, true, true, imdbID);
+    if (generation !== streamFetchGeneration) return;
+    startingPlayback.set(false);
+
+    const best = pickBestStream(buildEnrichedStreams(candidates, get(failedStreamKeys)), rankingContext());
+    if (best) onStreamClick(withAvailabilityHint(best), get(progressMap));
+    else streamsPopupVisible.set(true);
+};
+
 export const playStream = (
     stream: Stream,
     progressMap: any,
@@ -253,13 +282,6 @@ export const playStream = (
 
         streamsPopupVisible.set(false);
 
-        const routerState = get(router);
-        const routeJoinPartyId =
-            typeof routerState?.params?.joinPartyId === "string"
-                ? routerState.params.joinPartyId
-                : null;
-        const routeAutoJoin = Boolean(routerState?.params?.autoJoin);
-
         router.navigate("player", {
             videoSrc: stream.directPlaybackMode === "iframe" ? null : url,
             embedSrc: stream.directPlaybackMode === "iframe" ? url : null,
@@ -268,8 +290,6 @@ export const playStream = (
             startTime,
             season: episode?.season ?? null,
             episode: episode?.episode ?? null,
-            joinPartyId: routeJoinPartyId,
-            autoJoin: routeJoinPartyId ? routeAutoJoin : false,
             streamAvailability: stream.raffiAvailability ?? null,
         }, { replace: options?.replace });
     } else {
@@ -333,6 +353,8 @@ export const markCurrentStreamAsFailed = (reason?: string) => {
 
 export const closeStreamsPopup = () => {
     streamFetchGeneration += 1;
+    shownStreamsKey = "";
+    startingPlayback.set(false);
     loadingStreams.set(false);
     streamsPopupVisible.set(false);
     streams.set([]);

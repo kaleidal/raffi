@@ -1,15 +1,19 @@
 <script lang="ts">
-    import { onDestroy, onMount } from "svelte";
+    import { onDestroy, onMount, untrack } from "svelte";
     import { fade } from "svelte/transition";
-    import { ChevronLeft, Play } from "@lucide/svelte";
+    import { ChevronLeft } from "@lucide/svelte";
     import { router } from "../../lib/stores/router";
 
     import SeasonSelector from "../../components/meta/SeasonSelector.svelte";
     import EpisodeGrid from "../../components/meta/EpisodeGrid.svelte";
     import EpisodeContextMenu from "../../components/meta/context_menus/EpisodeContextMenu.svelte";
     import LoadingSpinner from "../../components/common/LoadingSpinner.svelte";
+    import AmbientBackdrop from "../../components/common/AmbientBackdrop.svelte";
+    import UnsupportedTitleModal from "../../components/meta/modals/UnsupportedTitleModal.svelte";
+    import { ADDONS_CHANGED_EVENT } from "../../components/settings/addons/addonsShared";
 
     import MetaBackground from "./components/MetaBackground.svelte";
+    import MetaHero from "./components/MetaHero.svelte";
     import MetaModals from "./components/MetaModals.svelte";
 
     import {
@@ -29,6 +33,7 @@
         selectedAddon,
         addons,
         streamsPopupVisible,
+        startingPlayback,
         streamsToReopen,
         showTorrentWarning,
         showEpisodeContextMenu,
@@ -41,36 +46,12 @@
     import * as StreamLogic from "./streamLogic";
     import * as ProgressLogic from "./progressLogic";
     import { hydrateStreamFailures } from "./streamFailures";
-    import { getFirstStandardEpisode, getSeriesResumeEpisode, getStandardEpisodes } from "./episodeSelection";
-    import ActionButtons from "../../components/meta/ActionButtons.svelte";
-    import MetaInfo from "./components/MetaInfo.svelte";
-    import TitleLogo from "./components/TitleLogo.svelte";
-    import UpNextCard from "../../components/meta/UpNextCard.svelte";
-    import AmbientBackdrop from "../../components/common/AmbientBackdrop.svelte";
-    import UnsupportedTitleModal from "../../components/meta/modals/UnsupportedTitleModal.svelte";
-    import { ADDONS_CHANGED_EVENT } from "../../components/settings/addons/addonsShared";
 
-    // Router params
-    $: imdbID = $router.params.imdbId;
-    $: titleType = $router.params.type || "movie";
-    $: expectedName = $router.params.name || "";
-    $: joinPartyId = $router.params.joinPartyId || null;
-    $: joinPartyAuto = Boolean($router.params.autoJoin);
-    $: openStreamsPopup = Boolean($router.params.openStreamsPopup);
-    $: partySeasonParam =
-        typeof $router.params.partySeason === "number"
-            ? $router.params.partySeason
-            : null;
-    $: partyEpisodeParam =
-        typeof $router.params.partyEpisode === "number"
-            ? $router.params.partyEpisode
-            : null;
+    const imdbID = $derived($router.params.imdbId);
+    const titleType = $derived($router.params.type || "movie");
+    const expectedName = $derived($router.params.name || "");
 
-    // Local state for player start
-    let streamsModalKey = "initial";
-    let unsupportedReason: string | null = null;
-    let partyJoinStreamPromptHandled = false;
-
+    const handleAddonsChanged = () => void DataLoader.loadAddons();
 
     onMount(async () => {
         resetMetaState();
@@ -81,293 +62,94 @@
 
     onDestroy(() => {
         streamsToReopen.set(null);
+        StreamLogic.closeStreamsPopup();
         DataLoader.cancelMetaDataLoad();
         window.removeEventListener(ADDONS_CHANGED_EVENT, handleAddonsChanged);
     });
 
-    function handleAddonsChanged() {
-        void DataLoader.loadAddons();
-    }
+    $effect(() => {
+        const [id, type, name] = [imdbID, titleType, expectedName];
+        if (id) untrack(() => void DataLoader.loadMetaData(id, type, name));
+    });
 
+    const unsupportedReason = $derived.by(() => {
+        if ($metaLoadError) return $metaLoadError;
+        if (!$loadedMeta || !$metaData) return null;
+        if (!$metaData.meta?.background) return "This title is missing metadata.";
+        if ($metaData.meta.type === "series" && !$metaData.meta.videos?.length) return "No episodes found for this series.";
+        return null;
+    });
 
-    $: if (imdbID) {
-        void DataLoader.loadMetaData(imdbID, titleType, expectedName);
-    }
-
-    $: if ($metaLoadError) {
-        unsupportedReason = $metaLoadError;
-    } else if ($loadedMeta && $metaData) {
-        if (!$metaData.meta?.background) {
-            unsupportedReason = "This title is missing metadata.";
-        } else if (
-            $metaData.meta?.type === "series" &&
-            (!$metaData.meta?.videos || $metaData.meta.videos.length === 0)
-        ) {
-            unsupportedReason = "No episodes found for this series.";
-        } else {
-            unsupportedReason = null;
+    $effect(() => {
+        const episode = $selectedEpisode;
+        if ($selectedAddon && episode && $streamsPopupVisible) {
+            untrack(() => StreamLogic.refreshStreamsForAddon(episode, imdbID));
         }
-    } else {
-        unsupportedReason = null;
-    }
+    });
 
-    $: if ($selectedAddon && $selectedEpisode && $streamsPopupVisible) {
-        StreamLogic.fetchStreams($selectedEpisode, false, false, imdbID);
-    }
-
-    $: if ($progressMap) {
-        streamsModalKey = (() => {
-            if ($metaData?.meta?.type === "movie") {
-                const entry: any = $progressMap;
-                return [
-                    "movie",
-                    entry?.time ?? 0,
-                    entry?.duration ?? 0,
-                    entry?.watched ?? false,
-                    entry?.updatedAt ?? 0,
-                ].join(":");
-            }
-            const parts = Object.entries($progressMap || {}).map(
-                ([key, value]: [string, any]) =>
-                    [
-                        key,
-                        value?.time ?? 0,
-                        value?.duration ?? 0,
-                        value?.watched ?? false,
-                        value?.updatedAt ?? 0,
-                    ].join("-"),
-            );
-            return parts.join("|") || "series:empty";
-        })();
-    }
-
-    $: if (!joinPartyId || !joinPartyAuto || !openStreamsPopup) {
-        partyJoinStreamPromptHandled = false;
-    }
-
-    $: if (
-        !partyJoinStreamPromptHandled &&
-        joinPartyId &&
-        joinPartyAuto &&
-        openStreamsPopup &&
-        imdbID &&
-        $loadedMeta &&
-        $metaData &&
-        $selectedAddon
-    ) {
-        const isSeries = $metaData.meta?.type === "series";
-
-        let targetEpisode: any = { season: 0, episode: 0 };
-
-        if (isSeries) {
-            const videos = Array.isArray($metaData.meta?.videos)
-                ? $metaData.meta.videos
-                : [];
-
-            const matched = videos.find(
-                (video: any) =>
-                    video?.season === partySeasonParam &&
-                    video?.episode === partyEpisodeParam,
-            );
-
-            targetEpisode =
-                matched ||
-                (partySeasonParam != null && partyEpisodeParam != null
-                    ? { season: partySeasonParam, episode: partyEpisodeParam }
-                    : getFirstStandardEpisode(videos) || { season: 1, episode: 1 });
+    $effect(() => {
+        const reopen = $streamsToReopen;
+        if (reopen && $loadedMeta && reopen.imdbId === $metaData?.meta?.imdb_id && $selectedAddon) {
+            untrack(() => {
+                streamsToReopen.set(null);
+                void StreamLogic.episodeClicked(reopen.episode, imdbID);
+            });
         }
+    });
 
-        partyJoinStreamPromptHandled = true;
-        void StreamLogic.episodeClicked(targetEpisode, imdbID);
-    }
+    const progressSignature = $derived(JSON.stringify($progressMap));
 
-    $: if ($streamsToReopen && $loadedMeta && $streamsToReopen.imdbId === $metaData?.meta?.imdb_id && $selectedAddon) {
-        const { episode } = $streamsToReopen;
-        streamsToReopen.set(null);
-        void StreamLogic.episodeClicked(episode, imdbID);
-    }
-
-    $: upNext =
-        $metaData?.meta?.type === "series"
-            ? getSeriesResumeEpisode(
-                  $metaData.meta.videos,
-                  $lastWatched,
-                  ProgressLogic.getProgress($progressMap, `${$lastWatched.season}:${$lastWatched.episode}`),
-              )
-            : null;
-    $: standardEpisodes = $metaData?.meta?.type === "series" ? getStandardEpisodes($metaData.meta.videos) : [];
-    $: seriesProgress = standardEpisodes.length
-        ? standardEpisodes.filter(
-              (video) => ProgressLogic.getProgress($progressMap, `${video.season}:${video.episode}`)?.watched,
-          ).length / standardEpisodes.length
-        : null;
-    $: upNextProgress = upNext ? ProgressLogic.getProgress($progressMap, `${upNext.season}:${upNext.episode}`) : undefined;
+    const playEpisode = (episode: { season: number; episode: number }) => StreamLogic.playBestStream(episode, imdbID);
+    const chooseSource = (episode: { season: number; episode: number }) => StreamLogic.episodeClicked(episode, imdbID);
 </script>
 
 {#if $loadedMeta && $metaData && $metaData.meta}
-    <div class="bg-canvas flex-1 relative" in:fade={{ duration: 300 }}>
+    <div class="relative flex-1 bg-canvas" in:fade={{ duration: 300 }}>
         <AmbientBackdrop src={$metaData.meta.background} fill />
-        <div class="meta-shell scheme-dark relative w-full bg-canvas">
+        <div class="meta-shell relative w-full bg-canvas scheme-dark">
             <div class="meta-backdrop absolute inset-0 opacity-60">
-                <MetaBackground
-                    background={$metaData.meta.background}
-                    bind:backgroundFailed={$backgroundFailed}
-                />
+                <MetaBackground background={$metaData.meta.background} bind:backgroundFailed={$backgroundFailed} />
             </div>
 
             <button
-                class="absolute top-[clamp(24px,3vw,50px)] left-[clamp(24px,3vw,50px)] z-50 bg-ink/10 hover:bg-ink/20 backdrop-blur-md p-[clamp(12px,1vw,16px)] rounded-full transition-colors duration-200 cursor-pointer"
-                on:click={() => {
-                    router.navigate("home");
-                }}
+                class="absolute top-[clamp(24px,3vw,50px)] left-[clamp(24px,3vw,50px)] z-50 cursor-pointer rounded-full bg-ink/10 p-[clamp(12px,1vw,16px)] backdrop-blur-md transition-colors duration-200 hover:bg-ink/20"
+                onclick={() => router.navigate("home")}
                 aria-label="Back to Home"
             >
                 <ChevronLeft size={30} strokeWidth={2} />
             </button>
 
             <div
-                class="meta-hero relative z-10 flex w-full {$metaData.meta.type === 'series' ? 'peek-episodes' : ''} flex-col items-stretch justify-between gap-[clamp(28px,3vw,50px)] px-[clamp(32px,6vw,72px)] py-[clamp(72px,10vh,120px)] xl:min-h-[720px] xl:flex-row xl:px-[9.2vw] xl:pt-[14.8vw] xl:pb-[9.2vw]"
+                class="meta-hero relative z-10 flex w-full flex-col items-stretch justify-between gap-[clamp(28px,3vw,50px)] px-[clamp(32px,6vw,72px)] py-[clamp(72px,10vh,120px)] xl:min-h-[720px] xl:flex-row xl:px-[9.2vw] xl:pt-[14.8vw] xl:pb-[9.2vw]"
+                class:peek-episodes={$metaData.meta.type === "series"}
             >
                 <div
                     class="flex min-h-[clamp(460px,58vh,620px)] w-full flex-col items-start justify-between gap-[clamp(28px,2.6vw,44px)] xl:min-h-0 xl:w-[40vw]"
                 >
-
-            <style>
-                .resume-button-shell {
-                    border-radius: clamp(30px, 5vw, 50px);
-                    overflow: hidden;
-                    transform-origin: center;
-                    transition-property: scale;
-                    transition-duration: 140ms;
-                    transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
-                }
-
-                .resume-button-shell:has(.resume-button:not(:disabled):active) {
-                    scale: 0.96;
-                }
-
-                .resume-button:not(:disabled):active {
-                    scale: 1;
-                }
-
-                .resume-button {
-                    min-height: clamp(68px, 5vw, 92px);
-                    padding: clamp(13px, 1.5vw, 20px) clamp(36px, 4.2vw, 76px);
-                    font-size: clamp(22px, 1.7vw, 30px);
-                }
-
-                .resume-button__label {
-                    white-space: nowrap;
-                }
-
-                .resume-button__icon {
-                    width: clamp(28px, 2.4vw, 42px);
-                    height: clamp(28px, 2.4vw, 42px);
-                }
-
-                .resume-button__icon :global(svg) {
-                    width: 100%;
-                    height: 100%;
-                    transform: translateX(2px);
-                }
-
-                @media (prefers-reduced-motion: reduce) {
-                    .resume-button-shell {
-                        transition-duration: 0ms;
-                    }
-
-                    .resume-button-shell:has(.resume-button:not(:disabled):active) {
-                        scale: 1;
-                    }
-                }
-            </style>
-                    <div
-                        class="flex flex-col gap-2.5 justify-start items-start w-full"
-                    >
-                        <TitleLogo
-                            logo={$logoFailed ? null : $metaData.meta.logo}
-                            name={$metaData.meta.name}
-                            progress={seriesProgress}
-                            onLogoError={() => logoFailed.set(true)}
-                        />
-
-                        <MetaInfo metaData={$metaData} seasons={$seasons} />
-
-                        {#if $metaData.meta.type === "series"}
-                            <div class="mt-1 flex items-center gap-3">
-                                <ActionButtons metaData={$metaData} />
-                            </div>
-                        {/if}
-                    </div>
-
-                    {#if $metaData.meta.type === "series"}
-                        {#if upNext}
-                            <UpNextCard
-                                episode={upNext}
-                                progress={upNextProgress}
-                                onPlay={() => upNext && StreamLogic.episodeClicked(upNext, imdbID)}
-                            />
-                        {/if}
-                    {:else}
-                        {@const movieProgress = ProgressLogic.getProgress($progressMap)}
-                        {@const isMovieResumable = movieProgress && !movieProgress.watched && movieProgress.time > 0}
-
-                        <div class="flex items-center gap-3">
-                            <div class="relative rounded-[50px] resume-button-shell" data-focus-ring>
-                                <button
-                                    data-tv-autofocus
-                                    class="bg-accent/85 hover:bg-accent/70 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-5 text-on-accent font-medium w-full transition-colors duration-200 relative z-10 resume-button"
-                                    on:click={() =>
-                                        StreamLogic.episodeClicked(
-                                            { season: 0, episode: 0 },
-                                            imdbID,
-                                        )}
-                                >
-                                    <div class="resume-button__icon flex items-center justify-center">
-                                        <Play size={48} strokeWidth={2} fill="currentColor" />
-                                    </div>
-                                    <span class="resume-button__label">
-                                        {#if isMovieResumable}
-                                            Resume
-                                        {:else}
-                                            Watch Movie
-                                        {/if}
-                                    </span>
-                                </button>
-                                {#if isMovieResumable}
-                                    <div
-                                        class="absolute bottom-0 left-0 h-1.5 bg-accent z-20 rounded-full overflow-hidden"
-                                        style="width: {(movieProgress.time /
-                                            movieProgress.duration) *
-                                            100}%"
-                                    ></div>
-                                {/if}
-                            </div>
-                            <ActionButtons metaData={$metaData} />
-                        </div>
-                    {/if}
+                    <MetaHero
+                        metaData={$metaData}
+                        progressMap={$progressMap}
+                        lastWatched={$lastWatched}
+                        seasons={$seasons}
+                        logoFailed={$logoFailed}
+                        starting={$startingPlayback}
+                        onLogoError={() => logoFailed.set(true)}
+                        onPlay={playEpisode}
+                        onChooseSource={chooseSource}
+                    />
                 </div>
             </div>
-
         </div>
 
         {#if $metaData.meta.type === "series"}
             <div class="relative w-full px-[clamp(32px,8.3vw,160px)] pt-2 pb-[clamp(32px,8.3vw,160px)]">
-                <SeasonSelector
-                    seasonsArray={$seasonsArray}
-                    bind:currentSeason={$currentSeason}
-                />
+                <SeasonSelector seasonsArray={$seasonsArray} bind:currentSeason={$currentSeason} />
                 <EpisodeGrid
                     metaData={$metaData}
                     currentSeason={$currentSeason}
                     progressMap={$progressMap}
-                    onEpisodeClick={(episode) =>
-                        StreamLogic.episodeClicked(episode, imdbID)}
-                    onEpisodeContextMenu={(detail) =>
-                        ProgressLogic.handleEpisodeContextMenu(
-                            detail.event,
-                            detail.episode,
-                        )}
+                    onEpisodeClick={playEpisode}
+                    onEpisodeContextMenu={(detail) => ProgressLogic.handleEpisodeContextMenu(detail.event, detail.episode)}
                 />
             </div>
         {/if}
@@ -392,53 +174,38 @@
         metaData={$metaData}
         selectedEpisode={$selectedEpisode}
         progressMap={$progressMap}
-        progressSignature={streamsModalKey}
+        {progressSignature}
         onCloseStreamsPopup={StreamLogic.closeStreamsPopup}
-        onStreamClick={(stream) =>
-            StreamLogic.onStreamClick(stream, $progressMap)}
-        onTorrentConfirm={() =>
-            StreamLogic.handleTorrentWarningConfirm($progressMap)}
+        onStreamClick={(stream) => StreamLogic.onStreamClick(stream, $progressMap)}
+        onTorrentConfirm={() => StreamLogic.handleTorrentWarningConfirm($progressMap)}
         onTorrentCancel={StreamLogic.handleTorrentWarningCancel}
     />
-
 
     {#if $showEpisodeContextMenu}
         <EpisodeContextMenu
             x={$contextMenuPos.x}
             y={$contextMenuPos.y}
             onClose={() => showEpisodeContextMenu.set(false)}
-            onWatch={() => {
-                if ($contextEpisode)
-                    StreamLogic.episodeClicked($contextEpisode, imdbID);
-            }}
-            onMarkWatched={() =>
-                ProgressLogic.handleContextMarkWatched(imdbID)}
-            onMarkUnwatched={() =>
-                ProgressLogic.handleContextMarkUnwatched(imdbID)}
-            onResetProgress={() =>
-                ProgressLogic.handleContextResetProgress(imdbID)}
-            onMarkSeasonWatched={() =>
-                ProgressLogic.handleContextMarkSeasonWatched(imdbID)}
-            onMarkSeasonUnwatched={() =>
-                ProgressLogic.handleContextMarkSeasonUnwatched(imdbID)}
+            onWatch={() => $contextEpisode && playEpisode($contextEpisode)}
+            onChooseSource={() => $contextEpisode && chooseSource($contextEpisode)}
+            onMarkWatched={() => ProgressLogic.handleContextMarkWatched(imdbID)}
+            onMarkUnwatched={() => ProgressLogic.handleContextMarkUnwatched(imdbID)}
+            onResetProgress={() => ProgressLogic.handleContextResetProgress(imdbID)}
+            onMarkSeasonWatched={() => ProgressLogic.handleContextMarkSeasonWatched(imdbID)}
+            onMarkSeasonUnwatched={() => ProgressLogic.handleContextMarkSeasonUnwatched(imdbID)}
         />
     {/if}
+{:else if unsupportedReason}
+    <UnsupportedTitleModal
+        title="Unsupported Title"
+        message={unsupportedReason}
+        onBack={() => router.navigate("home")}
+        onRetry={() => window.location.reload()}
+    />
 {:else}
-    {#if unsupportedReason}
-        <UnsupportedTitleModal
-            title="Unsupported Title"
-            message={unsupportedReason}
-            onBack={() => router.navigate("home")}
-            onRetry={() => window.location.reload()}
-        />
-    {:else}
-        <div
-            class="w-full h-full flex items-center justify-center"
-            out:fade={{ duration: 200 }}
-        >
-            <LoadingSpinner size="60px" />
-        </div>
-    {/if}
+    <div class="flex h-full w-full items-center justify-center" out:fade={{ duration: 200 }}>
+        <LoadingSpinner size="60px" />
+    </div>
 {/if}
 
 <style>

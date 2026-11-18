@@ -1,5 +1,5 @@
 <script lang="ts">
-    import type { EnrichedStream } from "./types";
+    import type { EnrichedStream } from "../../../../lib/streams/ranking/types";
 
     let { item, onClick }: { item: EnrichedStream; onClick: () => void } = $props();
 

@@ -14,6 +14,7 @@ import {
 } from "../registerCoders";
 import type { EmbeddedSubtitleTrack } from "../subtitles/embeddedSubtitles";
 import { acquireStreamInput, type StreamInput } from "./streamInput";
+import { languageCode, preferredLanguage } from "../../utils/languages";
 import {
 	codecsCompatible,
 	isMseFriendlyVideo,
@@ -127,16 +128,22 @@ export function formatAudioTrackLabel(track: {
 	return lang ? LANGUAGE_LABELS[lang] || lang.toUpperCase() : "Unknown";
 }
 
+const speaksLanguage = (track: ProbedAudioTrack, code: string) =>
+	languageCode(track.language?.split("-")[0]) === code ||
+	(track.title ?? "").split(/[^A-Za-z]+/).some((word) => word.length > 2 && languageCode(word) === code);
+
+const isCommentaryTrack = (track: ProbedAudioTrack) => /commentary/i.test(track.title ?? "");
+
 export function preferredAudioIndex(tracks: ProbedAudioTrack[]): number {
-	const engPlayable = tracks.find(
-		(track) => normalizeLang(track.language) === "eng" && track.playable,
-	);
-	if (engPlayable) return engPlayable.index;
-	const playable = tracks.find((track) => track.playable);
-	if (playable) return playable.index;
-	const eng = tracks.find((track) => normalizeLang(track.language) === "eng");
-	if (eng) return eng.index;
-	return tracks[0]?.index ?? 0;
+	const language = preferredLanguage();
+	const main = tracks.filter((track) => !isCommentaryTrack(track));
+	const ranked = [
+		main.find((track) => speaksLanguage(track, language) && track.playable),
+		main.find((track) => track.playable),
+		tracks.find((track) => track.playable),
+		main.find((track) => speaksLanguage(track, language)),
+	];
+	return ranked.find(Boolean)?.index ?? tracks[0]?.index ?? 0;
 }
 
 export function canRemuxOrTranscodeAudio(
