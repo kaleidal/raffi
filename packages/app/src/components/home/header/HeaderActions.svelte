@@ -1,9 +1,7 @@
 <script lang="ts">
-    import { FileVideo, Library, Settings, Tv } from "@lucide/svelte";
+    import { Library, Settings, Tv } from "@lucide/svelte";
     import LoadingSpinner from "../../common/LoadingSpinner.svelte";
     import { router, type Route } from "../../../lib/stores/router";
-    import { isDesktopPlatform } from "../../../lib/shell/platform";
-    import { playLocalFile } from "../../../lib/shell/localFile";
     import { showLiveInHeader } from "../../../lib/live/preferences";
     import { openSettings } from "../../../lib/stores/settings";
     import { currentUser, authInitializing, updateStatus } from "../../../lib/stores/authStore";
@@ -11,7 +9,6 @@
     type NavItem = { label: string; icon: typeof Library; page?: Route; onSelect: () => void };
 
     const items = $derived<NavItem[]>([
-        ...(isDesktopPlatform ? [{ label: "Open file", icon: FileVideo, onSelect: playLocalFile }] : []),
         { label: "Lists", icon: Library, page: "lists", onSelect: () => router.navigate("lists") },
         ...($showLiveInHeader ? [{ label: "Live", icon: Tv, page: "live" as Route, onSelect: () => router.navigate("live") }] : []),
     ]);

@@ -15,7 +15,8 @@
     } from "./lib/stores/authStore";
     import { formatReleaseNotes } from "./lib/shell/updateNotes";
     import { warmTraktClientAuth } from "./lib/db/db";
-    import { isAndroidPlatform } from "./lib/shell/platform";
+    import { isAndroidPlatform, isDesktopPlatform } from "./lib/shell/platform";
+    import { acceptDroppedVideos, playLocalVideo } from "./lib/shell/localFile";
     import { nativeVideoVisible } from "./lib/android/nativeVideo";
     import { applyTheme } from "./lib/appearance/theme";
     import { loadCustomThemes } from "./lib/appearance/customThemes";
@@ -222,19 +223,8 @@
         window.addEventListener("pointerup", handlePointerButtons);
         window.addEventListener("keydown", handleUpdateTestKey);
 
-        // Listen for file open events
-        if ((window as any).electronAPI?.onOpenFile) {
-            (window as any).electronAPI.onOpenFile((filePath: string) => {
-                router.navigate("player", { 
-                    videoSrc: filePath,
-                    startTime: 0,
-                    metaData: null,
-                    fileIdx: null,
-                    season: null,
-                    episode: null
-                });
-            });
-        }
+        (window as any).electronAPI?.onOpenFile?.(playLocalVideo);
+        const stopAcceptingDrops = isDesktopPlatform ? acceptDroppedVideos() : null;
 
         const handleUpdateTestEvent = () => {
             triggerUpdateTest();
@@ -287,6 +277,7 @@
 
         return () => {
             window.removeEventListener("pointerup", handlePointerButtons);
+            stopAcceptingDrops?.();
             if (typeof removeUpdateAvailable === "function") {
                 removeUpdateAvailable();
             }
