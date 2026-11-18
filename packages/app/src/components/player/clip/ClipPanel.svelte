@@ -1,7 +1,16 @@
 <script lang="ts">
     import { slide } from "svelte/transition";
-    import { createClip } from "../../lib/shell/client";
-    import { formatTime } from "../../lib/utils/time";
+    import { createClip } from "../../../lib/shell/client";
+    import { formatTime } from "../../../lib/utils/time";
+    import {
+        MIN_CLIP_GAP,
+        clamp,
+        hitTestThumb,
+        normalizeClipRange,
+        normalizeClipView,
+        viewPercent,
+        zoomView,
+    } from "./clipTimeline";
 
     export let open = false;
     export let videoSrc: string | null = null;
@@ -34,8 +43,6 @@
 
     let dragHandle: "start" | "end" | null = null;
 
-    const minGap = 0.1;
-
     const formatClipTimeLabel = (t: number) => {
         // If the main seekbar is inverted and we know duration, mirror that style:
         // show remaining as a negative value (e.g. -3:03).
@@ -46,39 +53,21 @@
         return formatTime(t);
     };
 
-    const clamp = (v: number, min: number, max: number) =>
-        Math.min(max, Math.max(min, v));
-
     const toSliderValue = (t: number) => (inverted ? clipMax - t : t);
     const fromSliderValue = (v: number) => (inverted ? clipMax - v : v);
 
     const normalizeView = () => {
-        if (!isFinite(clipMax) || clipMax <= 0) return;
-        viewMinSlider = clamp(viewMinSlider, 0, clipMax);
-        viewMaxSlider = clamp(viewMaxSlider, 0, clipMax);
-        if (viewMaxSlider < viewMinSlider) {
-            const tmp = viewMinSlider;
-            viewMinSlider = viewMaxSlider;
-            viewMaxSlider = tmp;
-        }
-        const minSpan = Math.min(clipMax, 5);
-        if (viewMaxSlider - viewMinSlider < minSpan) {
-            const mid = (viewMinSlider + viewMaxSlider) / 2;
-            viewMinSlider = clamp(mid - minSpan / 2, 0, clipMax - minSpan);
-            viewMaxSlider = viewMinSlider + minSpan;
-        }
+        ({ min: viewMinSlider, max: viewMaxSlider } = normalizeClipView(
+            { min: viewMinSlider, max: viewMaxSlider },
+            clipMax,
+        ));
     };
 
     const normalizeRange = () => {
-        if (!isFinite(clipMax) || clipMax <= 0) return;
-        clipStart = clamp(clipStart, 0, clipMax);
-        clipEnd = clamp(clipEnd, 0, clipMax);
-        if (clipEnd < clipStart + minGap) {
-            clipEnd = clamp(clipStart + minGap, 0, clipMax);
-        }
-        if (clipStart > clipEnd - minGap) {
-            clipStart = clamp(clipEnd - minGap, 0, clipMax);
-        }
+        ({ start: clipStart, end: clipEnd } = normalizeClipRange(
+            { start: clipStart, end: clipEnd },
+            clipMax,
+        ));
     };
 
     const resetDefaults = () => {
@@ -114,7 +103,7 @@
         const v = Number((e.target as HTMLInputElement).value);
         let t = fromSliderValue(v);
         t = clamp(t, 0, clipMax);
-        t = Math.min(t, clipEnd - minGap);
+        t = Math.min(t, clipEnd - MIN_CLIP_GAP);
         clipStart = t;
         normalizeRange();
         startSlider = toSliderValue(clipStart);
@@ -124,7 +113,7 @@
         const v = Number((e.target as HTMLInputElement).value);
         let t = fromSliderValue(v);
         t = clamp(t, 0, clipMax);
-        t = Math.max(t, clipStart + minGap);
+        t = Math.max(t, clipStart + MIN_CLIP_GAP);
         clipEnd = t;
         normalizeRange();
         endSlider = toSliderValue(clipEnd);
@@ -136,10 +125,10 @@
         // - Clicking inside the selected (white) range does nothing.
         if (t < clipStart) {
             activeHandle = "start";
-            clipStart = Math.min(t, clipEnd - minGap);
+            clipStart = Math.min(t, clipEnd - MIN_CLIP_GAP);
         } else if (t > clipEnd) {
             activeHandle = "end";
-            clipEnd = Math.max(t, clipStart + minGap);
+            clipEnd = Math.max(t, clipStart + MIN_CLIP_GAP);
         } else {
             return;
         }
@@ -161,31 +150,11 @@
         return { rect, x, t };
     };
 
-    const sliderToXInView = (sliderV: number, rectWidth: number) => {
-        const span = Math.max(0.0001, viewMaxSlider - viewMinSlider);
-        const frac = (sliderV - viewMinSlider) / span;
-        return clamp(frac * rectWidth, 0, rectWidth);
-    };
-
-    const hitTestThumb = (x: number, rectWidth: number) => {
-        const startInView = startSlider >= viewMinSlider && startSlider <= viewMaxSlider;
-        const endInView = endSlider >= viewMinSlider && endSlider <= viewMaxSlider;
-        if (!startInView && !endInView) return null;
-
-        const startX = sliderToXInView(startSlider, rectWidth);
-        const endX = sliderToXInView(endSlider, rectWidth);
-        const distStart = startInView ? Math.abs(x - startX) : Number.POSITIVE_INFINITY;
-        const distEnd = endInView ? Math.abs(x - endX) : Number.POSITIVE_INFINITY;
-        const thumbHitSlop = 14;
-        if (Math.min(distStart, distEnd) > thumbHitSlop) return null;
-        return distStart <= distEnd ? "start" : "end";
-    };
-
     const setHandleTime = (handle: "start" | "end", t: number) => {
         if (handle === "start") {
-            clipStart = Math.min(clamp(t, 0, clipMax), clipEnd - minGap);
+            clipStart = Math.min(clamp(t, 0, clipMax), clipEnd - MIN_CLIP_GAP);
         } else {
-            clipEnd = Math.max(clamp(t, 0, clipMax), clipStart + minGap);
+            clipEnd = Math.max(clamp(t, 0, clipMax), clipStart + MIN_CLIP_GAP);
         }
         normalizeRange();
         startSlider = toSliderValue(clipStart);
@@ -199,7 +168,12 @@
         const info = getPointerTime(e);
         if (!info) return;
 
-        const thumb = hitTestThumb(info.x, info.rect.width);
+        const thumb = hitTestThumb(
+            info.x,
+            info.rect.width,
+            { start: startSlider, end: endSlider },
+            { min: viewMinSlider, max: viewMaxSlider },
+        );
         if (thumb) {
             activeHandle = thumb;
             dragHandle = thumb;
@@ -246,20 +220,16 @@
         if (rect.width <= 0) return;
 
         const x = clamp(e.clientX - rect.left, 0, rect.width);
-        const span = viewMaxSlider - viewMinSlider;
-        if (!isFinite(span) || span <= 0) return;
+        const zoomed = zoomView(
+            { min: viewMinSlider, max: viewMaxSlider },
+            x / rect.width,
+            e.deltaY < 0,
+            clipMax,
+        );
+        if (!zoomed) return;
 
-        const cursorFrac = x / rect.width;
-        const cursorSlider = viewMinSlider + cursorFrac * span;
-
-        const zoomIn = e.deltaY < 0;
-        const factor = zoomIn ? 0.85 : 1.15;
-        const newSpan = clamp(span * factor, Math.min(clipMax, 5), clipMax);
-
-        // Keep cursor position stable while zooming.
-        const newMin = cursorSlider - cursorFrac * newSpan;
-        viewMinSlider = clamp(newMin, 0, clipMax - newSpan);
-        viewMaxSlider = viewMinSlider + newSpan;
+        viewMinSlider = zoomed.min;
+        viewMaxSlider = zoomed.max;
         normalizeView();
     };
 
@@ -273,7 +243,7 @@
         }
 
         const start = Math.max(0, clipStart);
-        const end = Math.max(start + minGap, clipEnd);
+        const end = Math.max(start + MIN_CLIP_GAP, clipEnd);
 
         let targetPath: string | null = null;
         if (window.electronAPI?.saveClipPath) {
@@ -314,33 +284,20 @@
     }
 
     $: nowSlider = toSliderValue(Math.min(Math.max(0, currentTime), clipMax));
-    $: {
-        const span = viewMaxSlider - viewMinSlider;
-        nowLeft = span > 0 ? clamp(((nowSlider - viewMinSlider) / span) * 100, 0, 100) : 0;
-    }
+    $: nowLeft = clamp(viewPercent(nowSlider, { min: viewMinSlider, max: viewMaxSlider }), 0, 100);
 
     // Selection is rendered based on slider positions so it always matches the thumbs
     // (including inverted mode).
     $: {
-        const span = viewMaxSlider - viewMinSlider;
-        const a = Math.min(startSlider, endSlider);
-        const b = Math.max(startSlider, endSlider);
-        const left = span > 0 ? clamp(((a - viewMinSlider) / span) * 100, 0, 100) : 0;
-        const right = span > 0 ? clamp(((b - viewMinSlider) / span) * 100, 0, 100) : 0;
+        const view = { min: viewMinSlider, max: viewMaxSlider };
+        const left = clamp(viewPercent(Math.min(startSlider, endSlider), view), 0, 100);
+        const right = clamp(viewPercent(Math.max(startSlider, endSlider), view), 0, 100);
         selectedLeft = Math.min(left, right);
         selectedWidth = Math.max(0, right - left);
     }
 
-    $: startLeft = (() => {
-        const span = viewMaxSlider - viewMinSlider;
-        if (!(span > 0)) return 0;
-        return ((startSlider - viewMinSlider) / span) * 100;
-    })();
-    $: endLeft = (() => {
-        const span = viewMaxSlider - viewMinSlider;
-        if (!(span > 0)) return 0;
-        return ((endSlider - viewMinSlider) / span) * 100;
-    })();
+    $: startLeft = viewPercent(startSlider, { min: viewMinSlider, max: viewMaxSlider });
+    $: endLeft = viewPercent(endSlider, { min: viewMinSlider, max: viewMaxSlider });
     $: startVisible = startLeft >= 0 && startLeft <= 100;
     $: endVisible = endLeft >= 0 && endLeft <= 100;
 </script>

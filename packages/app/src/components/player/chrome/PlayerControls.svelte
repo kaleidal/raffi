@@ -36,7 +36,7 @@
     import { AudioLines, Download, Maximize, Scissors, Subtitles, ZoomIn, ZoomOut } from "@lucide/svelte";
     import { isAndroidPlatform } from "../../../lib/shell/platform";
     import { formatTime } from "../../../lib/utils/time";
-    import ClipPanel from "../ClipPanel.svelte";
+    import ClipPanel from "../clip/ClipPanel.svelte";
     import PlayPauseIcon from "../PlayPauseIcon.svelte";
     import SeekBar from "../seek/SeekBar.svelte";
     import PlayerButton from "./PlayerButton.svelte";
