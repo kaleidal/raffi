@@ -25,14 +25,10 @@ export function cancelMetaDataLoad() {
 }
 
 export async function loadAddons() {
-    try {
-        const dbAddons = await getAddons();
-        addons.set(dbAddons);
-        const streamAddon = dbAddons.find(addonHasStreamResource);
-        selectedAddon.set(streamAddon?.transport_url ?? "");
-    } catch (e) {
-        console.error("Failed to load addons", e);
-    }
+    const dbAddons = await getAddons();
+    addons.set(dbAddons);
+    const streamAddon = dbAddons.find(addonHasStreamResource);
+    selectedAddon.set(streamAddon?.transport_url ?? "");
 }
 
 export async function loadMetaData(imdbID: string, titleType: string, expectedName: string) {
@@ -62,7 +58,7 @@ export async function loadMetaData(imdbID: string, titleType: string, expectedNa
             data = await getCachedMetaData(imdbID, fallbackType);
             if (isStale()) return;
         }
-    } catch (e) {
+    } catch {
         if (isStale()) return;
         console.warn(`Failed to load meta for ${titleType}, trying fallback`);
         try {

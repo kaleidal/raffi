@@ -44,58 +44,49 @@ export async function loadLists() {
 }
 
 export async function loadListItems(listId: string, items?: any[]) {
-    try {
-        if (!items) {
-            items = await getListItems(listId);
-        }
-
-        const metaPromises = items!.map(async (item: any) => {
-            const partialItem = createPartialListItem(listId, item);
-            if (partialItem.poster) return partialItem;
-
-            try {
-                const data = await getCachedMetaData(
-                    item.imdb_id,
-                    item.type,
-                );
-                if (data && data.meta) {
-                    if (!item.poster && data.meta.poster) {
-                        try {
-                            await updateListItemPoster(
-                                listId,
-                                item.imdb_id,
-                                data.meta.poster,
-                            );
-
-                            item.poster = data.meta.poster;
-                        } catch (e) {
-                            console.error("Failed to backfill poster", e);
-                        }
-                    }
-                    return { ...data.meta, list_id: listId, db_item: item, position: item.position, updated_at: item.updated_at } as ExtendedListItem;
-                }
-            } catch (e) {
-                console.error(`Failed to load meta for ${item.imdb_id}`, e);
-            }
-            return partialItem;
-        });
-
-        const resolved = await Promise.all(metaPromises);
-
-        listItemsMap.update(map => ({
-            ...map,
-            [listId]: resolved
-                .map((m) => ({
-                    ...m,
-                    poster: m.db_item.poster || m.poster,
-                    position: m.db_item.position,
-                }))
-                .sort((a, b) => a.position - b.position)
-        }));
-
-    } catch (e) {
-        console.error("Failed to load list items", e);
+    if (!items) {
+        items = await getListItems(listId);
     }
+
+    const metaPromises = items.map(async (item: any) => {
+        const partialItem = createPartialListItem(listId, item);
+        if (partialItem.poster) return partialItem;
+
+        try {
+            const data = await getCachedMetaData(
+                item.imdb_id,
+                item.type,
+            );
+            if (data && data.meta) {
+                if (!item.poster && data.meta.poster) {
+                    await updateListItemPoster(
+                        listId,
+                        item.imdb_id,
+                        data.meta.poster,
+                    );
+
+                    item.poster = data.meta.poster;
+                }
+                return { ...data.meta, list_id: listId, db_item: item, position: item.position, updated_at: item.updated_at } as ExtendedListItem;
+            }
+        } catch (e) {
+            console.error(`Failed to load meta for ${item.imdb_id}`, e);
+        }
+        return partialItem;
+    });
+
+    const resolved = await Promise.all(metaPromises);
+
+    listItemsMap.update(map => ({
+        ...map,
+        [listId]: resolved
+            .map((m) => ({
+                ...m,
+                poster: m.db_item.poster || m.poster,
+                position: m.db_item.position,
+            }))
+            .sort((a, b) => a.position - b.position)
+    }));
 }
 
 export function selectList(listId: string) {

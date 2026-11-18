@@ -47,13 +47,8 @@
 
 	async function loadAddons() {
 		loadingAddons = true;
-		try {
-			addonsList = await getAddons();
-		} catch (e) {
-			console.error("Failed to load addons", e);
-		} finally {
-			loadingAddons = false;
-		}
+		addonsList = await getAddons();
+		loadingAddons = false;
 	}
 
 	async function handleAddAddon() {
@@ -71,27 +66,23 @@
 			newAddonUrl += "/manifest.json";
 		}
 
-		const response = await fetch(newAddonUrl);
-		const manifest = await response.json();
+		const manifest = await fetch(newAddonUrl)
+			.then((response) => (response.ok ? response.json() : null))
+			.catch(() => null);
 		if (!manifest) {
-			await alertDialog("Invalid manifest");
+			await alertDialog("Couldn't load an addon from that address");
 			return;
 		}
 
-		try {
-			await addAddon({
-				transport_url: normalizeTransportUrl(newAddonUrl),
-				manifest,
-				flags: { protected: false, official: false },
-				addon_id: crypto.randomUUID(),
-			});
-			newAddonUrl = "";
-			await loadAddons();
-			emitAddonsChanged();
-		} catch (e) {
-			console.error("Failed to add addon", e);
-			await alertDialog("Failed to add addon");
-		}
+		await addAddon({
+			transport_url: normalizeTransportUrl(newAddonUrl),
+			manifest,
+			flags: { protected: false, official: false },
+			addon_id: crypto.randomUUID(),
+		});
+		newAddonUrl = "";
+		await loadAddons();
+		emitAddonsChanged();
 	}
 
 	function handleConfigure(url: string | undefined) {
@@ -100,13 +91,9 @@
 
 	async function handleRemoveAddon(url: string) {
 		if (!(await confirmDialog("Are you sure?", "Remove addon"))) return;
-		try {
-			await removeAddon(url);
-			await loadAddons();
-			emitAddonsChanged();
-		} catch (e) {
-			console.error("Failed to remove addon", e);
-		}
+		await removeAddon(url);
+		await loadAddons();
+		emitAddonsChanged();
 	}
 
 	async function moveAddon(addon: Addon, direction: -1 | 1) {
@@ -120,13 +107,8 @@
 		next.splice(targetIndex, 0, moved);
 		addonsList = next.map((item, index) => ({ ...item, position: index + 1 }));
 
-		try {
-			await reorderAddons(addonsList.map((item) => item.transport_url));
-			emitAddonsChanged();
-		} catch (e) {
-			console.error("Failed to reorder addons", e);
-			await loadAddons();
-		}
+		await reorderAddons(addonsList.map((item) => item.transport_url));
+		emitAddonsChanged();
 	}
 </script>
 

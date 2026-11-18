@@ -302,9 +302,7 @@ export async function addLimboTorrent(input: {
 			let body: { error?: string; message?: string } | null = null;
 			try {
 				body = JSON.parse(text) as { error?: string; message?: string };
-			} catch {
-				body = null;
-			}
+			} catch {}
 			if (body?.error === "APPROVAL_DENIED") {
 				throw new Error(body.message || "Torrent request was denied in Limbo");
 			}

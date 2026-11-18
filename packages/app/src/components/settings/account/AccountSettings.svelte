@@ -44,15 +44,10 @@
 		if (!$currentUser) return;
 		error = "";
 		showSignOut = false;
-		try {
-			if (keepData) await syncUserStateToLocal($currentUser.id);
-			else clearLocalState();
-			signOutToLocalMode();
-			router.navigate("home");
-		} catch (e) {
-			console.error("Failed to switch to local mode", e);
-			error = "Failed to switch to local mode";
-		}
+		if (keepData) await syncUserStateToLocal($currentUser.id);
+		else clearLocalState();
+		signOutToLocalMode();
+		router.navigate("home");
 	}
 
 	function handleSignedIn() {
@@ -62,13 +57,8 @@
 
 	async function syncNow() {
 		error = "";
-		try {
-			const result = await syncCloudBackupNow();
-			if (!result?.ok) error = "Cloud backup is currently unavailable.";
-		} catch (e: any) {
-			console.error("Failed to sync cloud backup", e);
-			error = e?.message || "Failed to sync cloud backup";
-		}
+		const result = await syncCloudBackupNow();
+		if (!result.ok) error = "Cloud backup is currently unavailable.";
 	}
 </script>
 

@@ -282,18 +282,14 @@ export const importStremioLibrary = async (
         report({ phase: "reconciling" });
 
         if (pushToCloud && isCloudBackupEnabled()) {
-            try {
-                const result = await syncCloudBackupNow();
-                report({
-                    phase: "uploading",
-                    uploaded: summary.added + summary.merged,
-                    total: summary.added + summary.merged,
-                });
-                if (!result?.ok && (result as { reason?: string })?.reason !== "paused") {
-                    console.warn("Stremio import cloud push did not complete cleanly", result);
-                }
-            } catch (error) {
-                console.warn("Stremio import cloud push failed", error);
+            const result = await syncCloudBackupNow();
+            report({
+                phase: "uploading",
+                uploaded: summary.added + summary.merged,
+                total: summary.added + summary.merged,
+            });
+            if (!result.ok && (result as { reason?: string }).reason !== "paused") {
+                console.warn("Stremio import cloud push did not complete cleanly", result);
             }
         }
 

@@ -13,20 +13,16 @@ export async function createNewList(name: string) {
 
 export async function handleDeleteList(listId: string) {
     if (!(await confirmDialog("Are you sure you want to delete this list?", "Delete list"))) return;
-    try {
-        await deleteList(listId);
-        await loadLists();
+    await deleteList(listId);
+    await loadLists();
 
-        if (get(selectedListId) === listId) {
-            const next = get(lists)[0];
-            if (next) selectList(next.list_id);
-            else {
-                selectedListId.set(null);
-                selectedItem.set(null);
-            }
+    if (get(selectedListId) === listId) {
+        const next = get(lists)[0];
+        if (next) selectList(next.list_id);
+        else {
+            selectedListId.set(null);
+            selectedItem.set(null);
         }
-    } catch (e) {
-        console.error("Failed to delete list", e);
     }
 }
 
@@ -37,18 +33,14 @@ export async function handleRemoveFromList() {
     if (!currentSelectedItem || !currentSelectedListId) return;
     if (!(await confirmDialog("Remove this item from the list?", "Remove item"))) return;
 
-    try {
-        await dbRemoveFromList(currentSelectedListId, currentSelectedItem.imdb_id);
-        await loadListItems(currentSelectedListId);
+    await dbRemoveFromList(currentSelectedListId, currentSelectedItem.imdb_id);
+    await loadListItems(currentSelectedListId);
 
-        const remaining = get(listItemsMap)[currentSelectedListId];
-        if (remaining && remaining.length > 0) {
-            selectItem(remaining[0], currentSelectedListId);
-        } else {
-            selectedItem.set(null);
-        }
-    } catch (e) {
-        console.error("Failed to remove item", e);
+    const remaining = get(listItemsMap)[currentSelectedListId];
+    if (remaining && remaining.length > 0) {
+        selectItem(remaining[0], currentSelectedListId);
+    } else {
+        selectedItem.set(null);
     }
 }
 
@@ -62,15 +54,11 @@ export function startEditing(list: List) {
 export async function saveListName() {
     const currentEditingState = get(editingState);
     if (!currentEditingState.listId) return;
-    try {
-        if (currentEditingState.name.trim()) {
-            await updateList(currentEditingState.listId, { name: currentEditingState.name.trim() });
-            await loadLists();
-        }
-        editingState.set({ listId: null, name: "" });
-    } catch (e) {
-        console.error("Failed to rename list", e);
+    if (currentEditingState.name.trim()) {
+        await updateList(currentEditingState.listId, { name: currentEditingState.name.trim() });
+        await loadLists();
     }
+    editingState.set({ listId: null, name: "" });
 }
 
 export async function reorderLists(fromIndex: number, toIndex: number) {
@@ -82,16 +70,11 @@ export async function reorderLists(fromIndex: number, toIndex: number) {
     reordered.splice(toIndex, 0, moved);
     lists.set(reordered);
 
-    try {
-        await Promise.all(
-            reordered
-                .map((list, index) => ({ list, position: index + 1 }))
-                .filter(({ list, position }) => list.position !== position)
-                .map(({ list, position }) => updateList(list.list_id, { position })),
-        );
-        await loadLists();
-    } catch (e) {
-        console.error("Failed to reorder lists", e);
-        await loadLists();
-    }
+    await Promise.all(
+        reordered
+            .map((list, index) => ({ list, position: index + 1 }))
+            .filter(({ list, position }) => list.position !== position)
+            .map(({ list, position }) => updateList(list.list_id, { position })),
+    );
+    await loadLists();
 }

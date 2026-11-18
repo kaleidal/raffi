@@ -91,15 +91,11 @@ export async function loadWatchingItem(
 
         if (meta && meta.meta) {
             if (!item.poster && meta.meta.poster) {
-                try {
-                    await updateLibraryPoster(
-                        item.imdb_id,
-                        meta.meta.poster,
-                    );
-                    item.poster = meta.meta.poster;
-                } catch (e) {
-                    console.error("Failed to backfill poster", e);
-                }
+                await updateLibraryPoster(
+                    item.imdb_id,
+                    meta.meta.poster,
+                );
+                item.poster = meta.meta.poster;
             }
 
             return {

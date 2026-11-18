@@ -106,13 +106,7 @@ async function fetchAddonMeta(addon: Addon, imdbId: string, type: CatalogType): 
 }
 
 async function fetchFirstAddonMeta(imdbId: string, type: CatalogType): Promise<ShowResponse | null> {
-    let addons: Addon[] = [];
-    try {
-        addons = await getAddons();
-    } catch {
-        return null;
-    }
-
+    const addons = await getAddons();
     const candidates = addons.filter((addon) => addonSupportsMeta(addon, imdbId, type));
     if (candidates.length === 0) return null;
 
@@ -121,21 +115,16 @@ async function fetchFirstAddonMeta(imdbId: string, type: CatalogType): Promise<S
         let found = false;
 
         for (const addon of candidates) {
-            fetchAddonMeta(addon, imdbId, type)
-                .then((payload) => {
-                    if (found) return;
-                    if (payload) {
-                        found = true;
-                        resolve(payload);
-                        return;
-                    }
-                    pending -= 1;
-                    if (pending === 0) resolve(null);
-                })
-                .catch(() => {
-                    pending -= 1;
-                    if (!found && pending === 0) resolve(null);
-                });
+            void fetchAddonMeta(addon, imdbId, type).then((payload) => {
+                if (found) return;
+                if (payload) {
+                    found = true;
+                    resolve(payload);
+                    return;
+                }
+                pending -= 1;
+                if (pending === 0) resolve(null);
+            });
         }
     });
 }

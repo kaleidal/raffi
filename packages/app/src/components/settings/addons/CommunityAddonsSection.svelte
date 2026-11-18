@@ -70,14 +70,10 @@
 	}
 
 	async function loadInstalledAddons() {
-		try {
-			const addonsList = await getAddons();
-			installedTransportUrls = new Set(
-				addonsList.map((addon) => normalizeTransportUrl(addon.transport_url)),
-			);
-		} catch (e) {
-			console.error("Failed to load installed addons", e);
-		}
+		const addonsList = await getAddons();
+		installedTransportUrls = new Set(
+			addonsList.map((addon) => normalizeTransportUrl(addon.transport_url)),
+		);
 	}
 
 	async function loadCommunityAddons() {

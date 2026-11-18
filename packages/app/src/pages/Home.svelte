@@ -104,40 +104,36 @@
         const previousById = new Map(
             continueWatchingMeta.map((item) => [item.meta.imdb_id, item]),
         );
-        try {
-            const library = await getLibrary();
-            library.sort(
-                (a, b) =>
-                    new Date(b.last_watched).getTime() -
-                    new Date(a.last_watched).getTime(),
-            );
+        const library = await getLibrary();
+        library.sort(
+            (a, b) =>
+                new Date(b.last_watched).getTime() -
+                new Date(a.last_watched).getTime(),
+        );
 
-            const recent = library.filter(
-                (item) => item.shown !== false && !item.completed_at,
+        const recent = library.filter(
+            (item) => item.shown !== false && !item.completed_at,
+        );
+        const loadedItems: Array<LoadedWatchingItem | null> = [];
+        for (let offset = 0; offset < recent.length; offset += 24) {
+            const batch = await mapWithConcurrency(recent.slice(offset, offset + 24), 6, (item) =>
+                loadWatchingItem(item, previousById.get(item.imdb_id)),
             );
-            const loadedItems: Array<LoadedWatchingItem | null> = [];
-            for (let offset = 0; offset < recent.length; offset += 24) {
-                const batch = await mapWithConcurrency(recent.slice(offset, offset + 24), 6, (item) =>
-                    loadWatchingItem(item, previousById.get(item.imdb_id)),
-                );
-                loadedItems.push(...batch);
-                if (
-                    generation === continueWatchingLoadGeneration &&
-                    offset === 0 &&
-                    continueWatchingMeta.length === 0
-                ) {
-                    continueWatchingMeta = loadedItems.filter(
-                        (item): item is LoadedWatchingItem => item !== null,
-                    );
-                }
-            }
-            if (generation === continueWatchingLoadGeneration) {
+            loadedItems.push(...batch);
+            if (
+                generation === continueWatchingLoadGeneration &&
+                offset === 0 &&
+                continueWatchingMeta.length === 0
+            ) {
                 continueWatchingMeta = loadedItems.filter(
                     (item): item is LoadedWatchingItem => item !== null,
                 );
             }
-        } catch (e) {
-            console.error("Failed to load library", e);
+        }
+        if (generation === continueWatchingLoadGeneration) {
+            continueWatchingMeta = loadedItems.filter(
+                (item): item is LoadedWatchingItem => item !== null,
+            );
         }
     }
 
@@ -254,7 +250,7 @@
                     await Promise.all([
                         getPopularTitles("movie"),
                         getPopularTitles("series"),
-                        getAddons().catch(() => []),
+                        getAddons(),
                     ]);
 
                 applyPopularData(mostPopularMovies, mostPopularSeries);
@@ -270,7 +266,7 @@
         void loadHomeData();
 
         const handleHomeRefresh = async (event: Event) => {
-            const installedAddons = await getAddons().catch(() => [] as Addon[]);
+            const installedAddons = await getAddons();
             const preserveHero = event instanceof CustomEvent
                 ? event.detail?.preserveHero !== false
                 : true;

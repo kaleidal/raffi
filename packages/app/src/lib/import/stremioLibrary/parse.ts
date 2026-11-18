@@ -261,7 +261,7 @@ export const parseStremioExport = (raw: string | unknown): StremioParseResult =>
     if (typeof raw === "string") {
         try {
             parsed = JSON.parse(raw) as StremioExport;
-        } catch (error) {
+        } catch {
             throw new Error("Could not parse the Stremio export file. Make sure it is a valid JSON file.");
         }
     } else if (isPlainObject(raw)) {

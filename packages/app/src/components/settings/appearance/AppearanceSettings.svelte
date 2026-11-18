@@ -53,13 +53,9 @@
 
 	onMount(async () => {
 		const [addons, trakt] = await Promise.all([
-			getAddons().catch((error) => {
-				console.error("Failed to load hero source options", error);
-				return null;
-			}),
+			getAddons(),
 			$localMode || !$currentUser ? null : getTraktStatus().catch(() => null),
 		]);
-		if (!addons) return;
 		heroCatalogs = getHeroCatalogSourceOptions(addons);
 		traktAvailable = Boolean(trakt?.connected && trakt.configured);
 

@@ -312,7 +312,7 @@ export const searchAddonTitlesSplit = async (
     }
 
     const promise = (async () => {
-        const addons = await getAddons().catch(() => [] as Addon[]);
+        const addons = await getAddons();
         const [movies, series] = await Promise.all([
             searchAddonCatalogsByType("movie", trimmed, addons),
             searchAddonCatalogsByType("series", trimmed, addons),

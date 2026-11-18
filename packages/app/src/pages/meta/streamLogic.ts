@@ -136,21 +136,16 @@ export const fetchStreams = async (
     } catch (e) {
         if (isStaleStreamFetch(requestId)) return [];
         console.error("Failed to fetch streams", e);
-        try {
-            const data = get(metaData);
-            const type = data?.meta?.type || "movie";
-            const localStreams = getLocalStreamsFor(imdbID, type as any, episode);
-            streams.set(localStreams as any);
-            return localStreams as any;
-        } catch {
-            // ignore
-        }
+        const data = get(metaData);
+        const type = data?.meta?.type || "movie";
+        const localStreams = getLocalStreamsFor(imdbID, type as any, episode);
+        streams.set(localStreams as any);
+        return localStreams as any;
     } finally {
         if (!isStaleStreamFetch(requestId)) {
             loadingStreams.set(false);
         }
     }
-    return [];
 };
 
 export const streamToPlayableUrl = (stream: Stream): { url: string; fileIdx: number | null } | null => {
@@ -203,13 +198,7 @@ export const fetchStreamListForEpisodeOnly = async (episode: any, imdbID: string
         return [...(localStreams as any), ...remoteStreams];
     } catch (e) {
         console.error("fetchStreamListForEpisodeOnly failed", e);
-        try {
-            const type = data.meta.type;
-            const localStreams = getLocalStreamsFor(imdbID, type as any, episode);
-            return localStreams as any;
-        } catch {
-            return [];
-        }
+        return localStreams as any;
     }
 };
 

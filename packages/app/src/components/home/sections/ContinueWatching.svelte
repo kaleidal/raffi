@@ -65,26 +65,18 @@
 
     async function handleRemove() {
         if (!selectedImdbId) return;
-        try {
-            await hideFromContinueWatching(selectedImdbId);
-            continueWatchingMeta = continueWatchingMeta.filter(
-                (item) => item.meta.imdb_id !== selectedImdbId,
-            );
-        } catch (e) {
-            console.error("Failed to remove item", e);
-        }
+        await hideFromContinueWatching(selectedImdbId);
+        continueWatchingMeta = continueWatchingMeta.filter(
+            (item) => item.meta.imdb_id !== selectedImdbId,
+        );
     }
 
     async function handleForget() {
         if (!selectedImdbId) return;
-        try {
-            await forgetProgress(selectedImdbId);
-            continueWatchingMeta = continueWatchingMeta.filter(
-                (item) => item.meta.imdb_id !== selectedImdbId,
-            );
-        } catch (e) {
-            console.error("Failed to forget item", e);
-        }
+        await forgetProgress(selectedImdbId);
+        continueWatchingMeta = continueWatchingMeta.filter(
+            (item) => item.meta.imdb_id !== selectedImdbId,
+        );
     }
 
     function handleAddToList() {

@@ -26,15 +26,10 @@
     async function handleCreateList() {
         if (!newListName.trim()) return;
         creatingList = true;
-        try {
-            await createList(newListName);
-            newListName = "";
-            await loadLists();
-        } catch (e) {
-            console.error("Failed to create list", e);
-        } finally {
-            creatingList = false;
-        }
+        await createList(newListName);
+        newListName = "";
+        await loadLists();
+        creatingList = false;
     }
 
     function close() {
@@ -44,31 +39,20 @@
 
     async function loadLists() {
         loading = true;
-        try {
-            lists = await getLists();
-
-            memberOf = await getListMembershipByImdb(imdbId);
-        } catch (e) {
-            console.error("Failed to load lists", e);
-        } finally {
-            loading = false;
-        }
+        lists = await getLists();
+        memberOf = await getListMembershipByImdb(imdbId);
+        loading = false;
     }
 
     async function toggleList(listId: string) {
-        try {
-            if (memberOf.has(listId)) {
-                await removeFromList(listId, imdbId);
-                memberOf.delete(listId);
-                memberOf = memberOf;
-            } else {
-                await addToList(listId, imdbId, 0, type);
-                memberOf.add(listId);
-                memberOf = memberOf;
-            }
-        } catch (e) {
-            console.error("Failed to toggle list", e);
+        if (memberOf.has(listId)) {
+            await removeFromList(listId, imdbId);
+            memberOf.delete(listId);
+        } else {
+            await addToList(listId, imdbId, 0, type);
+            memberOf.add(listId);
         }
+        memberOf = memberOf;
     }
 
     $: if (visible) {

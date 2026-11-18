@@ -205,7 +205,7 @@
             } else {
                 disableRPC();
             }
-        } catch (e) {
+        } catch {
             // ignore
         }
 
