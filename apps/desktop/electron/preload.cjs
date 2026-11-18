@@ -82,6 +82,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     setTheme: (theme) => ipcRenderer.send('WINDOW_SET_THEME', theme),
     toggleFullscreen: () => ipcRenderer.send('WINDOW_TOGGLE_FULLSCREEN'),
     isFullscreen: () => ipcRenderer.invoke('WINDOW_IS_FULLSCREEN'),
+    sampleRegion: (rect) => ipcRenderer.invoke('WINDOW_SAMPLE_REGION', rect),
     onFullscreenChanged: (callback) => {
         const handler = (_event, value) => callback(value);
         ipcRenderer.on('WINDOW_FULLSCREEN_CHANGED', handler);

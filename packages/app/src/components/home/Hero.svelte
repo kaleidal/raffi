@@ -5,6 +5,7 @@
     import type { PopularTitleMeta } from "../../lib/library/types/popular_types";
     import { isAndroidPlatform } from "../../lib/shell/platform";
     import { router } from "../../lib/stores/router";
+    import { followTrailerColours } from "../../lib/home/trailerAmbient";
     import IconButton from "../common/controls/IconButton.svelte";
 
     export let showcasedTitle: PopularTitleMeta | null;
@@ -17,6 +18,7 @@
     let isMuted = true;
     let wasPlayingBeforeHidden = false;
     let canControlTrailer = false;
+    let trailerPlaying = false;
     let trailerSrc = "";
 
 
@@ -25,6 +27,7 @@
         isPaused = false;
         wasPlayingBeforeHidden = false;
         canControlTrailer = false;
+        trailerPlaying = false;
         const trailerId = isAndroidPlatform ? undefined : showcasedTitle.trailerStreams?.at(-1)?.ytId;
         const origin = typeof window !== "undefined" ? window.location.origin : "";
         const originParam = origin && origin !== "null" ? `&origin=${encodeURIComponent(origin)}` : "";
@@ -111,6 +114,7 @@
             } else if (state === 2) {
                 isPaused = true;
             }
+            if (state !== 3) trailerPlaying = state === 1;
         }
     };
 
@@ -136,7 +140,11 @@
 
     onMount(() => {
         window.addEventListener("message", handleTrailerMessage);
-        return () => window.removeEventListener("message", handleTrailerMessage);
+        const stopFollowing = followTrailerColours(() => (trailerSrc ? playerIframe : undefined), () => trailerPlaying);
+        return () => {
+            window.removeEventListener("message", handleTrailerMessage);
+            stopFollowing();
+        };
     });
 
     const handleTrailerLoad = () => {

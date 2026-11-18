@@ -1,10 +1,8 @@
-import { fetchJson } from "./library";
+import { CINEMETA_BASE_URL, fetchJson } from "./library";
 import { sanitizeCatalogTitles } from "./catalogQuality";
 import type { PopularTitleMeta } from "./types/popular_types";
 
 export type BrowseType = "movie" | "series";
-
-const CINEMETA_BASE_URL = "https://v3-cinemeta.strem.io";
 
 const SHARED_GENRES = [
     "Action",

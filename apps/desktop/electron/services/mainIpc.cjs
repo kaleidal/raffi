@@ -118,6 +118,11 @@ function registerMainIpcHandlers({
     return mainWindow.isFullScreen();
   });
 
+  ipcMain.handle("WINDOW_SAMPLE_REGION", async (event, rect) => {
+    const frame = await event.sender.capturePage(rect);
+    return frame.isEmpty() ? null : frame.resize({ width: 48 }).toDataURL();
+  });
+
   ipcMain.on("WINDOW_SYNC_MINI_PLAYER_STATE", (_event, payload) => {
     const mainWindow = getMainWindow();
     if (!mainWindow || mainWindow.isDestroyed()) return;

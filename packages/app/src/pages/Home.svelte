@@ -30,7 +30,7 @@
     import TitleRow from "../components/home/sections/TitleRow.svelte";
     import { fetchRecommendedTitles, uniqueTitles } from "../lib/home/homeRows";
     import { pickHeroTitle, pickSpotlight } from "../lib/home/featured";
-    import { homeAmbient } from "../lib/home/ambient";
+    import { homeAmbient, setRestingAmbient } from "../lib/home/ambient";
     import { BROWSE_SECTION_ID, browseSelection } from "../lib/home/browse";
     import BrowseSection from "../components/home/sections/BrowseSection.svelte";
     import TitleMenuHost from "../components/home/TitleMenuHost.svelte";
@@ -43,6 +43,7 @@
     import TitleRowSkeleton from "../components/home/sections/TitleRowSkeleton.svelte";
 
     let showcasedTitle: PopularTitleMeta | null = null;
+    $: setRestingAmbient(showcasedTitle?.background);
     let fetchedTitles = false;
     let continueWatchingMeta: LoadedWatchingItem[] = [];
     let popularMeta: PopularTitleMeta[] = [];

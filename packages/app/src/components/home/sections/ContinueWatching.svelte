@@ -15,7 +15,7 @@
     import PosterImage from "./PosterImage.svelte";
     import { resumePoint, type ResumePoint, type WatchingItem } from "../../../lib/home/continueWatching";
     import { streamsToReopen } from "../../../pages/meta/metaState";
-    import { previewAmbient } from "../../../lib/home/ambient";
+    import { endAmbientPreview, previewAmbient } from "../../../lib/home/ambient";
 
     export let continueWatchingMeta: WatchingItem[] = [];
 
@@ -256,6 +256,9 @@
                             aria-label={`Resume ${title.meta.name}`}
                             on:click={() => resume(title, point)}
                             on:pointerenter={() => previewAmbient(point.image || title.meta.background)}
+                            on:focus={() => previewAmbient(point.image || title.meta.background)}
+                            on:pointerleave={endAmbientPreview}
+                            on:blur={endAmbientPreview}
                             on:contextmenu={(e) =>
                                 handleContextMenu(
                                     e,

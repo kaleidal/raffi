@@ -2,7 +2,7 @@
     import PosterImage from "./PosterImage.svelte";
     import { router } from "../../../lib/stores/router";
     import { openTitleMenu } from "../../../lib/home/titleMenu";
-    import { previewAmbient } from "../../../lib/home/ambient";
+    import { endAmbientPreview, previewAmbient } from "../../../lib/home/ambient";
     import type { PopularTitleMeta } from "../../../lib/library/types/popular_types";
 
     let { title, class: className = "" }: { title: PopularTitleMeta; class?: string } = $props();
@@ -19,6 +19,8 @@
     oncontextmenu={(event) => openTitleMenu(event, title)}
     onpointerenter={() => previewAmbient(title.background || title.poster)}
     onfocus={() => previewAmbient(title.background || title.poster)}
+    onpointerleave={endAmbientPreview}
+    onblur={endAmbientPreview}
 >
     <PosterImage src={title.poster} title={title.name} alt="" />
     <span
