@@ -1,7 +1,7 @@
 <script lang="ts">
     import { Maximize, Star, ZoomIn, ZoomOut } from "@lucide/svelte";
     import IconButton from "../../../components/common/controls/IconButton.svelte";
-    import Slider from "../../../components/common/controls/Slider.svelte";
+    import VolumeControl from "../../../components/player/chrome/VolumeControl.svelte";
     import PlayPauseIcon from "../../../components/player/PlayPauseIcon.svelte";
     import ChannelLogo from "../components/ChannelLogo.svelte";
     import { isAndroidPlatform } from "../../../lib/shell/platform";
@@ -65,9 +65,7 @@
             <IconButton label="Fullscreen" onClick={toggleFullscreen}>
                 <Maximize size={22} strokeWidth={2} />
             </IconButton>
-            <div class="live-volume">
-                <Slider onInput={onVolumeChange} value={volume} label="Volume" />
-            </div>
+            <VolumeControl {volume} onChange={onVolumeChange} />
         {/if}
     </div>
 </div>
@@ -85,10 +83,6 @@
         width: clamp(40px, 3.125vw, 60px);
         height: clamp(40px, 3.125vw, 60px);
         flex: 0 0 auto;
-    }
-
-    .live-volume {
-        width: clamp(96px, 8vw, 128px);
     }
 
     @media (max-width: 760px), (orientation: portrait) {

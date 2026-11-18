@@ -13,7 +13,8 @@
 		disconnectStremio,
 	} from "../../../lib/import/stremioAccount";
 	import type { StremioConnectionStatus } from "../../../lib/import/stremioConnection";
-	import { openTraktActivation, waitForTraktApproval } from "../../../lib/auth/traktAuth";
+	import { waitForTraktApproval } from "../../../lib/auth/traktAuth";
+	import { openExternal } from "../../../lib/shell/openExternal";
 	import { onDestroy } from "svelte";
 	import AccountProfile from "./AccountProfile.svelte";
 	import SettingRow from "../SettingRow.svelte";
@@ -130,7 +131,7 @@
 	async function openTrakt(url: string) {
 		traktError = "";
 		try {
-			await openTraktActivation(url);
+			await openExternal(url);
 		} catch (e) {
 			console.error("Failed to open Trakt", e);
 			traktError = "Couldn't open your browser. Open the address above yourself and enter the code.";

@@ -1,4 +1,4 @@
-import { isWeb } from "../../../lib/shell/platform";
+import { isWeb } from "../../../../lib/shell/platform";
 
 type PlaybackFailure = {
 	reason?: string | null;

@@ -1,4 +1,4 @@
-import * as Session from "./videoSession";
+import * as Session from "../videoSession";
 
 type BrowserPlaybackGuardOptions = {
     getVideo: () => HTMLVideoElement | undefined;

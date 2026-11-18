@@ -2,36 +2,28 @@
     import { onDestroy, onMount, tick } from "svelte";
     import { get } from "svelte/store";
     import { router } from "../../lib/stores/router";
-    import PlayerControls from "../../components/player/PlayerControls.svelte";
+    import PlayerChrome from "../../components/player/chrome/PlayerChrome.svelte";
     import MiniPlayerControls from "../../components/player/MiniPlayerControls.svelte";
-    import PlayerOverlays from "../../components/player/PlayerOverlays.svelte";
     import SeekFeedback from "../../components/player/SeekFeedback.svelte";
     import PlayPauseFeedback from "../../components/player/PlayPauseFeedback.svelte";
+    import LoadingSpinner from "../../components/common/LoadingSpinner.svelte";
     import PlayerVideo from "./components/PlayerVideo.svelte";
     import PlayerLoadingScreen from "./components/PlayerLoadingScreen.svelte";
     import PlayerModals from "./components/PlayerModals.svelte";
-    import LoadingSpinner from "../../components/common/LoadingSpinner.svelte";
     import type { ShowResponse } from "../../lib/library/types/meta_types";
     import { localMode } from "../../lib/stores/authStore";
     import { flushPendingLibraryProgress } from "../../lib/db/db";
-    import {
-        autoSkipIntros,
-        miniPlayerOnMinimize,
-    } from "../../lib/stores/playbackPreferences";
-    import { ChevronLeft, SkipForward } from "@lucide/svelte";
+    import { autoSkipIntros, miniPlayerOnMinimize } from "../../lib/stores/playbackPreferences";
+    import { isDesktopPlatform } from "../../lib/shell/platform";
+    import { openExternal } from "../../lib/shell/openExternal";
     import * as NavigationLogic from "../meta/navigationLogic";
-    import { markCurrentStreamAsFailed, reopenStreamsOnReturn, streamToPlayableUrl } from "../meta/streamLogic";
+    import { markCurrentStreamAsFailed, reopenStreamsOnReturn } from "../meta/streamLogic";
     import * as ProgressLogic from "../meta/progressLogic";
     import { progressMap as metaProgressMap, selectedStream } from "../meta/metaState";
-    import { isDesktopPlatform } from "../../lib/shell/platform";
-    import { needsServerResolve, resolveBrowserStream } from "../../lib/streams/browserStreams";
-    import { streamConnectionFailure } from "./session/playbackFailure";
-    import {
-        isLikelyProviderStatusMedia,
-        isStreamPreparationPending,
-        preflightStreamUrl,
-    } from "../../lib/streams/streamAvailability";
     import type { StreamAvailabilityHint } from "../meta/types";
+    import { isLikelyProviderStatusMedia } from "../../lib/streams/streamAvailability";
+    import { SeekPreview } from "../../lib/media/preview/seekPreview";
+    import { readBufferedRanges, type TimeRange } from "../../components/player/seek/seekTrack";
 
     import {
         isPlaying,
@@ -81,35 +73,20 @@
         shouldShowSeekStyleInfoModal,
         type SeekBarStyle,
     } from "./controls/seekStyle";
-    import {
-        createTraktScrobbler,
-        TRAKT_COMPLETION_THRESHOLD,
-    } from "./integrations/traktScrobbleManager";
+    import { createTraktScrobbler, TRAKT_COMPLETION_THRESHOLD } from "./integrations/traktScrobbleManager";
+    import { createEmbedPlayback } from "./integrations/embedPlayback";
     import { createTorrentStatusPoller } from "./session/torrentStatusPolling";
-    import { createNextEpisodeHandler } from "./controls/playerNextEpisode";
+    import { createNextEpisodeHandler, hasNextEpisode as seriesHasNextEpisode } from "./controls/playerNextEpisode";
     import { createPlayerSessionLoader } from "./session/playerSessionLoader";
-    import { createBrowserPlaybackGuard } from "./session/browserPlaybackGuard";
-    import { readEmbedProgress } from "./integrations/embedProgress";
+    import { createBrowserPlaybackGuard } from "./session/health/browserPlaybackGuard";
     import { createPlayerModalHandlers } from "./controls/playerModalHandlers";
-    import {
-        canReuseNextEpisodePrefetch,
-        isSamePlaybackSource,
-        startNextEpisodePrefetch,
-        type NextEpisodePrefetchHandoff,
-    } from "./session/nextEpisodePrefetch";
+    import { canReuseNextEpisodePrefetch, isSamePlaybackSource } from "./session/prefetch/nextEpisodePrefetch";
+    import { createNextEpisodePrefetchRunner } from "./session/prefetch/nextEpisodePrefetchRunner";
+    import { createPlaybackHealthMonitor } from "./session/health/playbackHealthMonitor";
+    import { createSourcePreflight } from "./session/sourcePreflight";
+    import { captureBackdrop, episodeArtwork, type LoadingBackdrop } from "./session/loadingBackdrop";
     import type { Chapter } from "./types";
-    import { SeekPreview } from "../../lib/media/preview/seekPreview";
-    import { readBufferedRanges, type TimeRange } from "../../components/player/seek/seekTrack";
-    import {
-        LONG_PLAYBACK_STALL_MS,
-        STALL_RECOVERY_MS,
-        canRecoverStall,
-        recordPlaybackStall,
-        shouldSuggestAnotherStream,
-        type PlaybackStall,
-    } from "./session/playbackHealth";
 
-    // Props
     export let videoSrc: string | null = null;
     export let embedSrc: string | null = null;
     export let fileIdx: number | null = null;
@@ -125,199 +102,100 @@
 
     const imdbID = metaData?.meta?.imdb_id || null;
     const NEXT_EPISODE_PREFETCH_CLICK_GRACE_MS = 750;
-
-    const handleProgressInternal = (time: number, dur: number) => {
-        if (onProgress) {
-            onProgress(time, dur);
-        } else if (imdbID) {
-            ProgressLogic.handleProgress(time, dur, imdbID, hasStarted);
-        }
-    };
-
-    const clearWatchedProgressOnStart = () => {
-        const progressKey = metaData?.meta?.type === "series"
-            && season != null
-            && episode != null
-            ? `${season}:${episode}`
-            : undefined;
-        const progress = ProgressLogic.getProgress(get(metaProgressMap), progressKey);
-        if (!progress?.watched) return;
-
-        const playbackTime = videoElem ? videoElem.currentTime : $currentTime;
-        handleProgressInternal(playbackTime, $duration);
-    };
-
-    const handleNextEpisodeInternal = async () => {
-        if (nextEpisodePrefetchStarting && nextEpisodePrefetchTask) {
-            await Promise.race([
-                nextEpisodePrefetchTask,
-                new Promise<void>((resolve) =>
-                    setTimeout(resolve, NEXT_EPISODE_PREFETCH_CLICK_GRACE_MS),
-                ),
-            ]);
-        }
-        if (nextEpisodePrefetchResolved) {
-            return NavigationLogic.playResolvedNextEpisode(
-                nextEpisodePrefetchResolved,
-                get(metaProgressMap),
-            );
-        }
-        if (nextEpisodePrefetchStarting) {
-            disposeNextEpisodePrefetch();
-        }
-        if (onNextEpisode) {
-            return onNextEpisode();
-        }
-        if (imdbID) {
-            return NavigationLogic.handleNextEpisode(imdbID, get(metaProgressMap));
-        }
-    };
-
-    let seekBarStyle: SeekBarStyle = "raffi";
-    let pendingStartAfterSeekStyleModal = false;
-    let introDbChapters: Chapter[] = [];
-
     /** Startup only waits this long for intro timings; late results still enable skipping. */
     const INTRO_DB_STARTUP_BUDGET_MS = 1500;
+    const SUBTITLE_CONTROLS_MARGIN_PX = 26;
+    const TORRENT_FAILURE_EXIT_MS = 1400;
 
-    const requestIntroDbChapters = (
-        meta: ShowResponse | null,
-        requestedSeason: number | null,
-        requestedEpisode: number | null,
-    ): Promise<Chapter[]> => {
-        if (meta?.meta?.type !== "series") return Promise.resolve([]);
-        return IntroDb.fetchIntroDbChapters(meta.meta.imdb_id, requestedSeason, requestedEpisode)
-            .catch((error) => {
-                console.warn("Failed to fetch IntroDB chapters", error);
-                return [];
-            });
-    };
+    let playerContainer: HTMLDivElement;
+    let canvasElem: HTMLCanvasElement;
+    let controlsPanel: HTMLDivElement | null = null;
     let videoSurfaceA: HTMLVideoElement | undefined = undefined;
     let videoSurfaceB: HTMLVideoElement | undefined = undefined;
     let activeVideoSurface: 0 | 1 = 0;
     $: videoElem = (activeVideoSurface === 0 ? videoSurfaceA : videoSurfaceB) as HTMLVideoElement;
-    $: nextEpisodePrefetchVideo =
-        (activeVideoSurface === 0 ? videoSurfaceB : videoSurfaceA) ?? null;
-    let nextEpisodePrefetchDispose: ((opts?: { transfer?: boolean }) => void) | null =
-        null;
-    let nextEpisodePrefetchHandoff: NextEpisodePrefetchHandoff | null = null;
-    let nextEpisodePrefetchResolved: Awaited<ReturnType<typeof NavigationLogic.resolveNextEpisodeStream>> = null;
-    let bingeAutoAdvancing = false;
-    let nextEpisodePrefetchRunId = 0;
-    let isTearingDown = false;
-    let nextEpisodePrefetchStarting = false;
-    let nextEpisodePrefetchTask: Promise<void> | null = null;
-    let nextEpisodePrefetchAbort: AbortController | null = null;
-    let nextEpisodePrefetchRetryAt = 0;
+    const activeVideo = () => (activeVideoSurface === 0 ? videoSurfaceA : videoSurfaceB) ?? undefined;
+    const idleVideo = () => (activeVideoSurface === 0 ? videoSurfaceB : videoSurfaceA) ?? null;
+
+    let hls: any = null;
+    let playbackController: import("../../lib/media").ClientPlaybackController | null = null;
+    let currentVideoSrc: string | null = null;
+    let currentVideoFileIdx: number | null = null;
+    let currentEmbedSrc: string | null = null;
+    let metadataCheckInterval: ReturnType<typeof setInterval> | undefined;
+    let errorModalOpen = false;
+    let reprobeAttempted = false;
+    let torrentFailureExitTimeout: ReturnType<typeof setTimeout> | null = null;
+    let seekBarStyle: SeekBarStyle = "raffi";
+    let pendingStartAfterSeekStyleModal = false;
+    let introDbChapters: Chapter[] = [];
     let effectiveChapterMarkers: Chapter[] = [];
     let skipButtonLabel = "Skip Intro";
+    let bingeAutoAdvancing = false;
+    let isTearingDown = false;
     let miniPlayerActive = false;
+    let loadingBackdrop: LoadingBackdrop = { src: null, mode: "art" };
+    let clipPanelOpen = false;
+    let cueLinePercent = 92;
+    let resizeCounter = 0;
+    let cueRecalcTimeout: number | null = null;
+    let lastControlsVisible: boolean | null = null;
     let lastMiniPlayerActive: boolean | null = null;
-    let canEnterMiniPlayer = false;
-    let isPlayerRoute = true;
-    let loadingBackdropSrc: string | null = null;
-    let loadingBackdropMode: "art" | "frame" = "art";
-    let availabilityNoticeVisible = false;
-    let availabilityBlockedSource: string | null = null;
-    let availabilityCheckSource: string | null = null;
-    let availabilityCheckRun = 0;
+    let playPauseFeedback: { type: "play" | "pause"; id: number } | null = null;
+    let playPauseFeedbackTimeout: ReturnType<typeof setTimeout> | null = null;
 
-    const getEpisodeLoadingBackdrop = () => {
-        if (metaData?.meta?.type !== "series") return null;
-        return metaData.meta.videos?.find(
-            (video) =>
-                video.season === season &&
-                (video.episode === episode || video.number === episode),
-        )?.thumbnail ?? null;
+    const handleProgressInternal = (time: number, dur: number) => {
+        if (onProgress) onProgress(time, dur);
+        else if (imdbID) ProgressLogic.handleProgress(time, dur, imdbID, hasStarted);
     };
 
-    const getWindowControls = () =>
-        (typeof window !== "undefined" ? (window as any).electronAPI?.windowControls : undefined) as
-            | {
-                syncMiniPlayerState?: (state: { enabled: boolean; canEnter: boolean }) => void;
-                exitMiniPlayer?: () => void;
-                isMiniPlayer?: () => Promise<boolean>;
-                onMiniPlayerChanged?: (callback: (value: boolean) => void) => (() => void) | void;
-            }
-            | undefined;
+    const clearWatchedProgressOnStart = () => {
+        const progressKey = metaData?.meta?.type === "series" && season != null && episode != null ? `${season}:${episode}` : undefined;
+        if (!ProgressLogic.getProgress(get(metaProgressMap), progressKey)?.watched) return;
+        handleProgressInternal(videoElem ? videoElem.currentTime : $currentTime, $duration);
+    };
+
+    const nextEpisodePrefetch = imdbID ? createNextEpisodePrefetchRunner(imdbID, idleVideo) : null;
+
+    const playNextEpisode = async () => {
+        const resolved = await nextEpisodePrefetch?.takeResolved(NEXT_EPISODE_PREFETCH_CLICK_GRACE_MS);
+        if (resolved) return NavigationLogic.playResolvedNextEpisode(resolved, get(metaProgressMap));
+        if (onNextEpisode) return onNextEpisode();
+        if (imdbID) return NavigationLogic.handleNextEpisode(imdbID, get(metaProgressMap));
+    };
+
+    const requestIntroDbChapters = (meta: ShowResponse | null, requestedSeason: number | null, requestedEpisode: number | null) => {
+        if (meta?.meta?.type !== "series") return Promise.resolve([] as Chapter[]);
+        return IntroDb.fetchIntroDbChapters(meta.meta.imdb_id, requestedSeason, requestedEpisode).catch((error) => {
+            console.warn("Failed to fetch IntroDB chapters", error);
+            return [] as Chapter[];
+        });
+    };
 
     const handleSeekStyleChange = (style: SeekBarStyle) => {
         seekBarStyle = style;
         persistSeekBarStyle(style);
     };
 
-    const handleSeekStyleAcknowledge = async () => {
+    const handleSeekStyleAcknowledge = () => {
         acknowledgeSeekStyleInfo();
         showSeekStyleModal.set(false);
-
         if (!pendingStartAfterSeekStyleModal) return;
         pendingStartAfterSeekStyleModal = false;
-
-        if (!videoElem) return;
-        try {
-            await videoElem.play();
-        } catch {
-        }
-    };
-
-    const handleToggleFullscreen = () => {
-        controlsManager?.toggleFullscreen?.();
+        void videoElem?.play();
     };
 
     const handleToggleObjectFit = () => {
-
-        const nextFit: "contain" | "cover" = $objectFit === "contain" ? "cover" : "contain";
-        const nextTransform = nextFit === "cover" ? "scale(1.035)" : "none";
+        const nextFit = $objectFit === "contain" ? "cover" : "contain";
         objectFit.set(nextFit);
-
-        if (videoElem) {
-            videoElem.style.objectFit = nextFit;
-            videoElem.style.objectPosition = "center center";
-            videoElem.style.transform = nextTransform;
-            videoElem.style.transformOrigin = "center center";
-        }
-
-        if (canvasElem) {
-            canvasElem.style.objectFit = nextFit;
-            canvasElem.style.objectPosition = "center center";
-            canvasElem.style.transform = nextTransform;
-            canvasElem.style.transformOrigin = "center center";
-        }
-
-        if (videoElem && canvasElem) {
-            Session.captureFrame(videoElem, canvasElem);
-
-            if (!$showCanvas && !$loading) {
-                showCanvas.set(true);
-                requestAnimationFrame(() => {
-                    if (!$loading) {
-                        showCanvas.set(false);
-                    }
-                });
-            }
-        }
-    };
-
-    const openAudioSelection = () => {
-        showAudioSelection.set(true);
-    };
-
-    const openSubtitleSelection = () => {
-        showSubtitleSelection.set(true);
-    };
-
-    const openDesktopDownload = () => {
-        const url = "https://raffi.al/#download";
-        const electronApi = (window as any).electronAPI as
-            | { openExternal?: (target: string) => Promise<void> }
-            | undefined;
-        if (electronApi?.openExternal) {
-            electronApi.openExternal(url).catch(() => {
-                window.open(url, "_blank", "noopener,noreferrer");
-            });
-            return;
-        }
-        window.open(url, "_blank", "noopener,noreferrer");
+        Controls.applyObjectFit(nextFit, videoElem, canvasElem);
+        if (!videoElem || !canvasElem) return;
+        Session.captureFrame(videoElem, canvasElem);
+        if ($showCanvas || $loading) return;
+        showCanvas.set(true);
+        requestAnimationFrame(() => {
+            if (!$loading) showCanvas.set(false);
+        });
     };
 
     const browserPlaybackGuard = createBrowserPlaybackGuard({
@@ -333,217 +211,61 @@
             errorDetails.set(`${reason} ${details}`);
         },
     });
-    const clearBrowserAudioCheck = browserPlaybackGuard.clearAudioCheck;
-    const handleVideoError = browserPlaybackGuard.handleVideoError;
-    const scheduleBrowserAudioCheck = browserPlaybackGuard.scheduleAudioCheck;
 
-    const handleEmbedMessage = (event: MessageEvent) => {
-        if (!embedSrc || !imdbID || !metaData) return;
-
-        const progress = readEmbedProgress(event.data);
-        if (!progress) return;
-
-        const nextDuration = progress.duration && progress.duration > 0
-            ? progress.duration
-            : $duration;
-        const now = Date.now();
-        if (now - lastEmbedProgressAt < 1000) return;
-        lastEmbedProgressAt = now;
-
-        hasStarted = true;
-        currentTime.set(progress.time);
-        if (nextDuration > 0) {
-            duration.set(nextDuration);
-            void ProgressLogic.handleProgress(progress.time, nextDuration, imdbID, true);
-        }
-        Discord.updateDiscordActivity(
-            metaData,
-            season,
-            episode,
-            nextDuration,
-            progress.time,
-            true,
-        );
-    };
-
-    const clearEmbedLoadFallback = () => {
-        if (!embedLoadFallbackTimeout) return;
-        clearTimeout(embedLoadFallbackTimeout);
-        embedLoadFallbackTimeout = null;
-    };
-
-    const finishEmbedLoad = () => {
-        clearEmbedLoadFallback();
-        loading.set(false);
-        loadingStage.set("");
-        loadingDetails.set("");
-        loadingProgress.set(null);
-    };
-
-    const handleEmbedLoaded = () => {
-        finishEmbedLoad();
-        Discord.updateDiscordActivity(
-            metaData,
-            season,
-            episode,
-            0,
-            0,
-            true,
-        );
-    };
-
-    let fullscreenCleanupDone = false;
-
-    const exitFullscreenIfNeeded = async () => {
-        if (fullscreenCleanupDone) return;
-        fullscreenCleanupDone = true;
-
-        try {
-            const electronApi = (window as any).electronAPI;
-            if (electronApi?.isFullscreen) {
-                const isFullscreen = await electronApi.isFullscreen();
-                if (isFullscreen) {
-                    electronApi.toggleFullscreen?.();
-                    return;
-                }
-            }
-
-            if (typeof document !== "undefined" && document.fullscreenElement) {
-                await document.exitFullscreen();
-            }
-        } catch (error) {
-            console.error("Failed to exit fullscreen", error);
-        }
-    };
-
-    const handleClose = async () => {
-        getWindowControls()?.exitMiniPlayer?.();
-        if (imdbID) {
-            void flushPendingLibraryProgress(imdbID);
-        }
-        if (hasStarted && !traktScrobbler.isStopSent()) {
-            void traktScrobbler.send("stop", true);
-        }
-        await exitFullscreenIfNeeded();
-        void playerSessionLoader.cancelCurrentLoad();
-        if (!router.back()) {
-            router.navigate("home");
-        }
-    };
-
-    let playerContainer: HTMLDivElement;
-    let canvasElem: HTMLCanvasElement;
-    let hls: any = null;
-    let playbackController: import("../../lib/media").ClientPlaybackController | null = null;
-    let currentVideoSrc: string | null = null;
-    let currentVideoFileIdx: number | null = null;
-    let currentEmbedSrc: string | null = null;
-    let metadataCheckInterval: any;
-    let bufferingActive = false;
-    let bufferingStartedAt = 0;
-    let bufferingEligibleForHealthPrompt = false;
-    let bufferingHealthTimer: ReturnType<typeof setTimeout> | null = null;
-    let stallRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
-    let lastStallRecoveryAt = 0;
-    let playbackHealthRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
-    let recentPlaybackStalls: PlaybackStall[] = [];
-    let playbackHealthPromptVisible = false;
-    let playbackHealthPromptDismissed = false;
-    let errorModalOpen = false;
-    let reprobeAttempted = false;
-    let torrentFailureExitTimeout: ReturnType<typeof setTimeout> | null = null;
-    let embedLoadFallbackTimeout: ReturnType<typeof setTimeout> | null = null;
-    let lastEmbedProgressAt = 0;
-
-    const getTraktMediaType = (): "movie" | "episode" => {
-        return metaData?.meta?.type === "series" ? "episode" : "movie";
-    };
-
-    const getTraktProgress = (): number => {
-        if ($duration <= 0) return 0;
-        return Math.max(0, Math.min(100, ($currentTime / $duration) * 100));
-    };
+    const embedPlayback = createEmbedPlayback({
+        isActive: () => Boolean(embedSrc),
+        getContext: () => ({ imdbId: imdbID, metaData, season, episode }),
+        onStarted: () => (hasStarted = true),
+    });
 
     const traktScrobbler = createTraktScrobbler({
         isLocalMode: () => $localMode,
         getImdbId: () => imdbID,
         getHasStarted: () => hasStarted,
-        getMediaType: getTraktMediaType,
+        getMediaType: () => (metaData?.meta?.type === "series" ? "episode" : "movie"),
         getSeasonEpisode: () => ({ season, episode }),
-        getProgress: getTraktProgress,
+        getProgress: () => ($duration > 0 ? Math.max(0, Math.min(100, ($currentTime / $duration) * 100)) : 0),
     });
 
-    const computeHasNextEpisode = (): boolean => {
-        if (!metaData || metaData.meta?.type !== "series") return false;
-        const videos: any[] = Array.isArray((metaData as any).meta?.videos)
-            ? ((metaData as any).meta.videos as any[])
-            : [];
-
-        if (videos.length === 0) return false;
-        if (season == null || episode == null) return true;
-
-        const idx = videos.findIndex(
-            (v) => v && v.season === season && v.episode === episode,
-        );
-        if (idx === -1) return true;
-        return idx < videos.length - 1;
+    const stopTrakt = () => {
+        if (hasStarted && !traktScrobbler.isStopSent()) void traktScrobbler.send("stop", true);
     };
 
-    $: hasNextEpisode = computeHasNextEpisode();
-
-    $: bingeNextSupported =
-        metaData?.meta?.type === "series" &&
-        Boolean($selectedStream?.behaviorHints?.bingeGroup);
-
-    $: nextEpisodePrefetchWindow = Chapters.getNextEpisodePrefetchWindow(
-        $duration,
-        $sessionData,
-        introDbChapters,
-    );
-    $: nextEpisodePrefetchStartAt = nextEpisodePrefetchWindow.startAt;
-    $: nextEpisodeHighlighted = $currentChapter?.kind === "outro";
-
-    $: nowPlayingLabel = (() => {
-        const name = metaData?.meta?.name;
-        if (!name) return null;
-        if (
-            metaData?.meta?.type === "series" &&
-            season != null &&
-            episode != null &&
-            Number.isFinite(season) &&
-            Number.isFinite(episode)
-        ) {
-            return `${name} S${season} E${episode}`;
-        }
-        return name;
-    })();
-
-    const disposeNextEpisodePrefetch = (opts?: { transfer?: boolean }) => {
-        nextEpisodePrefetchRunId += 1;
-        nextEpisodePrefetchStarting = false;
-        nextEpisodePrefetchAbort?.abort();
-        nextEpisodePrefetchAbort = null;
-        nextEpisodePrefetchTask = null;
-        nextEpisodePrefetchRetryAt = 0;
-        if (nextEpisodePrefetchDispose) {
-            nextEpisodePrefetchDispose(opts);
-            nextEpisodePrefetchDispose = null;
-        }
-        nextEpisodePrefetchHandoff = null;
-        nextEpisodePrefetchResolved = null;
+    let fullscreenExited = false;
+    const leaveFullscreen = async () => {
+        if (fullscreenExited) return;
+        fullscreenExited = true;
+        await Controls.exitFullscreen();
     };
+
+    const handleClose = async () => {
+        window.electronAPI?.windowControls?.exitMiniPlayer?.();
+        if (imdbID) void flushPendingLibraryProgress(imdbID);
+        stopTrakt();
+        await leaveFullscreen();
+        void playerSessionLoader.cancelCurrentLoad();
+        if (!router.back()) router.navigate("home");
+    };
+
+    const returnToStreams = () => {
+        reopenStreamsOnReturn(imdbID);
+        void handleClose();
+    };
+
+    const playbackHealth = createPlaybackHealthMonitor({
+        hasStarted: () => hasStarted,
+        reopenStream: () => {
+            if (currentVideoSrc && videoElem) loadVideo(currentVideoSrc, { startTime: videoElem.currentTime });
+        },
+    });
+    const healthPromptVisible = playbackHealth.promptVisible;
 
     const handleTorrentError = (message: string) => {
-        if (torrentFailureExitTimeout) {
-            clearTimeout(torrentFailureExitTimeout);
-            torrentFailureExitTimeout = null;
-        }
-
+        if (torrentFailureExitTimeout) clearTimeout(torrentFailureExitTimeout);
         const details = String(message || "").trim();
         const reason = details
             ? `Bad torrent stream: ${details}. Please select another stream.`
             : "Bad torrent stream. Please select another stream.";
-
         markCurrentStreamAsFailed(reason);
         loading.set(false);
         showCanvas.set(false);
@@ -551,21 +273,23 @@
         errorMessage.set("Stream failed");
         errorDetails.set(reason);
         reopenStreamsOnReturn(imdbID);
-
-
         torrentFailureExitTimeout = setTimeout(() => {
-            showError.set(false);
-            handleClose();
             torrentFailureExitTimeout = null;
-        }, 1400);
+            showError.set(false);
+            void handleClose();
+        }, TORRENT_FAILURE_EXIT_MS);
     };
 
-    const torrentStatusPoller = createTorrentStatusPoller({
-        onTorrentError: handleTorrentError,
-    });
+    const torrentStatusPoller = createTorrentStatusPoller({ onTorrentError: handleTorrentError });
 
-    let playPauseFeedback: { type: "play" | "pause"; id: number } | null = null;
-    let playPauseFeedbackTimeout: ReturnType<typeof setTimeout> | null = null;
+    const sourcePreflight = createSourcePreflight({
+        getAvailability: () => streamAvailability,
+        isStillRequested: (source) => isSamePlaybackSource(videoSrc, fileIdx, source.src, source.fileIdx),
+        start: (source) => transitionToVideoSource(source.src, source.fileIdx),
+        redirect: (src) => (videoSrc = src),
+        onCheckStarted: () => (loadingBackdrop = episodeArtwork(metaData, season, episode)),
+    });
+    const availabilityNoticeVisible = sourcePreflight.noticeVisible;
 
     const playerSessionLoader = createPlayerSessionLoader({
         getFileIdx: () => fileIdx,
@@ -574,25 +298,16 @@
         getMetaData: () => metaData,
         getSeason: () => season,
         getEpisode: () => episode,
-        getVideoElem: () =>
-            (activeVideoSurface === 0 ? videoSurfaceA : videoSurfaceB) ?? undefined,
+        getVideoElem: activeVideo,
         getHls: () => hls,
-        setHls: (value) => {
-            hls = value;
-        },
+        setHls: (value) => (hls = value),
         getPlaybackController: () => playbackController,
-        setPlaybackController: (value) => {
-            playbackController = value;
-        },
+        setPlaybackController: (value) => (playbackController = value),
         getCueLinePercent: () => cueLinePercent,
         shouldShowSeekStyleInfoModal,
-        setPendingStartAfterSeekStyleModal: (value) => {
-            pendingStartAfterSeekStyleModal = value;
-        },
+        setPendingStartAfterSeekStyleModal: (value) => (pendingStartAfterSeekStyleModal = value),
         setHasStarted: (value) => (hasStarted = value),
-        setIntroDbChapters: (chapters) => {
-            introDbChapters = chapters;
-        },
+        setIntroDbChapters: (chapters) => (introDbChapters = chapters),
         handleProviderStatusMedia: ({ source, meta }) => {
             if (
                 !streamAvailability ||
@@ -603,19 +318,11 @@
             ) {
                 return false;
             }
-
-            availabilityBlockedSource = videoSrc || source;
-            availabilityNoticeVisible = true;
+            sourcePreflight.block(videoSrc || source);
             showError.set(false);
             return true;
         },
-        resolvePlaybackStart: async ({
-            sessionData,
-            startTime,
-            metaData: loadMetaData,
-            season: loadSeason,
-            episode: loadEpisode,
-        }) => {
+        resolvePlaybackStart: async ({ sessionData, startTime, metaData: loadMetaData, season: loadSeason, episode: loadEpisode }) => {
             const request = requestIntroDbChapters(loadMetaData, loadSeason, loadEpisode);
             const nextIntroDbChapters = await Promise.race([
                 request,
@@ -623,24 +330,12 @@
             ]);
             if (nextIntroDbChapters === null) {
                 void request.then((chapters) => {
-                    if (metaData === loadMetaData && season === loadSeason && episode === loadEpisode) {
-                        introDbChapters = chapters;
-                    }
+                    if (metaData === loadMetaData && season === loadSeason && episode === loadEpisode) introDbChapters = chapters;
                 });
             }
-
-            const effectiveChapters = Chapters.getEffectiveChapterSegments(
-                sessionData,
-                nextIntroDbChapters ?? [],
-            );
-            const effectiveStartTime = Chapters.getStartupSkipTarget(
-                startTime,
-                effectiveChapters,
-                $autoSkipIntros,
-            );
-
+            const effectiveChapters = Chapters.getEffectiveChapterSegments(sessionData, nextIntroDbChapters ?? []);
             return {
-                effectiveStartTime,
+                effectiveStartTime: Chapters.getStartupSkipTarget(startTime, effectiveChapters, $autoSkipIntros),
                 introDbChapters: nextIntroDbChapters ?? [],
             };
         },
@@ -655,6 +350,12 @@
         return playerSessionLoader.loadVideo(src, opts);
     };
 
+    const captureLoadingBackdrop = () => {
+        loadingBackdrop = hasStarted
+            ? captureBackdrop(videoElem, canvasElem, loadingBackdrop)
+            : episodeArtwork(metaData, season, episode);
+    };
+
     const seekToTime = (targetTime: number) => {
         if (!videoElem) return;
         captureLoadingBackdrop();
@@ -664,15 +365,7 @@
             videoElem,
             captureFrame: () => Session.captureFrame(videoElem, canvasElem),
             onAfterSeek: () => {
-                if (!hasStarted) return;
-                Discord.updateDiscordActivity(
-                    metaData,
-                    season,
-                    episode,
-                    $duration,
-                    $currentTime,
-                    $isPlaying,
-                );
+                if (hasStarted) Discord.updateDiscordActivity(metaData, season, episode, $duration, $currentTime, $isPlaying);
             },
             setPendingSeek: pendingSeek.set,
             setCurrentTime: currentTime.set,
@@ -681,514 +374,24 @@
         });
     };
 
-    const triggerPlayPauseFeedback = (type: "play" | "pause") => {
-        if (playPauseFeedbackTimeout) clearTimeout(playPauseFeedbackTimeout);
-        playPauseFeedback = { type, id: Date.now() };
-        playPauseFeedbackTimeout = setTimeout(() => {
-            playPauseFeedback = null;
-        }, 450);
-    };
-
     const togglePlayWithFeedback = () => {
-        if (!videoElem) return;
-
-        if ($showSeekStyleModal) return;
-
+        if (!videoElem || $showSeekStyleModal) return;
         if (shouldShowSeekStyleInfoModal()) {
             showSeekStyleModal.set(true);
             pendingStartAfterSeekStyleModal = true;
             return;
         }
-
-        triggerPlayPauseFeedback(videoElem.paused ? "play" : "pause");
+        if (playPauseFeedbackTimeout) clearTimeout(playPauseFeedbackTimeout);
+        playPauseFeedback = { type: videoElem.paused ? "play" : "pause", id: Date.now() };
+        playPauseFeedbackTimeout = setTimeout(() => (playPauseFeedback = null), 450);
         controlsManager.togglePlay(controlsVisible.set);
     };
 
     const togglePlaybackFromMiniPlayer = () => {
         if (!videoElem) return;
-
-        if (videoElem.paused) {
-            void videoElem.play();
-            return;
-        }
-
-        videoElem.pause();
+        if (videoElem.paused) void videoElem.play();
+        else videoElem.pause();
     };
-
-    const captureLoadingBackdrop = () => {
-        if (!hasStarted) {
-            loadingBackdropSrc = getEpisodeLoadingBackdrop();
-            loadingBackdropMode = "art";
-            return;
-        }
-
-        if (
-            videoElem &&
-            canvasElem &&
-            videoElem.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
-            videoElem.videoWidth > 0 &&
-            videoElem.videoHeight > 0
-        ) {
-            Session.captureFrame(videoElem, canvasElem);
-            if (canvasElem.width > 0 && canvasElem.height > 0) {
-                try {
-                    loadingBackdropSrc = canvasElem.toDataURL("image/jpeg", 0.72);
-                    loadingBackdropMode = "frame";
-                    return;
-                } catch {
-                }
-            }
-        }
-
-        if (canvasElem && canvasElem.width > 0 && canvasElem.height > 0) {
-            try {
-                loadingBackdropSrc = canvasElem.toDataURL("image/jpeg", 0.72);
-                loadingBackdropMode = "frame";
-                return;
-            } catch {
-            }
-        }
-
-        if (loadingBackdropMode === "frame" && loadingBackdropSrc) {
-            return;
-        }
-
-        loadingBackdropSrc = null;
-        loadingBackdropMode = "art";
-    };
-
-    $: hasStartedStore.set(hasStarted);
-
-    $: controlsManager = Controls.createControlsManager(playerContainer, videoElem);
-
-    // When clipping is open, keep controls visible (no idle auto-hide).
-    $: if (controlsManager?.setPinned) {
-        controlsManager.setPinned(clipPanelOpen, controlsVisible.set);
-    }
-
-    onMount(() => {
-        resetPlayerState();
-        hasStarted = false;
-
-        const windowControls = getWindowControls();
-        const removeMiniPlayerChanged =
-            windowControls?.onMiniPlayerChanged?.((value: boolean) => {
-                miniPlayerActive = Boolean(value);
-            }) ?? null;
-
-        void windowControls?.isMiniPlayer?.().then((value) => {
-            miniPlayerActive = Boolean(value);
-        });
-
-        loadingStage.set("Loading...");
-        loadingDetails.set("");
-        loadingProgress.set(null);
-
-        seekBarStyle = getSeekBarStyleFromStorage();
-
-        window.addEventListener("message", handleEmbedMessage);
-
-        metadataCheckInterval = setInterval(() => {
-            if (!videoElem) return;
-
-            const currentTime = videoElem.currentTime;
-            const durationVal = videoElem.duration;
-
-            if (
-                currentTime > 2 &&
-                !videoElem.paused &&
-                (isNaN(durationVal) || durationVal === 0)
-            ) {
-                if (!reprobeAttempted) {
-                    reprobeAttempted = true;
-                    reloadSession();
-                } else if (currentTime > 10) {
-                    showError.set(true);
-                    errorMessage.set("Stream Error");
-                    errorDetails.set(
-                        "Metadata missing. Please select another stream.",
-                    );
-                    videoElem.pause();
-                    clearInterval(metadataCheckInterval);
-                }
-            }
-        }, 1000);
-
-        return () => {
-            if (typeof removeMiniPlayerChanged === "function") {
-                removeMiniPlayerChanged();
-            }
-            window.removeEventListener("message", handleEmbedMessage);
-        };
-    });
-
-    onDestroy(() => {
-        isTearingDown = true;
-        MediaSession.clearMediaSession();
-        followSeekPreviewSource(null);
-        availabilityCheckRun += 1;
-        getWindowControls()?.syncMiniPlayerState?.({
-            enabled: false,
-            canEnter: false,
-        });
-        getWindowControls()?.exitMiniPlayer?.();
-        if (imdbID) {
-            void flushPendingLibraryProgress(imdbID);
-        }
-        if (hasStarted && !traktScrobbler.isStopSent()) {
-            void traktScrobbler.send("stop", true);
-        }
-        void exitFullscreenIfNeeded();
-        clearInterval(metadataCheckInterval);
-        torrentStatusPoller.stop();
-        if (playPauseFeedbackTimeout) clearTimeout(playPauseFeedbackTimeout);
-        if (torrentFailureExitTimeout) clearTimeout(torrentFailureExitTimeout);
-        if (bufferingHealthTimer) clearTimeout(bufferingHealthTimer);
-        if (stallRecoveryTimer) clearTimeout(stallRecoveryTimer);
-        if (playbackHealthRecoveryTimer) clearTimeout(playbackHealthRecoveryTimer);
-        clearEmbedLoadFallback();
-        clearBrowserAudioCheck();
-        playerSessionLoader.cancelCurrentLoad();
-        Subtitles.releaseUploadedSubtitleUrls();
-        disposeNextEpisodePrefetch();
-        if (playbackController) {
-            void playbackController.destroy();
-            playbackController = null;
-        }
-        Session.cleanupSession(
-            hls,
-            Discord.clearDiscordActivity,
-            videoElem,
-        );
-        resetPlayerState();
-        hasStarted = false;
-    });
-
-    const handleTimeUpdate = () => {
-        if (!videoElem || isTearingDown) return;
-        if ($pendingSeek != null || $seekGuard) {
-            return;
-        }
-        const time = videoElem.currentTime;
-        currentTime.set(time);
-        handleProgressInternal(time, $duration);
-
-        if (
-            !traktScrobbler.isStopSent() &&
-            $duration > 0 &&
-            time / $duration >= TRAKT_COMPLETION_THRESHOLD
-        ) {
-            void traktScrobbler.send("stop", true);
-        }
-
-        if (!$seekGuard) {
-            const result = Chapters.checkChapters(
-                time,
-                $sessionData,
-                $duration,
-                metaData,
-                introDbChapters,
-            );
-            currentChapter.set(result.currentChapter);
-            showSkipIntro.set(result.showSkipIntro);
-            const skipLanding = Chapters.upcomingSkipLanding(time, $sessionData, introDbChapters);
-            if (skipLanding != null) playbackController?.prepareSeek(skipLanding);
-            showNextEpisode.set(result.showNextEpisode);
-            skipButtonLabel = result.skipButtonLabel;
-
-            if (bingeNextSupported) {
-                const bingeChapter = result.currentChapter;
-                if (Chapters.shouldAutoSkipChapter(bingeChapter, $autoSkipIntros)) {
-                    seekToTime(Chapters.skipLandingTime(bingeChapter));
-                    return;
-                }
-
-                const hasOutro = Chapters.hasMarkedOutroChapter(
-                    $sessionData,
-                    introDbChapters,
-                );
-                let shouldAutoNext = false;
-                if (hasOutro && result.currentChapter?.kind === "outro") {
-                    const t = Chapters.getBingeOutroAutoNextThreshold(
-                        result.currentChapter,
-                    );
-                    shouldAutoNext = t != null && time >= t;
-                } else if (!hasOutro && $duration > 0) {
-                    shouldAutoNext = time >= $duration - 3;
-                }
-                if (shouldAutoNext && !bingeAutoAdvancing) {
-                    bingeAutoAdvancing = true;
-                    handleNextEpisodeClick();
-                    return;
-                }
-
-            }
-
-            if (
-                imdbID &&
-                hasNextEpisode &&
-                !nextEpisodePrefetchDispose &&
-                !nextEpisodePrefetchStarting &&
-                !nextEpisodePrefetchResolved &&
-                Date.now() >= nextEpisodePrefetchRetryAt &&
-                nextEpisodePrefetchWindow.creditsAt > 0 &&
-                nextEpisodePrefetchStartAt < nextEpisodePrefetchWindow.creditsAt &&
-                time >= nextEpisodePrefetchStartAt
-            ) {
-                nextEpisodePrefetchStarting = true;
-                const runId = ++nextEpisodePrefetchRunId;
-                const prefetchAbort = new AbortController();
-                nextEpisodePrefetchAbort = prefetchAbort;
-                nextEpisodePrefetchTask = (async () => {
-                    try {
-                        const resolved = await NavigationLogic.resolveNextEpisodeStream(imdbID);
-                        if (runId !== nextEpisodePrefetchRunId) return;
-                        if (!nextEpisodePrefetchVideo || !resolved) {
-                            nextEpisodePrefetchRetryAt = Date.now() + 10_000;
-                            return;
-                        }
-                        const playable = streamToPlayableUrl(resolved.stream);
-                        if (!playable) {
-                            nextEpisodePrefetchRetryAt = Date.now() + 10_000;
-                            return;
-                        }
-                        const { dispose, handoff } = await startNextEpisodePrefetch(
-                            playable.url,
-                            playable.fileIdx,
-                            nextEpisodePrefetchVideo,
-                            () => {},
-                            prefetchAbort.signal,
-                        );
-                        if (runId !== nextEpisodePrefetchRunId) {
-                            dispose?.();
-                            return;
-                        }
-                        if (!dispose || !handoff) {
-                            nextEpisodePrefetchRetryAt = Date.now() + 10_000;
-                            return;
-                        }
-                        nextEpisodePrefetchDispose = dispose;
-                        nextEpisodePrefetchHandoff = handoff;
-                        nextEpisodePrefetchResolved = resolved;
-                    } catch (error) {
-                        if (runId === nextEpisodePrefetchRunId) {
-                            nextEpisodePrefetchResolved = null;
-                            nextEpisodePrefetchHandoff = null;
-                        }
-                        if (!(error instanceof DOMException && error.name === "AbortError")) {
-                            console.warn("Next episode prefetch attempt failed", error);
-                            nextEpisodePrefetchRetryAt = Date.now() + 10_000;
-                        }
-                    } finally {
-                        if (runId === nextEpisodePrefetchRunId) {
-                            nextEpisodePrefetchStarting = false;
-                            nextEpisodePrefetchAbort = null;
-                            nextEpisodePrefetchTask = null;
-                        }
-                    }
-                })();
-            }
-        }
-    };
-
-    const handlePlay = () => {
-        torrentStatusPoller.stop();
-        isPlaying.set(true);
-    };
-
-    const handlePlaying = () => {
-        torrentStatusPoller.stop();
-        isPlaying.set(true);
-        hasStarted = true;
-        clearWatchedProgressOnStart();
-        void traktScrobbler.send("start");
-        Discord.updateDiscordActivity(
-            metaData,
-            season,
-            episode,
-            $duration,
-            $currentTime,
-            true,
-        );
-        playbackBuffering.set(false);
-        loading.set(false);
-        loadingStage.set("");
-        loadingDetails.set("");
-        loadingProgress.set(null);
-        handleBufferEnd();
-        scheduleBrowserAudioCheck();
-    };
-
-    const handlePause = () => {
-        // Hard seeks pause the element on purpose while remux/HLS rebuilds —
-        // don't treat that as a user pause (Trakt / Discord).
-        if (get(seekGuard) || get(pendingSeek) != null) {
-            return;
-        }
-        if (!hasStarted) {
-            Discord.clearDiscordActivity();
-            return;
-        }
-        isPlaying.set(false);
-        if (
-            !traktScrobbler.isStopSent() &&
-            !(
-                $duration > 0 &&
-                $currentTime / $duration >= TRAKT_COMPLETION_THRESHOLD
-            )
-        ) {
-            void traktScrobbler.send("pause");
-        }
-        Discord.updateDiscordActivity(
-            metaData,
-            season,
-            episode,
-            $duration,
-            $currentTime,
-            false,
-        );
-    };
-
-    const handleBufferStart = () => {
-        if (bufferingActive) return;
-        bufferingActive = true;
-        bufferingStartedAt = Date.now();
-        if (playbackHealthRecoveryTimer) {
-            clearTimeout(playbackHealthRecoveryTimer);
-            playbackHealthRecoveryTimer = null;
-        }
-        bufferingEligibleForHealthPrompt =
-            hasStarted && !get(seekGuard) && get(pendingSeek) == null;
-        if (bufferingEligibleForHealthPrompt && canRecoverStall(lastStallRecoveryAt)) {
-            stallRecoveryTimer = setTimeout(recoverStalledPlayback, STALL_RECOVERY_MS);
-        }
-        if (
-            bufferingEligibleForHealthPrompt &&
-            !playbackHealthPromptVisible &&
-            !playbackHealthPromptDismissed
-        ) {
-            if (bufferingHealthTimer) clearTimeout(bufferingHealthTimer);
-            bufferingHealthTimer = setTimeout(() => {
-                if (
-                    bufferingActive &&
-                    bufferingEligibleForHealthPrompt &&
-                    !playbackHealthPromptDismissed
-                ) {
-                    playbackHealthPromptVisible = true;
-                }
-            }, LONG_PLAYBACK_STALL_MS);
-        }
-    };
-
-    const handleBufferEnd = () => {
-        if (!bufferingActive) return;
-        bufferingActive = false;
-        if (stallRecoveryTimer) {
-            clearTimeout(stallRecoveryTimer);
-            stallRecoveryTimer = null;
-        }
-        if (bufferingHealthTimer) {
-            clearTimeout(bufferingHealthTimer);
-            bufferingHealthTimer = null;
-        }
-        const durationMs = Date.now() - bufferingStartedAt;
-        if (
-            bufferingEligibleForHealthPrompt &&
-            !get(seekGuard) &&
-            get(pendingSeek) == null
-        ) {
-            recentPlaybackStalls = recordPlaybackStall(
-                recentPlaybackStalls,
-                durationMs,
-            );
-            if (
-                !playbackHealthPromptDismissed &&
-                !playbackHealthPromptVisible &&
-                shouldSuggestAnotherStream(recentPlaybackStalls)
-            ) {
-                playbackHealthPromptVisible = true;
-            }
-        }
-        bufferingEligibleForHealthPrompt = false;
-        if (playbackHealthPromptVisible) {
-            playbackHealthRecoveryTimer = setTimeout(() => {
-                playbackHealthRecoveryTimer = null;
-                if (bufferingActive || !playbackHealthPromptVisible) return;
-                playbackHealthPromptVisible = false;
-                recentPlaybackStalls = [];
-            }, 15_000);
-        }
-    };
-
-    const dismissPlaybackHealthPrompt = () => {
-        if (playbackHealthRecoveryTimer) {
-            clearTimeout(playbackHealthRecoveryTimer);
-            playbackHealthRecoveryTimer = null;
-        }
-        playbackHealthPromptVisible = false;
-        playbackHealthPromptDismissed = true;
-    };
-
-    const chooseAnotherStreamForPlaybackHealth = () => {
-        if (playbackHealthRecoveryTimer) {
-            clearTimeout(playbackHealthRecoveryTimer);
-            playbackHealthRecoveryTimer = null;
-        }
-        playbackHealthPromptVisible = false;
-        playbackHealthPromptDismissed = true;
-        returnToStreams();
-    };
-
-    /** Reopens a stream stuck buffering at the same position instead of spinning forever. */
-    const recoverStalledPlayback = () => {
-        stallRecoveryTimer = null;
-        if (!currentVideoSrc || !videoElem || !bufferingActive) return;
-        if (get(seekGuard) || get(pendingSeek) != null) return;
-        lastStallRecoveryAt = Date.now();
-        loadVideo(currentVideoSrc, { startTime: videoElem.currentTime });
-    };
-
-    const reloadSession = () => {
-        if (!currentVideoSrc) return;
-        const resumeAt = hasStarted && videoElem ? videoElem.currentTime : undefined;
-
-        playerSessionLoader.cancelCurrentLoad();
-        Session.cleanupSession(
-            hls,
-            Discord.clearDiscordActivity,
-            videoElem,
-        );
-        loadVideo(currentVideoSrc, { startTime: resumeAt });
-    };
-
-    $: if ($showError && !errorModalOpen) {
-        Discord.clearDiscordActivity();
-        loading.set(false);
-        loadingStage.set("");
-        loadingDetails.set("");
-        loadingProgress.set(null);
-        playbackBuffering.set(false);
-        errorModalOpen = true;
-    }
-
-    $: if (!$showError && errorModalOpen) {
-        errorModalOpen = false;
-    }
-
-    $: if (availabilityNoticeVisible) {
-        Discord.clearDiscordActivity();
-    }
-
-    const seekWithMediaKeys = (time: number) => seekToTime(Math.max(0, Math.min(time, $duration)));
-
-    $: MediaSession.setNowPlaying(metaData, season, episode);
-
-    $: MediaSession.bindMediaControls({
-        togglePlay: togglePlayWithFeedback,
-        seekTo: seekWithMediaKeys,
-        seekBy: (seconds) => seekWithMediaKeys($currentTime + seconds),
-        nextEpisode: hasNextEpisode ? handleNextEpisodeClick : null,
-    });
 
     const showActionLoading = (actionLabel: string, err: unknown) => {
         bingeAutoAdvancing = false;
@@ -1198,142 +401,61 @@
         errorDetails.set(err instanceof Error ? err.message : String(err));
     };
 
-    const handleSkipIntro = () => {
-        Chapters.skipChapter($currentChapter, seekToTime);
-    };
-
     const handleNextEpisodeClick = createNextEpisodeHandler({
         handleProgressInternal,
         getVideoSrc: () => videoSrc,
-        setCurrentVideoSrc: (value) => {
-            currentVideoSrc = value;
-        },
-        invokeNextEpisode: handleNextEpisodeInternal,
+        setCurrentVideoSrc: (value) => (currentVideoSrc = value),
+        invokeNextEpisode: playNextEpisode,
         showActionLoading,
-        suppressInitialLoading: () => nextEpisodePrefetchHandoff != null,
-        onNextEpisodeFailed: () => {
-            bingeAutoAdvancing = false;
-        },
+        suppressInitialLoading: () => nextEpisodePrefetch?.handoff != null,
+        onNextEpisodeFailed: () => (bingeAutoAdvancing = false),
     });
 
-    const handleEnded = () => {
-        if (hasStarted && !traktScrobbler.isStopSent()) {
-            void traktScrobbler.send("stop", true);
-        }
-        if (bingeNextSupported && hasNextEpisode && !bingeAutoAdvancing) {
-            bingeAutoAdvancing = true;
-            handleNextEpisodeClick();
-        }
+    const reloadSession = () => {
+        if (!currentVideoSrc) return;
+        const resumeAt = hasStarted && videoElem ? videoElem.currentTime : undefined;
+        playerSessionLoader.cancelCurrentLoad();
+        Session.cleanupSession(hls, Discord.clearDiscordActivity, videoElem);
+        loadVideo(currentVideoSrc, { startTime: resumeAt });
     };
 
     const modalHandlers = createPlayerModalHandlers({
-        getVideoElem: () =>
-            (activeVideoSurface === 0 ? videoSurfaceA : videoSurfaceB) ?? undefined,
+        getVideoElem: activeVideo,
         getCueLinePercent: () => cueLinePercent,
         getVideoSrc: () => videoSrc,
-        loadVideo: (src) => {
-            if (src === currentVideoSrc) {
-                reloadSession();
-                return;
-            }
-            return loadVideo(src);
-        },
+        loadVideo: (src) => (src === currentVideoSrc ? reloadSession() : loadVideo(src)),
         handleClose,
         getPlaybackController: () => playbackController,
     });
 
-    let controlsOverlayElem: HTMLElement | null = null;
-    let clipPanelOpen = false;
-    let cueLinePercent = 92;
-    let resizeCounter = 0;
-    let cueRecalcTimeout: number | null = null;
-    let lastControlsVisible: boolean | null = null;
-
-    const SUBTITLE_CONTROLS_MARGIN_PX = 26;
-
-    const recomputeCueLinePercent = () => {
-        cueLinePercent = Subtitles.computeCueLinePercent(
-            playerContainer,
-            controlsOverlayElem,
-            $controlsVisible,
-            SUBTITLE_CONTROLS_MARGIN_PX,
-        );
-        Subtitles.updateCuePositions(videoElem, cueLinePercent);
+    const retryInitialSource = () => {
+        if (videoSrc && currentVideoSrc !== videoSrc && sourcePreflight.retry({ src: videoSrc, fileIdx })) return;
+        modalHandlers.onErrorRetry();
     };
 
-    $: if (embedSrc && embedSrc !== currentEmbedSrc) {
-        currentEmbedSrc = embedSrc;
-        currentVideoSrc = embedSrc;
-        currentVideoFileIdx = null;
+    const resetForNewSource = () => {
         introDbChapters = [];
         effectiveChapterMarkers = [];
         skipButtonLabel = "Skip Intro";
         hasStarted = false;
         bingeAutoAdvancing = false;
-        lastEmbedProgressAt = 0;
-        currentTime.set(0);
-        duration.set(0);
-        playerSessionLoader.cancelCurrentLoad();
-        disposeNextEpisodePrefetch();
-        handleNextEpisodeClick.cancel();
-        Session.cleanupSession(
-            hls,
-            Discord.clearDiscordActivity,
-            videoElem,
-        );
-        hls = null;
-        loading.set(true);
-        loadingStage.set("Loading embedded player");
-        loadingDetails.set("");
-        loadingProgress.set(null);
-        showError.set(false);
-        clearEmbedLoadFallback();
-        embedLoadFallbackTimeout = setTimeout(finishEmbedLoad, 1200);
-    }
+    };
 
-    const transitionToVideoSource = (
-        nextVideoSrc: string,
-        nextFileIdx: number | null,
-    ) => {
-        clearEmbedLoadFallback();
+    const transitionToVideoSource = (nextVideoSrc: string, nextFileIdx: number | null) => {
+        embedPlayback.cancelLoading();
         currentEmbedSrc = null;
-        introDbChapters = [];
-        effectiveChapterMarkers = [];
-        skipButtonLabel = "Skip Intro";
+        resetForNewSource();
         currentVideoSrc = nextVideoSrc;
         currentVideoFileIdx = nextFileIdx;
-        hasStarted = false;
-        bingeAutoAdvancing = false;
-        recentPlaybackStalls = [];
-        playbackHealthPromptVisible = false;
-        playbackHealthPromptDismissed = false;
-        bufferingEligibleForHealthPrompt = false;
-        if (bufferingHealthTimer) {
-            clearTimeout(bufferingHealthTimer);
-            bufferingHealthTimer = null;
-        }
-        if (playbackHealthRecoveryTimer) {
-            clearTimeout(playbackHealthRecoveryTimer);
-            playbackHealthRecoveryTimer = null;
-        }
+        playbackHealth.reset();
 
-        const handoff = nextEpisodePrefetchHandoff;
-        const canReuseHandoff = canReuseNextEpisodePrefetch(
-            handoff,
-            nextVideoSrc,
-            nextFileIdx,
-            startTime,
-        );
-
+        const handoff = nextEpisodePrefetch?.handoff ?? null;
+        const canReuseHandoff = canReuseNextEpisodePrefetch(handoff, nextVideoSrc, nextFileIdx, startTime);
         const previousController = playbackController;
         const previousHls = hls;
-
-        if (canReuseHandoff) {
-            // Keep MediaSource on the same element by flipping which surface is visible.
-            activeVideoSurface = activeVideoSurface === 0 ? 1 : 0;
-        }
-
-        const reuseSession = canReuseHandoff
+        // Keep MediaSource on the same element by flipping which surface is visible.
+        if (canReuseHandoff) activeVideoSurface = activeVideoSurface === 0 ? 1 : 0;
+        const reuseSession = canReuseHandoff && handoff
             ? {
                   sessionData: handoff.sessionData,
                   mode: handoff.mode,
@@ -1345,185 +467,141 @@
 
         playerSessionLoader.cancelCurrentLoad();
         handleNextEpisodeClick.cancel();
-        disposeNextEpisodePrefetch(reuseSession ? { transfer: true } : undefined);
+        nextEpisodePrefetch?.dispose(reuseSession ? { transfer: true } : undefined);
 
-        if (reuseSession?.playbackController) {
-            playbackController = reuseSession.playbackController;
-        } else if (!canReuseHandoff) {
-            playbackController = null;
+        if (reuseSession?.playbackController) playbackController = reuseSession.playbackController;
+        else if (!canReuseHandoff) playbackController = null;
+        if (previousHls && previousHls !== reuseSession?.hls) previousHls.destroy();
+        if (reuseSession?.hls) hls = reuseSession.hls;
+        else if (!canReuseHandoff) hls = null;
+
+        const idle = idleVideo();
+        if (canReuseHandoff && idle && !previousController) {
+            idle.pause();
+            idle.removeAttribute("src");
+            idle.load();
         }
 
-        if (previousHls && previousHls !== reuseSession?.hls) {
-            try {
-                previousHls.destroy();
-            } catch {
-                // ignore
-            }
-        }
-        if (reuseSession?.hls) {
-            hls = reuseSession.hls;
-        } else if (!canReuseHandoff) {
-            hls = null;
-        }
-
-        // Clear the previous episode off the now-idle surface.
-        const idleVideo =
-            activeVideoSurface === 0 ? videoSurfaceB : videoSurfaceA;
-        if (canReuseHandoff && idleVideo && !previousController) {
-            try {
-                idleVideo.pause();
-                idleVideo.removeAttribute("src");
-                idleVideo.load();
-            } catch {
-                // ignore
-            }
-        }
-
-        Session.cleanupSession(
-            null,
-            Discord.clearDiscordActivity,
-            canReuseHandoff ? null : videoElem,
-        );
+        Session.cleanupSession(null, Discord.clearDiscordActivity, canReuseHandoff ? null : videoElem);
         loadVideo(nextVideoSrc, reuseSession ? { reuseSession } : undefined);
     };
 
-    const shouldPreflightSource = (source: string) =>
-        Boolean(
-            streamAvailability &&
-            /^https?:\/\//i.test(source) &&
-            $selectedStream?.raffiSource !== "local" &&
-            $selectedStream?.raffiSource !== "direct" &&
-            $selectedStream?.directPlaybackMode !== "iframe",
-        );
+    const runChapterAutomation = (time: number) => {
+        const result = Chapters.checkChapters(time, $sessionData, $duration, metaData, introDbChapters);
+        currentChapter.set(result.currentChapter);
+        showSkipIntro.set(result.showSkipIntro);
+        const skipLanding = Chapters.upcomingSkipLanding(time, $sessionData, introDbChapters);
+        if (skipLanding != null) playbackController?.prepareSeek(skipLanding);
+        showNextEpisode.set(result.showNextEpisode);
+        skipButtonLabel = result.skipButtonLabel;
 
-    const prepareVideoSource = async (
-        nextVideoSrc: string,
-        nextFileIdx: number | null,
-    ) => {
-        if (
-            isSamePlaybackSource(
-                nextVideoSrc,
-                nextFileIdx,
-                currentVideoSrc,
-                currentVideoFileIdx,
-            ) ||
-            nextVideoSrc === availabilityCheckSource ||
-            nextVideoSrc === availabilityBlockedSource
-        ) return;
-
-        if (!shouldPreflightSource(nextVideoSrc)) {
-            transitionToVideoSource(nextVideoSrc, nextFileIdx);
-            return;
-        }
-
-        const run = ++availabilityCheckRun;
-        availabilityCheckSource = nextVideoSrc;
-        availabilityNoticeVisible = false;
-        showError.set(false);
-        errorMessage.set("");
-        errorDetails.set("");
-        loadingBackdropSrc = getEpisodeLoadingBackdrop();
-        loadingBackdropMode = "art";
-        loading.set(true);
-        loadingStage.set("Checking availability");
-        loadingDetails.set("Verifying that this source can start immediately.");
-        loadingProgress.set(null);
-
-        if (needsServerResolve(nextVideoSrc)) {
-            const resolved = await resolveBrowserStream(nextVideoSrc);
-            if (run !== availabilityCheckRun) return;
-            if (resolved !== nextVideoSrc) {
-                videoSrc = resolved;
-                return;
+        if (bingeNextSupported) {
+            const action = Chapters.getBingeAction(time, result.currentChapter, {
+                sessionData: $sessionData,
+                introDbChapters,
+                duration: $duration,
+                autoSkipIntros: $autoSkipIntros,
+            });
+            if (action?.kind === "skip") return seekToTime(action.to);
+            if (action?.kind === "next" && !bingeAutoAdvancing) {
+                bingeAutoAdvancing = true;
+                return handleNextEpisodeClick();
             }
         }
 
-        const result = await preflightStreamUrl(nextVideoSrc);
-        if (
-            run !== availabilityCheckRun ||
-            !isSamePlaybackSource(videoSrc, fileIdx, nextVideoSrc, nextFileIdx)
-        ) return;
-        availabilityCheckSource = null;
+        if (hasNextEpisode) nextEpisodePrefetch?.maybeStart(time, nextEpisodePrefetchWindow);
+    };
 
-        if (result.state === "network-error") {
-            availabilityBlockedSource = nextVideoSrc;
-            const failure = streamConnectionFailure();
-            errorMessage.set(failure.title);
-            errorDetails.set(failure.details);
+    const handleTimeUpdate = () => {
+        if (!videoElem || isTearingDown || $pendingSeek != null || $seekGuard) return;
+        const time = videoElem.currentTime;
+        currentTime.set(time);
+        handleProgressInternal(time, $duration);
+        if (!traktScrobbler.isStopSent() && $duration > 0 && time / $duration >= TRAKT_COMPLETION_THRESHOLD) {
+            void traktScrobbler.send("stop", true);
+        }
+        runChapterAutomation(time);
+    };
+
+    const handlePlay = () => {
+        torrentStatusPoller.stop();
+        isPlaying.set(true);
+    };
+
+    const handlePlaying = () => {
+        handlePlay();
+        hasStarted = true;
+        clearWatchedProgressOnStart();
+        void traktScrobbler.send("start");
+        Discord.updateDiscordActivity(metaData, season, episode, $duration, $currentTime, true);
+        playbackBuffering.set(false);
+        loading.set(false);
+        loadingStage.set("");
+        loadingDetails.set("");
+        loadingProgress.set(null);
+        playbackHealth.bufferEnd();
+        browserPlaybackGuard.scheduleAudioCheck();
+    };
+
+    const handlePause = () => {
+        // Hard seeks pause the element on purpose while remux/HLS rebuilds — not a user pause.
+        if (get(seekGuard) || get(pendingSeek) != null) return;
+        if (!hasStarted) {
+            Discord.clearDiscordActivity();
+            return;
+        }
+        isPlaying.set(false);
+        if (!traktScrobbler.isStopSent() && !($duration > 0 && $currentTime / $duration >= TRAKT_COMPLETION_THRESHOLD)) {
+            void traktScrobbler.send("pause");
+        }
+        Discord.updateDiscordActivity(metaData, season, episode, $duration, $currentTime, false);
+    };
+
+    const handleWaiting = () => {
+        if (hasStarted) {
+            playbackBuffering.set(true);
+        } else {
+            captureLoadingBackdrop();
+            loading.set(true);
+            loadingStage.set("Buffering");
+        }
+        playbackHealth.bufferStart();
+    };
+
+    const handleCanPlay = () => {
+        playbackBuffering.set(false);
+        loading.set(false);
+        playbackHealth.bufferEnd();
+    };
+
+    const handleEnded = () => {
+        stopTrakt();
+        if (bingeNextSupported && hasNextEpisode && !bingeAutoAdvancing) {
+            bingeAutoAdvancing = true;
+            handleNextEpisodeClick();
+        }
+    };
+
+    const checkMetadata = () => {
+        if (!videoElem) return;
+        const time = videoElem.currentTime;
+        if (time <= 2 || videoElem.paused || !(isNaN(videoElem.duration) || videoElem.duration === 0)) return;
+        if (!reprobeAttempted) {
+            reprobeAttempted = true;
+            reloadSession();
+        } else if (time > 10) {
             showError.set(true);
-            loading.set(false);
-            return;
+            errorMessage.set("Stream Error");
+            errorDetails.set("Metadata missing. Please select another stream.");
+            videoElem.pause();
+            clearInterval(metadataCheckInterval);
         }
-
-        const looksLikeStatusMedia =
-            result.state === "ready" &&
-            isLikelyProviderStatusMedia({
-                expectedSizeBytes: streamAvailability?.expectedSizeBytes ?? null,
-                actualSizeBytes: result.totalBytes,
-            });
-
-        if (
-            looksLikeStatusMedia ||
-            isStreamPreparationPending(result, streamAvailability?.cacheHint ?? null)
-        ) {
-            availabilityBlockedSource = nextVideoSrc;
-            availabilityNoticeVisible = true;
-            loading.set(false);
-            return;
-        }
-
-        transitionToVideoSource(nextVideoSrc, nextFileIdx);
     };
 
-    const retryInitialSource = () => {
-        if (
-            videoSrc &&
-            availabilityBlockedSource === videoSrc &&
-            currentVideoSrc !== videoSrc
-        ) {
-            availabilityBlockedSource = null;
-            showError.set(false);
-            void prepareVideoSource(videoSrc, fileIdx);
-            return;
-        }
-        modalHandlers.onErrorRetry();
+    const recomputeCueLinePercent = () => {
+        cueLinePercent = Subtitles.computeCueLinePercent(playerContainer, controlsPanel, $controlsVisible, SUBTITLE_CONTROLS_MARGIN_PX);
+        Subtitles.updateCuePositions(videoElem, cueLinePercent);
     };
-
-    const returnToStreams = () => {
-        reopenStreamsOnReturn(imdbID);
-        void handleClose();
-    };
-
-    const openAvailabilityDashboard = () => {
-        const url = streamAvailability?.dashboardUrl;
-        if (!url || typeof window === "undefined") return;
-        const electronApi = (window as any).electronAPI as
-            | { openExternal?: (target: string) => Promise<void> }
-            | undefined;
-        if (electronApi?.openExternal) {
-            void electronApi.openExternal(url).catch(() => {
-                window.open(url, "_blank", "noopener,noreferrer");
-            });
-            return;
-        }
-        window.open(url, "_blank", "noopener,noreferrer");
-    };
-
-    $: if (
-        videoSrc &&
-        !isSamePlaybackSource(
-            videoSrc,
-            fileIdx,
-            currentVideoSrc,
-            currentVideoFileIdx,
-        ) &&
-        videoSrc !== availabilityCheckSource &&
-        videoSrc !== availabilityBlockedSource
-    ) {
-        void prepareVideoSource(videoSrc, fileIdx);
-    }
-
-    $: effectiveChapterMarkers = Chapters.getEffectiveChapterSegments($sessionData, introDbChapters);
 
     let seekPreview: SeekPreview | null = null;
     let bufferedRanges: TimeRange[] = [];
@@ -1537,36 +615,109 @@
         seekPreview?.dispose();
         seekPreview = src ? new SeekPreview(src) : null;
     };
-    $: followSeekPreviewSource($sessionData?.isDirectHttp ? $sessionData.sourceUrl : null);
 
-    $: if (videoElem) {
-        videoElem.muted = false;
+    onMount(() => {
+        resetPlayerState();
+        hasStarted = false;
+        const windowControls = window.electronAPI?.windowControls;
+        const removeMiniPlayerChanged = windowControls?.onMiniPlayerChanged?.((value) => (miniPlayerActive = value));
+        void windowControls?.isMiniPlayer?.().then((value) => (miniPlayerActive = value));
+        loadingStage.set("Loading...");
+        loadingDetails.set("");
+        loadingProgress.set(null);
+        seekBarStyle = getSeekBarStyleFromStorage();
+        window.addEventListener("message", embedPlayback.handleMessage);
+        metadataCheckInterval = setInterval(checkMetadata, 1000);
+        return () => {
+            if (typeof removeMiniPlayerChanged === "function") removeMiniPlayerChanged();
+            window.removeEventListener("message", embedPlayback.handleMessage);
+        };
+    });
+
+    onDestroy(() => {
+        isTearingDown = true;
+        MediaSession.clearMediaSession();
+        followSeekPreviewSource(null);
+        sourcePreflight.cancel();
+        window.electronAPI?.windowControls?.syncMiniPlayerState?.({ enabled: false, canEnter: false });
+        window.electronAPI?.windowControls?.exitMiniPlayer?.();
+        if (imdbID) void flushPendingLibraryProgress(imdbID);
+        stopTrakt();
+        void leaveFullscreen();
+        clearInterval(metadataCheckInterval);
+        torrentStatusPoller.stop();
+        if (playPauseFeedbackTimeout) clearTimeout(playPauseFeedbackTimeout);
+        if (torrentFailureExitTimeout) clearTimeout(torrentFailureExitTimeout);
+        playbackHealth.dispose();
+        embedPlayback.cancelLoading();
+        browserPlaybackGuard.clearAudioCheck();
+        playerSessionLoader.cancelCurrentLoad();
+        Subtitles.releaseUploadedSubtitleUrls();
+        nextEpisodePrefetch?.dispose();
+        void playbackController?.destroy();
+        playbackController = null;
+        Session.cleanupSession(hls, Discord.clearDiscordActivity, videoElem);
+        resetPlayerState();
+        hasStarted = false;
+    });
+
+    $: hasNextEpisode = seriesHasNextEpisode(metaData, season, episode);
+    $: bingeNextSupported = metaData?.meta?.type === "series" && Boolean($selectedStream?.behaviorHints?.bingeGroup);
+    $: nextEpisodePrefetchWindow = Chapters.getNextEpisodePrefetchWindow($duration, $sessionData, introDbChapters);
+    $: nextEpisodeHighlighted = $currentChapter?.kind === "outro";
+    $: hasStartedStore.set(hasStarted);
+    $: controlsManager = Controls.createControlsManager(playerContainer, videoElem);
+    $: controlsManager?.setPinned(clipPanelOpen, controlsVisible.set);
+    $: effectiveChapterMarkers = Chapters.getEffectiveChapterSegments($sessionData, introDbChapters);
+    $: followSeekPreviewSource($sessionData?.isDirectHttp ? $sessionData.sourceUrl : null);
+    $: if (videoElem) videoElem.muted = false;
+    $: if ($loading && !hasStarted) loadingBackdrop = episodeArtwork(metaData, season, episode);
+
+    $: if ($showError && !errorModalOpen) {
+        Discord.clearDiscordActivity();
+        loading.set(false);
+        loadingStage.set("");
+        loadingDetails.set("");
+        loadingProgress.set(null);
+        playbackBuffering.set(false);
+        errorModalOpen = true;
+    }
+    $: if (!$showError && errorModalOpen) errorModalOpen = false;
+    $: if ($availabilityNoticeVisible) Discord.clearDiscordActivity();
+
+    const seekWithMediaKeys = (time: number) => seekToTime(Math.max(0, Math.min(time, $duration)));
+    $: MediaSession.setNowPlaying(metaData, season, episode);
+    $: MediaSession.bindMediaControls({
+        togglePlay: togglePlayWithFeedback,
+        seekTo: seekWithMediaKeys,
+        seekBy: (seconds) => seekWithMediaKeys($currentTime + seconds),
+        nextEpisode: hasNextEpisode ? handleNextEpisodeClick : null,
+    });
+
+    $: if (embedSrc && embedSrc !== currentEmbedSrc) {
+        currentEmbedSrc = embedSrc;
+        currentVideoSrc = embedSrc;
+        currentVideoFileIdx = null;
+        resetForNewSource();
+        currentTime.set(0);
+        duration.set(0);
+        playerSessionLoader.cancelCurrentLoad();
+        nextEpisodePrefetch?.dispose();
+        handleNextEpisodeClick.cancel();
+        Session.cleanupSession(hls, Discord.clearDiscordActivity, videoElem);
+        hls = null;
+        showError.set(false);
+        embedPlayback.begin();
     }
 
-    $: if ($loading && !hasStarted) {
-        loadingBackdropSrc = getEpisodeLoadingBackdrop();
-        loadingBackdropMode = "art";
+    $: if (videoSrc && !isSamePlaybackSource(videoSrc, fileIdx, currentVideoSrc, currentVideoFileIdx)) {
+        sourcePreflight.request({ src: videoSrc, fileIdx });
     }
 
     $: isPlayerRoute = $router.page === "player";
-
-    $: canEnterMiniPlayer = Boolean(
-        isPlayerRoute &&
-        $miniPlayerOnMinimize &&
-        videoSrc &&
-        !$showError &&
-        ($isPlaying || miniPlayerActive),
-    );
-
-    $: getWindowControls()?.syncMiniPlayerState?.({
-        enabled: $miniPlayerOnMinimize && isPlayerRoute,
-        canEnter: canEnterMiniPlayer,
-    });
-
-    $: if (miniPlayerActive && !canEnterMiniPlayer) {
-        getWindowControls()?.exitMiniPlayer?.();
-    }
-
+    $: canEnterMiniPlayer = Boolean(isPlayerRoute && $miniPlayerOnMinimize && videoSrc && !$showError && ($isPlaying || miniPlayerActive));
+    $: window.electronAPI?.windowControls?.syncMiniPlayerState?.({ enabled: $miniPlayerOnMinimize && isPlayerRoute, canEnter: canEnterMiniPlayer });
+    $: if (miniPlayerActive && !canEnterMiniPlayer) window.electronAPI?.windowControls?.exitMiniPlayer?.();
     $: if (lastMiniPlayerActive !== miniPlayerActive) {
         lastMiniPlayerActive = miniPlayerActive;
         resizeCounter += 1;
@@ -1574,62 +725,32 @@
 
     $: {
         resizeCounter;
-        cueLinePercent = Subtitles.computeCueLinePercent(
-            playerContainer,
-            controlsOverlayElem,
-            $controlsVisible,
-            SUBTITLE_CONTROLS_MARGIN_PX,
-        );
+        cueLinePercent = Subtitles.computeCueLinePercent(playerContainer, controlsPanel, $controlsVisible, SUBTITLE_CONTROLS_MARGIN_PX);
     }
     $: Subtitles.updateCuePositions(videoElem, cueLinePercent);
-
-    $: if (typeof window !== "undefined") {
-        if (lastControlsVisible !== $controlsVisible) {
-            lastControlsVisible = $controlsVisible;
-
-            // Instant update on toggle.
-            recomputeCueLinePercent();
-
-            // Follow up during the transition/layout settling.
-            window.requestAnimationFrame(() => recomputeCueLinePercent());
-            window.requestAnimationFrame(() => {
-                window.requestAnimationFrame(() => recomputeCueLinePercent());
-            });
-
-            if (cueRecalcTimeout != null) {
-                window.clearTimeout(cueRecalcTimeout);
-            }
-            cueRecalcTimeout = window.setTimeout(recomputeCueLinePercent, 350);
-        }
+    $: if (lastControlsVisible !== $controlsVisible) {
+        lastControlsVisible = $controlsVisible;
+        recomputeCueLinePercent();
+        // Follow the controls while they slide, then once more after they settle.
+        requestAnimationFrame(() => requestAnimationFrame(recomputeCueLinePercent));
+        if (cueRecalcTimeout != null) clearTimeout(cueRecalcTimeout);
+        cueRecalcTimeout = window.setTimeout(recomputeCueLinePercent, 350);
     }
 </script>
 
 <svelte:window
     on:mousemove={() => controlsManager.handleMouseMove(controlsVisible.set)}
-    on:resize={() => {
-        resizeCounter += 1;
-    }}
+    on:resize={() => (resizeCounter += 1)}
     on:keydown={(e) =>
-        controlsManager.handleKeydown(
-            e,
-            $currentTime,
-            $duration,
-            $volume,
-            seekToTime,
-            volume.set,
-            seekFeedback.set,
-            togglePlayWithFeedback,
-        )}
+        controlsManager.handleKeydown(e, $currentTime, $duration, $volume, seekToTime, volume.set, seekFeedback.set, togglePlayWithFeedback)}
 />
 
 <div
-    class="fixed inset-0 w-full h-full bg-black overflow-hidden group z-100 {$controlsVisible
-        ? 'cursor-default'
-        : 'cursor-none'}"
+    class="group fixed inset-0 z-100 h-full w-full overflow-hidden bg-black {$controlsVisible ? 'cursor-default' : 'cursor-none'}"
     bind:this={playerContainer}
     role="presentation"
 >
-    <div class="w-full h-full">
+    <div class="h-full w-full">
         {#if embedSrc}
             <iframe
                 src={embedSrc}
@@ -1638,7 +759,7 @@
                 allow="autoplay *; fullscreen *; encrypted-media *; picture-in-picture *"
                 allowfullscreen
                 referrerpolicy="no-referrer"
-                on:load={handleEmbedLoaded}
+                on:load={embedPlayback.loaded}
             ></iframe>
         {:else}
             <PlayerVideo
@@ -1654,37 +775,17 @@
                 on:play={handlePlay}
                 on:pause={handlePause}
                 on:ended={handleEnded}
-                on:click={() => {
-                    if (!miniPlayerActive) {
-                        togglePlayWithFeedback();
-                    }
-                }}
-                on:waiting={() => {
-                    if (hasStarted) {
-                        playbackBuffering.set(true);
-                    } else {
-                        captureLoadingBackdrop();
-                        loading.set(true);
-                        loadingStage.set("Buffering");
-                    }
-                    handleBufferStart();
-                }}
+                on:click={() => !miniPlayerActive && togglePlayWithFeedback()}
+                on:waiting={handleWaiting}
                 on:playing={handlePlaying}
-                on:canplay={() => {
-                    playbackBuffering.set(false);
-                    loading.set(false);
-                    handleBufferEnd();
-                }}
-                on:error={handleVideoError}
+                on:canplay={handleCanPlay}
+                on:error={browserPlaybackGuard.handleVideoError}
             />
         {/if}
     </div>
 
     {#if playPauseFeedback && !embedSrc}
-        <PlayPauseFeedback
-            type={playPauseFeedback.type}
-            id={playPauseFeedback.id}
-        />
+        <PlayPauseFeedback type={playPauseFeedback.type} id={playPauseFeedback.id} />
     {/if}
 
     {#if miniPlayerActive && !embedSrc}
@@ -1696,27 +797,23 @@
             isPlaying={$isPlaying}
             {seekBarStyle}
             onTogglePlayback={togglePlaybackFromMiniPlayer}
-            onSeekInput={(time) =>
-                controlsManager.onSeekInput(time, pendingSeek.set)}
-            onSeekChange={(time) =>
-                controlsManager.onSeekChange(time, seekToTime)}
+            onSeekInput={(time) => controlsManager.onSeekInput(time, pendingSeek.set)}
+            onSeekChange={(time) => controlsManager.onSeekChange(time, seekToTime)}
         />
     {/if}
 
     {#if $seekFeedback && !embedSrc}
-        <SeekFeedback
-            type={$seekFeedback.type}
-            seekBarStyle={seekBarStyle}
-            id={$seekFeedback.id}
-        />
+        <SeekFeedback type={$seekFeedback.type} {seekBarStyle} id={$seekFeedback.id} />
     {/if}
 
     <PlayerLoadingScreen
         loading={$loading && !miniPlayerActive}
         onClose={handleClose}
         {metaData}
-        backdropSrc={loadingBackdropSrc}
-        backdropMode={loadingBackdropMode}
+        {season}
+        {episode}
+        backdropSrc={loadingBackdrop.src}
+        backdropMode={loadingBackdrop.mode}
         stage={$loadingStage}
         details={$loadingDetails}
         progress={$loadingProgress}
@@ -1725,14 +822,14 @@
         errorDetails={$errorDetails}
         onRetry={retryInitialSource}
         onBack={modalHandlers.onErrorBack}
-        onDownloadDesktop={openDesktopDownload}
-        showNotice={availabilityNoticeVisible && !miniPlayerActive}
+        onDownloadDesktop={() => void openExternal("https://raffi.al/#download")}
+        showNotice={$availabilityNoticeVisible && !miniPlayerActive}
         noticeTitle="Not available on demand"
-        noticeDetails={`This stream is not ready yet. ${streamAvailability?.providerLabel || "Your debrid provider"} has started preparing it, which can take a while and sometimes days. Check your provider dashboard for progress, then try this source again once it is cached.`}
+        noticeDetails="{streamAvailability?.providerLabel || 'Your debrid provider'} is still preparing this source. Check your dashboard, then try again once it's cached."
         noticePrimaryLabel="Back to Streams"
         noticeSecondaryLabel={streamAvailability?.dashboardUrl ? "Open Dashboard" : ""}
         onNoticePrimary={returnToStreams}
-        onNoticeSecondary={openAvailabilityDashboard}
+        onNoticeSecondary={() => streamAvailability?.dashboardUrl && void openExternal(streamAvailability.dashboardUrl)}
         showSeekStyle={$showSeekStyleModal && !hasStarted && !miniPlayerActive}
         {seekBarStyle}
         onSeekStyleChange={handleSeekStyleChange}
@@ -1746,109 +843,51 @@
     {/if}
 
     {#if !$loading && !miniPlayerActive}
-        <div
-            class="absolute left-0 top-0 p-4 sm:p-10 z-50 transition-all duration-300 ease-in-out transform {$controlsVisible
-                ? 'translate-y-0 opacity-100'
-                : '-translate-y-10 opacity-0 pointer-events-none'} will-change-transform will-change-opacity"
-        >
-            <button
-                class="player-nav-button bg-canvas/20 backdrop-blur-md hover:bg-ink/20 transition-colors duration-200 rounded-full cursor-pointer"
-                on:click={handleClose}
-                aria-label="Close player"
-            >
-                <ChevronLeft size={26} strokeWidth={2} />
-            </button>
-        </div>
-
-        {#if metaData?.meta?.type === "series" && hasNextEpisode}
-            <div
-                class="absolute right-0 top-0 p-4 sm:p-10 z-50 transition-all duration-300 ease-in-out transform {nextEpisodeHighlighted || $controlsVisible
-                    ? 'translate-y-0 opacity-100'
-                    : '-translate-y-10 opacity-0 pointer-events-none'} will-change-transform will-change-opacity"
-            >
-                <button
-                    class="player-nav-button backdrop-blur-md transition-all duration-200 rounded-full cursor-pointer {nextEpisodeHighlighted
-                        ? 'bg-ink shadow-[0_0_0_4px_rgba(255,255,255,0.22),0_0_32px_rgba(255,255,255,0.5)] scale-105'
-                        : 'bg-canvas/20 hover:bg-ink/20'}"
-                    on:click={handleNextEpisodeClick}
-                    aria-label="Next episode"
-                    title={nextEpisodeHighlighted ? "Next Episode — Outro" : "Next Episode"}
-                >
-                    <SkipForward size={26} color={nextEpisodeHighlighted ? "black" : "white"} strokeWidth={2} />
-                </button>
-            </div>
-        {/if}
-
-        {#if nowPlayingLabel}
-            <div
-                class="absolute top-4 inset-x-24 sm:top-10 sm:inset-x-28 z-50 flex h-[62px] items-center justify-center pointer-events-none select-none transition-all duration-300 ease-in-out transform {$controlsVisible
-                    ? 'translate-y-0 opacity-100'
-                    : '-translate-y-10 opacity-0'} will-change-transform will-change-opacity"
-            >
-                <span
-                    class="inline-flex min-h-[clamp(48px,3.23vw,62px)] max-w-full items-center truncate rounded-full bg-black/20 p-4 text-[1rem] leading-6 font-medium text-ink backdrop-blur-md transition-colors duration-200 sm:max-w-[40rem] sm:px-8 sm:text-[1.125rem] {$controlsVisible
-                        ? 'pointer-events-auto'
-                        : 'pointer-events-none'}"
-                    title={nowPlayingLabel}
-                >
-                    {nowPlayingLabel}
-                </span>
-            </div>
-        {/if}
-
-        {#if !embedSrc}
-            <div
-            class="player-controls-dock absolute left-1/2 -translate-x-1/2 z-50 flex max-w-full flex-col gap-2.5"
-            >
-                <PlayerOverlays
-                    showSkipIntro={$showSkipIntro}
-                    skipLabel={skipButtonLabel}
-                    skipChapter={handleSkipIntro}
-                    showPlaybackHealthPrompt={playbackHealthPromptVisible}
-                    chooseAnotherStream={chooseAnotherStreamForPlaybackHealth}
-                    keepWatching={dismissPlaybackHealthPrompt}
-                />
-
-                <div
-                    class="transition-all duration-300 ease-in-out transform {$controlsVisible
-                        ? 'translate-y-0 opacity-100'
-                        : 'translate-y-10 opacity-0 pointer-events-none'} will-change-transform will-change-opacity"
-                    bind:this={controlsOverlayElem}
-                >
-                    <PlayerControls
-                        isPlaying={$isPlaying}
-                        duration={$duration}
-                        currentTime={$currentTime}
-                        pendingSeek={$pendingSeek}
-                        volume={$volume}
-                        {seekBarStyle}
-                        chapterMarkers={effectiveChapterMarkers}
-                        {seekPreview}
-                        buffered={bufferedRanges}
-                        visible={$controlsVisible}
-                        {videoSrc}
-                        {metaData}
-                        currentAudioLabel={$currentAudioLabel}
-                        currentSubtitleLabel={$currentSubtitleLabel}
-                            togglePlay={togglePlayWithFeedback}
-                        onSeekInput={(time) =>
-                            controlsManager.onSeekInput(time, pendingSeek.set)}
-                        onSeekChange={(time) =>
-                            controlsManager.onSeekChange(time, seekToTime)}
-                        onVolumeChange={(value) => controlsManager.onVolumeChange(value, volume.set)}
-                        toggleFullscreen={handleToggleFullscreen}
-                        objectFit={$objectFit}
-                        toggleObjectFit={handleToggleObjectFit}
-                        onAudioClick={openAudioSelection}
-                        onSubtitleClick={openSubtitleSelection}
-                        onClipPanelOpenChange={(detail) => {
-                            clipPanelOpen = !!detail?.open;
-                            controlsManager?.setPinned?.(clipPanelOpen, controlsVisible.set);
-                        }}
-                    />
-                </div>
-            </div>
-        {/if}
+        <PlayerChrome
+            visible={$controlsVisible}
+            {metaData}
+            {season}
+            {episode}
+            skipLabel={$showSkipIntro ? skipButtonLabel : null}
+            onSkip={() => Chapters.skipChapter($currentChapter, seekToTime)}
+            {hasNextEpisode}
+            {nextEpisodeHighlighted}
+            onNextEpisode={handleNextEpisodeClick}
+            showHealthPrompt={$healthPromptVisible}
+            onChooseAnotherStream={() => {
+                playbackHealth.dismiss();
+                returnToStreams();
+            }}
+            onKeepWatching={playbackHealth.dismiss}
+            onClose={handleClose}
+            bind:panel={controlsPanel}
+            controls={embedSrc ? null : {
+                isPlaying: $isPlaying,
+                duration: $duration,
+                currentTime: $currentTime,
+                pendingSeek: $pendingSeek,
+                volume: $volume,
+                seekBarStyle,
+                chapterMarkers: effectiveChapterMarkers,
+                seekPreview,
+                buffered: bufferedRanges,
+                visible: $controlsVisible,
+                videoSrc,
+                canDownload: Boolean(metaData),
+                currentAudioLabel: $currentAudioLabel,
+                currentSubtitleLabel: $currentSubtitleLabel,
+                objectFit: $objectFit,
+                togglePlay: togglePlayWithFeedback,
+                onSeekInput: (time) => controlsManager.onSeekInput(time, pendingSeek.set),
+                onSeekChange: (time) => controlsManager.onSeekChange(time, seekToTime),
+                onVolumeChange: (value) => controlsManager.onVolumeChange(value, volume.set),
+                toggleFullscreen: () => void controlsManager.toggleFullscreen(),
+                toggleObjectFit: handleToggleObjectFit,
+                onAudioClick: () => showAudioSelection.set(true),
+                onSubtitleClick: () => showSubtitleSelection.set(true),
+                onClipPanelOpenChange: (open) => (clipPanelOpen = open),
+            }}
+        />
     {/if}
 
     <PlayerModals
@@ -1869,32 +908,8 @@
         onSubtitleDelayChange={modalHandlers.onSubtitleDelayChange}
         onErrorRetry={modalHandlers.onErrorRetry}
         onErrorBack={modalHandlers.onErrorBack}
-        onDownloadDesktop={openDesktopDownload}
+        onDownloadDesktop={() => void openExternal("https://raffi.al/#download")}
         onCloseAudio={modalHandlers.onCloseAudio}
         onCloseSubtitle={modalHandlers.onCloseSubtitle}
     />
 </div>
-
-<style>
-    .player-controls-dock {
-        bottom: clamp(14px, 4.5vh, 50px);
-    }
-
-    .player-nav-button {
-        display: grid;
-        width: clamp(44px, 3.2vw, 54px);
-        height: clamp(44px, 3.2vw, 54px);
-        place-items: center;
-    }
-
-    .player-nav-button :global(svg) {
-        width: clamp(21px, 1.55vw, 26px);
-        height: clamp(21px, 1.55vw, 26px);
-    }
-
-    @media (orientation: portrait), (max-height: 620px) {
-        .player-controls-dock {
-            bottom: 10px;
-        }
-    }
-</style>

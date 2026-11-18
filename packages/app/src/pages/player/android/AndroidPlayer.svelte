@@ -76,11 +76,6 @@
     $: subtitle = isSeries && season != null && episode != null
         ? [`S${season} E${episode}`, episodeInfo?.name].filter(Boolean).join(" · ")
         : null;
-    $: nowPlaying = metaData?.meta?.name
-        ? isSeries && season != null && episode != null
-            ? `${metaData.meta.name} S${season} E${episode}`
-            : metaData.meta.name
-        : null;
 
     $: chapterState = Chapters.checkChapters($playbackState.position, null, $playbackState.duration, metaData, introDbChapters);
     $: hasNextEpisode = isSeries && Boolean(episodeInfo) && metaData?.meta?.videos?.at(-1) !== episodeInfo;
@@ -388,7 +383,8 @@
             visible={controlsVisible}
             state={$playbackState}
             {metaData}
-            {nowPlaying}
+            {season}
+            {episode}
             chapters={Chapters.getEffectiveChapterSegments(null, introDbChapters)}
             {seekBarStyle}
             audioLabel={selectedLabel(audioOptions, "Audio")}
@@ -414,6 +410,8 @@
     loading={!hasStarted || Boolean(blockingError)}
     onClose={close}
     {metaData}
+    {season}
+    {episode}
     stage={$loadingStage}
     details={$loadingDetails}
     progress={$loadingProgress}

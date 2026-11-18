@@ -30,7 +30,7 @@ import { attachHlsPlayback } from "./hlsPlayback";
 import {
     describePlaybackFailure,
     PlaybackPreparationError,
-} from "./playbackFailure";
+} from "./health/playbackFailure";
 import {
     isPlaying,
     loading,

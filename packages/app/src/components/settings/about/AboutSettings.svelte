@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { ExternalLink } from "@lucide/svelte";
+	import { openExternal } from "../../../lib/shell/openExternal";
 	import RaffiMark from "../../common/RaffiMark.svelte";
 	import SettingRow from "../SettingRow.svelte";
 	import UpdateSection from "./UpdateSection.svelte";
@@ -13,16 +14,6 @@
 		{ title: "Ideas and questions", description: "Talk with other people using Raffi.", url: "https://github.com/kaleidal/raffi/discussions" },
 	];
 
-	function openExternalLink(url: string) {
-		const openExternal = window.electronAPI?.openExternal;
-		if (!openExternal) {
-			window.open(url, "_blank", "noopener");
-			return;
-		}
-		openExternal(url).catch((error) => {
-			console.error("Failed to open external link", error);
-		});
-	}
 </script>
 
 <div class="flex items-center gap-4 pb-6">
@@ -37,7 +28,7 @@
 
 {#each links as link (link.url)}
 	<SettingRow title={link.title} description={link.description}>
-		<button class={secondaryButton} on:click={() => openExternalLink(link.url)}>
+		<button class={secondaryButton} on:click={() => void openExternal(link.url)}>
 			Open
 			<ExternalLink size={15} strokeWidth={2} />
 		</button>

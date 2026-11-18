@@ -1,3 +1,4 @@
+import { openExternal } from "../../../lib/shell/openExternal";
 export const HOME_REFRESH_EVENT = "raffi:home-refresh";
 export const ADDONS_CHANGED_EVENT = "raffi:addons-changed";
 
@@ -75,17 +76,6 @@ export const openConfigureUrl = (url: string | undefined) => {
 	const target = buildConfigureUrl(url);
 	if (!target) return null;
 
-	const electronApi = (window as any).electronAPI as
-		| { openExternal?: (url: string) => Promise<void> }
-		| undefined;
-
-	if (electronApi?.openExternal) {
-		void electronApi.openExternal(target).catch((error) => {
-			console.error("Failed to open addon configure page", error);
-		});
-		return target;
-	}
-
-	window.open(target, "_blank", "noopener,noreferrer");
+	void openExternal(target);
 	return target;
 };

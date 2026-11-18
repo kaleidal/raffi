@@ -61,7 +61,7 @@
 {#if showSeekStyleModal}
     <SeekStyleInfoModal
         {seekBarStyle}
-        onStyleChange={(detail) => onSeekStyleChange(detail.style)}
+        onStyleChange={onSeekStyleChange}
         onAcknowledge={onSeekStyleAcknowledge}
     />
 {/if}

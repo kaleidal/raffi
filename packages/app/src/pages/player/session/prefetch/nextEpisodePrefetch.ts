@@ -2,15 +2,15 @@ import type Hls from "hls.js";
 import {
 	isHttpUrl,
 	isMagnetUrl,
-} from "../../../lib/media/localSource";
+} from "../../../../lib/media/localSource";
 import {
 	MediaBunnyPlayback,
 	resolveHttpPlayback,
 	type HttpPlaybackMode,
 	type ProbedStream,
 	type ClientPlaybackController,
-} from "../../../lib/media";
-import * as Session from "./videoSession";
+} from "../../../../lib/media/index";
+import * as Session from "../videoSession";
 
 export function getBufferedRatioFromStart(video: HTMLVideoElement): number {
 	const d = video.duration;

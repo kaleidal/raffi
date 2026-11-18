@@ -3,7 +3,7 @@
     import UpNextCard from "../../../components/meta/UpNextCard.svelte";
     import MetaInfo from "./MetaInfo.svelte";
     import MovieWatchButton from "./MovieWatchButton.svelte";
-    import TitleLogo from "./TitleLogo.svelte";
+    import TitleLogo from "../../../components/common/TitleLogo.svelte";
     import { getSeriesResumeEpisode, getStandardEpisodes } from "../episodeSelection";
     import { getProgress } from "../progressLogic";
     import type { ShowResponse } from "../../../lib/library/types/meta_types";

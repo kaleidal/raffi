@@ -162,3 +162,22 @@ export function createControlsManager(
         toggleObjectFit,
     };
 }
+
+export async function exitFullscreen() {
+    const api = window.electronAPI;
+    if (api?.isFullscreen && (await api.isFullscreen())) {
+        api.toggleFullscreen?.();
+        return;
+    }
+    if (document.fullscreenElement) await document.exitFullscreen();
+}
+
+export function applyObjectFit(fit: "contain" | "cover", ...surfaces: Array<HTMLElement | undefined>) {
+    for (const surface of surfaces) {
+        if (!surface) continue;
+        surface.style.objectFit = fit;
+        surface.style.objectPosition = "center center";
+        surface.style.transform = fit === "cover" ? "scale(1.035)" : "none";
+        surface.style.transformOrigin = "center center";
+    }
+}

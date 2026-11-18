@@ -1,4 +1,5 @@
 import { get } from "svelte/store";
+import type { ShowResponse } from "../../../lib/library/types/meta_types";
 import { currentTime, duration, loading } from "../playerState";
 
 const NEXT_EPISODE_TIMEOUT_MS = 45_000;
@@ -79,3 +80,12 @@ export const createNextEpisodeHandler = ({
 
     return handler;
 };
+
+export function hasNextEpisode(metaData: ShowResponse | null, season: number | null, episode: number | null) {
+    if (metaData?.meta?.type !== "series") return false;
+    const videos = metaData.meta.videos ?? [];
+    if (videos.length === 0) return false;
+    if (season == null || episode == null) return true;
+    const index = videos.findIndex((video) => video.season === season && video.episode === episode);
+    return index === -1 || index < videos.length - 1;
+}

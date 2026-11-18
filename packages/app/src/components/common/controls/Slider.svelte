@@ -2,7 +2,7 @@
     import { pointerScrub, type ScrubPosition } from "./pointerScrub";
 
     export let value: number;
-    export let label = "";
+    export let label: string;
     export let min = 0;
     export let max = 1;
     export let onInput: (value: number) => void;
@@ -16,15 +16,12 @@
     const valueAt = ({ ratio }: ScrubPosition) => onInput(min + ratio * (max - min));
 </script>
 
-<div class="flex flex-col items-stretch gap-1 w-full min-w-0">
-    {#if label}
-        <span class="text-ink/55 text-[0.9375rem] font-medium">{label}</span>
-    {/if}
+<div class="w-full min-w-0">
     <div
         class="relative h-4 w-full cursor-pointer touch-none select-none"
         role="slider"
         tabindex="-1"
-        aria-label={label || undefined}
+        aria-label={label}
         aria-valuemin={min}
         aria-valuemax={max}
         aria-valuenow={value}

@@ -183,7 +183,7 @@ export function getNextEpisodePrefetchWindow(
     return { startAt, creditsAt };
 }
 
-export function getBingeOutroAutoNextThreshold(chapter: Chapter | null): number | null {
+function getBingeOutroAutoNextThreshold(chapter: Chapter | null): number | null {
     if (!chapter || chapter.kind !== "outro") return null;
     const margin = BINGE_CREDITS_BUFFER_SECONDS;
     const start = chapter.startTime;
@@ -194,7 +194,7 @@ export function getBingeOutroAutoNextThreshold(chapter: Chapter | null): number 
     return Math.min(start + margin, Math.max(start, end - 0.25));
 }
 
-export function hasMarkedOutroChapter(
+function hasMarkedOutroChapter(
     sessionData: SessionData | null,
     introDbChapters: Chapter[] = [],
 ): boolean {
@@ -237,4 +237,26 @@ export function skipChapter(currentChapter: Chapter | null, performSeek: (time: 
     if (currentChapter) {
         performSeek(skipLandingTime(currentChapter));
     }
+}
+
+export type BingeAction = { kind: "skip"; to: number } | { kind: "next" } | null;
+
+/** What binge playback does at `time`: skip an intro or recap, move on at the credits, or nothing. */
+export function getBingeAction(
+    time: number,
+    chapter: Chapter | null,
+    { sessionData, introDbChapters, duration, autoSkipIntros }: {
+        sessionData: SessionData | null;
+        introDbChapters: Chapter[];
+        duration: number;
+        autoSkipIntros: boolean;
+    },
+): BingeAction {
+    if (shouldAutoSkipChapter(chapter, autoSkipIntros)) return { kind: "skip", to: skipLandingTime(chapter) };
+    const nextAt = hasMarkedOutroChapter(sessionData, introDbChapters)
+        ? getBingeOutroAutoNextThreshold(chapter)
+        : duration > 0
+          ? duration - 3
+          : null;
+    return nextAt != null && time >= nextAt ? { kind: "next" } : null;
 }
