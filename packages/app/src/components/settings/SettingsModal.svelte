@@ -42,14 +42,14 @@
 	<div
 		use:portal
 		use:lockPageScroll
-		class="raffi-modal-backdrop fixed inset-0 z-200 flex items-center justify-center bg-canvas/56 backdrop-blur-xl"
+		class="raffi-modal-backdrop fixed inset-0 z-200 flex items-center justify-center bg-canvas/56 p-6 backdrop-blur-xl"
 		transition:fade={{ duration: 200 }}
 		onclick={(event) => event.target === event.currentTarget && closeSettings()}
 		onkeydown={(event) => event.key === "Escape" && closeSettings()}
 		role="presentation"
 	>
 		<div
-			class="raffi-modal-surface relative flex h-full max-h-[900px] w-full max-w-[1200px] overflow-hidden rounded-[36px] bg-raised/60 shadow-[0_40px_160px_rgba(0,0,0,0.45)] backdrop-blur-[40px] portrait:flex-col"
+			class="raffi-modal-surface relative flex max-h-[min(900px,100%)] min-h-[min(560px,100%)] w-full max-w-[1080px] overflow-hidden rounded-[36px] bg-raised/60 shadow-[0_40px_160px_rgba(0,0,0,0.45)] backdrop-blur-[40px] portrait:flex-col"
 			transition:scale={{ start: 0.96, duration: 200 }}
 			role="dialog"
 			aria-modal="true"
@@ -84,7 +84,7 @@
 						<X size={24} strokeWidth={2} />
 					</button>
 				</div>
-				<div class="max-w-[820px]">
+				<div class="max-w-[760px]">
 					{#if current.id === "addons"}
 						<AddonsSettings filter={$settingsView.addonFilter} />
 					{:else}

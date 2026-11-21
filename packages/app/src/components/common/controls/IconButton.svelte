@@ -4,9 +4,10 @@
 </script>
 
 <button
-    class="icon-button bg-[#6e6e6e]/50 text-white hover:bg-[#7a7a7a]/55 flex flex-row items-center cursor-pointer w-auto rounded-full duration-200 ease-out"
+    class="icon-button flex w-auto cursor-pointer flex-row items-center rounded-full bg-ink/12 text-ink backdrop-blur-md duration-200 ease-out hover:bg-ink/20 active:scale-95"
     on:click={onClick}
     aria-label={label}
+    title={label}
 >
     <slot />
 </button>

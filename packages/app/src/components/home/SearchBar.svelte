@@ -258,7 +258,7 @@
 	}
 
 	const inputClass =
-		"bg-canvas/50 text-ink/85 text-center px-[clamp(20px,2vw,40px)] w-full min-w-0 text-[clamp(18px,1.5vw,28px)] font-normal outline-none focus:outline-none focus:ring-0 transition-[font-size,padding] duration-300";
+		"bg-transparent text-ink/85 text-center px-[clamp(20px,2vw,40px)] w-full min-w-0 text-[clamp(18px,1.5vw,28px)] font-normal outline-none focus:outline-none focus:ring-0 transition-[font-size,padding] duration-300";
 
 	$: channelMode = $router.page === "live";
 	$: link = channelMode ? null : parsePlayableLink(searchQuery);
@@ -360,7 +360,7 @@
             {/if}
             <div
                 data-focus-ring
-                class={`search-shell flex h-[clamp(56px,4vw,80px)] flex-row gap-0 rounded-full overflow-clip backdrop-blur-md z-20 transition-[width,height,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                class={`search-shell flex h-[clamp(56px,4vw,80px)] flex-row gap-0 rounded-full overflow-clip bg-raised/70 backdrop-blur-md z-20 transition-[width,height,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
                     portraitLayout
                         ? "w-[calc(100vw-clamp(32px,8vw,72px))] max-w-[720px]"
                         : "w-[clamp(340px,36vw,680px)] max-w-[48vw]"
@@ -371,7 +371,7 @@
                 }`}
             >
                 <slot name="leading">
-                    <div class="search-icon flex w-[clamp(56px,4vw,80px)] shrink-0 items-center justify-center bg-surface/50">
+                    <div class="search-icon flex w-[clamp(56px,4vw,80px)] shrink-0 items-center justify-center pl-2 text-ink/70">
                         <Search size={40} strokeWidth={2} />
                     </div>
                 </slot>
@@ -404,7 +404,7 @@
                 {#if isTvPlatform}
                     <button
                         data-own-focus
-                        class="search-icon flex w-[clamp(56px,4vw,80px)] shrink-0 items-center justify-center bg-surface/50 text-ink/75 transition-colors focus:bg-ink focus:text-canvas"
+                        class="search-icon flex w-[clamp(56px,4vw,80px)] shrink-0 items-center justify-center text-ink/75 transition-colors focus:bg-ink focus:text-canvas"
                         aria-label="Search by voice"
                         onclick={searchByVoice}
                     >
@@ -426,6 +426,7 @@
                 <LinkResult bind:this={linkResult} {link} above={portraitLayout || searchDockBottom} />
             {:else if showSearchResults && (totalSearchResults > 0 || loading)}
                 <SearchResults
+                    query={searchQuery}
                     results={searchResults}
                     {loading}
                     above={portraitLayout || searchDockBottom}

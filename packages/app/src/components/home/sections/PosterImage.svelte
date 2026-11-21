@@ -48,7 +48,7 @@
     </div>
 {:else}
     <div
-        class="flex h-full w-full flex-col items-center justify-center gap-3 rounded-[inherit] border border-ink/10 bg-surface p-4 text-center"
+        class="flex h-full w-full flex-col items-center justify-center gap-3 rounded-[inherit] bg-ink/8 p-4 text-center"
         aria-label={alt}
     >
         <Film size={26} strokeWidth={2} class="text-ink/50" />
