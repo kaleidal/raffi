@@ -1,6 +1,6 @@
 <script lang="ts">
     import { Play } from "@lucide/svelte";
-    import ShapeLoader from "../common/loading/ShapeLoader.svelte";
+    import BusyIcon from "../common/loading/BusyIcon.svelte";
     import type { Episode } from "../../lib/library/types/meta_types";
     import type { ProgressItem } from "../../pages/meta/types";
 
@@ -36,11 +36,9 @@
             <span
                 class="flex size-[clamp(46px,3.3vw,60px)] items-center justify-center rounded-full bg-accent text-on-accent transition-transform duration-200 group-hover:scale-110"
             >
-                {#if starting}
-                    <ShapeLoader size="26px" />
-                {:else}
+                <BusyIcon busy={starting} size="26px">
                     <Play size={24} strokeWidth={2.5} fill="currentColor" class="translate-x-px" />
-                {/if}
+                </BusyIcon>
             </span>
         </span>
         {#if started && progress}

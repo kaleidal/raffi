@@ -140,13 +140,6 @@
             <PlayerButton label="Subtitles: {currentSubtitleLabel || 'Off'}" onclick={onSubtitleClick}>
                 <Subtitles strokeWidth={2} />
             </PlayerButton>
-            <PlayerButton label={objectFit === "contain" ? "Fill screen" : "Fit to screen"} onclick={toggleObjectFit}>
-                {#if objectFit === "contain"}
-                    <ZoomIn strokeWidth={2} />
-                {:else}
-                    <ZoomOut strokeWidth={2} />
-                {/if}
-            </PlayerButton>
             {#if !isAndroidPlatform}
                 <PlayerButton label="Clip" onclick={() => setClipPanelOpen(!clipPanelOpen)}>
                     <Scissors strokeWidth={2} />
@@ -156,10 +149,15 @@
                         <Download strokeWidth={2} />
                     </PlayerButton>
                 {/if}
-                <PlayerButton label="Fullscreen" onclick={toggleFullscreen}>
-                    <Maximize strokeWidth={2} />
-                </PlayerButton>
             {/if}
+            <span class="mx-[clamp(4px,0.5vw,10px)] h-6 w-px bg-ink/15" aria-hidden="true"></span>
+            <PlayerButton label={objectFit === "contain" ? "Fill screen" : "Fit to screen"} onclick={toggleObjectFit}>
+                {#if objectFit === "contain"}
+                    <ZoomIn strokeWidth={2} />
+                {:else}
+                    <ZoomOut strokeWidth={2} />
+                {/if}
+            </PlayerButton>
             {#if onTogglePin}
                 <PlayerButton label={pinned ? "Let controls hide" : "Keep controls on screen"} active={pinned} onclick={onTogglePin}>
                     {#if pinned}
@@ -167,6 +165,11 @@
                     {:else}
                         <Pin strokeWidth={2} />
                     {/if}
+                </PlayerButton>
+            {/if}
+            {#if !isAndroidPlatform}
+                <PlayerButton label="Fullscreen" onclick={toggleFullscreen}>
+                    <Maximize strokeWidth={2} />
                 </PlayerButton>
             {/if}
         </div>

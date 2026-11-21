@@ -1,3 +1,8 @@
+<script lang="ts" module>
+    /** Quick waits finish before the loader shows, so they don't flash it. */
+    export const APPEAR_DELAY_MS = 300;
+</script>
+
 <script lang="ts">
     import { SHAPE_PATHS, TURN_PER_SHAPE } from "./morphShapes";
 
@@ -29,8 +34,21 @@
     }
 </script>
 
-<svg viewBox="0 0 100 100" style:width={size} style:height={size} class="shrink-0 {className}" aria-hidden="true">
+<svg viewBox="0 0 100 100" style:width={size} style:height={size} style:--appear-delay="{APPEAR_DELAY_MS}ms" class="shape-loader shrink-0 {className}" aria-hidden="true">
     <g use:spin class="origin-center [transform-box:view-box]">
         <path use:morph d={SHAPE_PATHS[0]} fill="currentColor" />
     </g>
 </svg>
+
+<style>
+    .shape-loader {
+        opacity: 0;
+        animation: appear 200ms ease var(--appear-delay) forwards;
+    }
+
+    @keyframes appear {
+        to {
+            opacity: 1;
+        }
+    }
+</style>

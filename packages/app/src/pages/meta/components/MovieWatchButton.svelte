@@ -1,6 +1,6 @@
 <script lang="ts">
     import { Play } from "@lucide/svelte";
-    import ShapeLoader from "../../../components/common/loading/ShapeLoader.svelte";
+    import BusyIcon from "../../../components/common/loading/BusyIcon.svelte";
     import type { ProgressItem } from "../types";
 
     let { progress, starting, onPlay }: { progress: ProgressItem | undefined; starting: boolean; onPlay: () => void } = $props();
@@ -16,11 +16,9 @@
         onclick={onPlay}
     >
         <span class="watch-icon flex items-center justify-center">
-            {#if starting}
-                <ShapeLoader size="100%" />
-            {:else}
+            <BusyIcon busy={starting} size="100%">
                 <Play size={48} strokeWidth={2} fill="currentColor" />
-            {/if}
+            </BusyIcon>
         </span>
         <span class="whitespace-nowrap">{resumable ? "Resume" : "Watch Movie"}</span>
     </button>
