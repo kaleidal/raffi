@@ -14,6 +14,7 @@ import {
 } from "../playerState";
 import * as Session from "../session/videoSession";
 import * as Subtitles from "../subtitles/subtitles";
+import { rememberSubtitleChoice } from "../subtitles/subtitlePreference";
 
 export const createPlayerModalHandlers = ({
 	getVideoElem,
@@ -57,6 +58,7 @@ export const createPlayerModalHandlers = ({
 		if (!videoElem) return;
 
 		const track = detail as import("../types").Track;
+		rememberSubtitleChoice(track);
 		subtitleTracks.update((tracks) =>
 			tracks.map((entry) => ({
 				...entry,

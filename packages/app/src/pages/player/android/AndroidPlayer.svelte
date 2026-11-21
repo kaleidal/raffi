@@ -28,6 +28,7 @@
     import { createNativePlayback, explainNativeError, type NativePlaybackState } from "./nativePlayback";
     import { createLimboTorrentStream } from "./limboTorrent";
     import { audioTrackOptions, selectedLabel, subtitleChoice, subtitleTrackOptions } from "./tracks";
+    import { findSubtitleInLanguage, readSubtitlePreference, rememberSubtitleChoice } from "../subtitles/subtitlePreference";
 
     export let videoSrc: string | null = null;
     export let embedSrc: string | null = null;
@@ -54,6 +55,7 @@
     let introDbChapters: Chapter[] = [];
     let addonSubtitles: Track[] = [];
     let selectedAddonSubtitle: Track["id"] | null = null;
+    let subtitlePreferenceApplied = false;
     let lastAutoSkip: number | null = null;
     let controlsVisible = false;
     let scrubbing = false;
@@ -84,6 +86,7 @@
 
     $: audioOptions = audioTrackOptions($tracks);
     $: subtitleOptions = subtitleTrackOptions($tracks, addonSubtitles, selectedAddonSubtitle);
+    $: if (!subtitlePreferenceApplied) applySubtitlePreference(subtitleOptions);
 
     $: unsupportedReason = unsupportedSource(videoSrc, embedSrc);
     $: blockingError = unsupportedReason
@@ -138,6 +141,7 @@
         introDbChapters = [];
         addonSubtitles = [];
         selectedAddonSubtitle = null;
+        subtitlePreferenceApplied = false;
         lastAutoSkip = null;
         sourceError = null;
         hideControls();
@@ -277,9 +281,26 @@
         playback.setFit(fit);
     }
 
-    function selectSubtitle(track: Track) {
+    function showSubtitle(track: Track) {
         selectedAddonSubtitle = track.isAddon ? track.id : null;
         playback.selectSubtitle(subtitleChoice(track));
+    }
+
+    function selectSubtitle(track: Track) {
+        subtitlePreferenceApplied = true;
+        rememberSubtitleChoice(track);
+        showSubtitle(track);
+    }
+
+    /** Starts each episode with subtitles the way the viewer last left them, once a matching track shows up. */
+    function applySubtitlePreference(options: Track[]) {
+        const preference = readSubtitlePreference();
+        if (!preference || options.length < 2) return;
+        const shown = options.find((track) => track.selected);
+        const wanted = preference.enabled ? findSubtitleInLanguage(options, preference.lang) : options.find((track) => track.id === "off");
+        if (!wanted) return;
+        subtitlePreferenceApplied = true;
+        if (wanted !== shown) showSubtitle(wanted);
     }
 
     async function startScrubbing(rightward: boolean) {
