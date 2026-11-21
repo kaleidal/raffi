@@ -5,7 +5,6 @@
 	import {
 		changeAccountAvatar,
 		currentUser,
-		removeAccountAvatar,
 		renameAccount,
 	} from "../../../lib/stores/authStore";
 
@@ -60,18 +59,6 @@
 			await changeAccountAvatar(file);
 		} catch (e: any) {
 			error = e?.message || "Couldn't update your photo";
-		} finally {
-			avatarBusy = false;
-		}
-	}
-
-	async function clearAvatar() {
-		avatarBusy = true;
-		error = "";
-		try {
-			await removeAccountAvatar();
-		} catch (e: any) {
-			error = e?.message || "Couldn't remove your photo";
 		} finally {
 			avatarBusy = false;
 		}
@@ -148,16 +135,6 @@
 				</button>
 			{/if}
 			<p class="mt-1 text-ink/62 text-sm break-all">{email}</p>
-			{#if $currentUser?.avatar && !editingName}
-				<button
-					type="button"
-					class="mt-2 text-sm text-ink/50 hover:text-ink transition-colors cursor-pointer disabled:cursor-wait"
-					disabled={avatarBusy}
-					on:click={clearAvatar}
-				>
-					Remove photo
-				</button>
-			{/if}
 		</div>
 	</div>
 

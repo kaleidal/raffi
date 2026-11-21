@@ -32,7 +32,6 @@ import {
     setRaffiSyncAuthFailureHandler,
     setRaffiSyncAuthRefreshHandler,
     setRaffiSyncAuthToken,
-    syncDelete,
     syncPut,
 } from "../db/raffiSync";
 import { writable } from "svelte/store";
@@ -247,11 +246,6 @@ export async function renameAccount(name: string) {
 export async function changeAccountAvatar(file: Blob) {
     const { image } = await syncPut<{ image: string }>("/profile/avatar", await prepareAvatarImage(file));
     updateActiveUser({ avatar: image });
-}
-
-export async function removeAccountAvatar() {
-    await syncDelete("/profile/avatar");
-    updateActiveUser({ avatar: null });
 }
 
 export function getCachedUser(): AppUser | null {

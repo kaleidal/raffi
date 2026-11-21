@@ -159,7 +159,3 @@ export const syncPut = async <T = unknown>(path: string, body: Blob): Promise<T>
         body,
     });
 };
-
-export const syncDelete = async <T = unknown>(path: string): Promise<T> => {
-    return syncRequest<T>(path, { method: "DELETE" });
-};

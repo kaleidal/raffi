@@ -12,7 +12,7 @@ import {
 } from "./dataMutations";
 import { applySyncState, ensureDefaultAddon, getState } from "./db";
 import { empty, getPathParts, handleError, HttpError, json, readJson, withCors } from "./http";
-import { removeAvatar, serveAvatar, uploadAvatar } from "./profile/avatars";
+import { serveAvatar, uploadAvatar } from "./profile/avatars";
 import {
   disconnectTrakt,
   exchangeTraktCode,
@@ -30,9 +30,8 @@ const routeAuthedRequest = async (request: Request, env: Env, parts: string[]) =
   const userId = await requireUserId(request, env);
   const db = getSyncDatabase(env);
 
-  if (parts[0] === "profile" && parts[1] === "avatar") {
-    if (request.method === "PUT") return uploadAvatar(request, env, userId);
-    if (request.method === "DELETE") return removeAvatar(env, userId);
+  if (parts[0] === "profile" && parts[1] === "avatar" && request.method === "PUT") {
+    return uploadAvatar(request, env, userId);
   }
 
   if (request.method === "GET" && parts[0] === "state") {
