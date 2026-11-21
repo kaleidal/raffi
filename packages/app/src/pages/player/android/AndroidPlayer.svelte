@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onDestroy, tick } from "svelte";
     import { get } from "svelte/store";
-    import LoadingSpinner from "../../../components/common/LoadingSpinner.svelte";
+    import LoadingSpinner from "../../../components/common/loading/LoadingSpinner.svelte";
     import TrackSelectionModal from "../../../components/player/TrackSelectionModal.svelte";
     import { flushPendingLibraryProgress } from "../../../lib/db/db";
     import type { ShowResponse } from "../../../lib/library/types/meta_types";

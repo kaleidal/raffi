@@ -3,7 +3,7 @@
 	import { addAddon, getAddons } from "../../../lib/db/db";
 	import { hostFetch } from "../../../lib/shell/hostFetch";
 	import { alertDialog } from "../../../lib/shell/systemDialogs";
-	import LoadingSpinner from "../../common/LoadingSpinner.svelte";
+	import LoadingSpinner from "../../common/loading/LoadingSpinner.svelte";
 	import AddonLogo from "./AddonLogo.svelte";
 	import {
 		ADDONS_CHANGED_EVENT,

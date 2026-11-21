@@ -9,7 +9,7 @@
         getListMembershipByImdb,
         type List,
     } from "../../../lib/db/db";
-    import LoadingSpinner from "../../common/LoadingSpinner.svelte";
+    import LoadingSpinner from "../../common/loading/LoadingSpinner.svelte";
 
     export let visible = false;
     export let imdbId: string;

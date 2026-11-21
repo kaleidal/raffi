@@ -4,7 +4,7 @@
     import type { ShowResponse } from "../../../lib/library/types/meta_types";
     import { isWeb } from "../../../lib/shell/platform";
     import { fullscreenPortal } from "../../../components/common/portal";
-    import LoadingSpinner from "../../../components/common/LoadingSpinner.svelte";
+    import LoadingSpinner from "../../../components/common/loading/LoadingSpinner.svelte";
     import TitleLogo from "../../../components/common/TitleLogo.svelte";
     import { episodeLine } from "../../../components/player/chrome/episodeLine";
 

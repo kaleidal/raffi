@@ -6,7 +6,7 @@
     import MiniPlayerControls from "../../components/player/MiniPlayerControls.svelte";
     import SeekFeedback from "../../components/player/SeekFeedback.svelte";
     import PlayPauseFeedback from "../../components/player/PlayPauseFeedback.svelte";
-    import LoadingSpinner from "../../components/common/LoadingSpinner.svelte";
+    import LoadingSpinner from "../../components/common/loading/LoadingSpinner.svelte";
     import PlayerVideo from "./components/PlayerVideo.svelte";
     import PlayerLoadingScreen from "./components/PlayerLoadingScreen.svelte";
     import PlayerModals from "./components/PlayerModals.svelte";

@@ -1,6 +1,6 @@
 <script lang="ts">
     import { openSettings } from "../../../../lib/stores/settings";
-    import LoadingSpinner from "../../../common/LoadingSpinner.svelte";
+    import LoadingSpinner from "../../../common/loading/LoadingSpinner.svelte";
     import StreamRow from "./StreamRow.svelte";
     import type { EnrichedStream } from "../../../../lib/streams/ranking/types";
 

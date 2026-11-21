@@ -3,7 +3,7 @@
     import { get, writable } from "svelte/store";
     import { fade } from "svelte/transition";
     import { ChevronLeft } from "@lucide/svelte";
-    import LoadingSpinner from "../../../components/common/LoadingSpinner.svelte";
+    import LoadingSpinner from "../../../components/common/loading/LoadingSpinner.svelte";
     import LiveControls from "./LiveControls.svelte";
     import LiveStatus from "./LiveStatus.svelte";
     import { browserEngine, nativeEngine, STARTING, type EngineStatus, type LiveEngine } from "./engines";

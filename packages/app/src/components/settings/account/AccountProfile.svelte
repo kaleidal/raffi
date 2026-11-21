@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { tick } from "svelte";
 	import { Camera, Pencil } from "@lucide/svelte";
-	import LoadingSpinner from "../../common/LoadingSpinner.svelte";
+	import LoadingSpinner from "../../common/loading/LoadingSpinner.svelte";
 	import {
 		changeAccountAvatar,
 		currentUser,

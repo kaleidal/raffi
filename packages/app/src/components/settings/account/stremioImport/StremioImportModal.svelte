@@ -14,7 +14,7 @@
         defaultSelectedLibraryIds,
         type StremioImportPreview,
     } from "../../../../lib/import/stremioImportPreview";
-    import LoadingSpinner from "../../../common/LoadingSpinner.svelte";
+    import LoadingSpinner from "../../../common/loading/LoadingSpinner.svelte";
     import AddonSelection from "./AddonSelection.svelte";
     import CheckMark from "./CheckMark.svelte";
     import ImportResult from "./ImportResult.svelte";

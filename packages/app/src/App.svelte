@@ -7,7 +7,7 @@
 
 
     import { X } from "@lucide/svelte";
-    import LoadingSpinner from "./components/common/LoadingSpinner.svelte";
+    import LoadingSpinner from "./components/common/loading/LoadingSpinner.svelte";
     import SettingsModal from "./components/settings/SettingsModal.svelte";
     import {
         initAuth,

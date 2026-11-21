@@ -3,7 +3,7 @@
 	import { ArrowDown, ArrowUp, Trash } from "@lucide/svelte";
 	import { addAddon, getAddons, removeAddon, reorderAddons, type Addon } from "../../../lib/db/db";
 	import { alertDialog, confirmDialog } from "../../../lib/shell/systemDialogs";
-	import LoadingSpinner from "../../common/LoadingSpinner.svelte";
+	import LoadingSpinner from "../../common/loading/LoadingSpinner.svelte";
 	import AddonLogo from "./AddonLogo.svelte";
 	import {
 		ADDONS_CHANGED_EVENT,

@@ -1,6 +1,6 @@
 <script lang="ts">
     import { Library, Settings, Tv } from "@lucide/svelte";
-    import LoadingSpinner from "../../common/LoadingSpinner.svelte";
+    import LoadingSpinner from "../../common/loading/LoadingSpinner.svelte";
     import { router, type Route } from "../../../lib/stores/router";
     import { showLiveInHeader } from "../../../lib/live/preferences";
     import { openSettings } from "../../../lib/stores/settings";

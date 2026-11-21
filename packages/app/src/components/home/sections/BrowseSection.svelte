@@ -2,7 +2,7 @@
     import { untrack } from "svelte";
     import Segmented from "../../common/controls/Segmented.svelte";
     import ChipRail from "../../common/ChipRail.svelte";
-    import Skeleton from "../../common/Skeleton.svelte";
+    import Skeleton from "../../common/loading/Skeleton.svelte";
     import PosterCard from "./PosterCard.svelte";
     import { BROWSE_GENRES, BROWSE_PAGE_SIZE, fetchBrowsePage, type BrowseType } from "../../../lib/library/browseCatalog";
     import { BROWSE_SECTION_ID, browseSelection } from "../../../lib/home/browse";

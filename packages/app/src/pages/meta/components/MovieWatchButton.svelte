@@ -1,6 +1,6 @@
 <script lang="ts">
     import { Play } from "@lucide/svelte";
-    import LoadingSpinner from "../../../components/common/LoadingSpinner.svelte";
+    import LoadingSpinner from "../../../components/common/loading/LoadingSpinner.svelte";
     import type { ProgressItem } from "../types";
 
     let { progress, starting, onPlay }: { progress: ProgressItem | undefined; starting: boolean; onPlay: () => void } = $props();

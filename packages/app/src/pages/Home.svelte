@@ -39,7 +39,7 @@
     import { router } from "../lib/stores/router";
     import { getPrimaryTrailerId } from "../lib/home/trailers";
     import { isAndroidPlatform } from "../lib/shell/platform";
-    import LoadingSpinner from "../components/common/LoadingSpinner.svelte";
+    import PageLoading from "../components/common/loading/PageLoading.svelte";
     import TitleRowSkeleton from "../components/home/sections/TitleRowSkeleton.svelte";
 
     let showcasedTitle: PopularTitleMeta | null = null;
@@ -339,11 +339,6 @@
             </div>
         </div>
     {:else}
-        <div
-            class="w-full h-screen flex items-center justify-center"
-            out:fade={{ duration: 200 }}
-        >
-            <LoadingSpinner size="60px" />
-        </div>
+        <PageLoading />
     {/if}
 </div>

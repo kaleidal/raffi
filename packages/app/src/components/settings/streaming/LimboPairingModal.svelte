@@ -4,7 +4,7 @@
 	import { Monitor } from "@lucide/svelte";
 	import { portal } from "../../common/portal";
 	import CodeInput from "../../common/controls/CodeInput.svelte";
-	import LoadingSpinner from "../../common/LoadingSpinner.svelte";
+	import LoadingSpinner from "../../common/loading/LoadingSpinner.svelte";
 	import {
 		discoverLimbo,
 		limboAddressToBaseUrl,

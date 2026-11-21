@@ -1,6 +1,6 @@
 <script lang="ts">
     import { Play } from "@lucide/svelte";
-    import LoadingSpinner from "../common/LoadingSpinner.svelte";
+    import LoadingSpinner from "../common/loading/LoadingSpinner.svelte";
     import type { Episode } from "../../lib/library/types/meta_types";
     import type { ProgressItem } from "../../pages/meta/types";
 

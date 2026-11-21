@@ -1,5 +1,5 @@
 <script lang="ts">
-    import LoadingSpinner from "../../../components/common/LoadingSpinner.svelte";
+    import LoadingSpinner from "../../../components/common/loading/LoadingSpinner.svelte";
     import { refreshLineup } from "../../../lib/live/refresh/refresh";
     import { newSourceId, saveSource } from "../../../lib/live/sources";
     import { normalizeServerUrl } from "../../../lib/live/xtream";

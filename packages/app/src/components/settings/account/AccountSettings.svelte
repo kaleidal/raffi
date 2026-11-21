@@ -1,5 +1,5 @@
 <script lang="ts">
-	import LoadingSpinner from "../../common/LoadingSpinner.svelte";
+	import LoadingSpinner from "../../common/loading/LoadingSpinner.svelte";
 	import AccountSection from "./AccountSection.svelte";
 	import AccountStateMismatchSection from "./AccountStateMismatchSection.svelte";
 	import LocalModeSignInSection from "./LocalModeSignInSection.svelte";

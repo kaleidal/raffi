@@ -1,5 +1,5 @@
 <script lang="ts">
-    import LoadingSpinner from "../common/LoadingSpinner.svelte";
+    import LoadingSpinner from "../common/loading/LoadingSpinner.svelte";
     import { pointerScrub, type ScrubPosition } from "../common/controls/pointerScrub";
     import { fractionToTime, timeToFraction } from "./seek/seekTrack";
 

@@ -1,7 +1,7 @@
 <script lang="ts">
     import { fade } from "svelte/transition";
     import Segmented from "../../common/controls/Segmented.svelte";
-    import Skeleton from "../../common/Skeleton.svelte";
+    import Skeleton from "../../common/loading/Skeleton.svelte";
     import PosterImage from "../sections/PosterImage.svelte";
     import type { SearchTitleResult, SplitSearchResults } from "../../../lib/library/titleSearch";
 

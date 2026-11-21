@@ -7,7 +7,7 @@
     import SeasonSelector from "../../components/meta/SeasonSelector.svelte";
     import EpisodeGrid from "../../components/meta/EpisodeGrid.svelte";
     import EpisodeContextMenu from "../../components/meta/context_menus/EpisodeContextMenu.svelte";
-    import LoadingSpinner from "../../components/common/LoadingSpinner.svelte";
+    import PageLoading from "../../components/common/loading/PageLoading.svelte";
     import AmbientBackdrop from "../../components/common/AmbientBackdrop.svelte";
     import UnsupportedTitleModal from "../../components/meta/modals/UnsupportedTitleModal.svelte";
     import { ADDONS_CHANGED_EVENT } from "../../components/settings/addons/addonsShared";
@@ -203,9 +203,7 @@
         onRetry={() => window.location.reload()}
     />
 {:else}
-    <div class="flex h-full w-full items-center justify-center" out:fade={{ duration: 200 }}>
-        <LoadingSpinner size="60px" />
-    </div>
+    <PageLoading />
 {/if}
 
 <style>

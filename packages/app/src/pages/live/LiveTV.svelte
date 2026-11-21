@@ -3,7 +3,7 @@
     import { fade } from "svelte/transition";
     import { RotateCw } from "@lucide/svelte";
     import SearchBar from "../../components/home/SearchBar.svelte";
-    import LoadingSpinner from "../../components/common/LoadingSpinner.svelte";
+    import LoadingSpinner from "../../components/common/loading/LoadingSpinner.svelte";
     import AmbientBackdrop from "../../components/common/AmbientBackdrop.svelte";
     import { collapseOnScroll } from "../../components/common/collapseOnScroll";
     import SourcePicker from "./components/SourcePicker.svelte";

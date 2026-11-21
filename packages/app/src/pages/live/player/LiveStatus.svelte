@@ -1,6 +1,6 @@
 <script lang="ts">
     import { fade } from "svelte/transition";
-    import LoadingSpinner from "../../../components/common/LoadingSpinner.svelte";
+    import LoadingSpinner from "../../../components/common/loading/LoadingSpinner.svelte";
     import ChannelLogo from "../components/ChannelLogo.svelte";
     import type { LiveChannel } from "../../../lib/live/types";
 
