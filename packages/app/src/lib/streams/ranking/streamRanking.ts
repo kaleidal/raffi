@@ -13,11 +13,10 @@ export const RESOLUTION_RANKS: Record<string, number> = {
 const COMFORTABLE_SIZE_GB_BY_RANK = [10, 2, 4, 10, 14, 25];
 
 const Tier = {
-    Fits: 0,
-    AboveScreen: 1,
-    PoorMatch: 2,
-    NotReady: 3,
-    Broken: 4,
+    Good: 0,
+    PoorMatch: 1,
+    NotReady: 2,
+    Broken: 3,
 } as const;
 
 export interface RankingContext {
@@ -68,13 +67,12 @@ function streamTier({ meta, isFailed }: EnrichedStream, context: RankingContext)
     }
     if (meta.isCached === false) return Tier.NotReady;
     if (lacksLanguage(meta, context.language) || meta.releaseTypeLabel === "CAM") return Tier.PoorMatch;
-    if (meta.resolutionRank > context.screenRank) return Tier.AboveScreen;
-    return Tier.Fits;
+    return Tier.Good;
 }
 
 function resolutionScore(rank: number, screenRank: number) {
     if (!rank) return 0;
-    return rank <= screenRank ? rank * 200 : screenRank * 200 - (rank - screenRank) * 150;
+    return rank <= screenRank ? rank * 200 : screenRank * 200 - (rank - screenRank) * 80;
 }
 
 function sizePenalty(meta: ParsedStreamMetadata) {
@@ -119,10 +117,16 @@ export function compareRecommended(left: EnrichedStream, right: EnrichedStream, 
     );
 }
 
-export function pickBestStream(streams: EnrichedStream[], context: RankingContext): EnrichedStream | null {
-    const best = streams.reduce<EnrichedStream | null>(
+function bestOf(streams: EnrichedStream[], context: RankingContext) {
+    return streams.reduce<EnrichedStream | null>(
         (current, item) => (!current || compareRecommended(item, current, context) < 0 ? item : current),
         null,
     );
-    return best && streamTier(best, context) <= Tier.AboveScreen ? best : null;
+}
+
+/** The stream one-click play starts: a good match that fits the screen, else a sharper good match, else none. */
+export function pickBestStream(streams: EnrichedStream[], context: RankingContext): EnrichedStream | null {
+    const good = streams.filter((item) => streamTier(item, context) === Tier.Good);
+    const fitting = good.filter(({ meta }) => meta.resolutionRank <= context.screenRank);
+    return bestOf(fitting, context) ?? bestOf(good, context);
 }

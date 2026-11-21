@@ -22,7 +22,7 @@
         buildEnrichedStreams,
     } from "./streams/streamFilters";
     import { withAvailabilityHint } from "../../../lib/streams/ranking/streamSelection";
-    import { rankingContext } from "../../../lib/streams/ranking/streamRanking";
+    import { pickBestStream, rankingContext } from "../../../lib/streams/ranking/streamRanking";
     import type { EnrichedStream } from "../../../lib/streams/ranking/types";
     import { computeProgressDetails, getProgressEntry, getReleaseInfo } from "./streams/episodeDetails";
     import type {
@@ -162,7 +162,7 @@
 
     $: filteredStreams = applyStreamFilters(enrichedStreams, filterState, ranking);
     $: ({ localFilteredStreams, addonFilteredStreams } = splitStreamsBySource(filteredStreams));
-    $: bestStream = filteredStreams.find((item) => !item.isFailed) ?? null;
+    $: bestStream = pickBestStream(filteredStreams, ranking) ?? filteredStreams.find((item) => !item.isFailed) ?? null;
     $: hasDirectStream = visibleStreams.some((stream) => stream?.raffiSource === "direct");
     $: showAddonSetupGuide =
         visibleStreams.length === 0 &&

@@ -171,3 +171,14 @@ describe("best stream for one-click play", () => {
         expect(pick(italianOnly, debridStream("1080p", "Show.S01E01.1080p.mkv", "🌎/🇬🇧", false))).toBeUndefined();
     });
 });
+
+describe("recommended stream order", () => {
+    test("lists releases sharper than the screen below ones that fit and above lower resolutions", () => {
+        const uhd = debridStream("2160p", "Show.S01E01.2160p.WEB-DL.x265.mkv", "🌎/🇬🇧");
+        const fullHd = debridStream("1080p", "Show.S01E01.1080p.WEB-DL.x264.mkv", "🌎/🇬🇧");
+        const hd = debridStream("720p", "Show.S01E01.720p.WEB-DL.x264.mkv", "🌎/🇬🇧");
+        const order = applyStreamFilters(buildEnrichedStreams([hd, uhd, fullHd]), defaultFilters, ranking);
+
+        expect(order.map((item) => item.stream.url)).toEqual([fullHd.url, uhd.url, hd.url]);
+    });
+});
