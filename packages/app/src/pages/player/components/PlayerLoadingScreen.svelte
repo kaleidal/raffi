@@ -4,7 +4,7 @@
     import type { ShowResponse } from "../../../lib/library/types/meta_types";
     import { isWeb } from "../../../lib/shell/platform";
     import { fullscreenPortal } from "../../../components/common/portal";
-    import LoadingSpinner from "../../../components/common/loading/LoadingSpinner.svelte";
+    import ShapeLoader from "../../../components/common/loading/ShapeLoader.svelte";
     import TitleLogo from "../../../components/common/TitleLogo.svelte";
     import { episodeLine } from "../../../components/player/chrome/episodeLine";
 
@@ -102,7 +102,7 @@
 
         {#if resuming}
             <div class="absolute right-0 bottom-0 p-[clamp(24px,3vw,48px)]">
-                <LoadingSpinner size="44px" />
+                <ShapeLoader size="48px" />
             </div>
         {:else}
             <div class="content absolute inset-x-0 bottom-0 flex max-w-[900px] flex-col items-start gap-[clamp(18px,1.8vw,30px)]">
@@ -151,11 +151,14 @@
                         </div>
                     </div>
                 {:else}
-                    <div class="flex flex-col gap-1.5" in:fade={{ duration: 200 }}>
-                        {#if line}
-                            <span class="text-[clamp(15px,1.1vw,20px)] font-medium whitespace-pre text-ink/85">{line}</span>
-                        {/if}
-                        <span class="text-[clamp(13px,0.9vw,16px)] text-ink/55">{stage || "Loading"}</span>
+                    <div class="flex items-center gap-4" in:fade={{ duration: 200 }}>
+                        <ShapeLoader size="clamp(40px,3vw,56px)" />
+                        <div class="flex flex-col gap-1">
+                            {#if line}
+                                <span class="text-[clamp(15px,1.1vw,20px)] font-medium whitespace-pre text-ink/85">{line}</span>
+                            {/if}
+                            <span class="text-[clamp(13px,0.9vw,16px)] text-ink/55">{stage || "Loading"}</span>
+                        </div>
                     </div>
                 {/if}
             </div>
