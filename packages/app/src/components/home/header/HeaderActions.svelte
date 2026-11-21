@@ -46,7 +46,7 @@
             {#if $authInitializing}
                 <LoadingSpinner size="26px" />
             {:else if $currentUser?.avatar}
-                <img src={$currentUser.avatar} alt="" class="h-full w-full object-cover" loading="lazy" />
+                <img src={$currentUser.avatar} alt="" class="h-full w-full object-cover" />
                 <span class="pointer-events-none absolute inset-0 bg-black/25 opacity-0 transition-opacity duration-300 group-hover:opacity-100"></span>
             {:else if $currentUser}
                 <span class="text-2xl font-semibold text-ink uppercase">

@@ -24,7 +24,7 @@
             on:dragover={handleDragOver}
             on:drop={(e) => handleDrop(e, item, listId)}
         >
-            <img src={item.poster} alt="" class="h-full w-full rounded-[16px] bg-surface object-cover" loading="lazy" />
+            <img src={item.poster} alt="" class="h-full w-full rounded-[16px] bg-surface object-cover" width="300" height="450" loading="lazy" />
 
             {#if $loadingItem === item.imdb_id}
                 <div

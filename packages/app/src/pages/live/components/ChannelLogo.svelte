@@ -23,6 +23,8 @@
     <img
         src={source}
         alt=""
+        width="120"
+        height="80"
         loading="lazy"
         decoding="async"
         draggable="false"

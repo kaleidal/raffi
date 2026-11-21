@@ -37,6 +37,8 @@
                     <img
                         src={episode.thumbnail}
                         alt=""
+                        width="480"
+                        height="270"
                         loading="lazy"
                         class="h-full w-full object-cover transition-[scale,filter] duration-200 {watched
                             ? 'brightness-[0.55] grayscale'

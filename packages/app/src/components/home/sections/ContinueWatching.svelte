@@ -279,7 +279,6 @@
                                         src={title.meta.logo}
                                         alt={title.meta.name}
                                         class="max-h-[clamp(30px,2.6vw,48px)] max-w-[60%] self-start object-contain object-left drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]"
-                                        loading="lazy"
                                     />
                                 {:else}
                                     <p class="line-clamp-1 text-lg font-semibold text-ink">{title.meta.name}</p>

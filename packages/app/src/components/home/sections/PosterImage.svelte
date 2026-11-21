@@ -33,6 +33,8 @@
         <img
             src={normalizedSrc}
             alt={alt}
+            width="300"
+            height="450"
             loading="lazy"
             decoding="async"
             draggable="false"
