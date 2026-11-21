@@ -1,6 +1,6 @@
 <script lang="ts">
     import { Play } from "@lucide/svelte";
-    import LoadingSpinner from "../common/loading/LoadingSpinner.svelte";
+    import ShapeLoader from "../common/loading/ShapeLoader.svelte";
     import type { Episode } from "../../lib/library/types/meta_types";
     import type { ProgressItem } from "../../pages/meta/types";
 
@@ -37,7 +37,7 @@
                 class="flex size-[clamp(46px,3.3vw,60px)] items-center justify-center rounded-full bg-accent text-on-accent transition-transform duration-200 group-hover:scale-110"
             >
                 {#if starting}
-                    <LoadingSpinner size="26px" />
+                    <ShapeLoader size="26px" />
                 {:else}
                     <Play size={24} strokeWidth={2.5} fill="currentColor" class="translate-x-px" />
                 {/if}

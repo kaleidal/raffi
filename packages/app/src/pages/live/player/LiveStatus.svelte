@@ -1,6 +1,6 @@
 <script lang="ts">
     import { fade } from "svelte/transition";
-    import LoadingSpinner from "../../../components/common/loading/LoadingSpinner.svelte";
+    import ShapeLoader from "../../../components/common/loading/ShapeLoader.svelte";
     import ChannelLogo from "../components/ChannelLogo.svelte";
     import type { LiveChannel } from "../../../lib/live/types";
 
@@ -43,7 +43,7 @@
                 {#if channel}
                     <p class="text-xl font-medium text-ink/85">{channel.name}</p>
                 {/if}
-                <LoadingSpinner size="40px" />
+                <ShapeLoader size="40px" />
             </div>
         {/if}
     </div>

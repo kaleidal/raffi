@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onDestroy, tick } from "svelte";
     import { get } from "svelte/store";
-    import LoadingSpinner from "../../../components/common/loading/LoadingSpinner.svelte";
+    import ShapeLoader from "../../../components/common/loading/ShapeLoader.svelte";
     import TrackSelectionModal from "../../../components/player/TrackSelectionModal.svelte";
     import { flushPendingLibraryProgress } from "../../../lib/db/db";
     import type { ShowResponse } from "../../../lib/library/types/meta_types";
@@ -389,7 +389,7 @@
 
     {#if hasStarted && $playbackState.buffering && !blockingError}
         <div class="absolute inset-0 flex items-center justify-center">
-            <LoadingSpinner size="56px" />
+            <ShapeLoader size="44px" class="opacity-80" />
         </div>
     {/if}
 

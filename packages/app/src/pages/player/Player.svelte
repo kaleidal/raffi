@@ -6,7 +6,7 @@
     import MiniPlayerControls from "../../components/player/MiniPlayerControls.svelte";
     import SeekFeedback from "../../components/player/SeekFeedback.svelte";
     import PlayPauseFeedback from "../../components/player/PlayPauseFeedback.svelte";
-    import LoadingSpinner from "../../components/common/loading/LoadingSpinner.svelte";
+    import ShapeLoader from "../../components/common/loading/ShapeLoader.svelte";
     import PlayerVideo from "./components/PlayerVideo.svelte";
     import PlayerLoadingScreen from "./components/PlayerLoadingScreen.svelte";
     import PlayerModals from "./components/PlayerModals.svelte";
@@ -67,6 +67,7 @@
     import * as MediaSession from "./integrations/mediaSession";
     import { createTraktScrobbler, TRAKT_COMPLETION_THRESHOLD } from "./integrations/traktScrobbleManager";
     import { createEmbedPlayback } from "./integrations/embedPlayback";
+    import { persistControlsPinned, readControlsPinned } from "./controls/playerPreferences";
     import { createTorrentStatusPoller } from "./session/torrentStatusPolling";
     import { createNextEpisodeHandler, hasNextEpisode as seriesHasNextEpisode } from "./controls/playerNextEpisode";
     import { createPlayerSessionLoader } from "./session/playerSessionLoader";
@@ -127,6 +128,7 @@
     let loadingBackdrop: LoadingBackdrop = { src: null, mode: "art" };
     let pictureAspect: number | null = null;
     let clipPanelOpen = false;
+    let controlsPinned = readControlsPinned();
     let cueLinePercent = 92;
     let resizeCounter = 0;
     let cueRecalcTimeout: number | null = null;
@@ -638,7 +640,7 @@
     $: nextEpisodeHighlighted = $currentChapter?.kind === "outro";
     $: hasStartedStore.set(hasStarted);
     $: controlsManager = Controls.createControlsManager(playerContainer, videoElem);
-    $: controlsManager?.setPinned(clipPanelOpen, controlsVisible.set);
+    $: controlsManager?.setPinned(clipPanelOpen || controlsPinned, controlsVisible.set);
     $: effectiveChapterMarkers = Chapters.getEffectiveChapterSegments($sessionData, introDbChapters);
     $: followSeekPreviewSource($sessionData?.isDirectHttp ? $sessionData.sourceUrl : null);
     $: if (videoElem) videoElem.muted = false;
@@ -804,7 +806,7 @@
 
     {#if $playbackBuffering && !$loading && !miniPlayerActive && !embedSrc}
         <div class="pointer-events-none absolute inset-0 z-40 flex items-center justify-center" aria-label="Buffering">
-            <LoadingSpinner size="56px" />
+            <ShapeLoader size="44px" class="opacity-80" />
         </div>
     {/if}
 
@@ -852,6 +854,8 @@
                 onAudioClick: () => showAudioSelection.set(true),
                 onSubtitleClick: () => showSubtitleSelection.set(true),
                 onClipPanelOpenChange: (open) => (clipPanelOpen = open),
+                pinned: controlsPinned,
+                onTogglePin: () => persistControlsPinned((controlsPinned = !controlsPinned)),
             }}
         />
     {/if}

@@ -4,6 +4,7 @@
     import { RotateCw } from "@lucide/svelte";
     import SearchBar from "../../components/home/SearchBar.svelte";
     import LoadingSpinner from "../../components/common/loading/LoadingSpinner.svelte";
+    import ShapeLoader from "../../components/common/loading/ShapeLoader.svelte";
     import AmbientBackdrop from "../../components/common/AmbientBackdrop.svelte";
     import { collapseOnScroll } from "../../components/common/collapseOnScroll";
     import SourcePicker from "./components/SourcePicker.svelte";
@@ -140,7 +141,7 @@
 
     <div class="page-body relative z-10 flex min-h-0 flex-1 flex-col gap-[clamp(14px,1.4vw,24px)] px-[var(--raffi-page-gutter)] pt-[clamp(8px,1vw,16px)]">
         {#if !settingsLoaded}
-            <div class="flex flex-1 items-center justify-center"><LoadingSpinner size="60px" /></div>
+            <div class="flex flex-1 items-center justify-center"><ShapeLoader size="60px" /></div>
         {:else if !sources.length}
             <LiveEmpty title="Watch live TV" actionLabel="Add a source" onAction={() => (showSources = true)}>
                 Add an M3U playlist or an Xtream Codes account.
@@ -151,7 +152,7 @@
                     {$library.error}
                 </LiveEmpty>
             {:else}
-                <div class="flex flex-1 items-center justify-center"><LoadingSpinner size="60px" /></div>
+                <div class="flex flex-1 items-center justify-center"><ShapeLoader size="60px" /></div>
             {/if}
         {:else}
             <div class="flex items-center justify-between gap-4" in:fade={{ duration: 200 }}>

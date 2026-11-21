@@ -1,12 +1,19 @@
 <script lang="ts">
     import type { Snippet } from "svelte";
 
-    let { label, onclick, children }: { label: string; onclick: () => void; children: Snippet } = $props();
+    let {
+        label,
+        active = false,
+        onclick,
+        children,
+    }: { label: string; active?: boolean; onclick: () => void; children: Snippet } = $props();
 </script>
 
 <button
     class="player-button flex shrink-0 cursor-pointer items-center justify-center rounded-full text-ink/80 transition-[background-color,color,scale] duration-150 hover:bg-ink/12 hover:text-ink active:scale-90"
+    class:active
     aria-label={label}
+    aria-pressed={active}
     title={label}
     {onclick}
 >
@@ -14,6 +21,11 @@
 </button>
 
 <style>
+    .player-button.active {
+        background: color-mix(in oklab, var(--raffi-ink) 16%, transparent);
+        color: var(--raffi-ink);
+    }
+
     .player-button {
         width: clamp(40px, 2.7vw, 52px);
         height: clamp(40px, 2.7vw, 52px);

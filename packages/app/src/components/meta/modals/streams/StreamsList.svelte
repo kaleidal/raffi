@@ -1,6 +1,6 @@
 <script lang="ts">
     import { openSettings } from "../../../../lib/stores/settings";
-    import LoadingSpinner from "../../../common/loading/LoadingSpinner.svelte";
+    import ShapeLoader from "../../../common/loading/ShapeLoader.svelte";
     import StreamRow from "./StreamRow.svelte";
     import type { EnrichedStream } from "../../../../lib/streams/ranking/types";
 
@@ -18,7 +18,7 @@
 <div class="no-scrollbar -mx-4 flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
     {#if loadingStreams}
         <div class="flex justify-center py-10">
-            <LoadingSpinner size="40px" />
+            <ShapeLoader size="40px" />
         </div>
     {:else if filteredStreams.length === 0}
         {#if showAddonSetupGuide}

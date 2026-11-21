@@ -7,7 +7,7 @@
 
 
     import { X } from "@lucide/svelte";
-    import LoadingSpinner from "./components/common/loading/LoadingSpinner.svelte";
+    import ShapeLoader from "./components/common/loading/ShapeLoader.svelte";
     import SettingsModal from "./components/settings/SettingsModal.svelte";
     import {
         initAuth,
@@ -332,7 +332,7 @@
                     aria-live="polite"
                     aria-label="Loading page"
                 >
-                    <LoadingSpinner size="60px" />
+                    <ShapeLoader size="60px" />
                 </div>
             {/if}
         </div>

@@ -1,5 +1,5 @@
 <script lang="ts">
-    import LoadingSpinner from "../common/loading/LoadingSpinner.svelte";
+    import ShapeLoader from "../common/loading/ShapeLoader.svelte";
     import { pointerScrub, type ScrubPosition } from "../common/controls/pointerScrub";
     import { fractionToTime, timeToFraction } from "./seek/seekTrack";
 
@@ -37,7 +37,7 @@
 
     {#if loading}
         <div class="absolute inset-0 flex items-center justify-center">
-            <LoadingSpinner size="40px" />
+            <ShapeLoader size="40px" />
         </div>
     {/if}
 

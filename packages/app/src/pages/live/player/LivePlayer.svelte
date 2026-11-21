@@ -3,7 +3,7 @@
     import { get, writable } from "svelte/store";
     import { fade } from "svelte/transition";
     import { ChevronLeft } from "@lucide/svelte";
-    import LoadingSpinner from "../../../components/common/loading/LoadingSpinner.svelte";
+    import ShapeLoader from "../../../components/common/loading/ShapeLoader.svelte";
     import LiveControls from "./LiveControls.svelte";
     import LiveStatus from "./LiveStatus.svelte";
     import { browserEngine, nativeEngine, STARTING, type EngineStatus, type LiveEngine } from "./engines";
@@ -247,7 +247,7 @@
         />
     {:else if $status.buffering}
         <div class="pointer-events-none absolute inset-0 flex items-center justify-center" transition:fade={{ duration: 150 }}>
-            <LoadingSpinner size="56px" />
+            <ShapeLoader size="44px" class="opacity-80" />
         </div>
     {/if}
 

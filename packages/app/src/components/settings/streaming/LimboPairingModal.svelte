@@ -4,7 +4,7 @@
 	import { Monitor } from "@lucide/svelte";
 	import { portal } from "../../common/portal";
 	import CodeInput from "../../common/controls/CodeInput.svelte";
-	import LoadingSpinner from "../../common/loading/LoadingSpinner.svelte";
+	import ShapeLoader from "../../common/loading/ShapeLoader.svelte";
 	import {
 		discoverLimbo,
 		limboAddressToBaseUrl,
@@ -96,7 +96,7 @@
 
 		{#if step === "searching"}
 			<div class="flex items-center gap-3 text-ink/70">
-				<LoadingSpinner size="24px" />
+				<ShapeLoader size="24px" />
 				Looking for Limbo on your network…
 			</div>
 		{:else if step === "pick"}

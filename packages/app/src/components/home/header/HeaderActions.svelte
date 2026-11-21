@@ -1,6 +1,6 @@
 <script lang="ts">
     import { Library, Settings, Tv } from "@lucide/svelte";
-    import LoadingSpinner from "../../common/loading/LoadingSpinner.svelte";
+    import ShapeLoader from "../../common/loading/ShapeLoader.svelte";
     import { router, type Route } from "../../../lib/stores/router";
     import { showLiveInHeader } from "../../../lib/live/preferences";
     import { openSettings } from "../../../lib/stores/settings";
@@ -44,7 +44,7 @@
             onclick={() => openSettings()}
         >
             {#if $authInitializing}
-                <LoadingSpinner size="26px" />
+                <ShapeLoader size="26px" />
             {:else if $currentUser?.avatar}
                 <img src={$currentUser.avatar} alt="" class="h-full w-full object-cover" />
                 <span class="pointer-events-none absolute inset-0 bg-black/25 opacity-0 transition-opacity duration-300 group-hover:opacity-100"></span>

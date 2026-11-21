@@ -1,6 +1,6 @@
 <script lang="ts">
     import { Play } from "@lucide/svelte";
-    import LoadingSpinner from "../../../components/common/loading/LoadingSpinner.svelte";
+    import ShapeLoader from "../../../components/common/loading/ShapeLoader.svelte";
     import type { ProgressItem } from "../types";
 
     let { progress, starting, onPlay }: { progress: ProgressItem | undefined; starting: boolean; onPlay: () => void } = $props();
@@ -17,7 +17,7 @@
     >
         <span class="watch-icon flex items-center justify-center">
             {#if starting}
-                <LoadingSpinner size="100%" />
+                <ShapeLoader size="100%" />
             {:else}
                 <Play size={48} strokeWidth={2} fill="currentColor" />
             {/if}

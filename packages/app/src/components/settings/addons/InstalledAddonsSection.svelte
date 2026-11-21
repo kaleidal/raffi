@@ -3,7 +3,7 @@
 	import { ArrowDown, ArrowUp, Trash } from "@lucide/svelte";
 	import { addAddon, getAddons, removeAddon, reorderAddons, type Addon } from "../../../lib/db/db";
 	import { alertDialog, confirmDialog } from "../../../lib/shell/systemDialogs";
-	import LoadingSpinner from "../../common/loading/LoadingSpinner.svelte";
+	import ShapeLoader from "../../common/loading/ShapeLoader.svelte";
 	import AddonLogo from "./AddonLogo.svelte";
 	import {
 		ADDONS_CHANGED_EVENT,
@@ -118,7 +118,7 @@
 	<div class="flex flex-col">
 		{#if loadingAddons}
 			<div class="flex justify-center py-6">
-				<LoadingSpinner size="30px" />
+				<ShapeLoader size="30px" />
 			</div>
 		{:else if addonsList.length === 0}
 			<div class="text-ink/50 text-center py-6 text-sm">No addons installed yet.</div>

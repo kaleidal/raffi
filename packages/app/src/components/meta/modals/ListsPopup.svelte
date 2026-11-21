@@ -9,7 +9,7 @@
         getListMembershipByImdb,
         type List,
     } from "../../../lib/db/db";
-    import LoadingSpinner from "../../common/loading/LoadingSpinner.svelte";
+    import ShapeLoader from "../../common/loading/ShapeLoader.svelte";
 
     export let visible = false;
     export let imdbId: string;
@@ -115,7 +115,7 @@
 
                 {#if loading}
                     <div class="flex justify-center py-4">
-                        <LoadingSpinner size="30px" />
+                        <ShapeLoader size="30px" />
                     </div>
                 {:else if lists.length === 0}
                     <div class="text-ink/50 text-center py-4">

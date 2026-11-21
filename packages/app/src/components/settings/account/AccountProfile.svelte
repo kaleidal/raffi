@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { tick } from "svelte";
 	import { Camera, Pencil } from "@lucide/svelte";
-	import LoadingSpinner from "../../common/loading/LoadingSpinner.svelte";
+	import ShapeLoader from "../../common/loading/ShapeLoader.svelte";
 	import {
 		changeAccountAvatar,
 		currentUser,
@@ -81,7 +81,7 @@
 			{/if}
 			<span class="absolute inset-0 flex items-center justify-center bg-canvas/45 transition-opacity duration-200 {avatarBusy ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}">
 				{#if avatarBusy}
-					<LoadingSpinner size="24px" />
+					<ShapeLoader size="24px" />
 				{:else}
 					<Camera size={22} strokeWidth={2} />
 				{/if}

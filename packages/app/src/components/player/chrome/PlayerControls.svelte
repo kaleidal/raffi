@@ -27,15 +27,17 @@
         onAudioClick: () => void;
         onSubtitleClick: () => void;
         onClipPanelOpenChange?: (open: boolean) => void;
+        pinned?: boolean;
+        onTogglePin?: () => void;
     };
 </script>
 
 <script lang="ts">
     import type { Snippet } from "svelte";
-    import { AudioLines, Download, Maximize, Scissors, Subtitles, ZoomIn, ZoomOut } from "@lucide/svelte";
+    import { AudioLines, Download, Maximize, Pin, PinOff, Scissors, Subtitles, ZoomIn, ZoomOut } from "@lucide/svelte";
     import { isAndroidPlatform } from "../../../lib/shell/platform";
     import { formatTime } from "../../../lib/utils/time";
-    import { persistShowRemaining, readShowRemaining } from "../../../pages/player/controls/timeDisplay";
+    import { persistShowRemaining, readShowRemaining } from "../../../pages/player/controls/playerPreferences";
     import ClipPanel from "../clip/ClipPanel.svelte";
     import PlayPauseIcon from "../PlayPauseIcon.svelte";
     import SeekBar from "../seek/SeekBar.svelte";
@@ -66,6 +68,8 @@
         onAudioClick,
         onSubtitleClick,
         onClipPanelOpenChange = () => {},
+        pinned = false,
+        onTogglePin,
         seek,
     }: PlayerControlsProps & { seek?: Snippet } = $props();
 
@@ -154,6 +158,15 @@
                 {/if}
                 <PlayerButton label="Fullscreen" onclick={toggleFullscreen}>
                     <Maximize strokeWidth={2} />
+                </PlayerButton>
+            {/if}
+            {#if onTogglePin}
+                <PlayerButton label={pinned ? "Let controls hide" : "Keep controls on screen"} active={pinned} onclick={onTogglePin}>
+                    {#if pinned}
+                        <PinOff strokeWidth={2} />
+                    {:else}
+                        <Pin strokeWidth={2} />
+                    {/if}
                 </PlayerButton>
             {/if}
         </div>

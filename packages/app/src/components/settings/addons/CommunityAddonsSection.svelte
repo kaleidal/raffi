@@ -3,7 +3,7 @@
 	import { addAddon, getAddons } from "../../../lib/db/db";
 	import { hostFetch } from "../../../lib/shell/hostFetch";
 	import { alertDialog } from "../../../lib/shell/systemDialogs";
-	import LoadingSpinner from "../../common/loading/LoadingSpinner.svelte";
+	import ShapeLoader from "../../common/loading/ShapeLoader.svelte";
 	import AddonLogo from "./AddonLogo.svelte";
 	import {
 		ADDONS_CHANGED_EVENT,
@@ -217,7 +217,7 @@
 	<div class="flex flex-col">
 		{#if loadingCommunity}
 			<div class="flex justify-center py-6">
-				<LoadingSpinner size="40px" />
+				<ShapeLoader size="40px" />
 			</div>
 		{:else if filteredCommunityAddons.length === 0}
 			<div class="text-ink/50 text-center py-6 text-sm">
