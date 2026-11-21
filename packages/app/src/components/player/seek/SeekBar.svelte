@@ -35,6 +35,7 @@
     let hoverTop = 0;
     let previewFrame: ImageBitmap | null = null;
     let previewRequest = 0;
+    let shownRequest = 0;
 
     $: segments = trackSegments(chapters, duration);
     $: cursor = timeToFraction(time, duration);
@@ -63,12 +64,18 @@
         return color ? `rgb(${color})` : "var(--raffi-accent)";
     };
 
+    const showFrame = (frame: ImageBitmap, request: number) => {
+        previewFrame = frame;
+        shownRequest = request;
+    };
+
+    /** Keeps the last frame up until a newer one decodes, so scrubbing never blanks the card. */
     const showPreview = (preview: SeekPreview, time: number) => {
         const request = ++previewRequest;
-        previewFrame = preview.peek(time);
-        if (previewFrame) return;
+        const cached = preview.peek(time);
+        if (cached) return showFrame(cached, request);
         void preview.frameAt(time).then((frame) => {
-            if (frame && request === previewRequest && preview === seekPreview) previewFrame = frame;
+            if (frame && request > shownRequest && preview === seekPreview) showFrame(frame, request);
         });
     };
 

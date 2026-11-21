@@ -18,11 +18,12 @@
     let innerHeight = 0;
     let aspectRatio = "16 / 9";
 
-    $: if (canvas && frame) {
-        canvas.width = frame.width;
-        canvas.height = frame.height;
-        canvas.getContext("2d")?.drawImage(frame, 0, 0);
-        aspectRatio = `${frame.width} / ${frame.height}`;
+    $: drawable = frame && frame.width > 0 ? frame : null;
+    $: if (canvas && drawable) {
+        canvas.width = drawable.width;
+        canvas.height = drawable.height;
+        canvas.getContext("2d")?.drawImage(drawable, 0, 0);
+        aspectRatio = `${drawable.width} / ${drawable.height}`;
     }
 
     $: left = withImage
@@ -46,7 +47,7 @@
     {#if withImage}
         <canvas
             bind:this={canvas}
-            class="block w-full bg-ink/6 {frame ? 'opacity-100 transition-opacity duration-150' : 'opacity-0'}"
+            class="block w-full bg-ink/6 {drawable ? 'opacity-100 transition-opacity duration-150' : 'opacity-0'}"
             style={`aspect-ratio:${aspectRatio}`}
         ></canvas>
     {/if}
