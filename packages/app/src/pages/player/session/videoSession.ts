@@ -342,6 +342,7 @@ export function createSeekHandler(
 		setPendingSeek(null);
 		if (isTimeBuffered(videoElem, pending)) {
 			videoElem.currentTime = pending;
+			setShowCanvas(false);
 			return;
 		}
 

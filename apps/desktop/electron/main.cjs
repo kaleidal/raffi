@@ -16,6 +16,7 @@ const {
   createAppProtocolHandler,
 } = require("./services/appProtocol.cjs");
 const { registerMainIpcHandlers } = require("./services/mainIpc.cjs");
+const { registerStreamResolveHandler } = require("./services/media/streamResolve.cjs");
 const { livePrivilegedScheme, createLiveProxyHandler } = require("./services/live/liveProxy.cjs");
 const { registerDiscordRpcHandlers } = require("./services/integrations/rpc.cjs");
 const { createMainWindow } = require("./services/window.cjs");
@@ -239,6 +240,7 @@ registerMainIpcHandlers({
   localMediaAccess,
   net,
 });
+registerStreamResolveHandler({ ipcMain, net });
 
 app.whenReady().then(() => {
   registerThemeHandlers({

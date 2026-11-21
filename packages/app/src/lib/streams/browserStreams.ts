@@ -1,5 +1,4 @@
 import { syncPost } from "../db/raffiSync";
-import { isWeb } from "../shell/platform";
 
 function hostBlocksBrowsers(src: string) {
 	try {
@@ -10,10 +9,13 @@ function hostBlocksBrowsers(src: string) {
 	}
 }
 
-export const needsServerResolve = (src: string) => isWeb && hostBlocksBrowsers(src);
+export const needsResolve = hostBlocksBrowsers;
 
+/** The desktop app follows the redirects itself; the browser asks Raffi Sync, since it can't read across origins. */
 export async function resolveBrowserStream(src: string) {
 	try {
+		const resolveOnDevice = window.electronAPI?.resolveStream;
+		if (resolveOnDevice) return await resolveOnDevice(src);
 		const { url } = await syncPost<{ url: string }>("/streams/resolve", { url: src });
 		return url;
 	} catch (error) {

@@ -1,7 +1,7 @@
 import { get, writable } from "svelte/store";
 import { selectedStream } from "../../meta/metaState";
 import type { StreamAvailabilityHint } from "../../meta/types";
-import { needsServerResolve, resolveBrowserStream } from "../../../lib/streams/browserStreams";
+import { needsResolve, resolveBrowserStream } from "../../../lib/streams/browserStreams";
 import {
     isLikelyProviderStatusMedia,
     isStreamPreparationPending,
@@ -63,10 +63,14 @@ export function createSourcePreflight({
         loadingDetails.set("Verifying that this source can start immediately.");
         loadingProgress.set(null);
 
-        if (needsServerResolve(src)) {
+        if (needsResolve(src)) {
             const resolved = await resolveBrowserStream(src);
             if (current !== run) return;
             if (resolved !== src) return redirect(resolved);
+        }
+        if (!needsCheck(src)) {
+            checking = null;
+            return start(source);
         }
 
         const result = await preflightStreamUrl(src);
@@ -101,7 +105,7 @@ export function createSourcePreflight({
 
     function request(source: Source) {
         if (isWaitingOn(source.src)) return;
-        if (needsCheck(source.src)) void check(source);
+        if (needsCheck(source.src) || needsResolve(source.src)) void check(source);
         else start(source);
     }
 
