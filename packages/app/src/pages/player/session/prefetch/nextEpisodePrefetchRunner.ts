@@ -1,5 +1,6 @@
 import * as NavigationLogic from "../../../meta/navigationLogic";
 import { streamToPlayableUrl } from "../../../meta/streamLogic";
+import { needsResolve, resolveBrowserStream } from "../../../../lib/streams/browserStreams";
 import { startNextEpisodePrefetch, type NextEpisodePrefetchHandoff } from "./nextEpisodePrefetch";
 
 const RETRY_DELAY_MS = 10_000;
@@ -41,11 +42,13 @@ export function createNextEpisodePrefetchRunner(imdbId: string, getIdleVideo: ()
             const video = getIdleVideo();
             const playable = next ? streamToPlayableUrl(next.stream) : null;
             if (!video || !next || !playable) return retryLater();
-            const started = await startNextEpisodePrefetch(playable.url, playable.fileIdx, video, () => {}, signal);
+            const source = needsResolve(playable.url) ? await resolveBrowserStream(playable.url) : playable.url;
+            if (id !== runId) return;
+            const started = await startNextEpisodePrefetch(source, playable.fileIdx, video, () => {}, signal);
             if (id !== runId) return started.dispose?.();
             if (!started.dispose || !started.handoff) return retryLater();
             disposePrefetch = started.dispose;
-            handoff = started.handoff;
+            handoff = { ...started.handoff, src: playable.url };
             resolved = next;
         } catch (error) {
             if (id === runId) {

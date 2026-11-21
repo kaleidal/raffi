@@ -264,6 +264,8 @@
 
     const sourcePreflight = createSourcePreflight({
         getAvailability: () => streamAvailability,
+        isPrefetched: (source) =>
+            canReuseNextEpisodePrefetch(nextEpisodePrefetch?.handoff ?? null, source.src, source.fileIdx, startTime),
         isStillRequested: (source) => isSamePlaybackSource(videoSrc, fileIdx, source.src, source.fileIdx),
         start: (source) => transitionToVideoSource(source.src, source.fileIdx),
         redirect: (src) => (videoSrc = src),

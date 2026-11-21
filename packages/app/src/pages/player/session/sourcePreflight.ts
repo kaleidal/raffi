@@ -15,12 +15,14 @@ type Source = { src: string; fileIdx: number | null };
 /** Makes sure a debrid source can start right away before handing it to the player, instead of playing a "still caching" clip. */
 export function createSourcePreflight({
     getAvailability,
+    isPrefetched,
     isStillRequested,
     start,
     redirect,
     onCheckStarted,
 }: {
     getAvailability: () => StreamAvailabilityHint | null;
+    isPrefetched: (source: Source) => boolean;
     isStillRequested: (source: Source) => boolean;
     start: (source: Source) => void;
     redirect: (src: string) => void;
@@ -105,6 +107,7 @@ export function createSourcePreflight({
 
     function request(source: Source) {
         if (isWaitingOn(source.src)) return;
+        if (isPrefetched(source)) return start(source);
         if (needsCheck(source.src) || needsResolve(source.src)) void check(source);
         else start(source);
     }
