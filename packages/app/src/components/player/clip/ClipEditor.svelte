@@ -75,11 +75,11 @@
     }
 </script>
 
-<div class="flex w-full flex-col gap-[clamp(12px,1vw,18px)] px-4">
+<div class="flex w-full flex-col gap-[clamp(12px,1vw,18px)]">
     <ClipTimeline bind:range {duration} playhead={currentTime} preview={seekPreview} onSettle={settle} />
 
-    <div class="-mx-4 flex items-center justify-between gap-4">
-        <div class="flex min-w-0 items-center gap-[clamp(8px,0.8vw,14px)]">
+    <div class="flex items-center justify-between gap-4">
+        <div class="-ml-[clamp(10px,0.675vw,13px)] flex min-w-0 items-center gap-[clamp(8px,0.8vw,14px)]">
             <PlayerButton label={isPlaying ? "Pause" : "Play clip"} onclick={togglePreview}>
                 {#if isPlaying}
                     <Pause strokeWidth={2} fill="currentColor" />

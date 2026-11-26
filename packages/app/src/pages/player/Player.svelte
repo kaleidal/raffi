@@ -831,6 +831,7 @@
             onKeepWatching={playbackHealth.dismiss}
             onClose={handleClose}
             {pictureAspect}
+            clipping={clipEditorOpen}
             bind:panel={controlsPanel}
             controls={embedSrc ? null : {
                 isPlaying: $isPlaying,

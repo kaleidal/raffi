@@ -23,6 +23,7 @@
         controls,
         seek,
         pictureAspect = null,
+        clipping = false,
         panel = $bindable(null),
     }: {
         visible: boolean;
@@ -41,6 +42,7 @@
         controls: PlayerControlsProps | null;
         seek?: Snippet;
         pictureAspect?: number | null;
+        clipping?: boolean;
         panel?: HTMLDivElement | null;
     } = $props();
 
@@ -75,18 +77,20 @@
                         <PlayerTitle {metaData} {season} {episode} />
                     {/if}
                 </div>
-                <div class="pointer-events-auto shrink-0">
-                    <PlayerOverlays
-                        {skipLabel}
-                        {onSkip}
-                        showNextEpisode={hasNextEpisode && (visible || nextEpisodeHighlighted)}
-                        {nextEpisodeHighlighted}
-                        {onNextEpisode}
-                        {showHealthPrompt}
-                        {onChooseAnotherStream}
-                        {onKeepWatching}
-                    />
-                </div>
+                {#if !clipping}
+                    <div class="pointer-events-auto shrink-0">
+                        <PlayerOverlays
+                            {skipLabel}
+                            {onSkip}
+                            showNextEpisode={hasNextEpisode && (visible || nextEpisodeHighlighted)}
+                            {nextEpisodeHighlighted}
+                            {onNextEpisode}
+                            {showHealthPrompt}
+                            {onChooseAnotherStream}
+                            {onKeepWatching}
+                        />
+                    </div>
+                {/if}
             </div>
 
             {#if controls}
