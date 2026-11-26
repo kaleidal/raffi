@@ -1,7 +1,7 @@
 const SHOW_REMAINING_KEY = "player_show_remaining";
 const CONTROLS_PINNED_KEY = "player_controls_pinned";
 
-export const readShowRemaining = () => localStorage.getItem(SHOW_REMAINING_KEY) === "true";
+export const readShowRemaining = () => localStorage.getItem(SHOW_REMAINING_KEY) !== "false";
 
 export const persistShowRemaining = (value: boolean) => localStorage.setItem(SHOW_REMAINING_KEY, String(value));
 

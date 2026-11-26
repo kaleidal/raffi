@@ -1,12 +1,13 @@
 <script lang="ts">
     import { fade, fly } from "svelte/transition";
-    import { ChevronLeft, ExternalLink, MonitorDown } from "@lucide/svelte";
+    import { ExternalLink, MonitorDown } from "@lucide/svelte";
     import type { ShowResponse } from "../../../lib/library/types/meta_types";
     import { isWeb } from "../../../lib/shell/platform";
     import { fullscreenPortal } from "../../../components/common/portal";
     import ShapeLoader from "../../../components/common/loading/ShapeLoader.svelte";
     import TitleLogo from "../../../components/common/TitleLogo.svelte";
     import { episodeLine } from "../../../components/player/chrome/episodeLine";
+    import PlayerBackButton from "../../../components/player/chrome/PlayerBackButton.svelte";
 
     let {
         loading,
@@ -92,13 +93,9 @@
         {/if}
         <div class="shade pointer-events-none absolute inset-0" class:shade--light={resuming}></div>
 
-        <button
-            class="chrome-back absolute z-10 flex cursor-pointer items-center justify-center rounded-full bg-ink/10 backdrop-blur-md transition-colors duration-200 hover:bg-ink/20"
-            onclick={onClose}
-            aria-label="Close player"
-        >
-            <ChevronLeft strokeWidth={2} />
-        </button>
+        <div class="chrome-back absolute z-10">
+            <PlayerBackButton onclick={onClose} />
+        </div>
 
         {#if resuming}
             <div class="absolute right-0 bottom-0 p-[clamp(24px,3vw,48px)]">
@@ -174,13 +171,6 @@
     .chrome-back {
         top: clamp(18px, 2.6vw, 48px);
         left: clamp(20px, 3.4vw, 64px);
-        width: clamp(44px, 3.2vw, 54px);
-        height: clamp(44px, 3.2vw, 54px);
-    }
-
-    .chrome-back :global(svg) {
-        width: clamp(21px, 1.55vw, 26px);
-        height: clamp(21px, 1.55vw, 26px);
     }
 
     .content {

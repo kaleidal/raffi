@@ -3,6 +3,7 @@
     import { formatTime } from "../../../lib/utils/time";
     import type { SeekPreview } from "../../../lib/media/preview/seekPreview";
     import type { Chapter } from "../../../pages/player/types";
+    import { LatestPreviewFrame } from "./latestPreviewFrame.svelte";
     import SeekPreviewCard from "./SeekPreviewCard.svelte";
     import {
         KIND_COLORS,
@@ -15,38 +16,46 @@
         type TrackSegment,
     } from "./seekTrack";
 
-    export let duration = 0;
-    export let time = 0;
-    export let chapters: Chapter[] = [];
-    export let buffered: TimeRange[] = [];
-    export let seekPreview: SeekPreview | null = null;
-    export let disabled = false;
-    export let visible = true;
-    export let emphasized = false;
-    export let onScrub: (time: number) => void;
-    export let onCommit: (time: number) => void;
+    let {
+        duration = 0,
+        time = 0,
+        chapters = [],
+        buffered = [],
+        seekPreview = null,
+        disabled = false,
+        visible = true,
+        emphasized = false,
+        onScrub,
+        onCommit,
+    }: {
+        duration?: number;
+        time?: number;
+        chapters?: Chapter[];
+        buffered?: TimeRange[];
+        seekPreview?: SeekPreview | null;
+        disabled?: boolean;
+        visible?: boolean;
+        emphasized?: boolean;
+        onScrub: (time: number) => void;
+        onCommit: (time: number) => void;
+    } = $props();
 
     const SEGMENT_GAP_PX = 3;
 
-    let hovering = false;
-    let dragging = false;
-    let hoverTime = 0;
-    let hoverX = 0;
-    let hoverTop = 0;
-    let previewFrame: ImageBitmap | null = null;
-    let previewRequest = 0;
-    let shownRequest = 0;
+    let hovering = $state(false);
+    let dragging = $state(false);
+    let hoverTime = $state(0);
+    let hoverX = $state(0);
+    let hoverTop = $state(0);
 
-    $: segments = trackSegments(chapters, duration);
-    $: cursor = timeToFraction(time, duration);
-    $: bufferedBar = bufferedFractions(buffered, duration);
-    $: active = hovering || dragging || emphasized;
-    $: hoverChapter = chapters.find((chapter) => hoverTime >= chapter.startTime && hoverTime < chapter.endTime) ?? null;
-
-    const forgetPreviewFrame = (_source: SeekPreview | null) => {
-        previewFrame = null;
-    };
-    $: forgetPreviewFrame(seekPreview);
+    const segments = $derived(trackSegments(chapters, duration));
+    const cursor = $derived(timeToFraction(time, duration));
+    const bufferedBar = $derived(bufferedFractions(buffered, duration));
+    const active = $derived(hovering || dragging || emphasized);
+    const hoverChapter = $derived(
+        chapters.find((chapter) => hoverTime >= chapter.startTime && hoverTime < chapter.endTime) ?? null,
+    );
+    const previewFrames = $derived(seekPreview && new LatestPreviewFrame(seekPreview));
 
     const segmentStyle = (segment: TrackSegment) => {
         const leftGap = segment.isFirst ? 0 : SEGMENT_GAP_PX / 2;
@@ -64,27 +73,12 @@
         return color ? `rgb(${color})` : "var(--raffi-accent)";
     };
 
-    const showFrame = (frame: ImageBitmap, request: number) => {
-        previewFrame = frame;
-        shownRequest = request;
-    };
-
-    /** Keeps the last frame up until a newer one decodes, so scrubbing never blanks the card. */
-    const showPreview = (preview: SeekPreview, time: number) => {
-        const request = ++previewRequest;
-        const cached = preview.peek(time);
-        if (cached) return showFrame(cached, request);
-        void preview.frameAt(time).then((frame) => {
-            if (frame && request > shownRequest && preview === seekPreview) showFrame(frame, request);
-        });
-    };
-
     const trackHover = ({ ratio, rect }: ScrubPosition) => {
         if (!hovering && !dragging) hoverTop = rect.top;
         hovering = true;
         hoverTime = fractionToTime(ratio, duration);
         hoverX = rect.left + ratio * rect.width;
-        if (seekPreview) showPreview(seekPreview, hoverTime);
+        previewFrames?.show(hoverTime);
     };
 
     const scrubTo = ({ ratio }: ScrubPosition) => onScrub(fractionToTime(ratio, duration));
@@ -153,7 +147,7 @@
         anchorTop={hoverTop}
         time={hoverTime}
         chapterTitle={hoverChapter?.title ?? null}
-        frame={previewFrame}
+        frame={previewFrames?.frame ?? null}
         withImage={Boolean(seekPreview)}
     />
 {/if}

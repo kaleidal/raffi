@@ -1,12 +1,16 @@
 <script lang="ts">
     import { untrack } from "svelte";
 
-    let { src, fill = false }: { src: string | null | undefined; fill?: boolean } = $props();
+    let {
+        src,
+        live = false,
+        fill = false,
+    }: { src: string | null | undefined; live?: boolean; fill?: boolean } = $props();
 
     const SAMPLE_WIDTH = 64;
     const SAMPLE_HEIGHT = 36;
 
-    type Layer = { id: number; src: string; visible: boolean };
+    type Layer = { id: number; src: string; visible: boolean; live: boolean };
 
     let layers = $state<Layer[]>([]);
     let nextId = 0;
@@ -53,7 +57,7 @@
         untrack(() => {
             if (next) {
                 latest = nextId++;
-                layers = [...layers, { id: latest, src: next, visible: false }];
+                layers = [...layers, { id: latest, src: next, visible: false, live }];
             } else {
                 latest = -1;
                 layers = layers.map((layer) => ({ ...layer, visible: false }));
@@ -71,6 +75,7 @@
                 height={SAMPLE_HEIGHT}
                 class="ambient-layer"
                 class:visible={layer.visible}
+                class:live={layer.live}
                 ontransitionend={() => settle(layer.id)}
             ></canvas>
         {/each}
@@ -115,6 +120,10 @@
         opacity: 0;
         transition: opacity 900ms ease;
         will-change: opacity;
+    }
+
+    .ambient-layer.live {
+        transition: opacity 1200ms linear;
     }
 
     .ambient-layer.visible {

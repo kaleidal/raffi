@@ -2,37 +2,46 @@
     import { fullscreenPortal } from "../../common/portal";
     import { formatTime } from "../../../lib/utils/time";
 
-    export let anchorX = 0;
-    export let anchorTop = 0;
-    export let time = 0;
-    export let chapterTitle: string | null = null;
-    export let frame: ImageBitmap | null = null;
-    export let withImage = false;
+    let {
+        anchorX = 0,
+        anchorTop = 0,
+        time = 0,
+        chapterTitle = null,
+        frame = null,
+        withImage = false,
+    }: {
+        anchorX?: number;
+        anchorTop?: number;
+        time?: number;
+        chapterTitle?: string | null;
+        frame?: ImageBitmap | null;
+        withImage?: boolean;
+    } = $props();
 
     const CARD_WIDTH = 208;
     const VIEWPORT_MARGIN = 12;
     const GAP_ABOVE_ANCHOR = 4;
 
-    let canvas: HTMLCanvasElement | undefined;
-    let innerWidth = 0;
-    let innerHeight = 0;
-    let aspectRatio = "16 / 9";
+    let canvas = $state<HTMLCanvasElement>();
+    let innerWidth = $state(0);
+    let innerHeight = $state(0);
 
-    $: drawable = frame && frame.width > 0 ? frame : null;
-    $: if (canvas && drawable) {
+    const drawable = $derived(frame && frame.width > 0 ? frame : null);
+    const aspectRatio = $derived(drawable ? `${drawable.width} / ${drawable.height}` : "16 / 9");
+
+    $effect(() => {
+        if (!canvas || !drawable) return;
         canvas.width = drawable.width;
         canvas.height = drawable.height;
         canvas.getContext("2d")?.drawImage(drawable, 0, 0);
-        aspectRatio = `${drawable.width} / ${drawable.height}`;
-    }
+    });
 
-    $: left = withImage
-        ? Math.min(
-              Math.max(anchorX - CARD_WIDTH / 2, VIEWPORT_MARGIN),
-              innerWidth - CARD_WIDTH - VIEWPORT_MARGIN,
-          )
-        : anchorX;
-    $: bottom = innerHeight - anchorTop + GAP_ABOVE_ANCHOR;
+    const left = $derived(
+        withImage
+            ? Math.min(Math.max(anchorX - CARD_WIDTH / 2, VIEWPORT_MARGIN), innerWidth - CARD_WIDTH - VIEWPORT_MARGIN)
+            : anchorX,
+    );
+    const bottom = $derived(innerHeight - anchorTop + GAP_ABOVE_ANCHOR);
 </script>
 
 <svelte:window bind:innerWidth bind:innerHeight />

@@ -1,7 +1,7 @@
 <script lang="ts">
     import type { Snippet } from "svelte";
-    import { ChevronLeft } from "@lucide/svelte";
     import type { ShowResponse } from "../../../lib/library/types/meta_types";
+    import PlayerBackButton from "./PlayerBackButton.svelte";
     import PlayerControls, { type PlayerControlsProps } from "./PlayerControls.svelte";
     import PlayerOverlays from "./PlayerOverlays.svelte";
     import PlayerTitle from "./PlayerTitle.svelte";
@@ -65,13 +65,7 @@
 
     <div class="absolute inset-y-0 left-1/2 w-full -translate-x-1/2" style:width={frameWidth ? `${frameWidth}px` : null}>
         <div class="chrome-edge absolute top-0 left-0 transition-[translate,opacity] duration-300 ease-out {shown('top')}" inert={!visible}>
-            <button
-                class="chrome-back pointer-events-auto flex cursor-pointer items-center justify-center rounded-full bg-ink/10 backdrop-blur-md transition-colors duration-200 hover:bg-ink/20"
-                onclick={onClose}
-                aria-label="Close player"
-            >
-                <ChevronLeft strokeWidth={2} />
-            </button>
+            <PlayerBackButton onclick={onClose} />
         </div>
 
         <div class="chrome-edge chrome-dock absolute inset-x-0 bottom-0 flex flex-col gap-[clamp(10px,1.2vw,22px)]">
@@ -115,16 +109,6 @@
 
     .chrome-dock {
         padding-bottom: clamp(14px, 2.4vh, 34px);
-    }
-
-    .chrome-back {
-        width: clamp(44px, 3.2vw, 54px);
-        height: clamp(44px, 3.2vw, 54px);
-    }
-
-    .chrome-back :global(svg) {
-        width: clamp(21px, 1.55vw, 26px);
-        height: clamp(21px, 1.55vw, 26px);
     }
 
     .chrome-scrim--top {

@@ -284,7 +284,7 @@
 </script>
 
 <div class="bg-canvas h-fit min-h-screen flex flex-col pb-[clamp(64px,7vw,100px)]">
-    <AmbientBackdrop src={$homeAmbient} fill />
+    <AmbientBackdrop src={$homeAmbient.image} live={$homeAmbient.live} fill />
     <TitleMenuHost />
 
     {#if fetchedTitles}
