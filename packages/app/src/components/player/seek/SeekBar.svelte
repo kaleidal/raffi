@@ -3,7 +3,7 @@
     import { formatTime } from "../../../lib/utils/time";
     import type { SeekPreview } from "../../../lib/media/preview/seekPreview";
     import type { Chapter } from "../../../pages/player/types";
-    import { latestPreviewFrame } from "./latestPreviewFrame.svelte";
+    import { restingPreviewFrame } from "./restingPreviewFrame.svelte";
     import SeekPreviewCard from "./SeekPreviewCard.svelte";
     import {
         KIND_COLORS,
@@ -55,7 +55,7 @@
     const hoverChapter = $derived(
         chapters.find((chapter) => hoverTime >= chapter.startTime && hoverTime < chapter.endTime) ?? null,
     );
-    const previewFrames = $derived(seekPreview && latestPreviewFrame(seekPreview));
+    const previewFrames = $derived(seekPreview && restingPreviewFrame(seekPreview));
 
     const segmentStyle = (segment: TrackSegment) => {
         const leftGap = segment.isFirst ? 0 : SEGMENT_GAP_PX / 2;

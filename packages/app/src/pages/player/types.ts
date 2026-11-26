@@ -16,6 +16,8 @@ export type ChapterSource = "native" | "introdb" | "fallback";
 export interface Track {
     id: string | number;
     label: string;
+    /** What sets the track apart from others in its language, like its channel layout or that it is forced. */
+    detail?: string;
     selected: boolean;
     group: string;
     lang?: string;

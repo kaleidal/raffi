@@ -89,8 +89,6 @@ export async function loadVideoSession(
 		setPendingSeek: (seek: number | null) => void;
 		setAudioTracks: (tracks: Track[]) => void;
 		setSubtitleTracks: (tracks: Track[]) => void;
-		setCurrentAudioLabel: (label: string) => void;
-		setCurrentSubtitleLabel: (label: string) => void;
 		setSessionData?: (sessionData: any) => void;
 	},
 	fetchAddonSubtitles: () => Promise<void>,
@@ -120,8 +118,6 @@ export async function loadVideoSession(
 		setPendingSeek,
 		setAudioTracks,
 		setSubtitleTracks,
-		setCurrentAudioLabel,
-		setCurrentSubtitleLabel,
 		setSessionData,
 	} = setStates;
 
@@ -155,8 +151,6 @@ export async function loadVideoSession(
 
 		setAudioTracks([]);
 		setSubtitleTracks([]);
-		setCurrentAudioLabel("Default");
-		setCurrentSubtitleLabel("Off");
 
 		if (options?.directHttp) {
 			const sessionData = {
@@ -420,7 +414,6 @@ export async function handleAudioSelect(
 	videoElem: HTMLVideoElement,
 	setStates: {
 		setAudioTracks: (tracks: Track[]) => void;
-		setCurrentAudioLabel: (label: string) => void;
 		setLoading: (loading: boolean) => void;
 		setLoadingStage: (stage: string) => void;
 	},
@@ -428,12 +421,11 @@ export async function handleAudioSelect(
 		setAudioTrack: (index: number, time: number) => Promise<void>;
 	} | null,
 ) {
-	const { setAudioTracks, setCurrentAudioLabel, setLoading, setLoadingStage } = setStates;
+	const { setAudioTracks, setLoading, setLoadingStage } = setStates;
 
 	if (track.selected) return;
 
 	setAudioTracks(audioTracks.map((t) => ({ ...t, selected: t.id === track.id })));
-	setCurrentAudioLabel(track.label);
 
 	const wasPlaying = !videoElem.paused;
 	try {

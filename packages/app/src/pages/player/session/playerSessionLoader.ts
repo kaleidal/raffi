@@ -32,8 +32,6 @@ import {
     duration,
     showSkipIntro,
     showNextEpisode,
-    currentAudioLabel,
-    currentSubtitleLabel,
     showError,
     errorMessage,
     errorDetails,
@@ -226,8 +224,6 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                     setPendingSeek: pendingSeek.set,
                     setAudioTracks: audioTracks.set,
                     setSubtitleTracks: subtitleTracks.set,
-                    setCurrentAudioLabel: currentAudioLabel.set,
-                    setCurrentSubtitleLabel: currentSubtitleLabel.set,
                     setSessionData: sessionData.set,
                 },
                 () =>

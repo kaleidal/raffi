@@ -23,7 +23,7 @@
         controls,
         seek,
         pictureAspect = null,
-        clipping = false,
+        panelOpen = false,
         panel = $bindable(null),
     }: {
         visible: boolean;
@@ -42,7 +42,8 @@
         controls: PlayerControlsProps | null;
         seek?: Snippet;
         pictureAspect?: number | null;
-        clipping?: boolean;
+        /** A panel over the controls is open, so the prompts that sit there step aside. */
+        panelOpen?: boolean;
         panel?: HTMLDivElement | null;
     } = $props();
 
@@ -77,7 +78,7 @@
                         <PlayerTitle {metaData} {season} {episode} />
                     {/if}
                 </div>
-                {#if !clipping}
+                {#if !panelOpen}
                     <div class="pointer-events-auto shrink-0">
                         <PlayerOverlays
                             {skipLabel}

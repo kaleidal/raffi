@@ -2,6 +2,7 @@
     import type { Chapter } from "../../../pages/player/types";
     import type { SeekPreview } from "../../../lib/media/preview/seekPreview";
     import type { TimeRange } from "../seek/seekTrack";
+    import type { TrackOptions } from "../tracks/types";
 
     export type PlayerControlsProps = {
         isPlaying: boolean;
@@ -15,8 +16,8 @@
         visible: boolean;
         videoSrc?: string | null;
         canDownload: boolean;
-        currentAudioLabel: string;
-        currentSubtitleLabel: string;
+        tracks: TrackOptions;
+        tracksOpen: boolean;
         objectFit: "contain" | "cover";
         togglePlay: () => void;
         onSeekInput: (time: number) => void;
@@ -24,8 +25,7 @@
         onVolumeChange: (volume: number) => void;
         toggleFullscreen: () => void;
         toggleObjectFit: () => void;
-        onAudioClick: () => void;
-        onSubtitleClick: () => void;
+        onTracksOpenChange: (open: boolean) => void;
         onClipEditorOpenChange?: (open: boolean) => void;
         pinned?: boolean;
         onTogglePin?: () => void;
@@ -34,13 +34,15 @@
 
 <script lang="ts">
     import type { Snippet } from "svelte";
-    import { AudioLines, Download, Maximize, Pin, PinOff, Scissors, Subtitles, ZoomIn, ZoomOut } from "@lucide/svelte";
+    import { Download, Maximize, Pin, PinOff, Scissors, Subtitles, ZoomIn, ZoomOut } from "@lucide/svelte";
     import { isAndroidPlatform } from "../../../lib/shell/platform";
     import { formatTime } from "../../../lib/utils/time";
     import { persistShowRemaining, readShowRemaining } from "../../../pages/player/controls/playerPreferences";
     import ClipEditor from "../clip/ClipEditor.svelte";
     import PlayPauseIcon from "../PlayPauseIcon.svelte";
     import SeekBar from "../seek/SeekBar.svelte";
+    import TrackPanel from "../tracks/TrackPanel.svelte";
+    import { TRACK_PANEL_ID } from "../tracks/types";
     import PlayerButton from "./PlayerButton.svelte";
     import VolumeControl from "./VolumeControl.svelte";
 
@@ -56,8 +58,8 @@
         visible,
         videoSrc = null,
         canDownload,
-        currentAudioLabel,
-        currentSubtitleLabel,
+        tracks,
+        tracksOpen,
         objectFit,
         togglePlay,
         onSeekInput,
@@ -65,8 +67,7 @@
         onVolumeChange,
         toggleFullscreen,
         toggleObjectFit,
-        onAudioClick,
-        onSubtitleClick,
+        onTracksOpenChange,
         onClipEditorOpenChange = () => {},
         pinned = false,
         onTogglePin,
@@ -101,7 +102,12 @@
         onClose={() => setClipEditorOpen(false)}
     />
 {:else}
-    <div class="flex w-full flex-col gap-[clamp(4px,0.5vw,10px)]">
+    <div class="relative flex w-full flex-col gap-[clamp(4px,0.5vw,10px)]">
+        {#if tracksOpen}
+            <div class="absolute right-0 bottom-full z-10 mb-[clamp(12px,1vw,18px)]">
+                <TrackPanel options={tracks} onClose={() => onTracksOpenChange(false)} />
+            </div>
+        {/if}
         <div class="flex items-center gap-[clamp(12px,1vw,20px)]">
             <span class="player-time text-left font-medium text-ink/80 tabular-nums">
                 {formatTime(displayedTime)}
@@ -146,10 +152,12 @@
             </div>
 
             <div class="player-actions flex min-w-0 items-center gap-[clamp(2px,0.3vw,6px)]">
-                <PlayerButton label="Audio: {currentAudioLabel || 'Default'}" onclick={onAudioClick}>
-                    <AudioLines strokeWidth={2} />
-                </PlayerButton>
-                <PlayerButton label="Subtitles: {currentSubtitleLabel || 'Off'}" onclick={onSubtitleClick}>
+                <PlayerButton
+                    label="Audio and subtitles"
+                    controls={TRACK_PANEL_ID}
+                    active={tracksOpen}
+                    onclick={() => onTracksOpenChange(!tracksOpen)}
+                >
                     <Subtitles strokeWidth={2} />
                 </PlayerButton>
                 {#if !isAndroidPlatform}

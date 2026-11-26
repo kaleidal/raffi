@@ -1,22 +1,19 @@
 import { get } from "svelte/store";
 import {
 	audioTracks,
-	currentAudioLabel,
-	currentSubtitleLabel,
 	errorDetails,
 	errorMessage,
 	loading,
 	loadingStage,
-	showAudioSelection,
 	showError,
-	showSubtitleSelection,
 	subtitleTracks,
 } from "../playerState";
 import * as Session from "../session/videoSession";
 import * as Subtitles from "../subtitles/subtitles";
 import { rememberSubtitleChoice } from "../subtitles/subtitlePreference";
 
-export const createPlayerModalHandlers = ({
+/** What the player's track panel and error screen do. */
+export const createPlayerActions = ({
 	getVideoElem,
 	getCueLinePercent,
 	getVideoSrc,
@@ -34,7 +31,6 @@ export const createPlayerModalHandlers = ({
 	} | null;
 }) => {
 	const onAudioSelect = (detail: unknown) => {
-
 		const videoElem = getVideoElem();
 		if (!videoElem) return;
 
@@ -44,7 +40,6 @@ export const createPlayerModalHandlers = ({
 			videoElem,
 			{
 				setAudioTracks: audioTracks.set,
-				setCurrentAudioLabel: currentAudioLabel.set,
 				setLoading: loading.set,
 				setLoadingStage: loadingStage.set,
 			},
@@ -53,7 +48,6 @@ export const createPlayerModalHandlers = ({
 	};
 
 	const onSubtitleSelect = (detail: unknown) => {
-
 		const videoElem = getVideoElem();
 		if (!videoElem) return;
 
@@ -65,7 +59,6 @@ export const createPlayerModalHandlers = ({
 				selected: entry.id === track.id,
 			})),
 		);
-		currentSubtitleLabel.set(track.label);
 		void Subtitles.handleSubtitleSelect(
 			track,
 			videoElem,
@@ -84,7 +77,6 @@ export const createPlayerModalHandlers = ({
 			...tracks.map((entry) => ({ ...entry, selected: false })),
 			{ ...track, selected: true },
 		]);
-		currentSubtitleLabel.set(track.label);
 		await Subtitles.handleSubtitleSelect(
 			track,
 			videoElem,
@@ -92,8 +84,8 @@ export const createPlayerModalHandlers = ({
 		);
 	};
 
-	const onSubtitleDelayChange = () => {
-
+	const onSubtitleDelayChange = (seconds: number) => {
+		Subtitles.setSubtitleDelaySeconds(seconds);
 		const selected = get(subtitleTracks).find((track) => track.selected);
 		if (!selected || selected.id === "off") return;
 
@@ -122,17 +114,13 @@ export const createPlayerModalHandlers = ({
 		void handleClose();
 	};
 
-	const onCloseAudio = () => showAudioSelection.set(false);
-	const onCloseSubtitle = () => showSubtitleSelection.set(false);
-
 	return {
 		onAudioSelect,
 		onSubtitleSelect,
 		onSubtitleUpload,
 		onSubtitleDelayChange,
+		subtitleDelay: Subtitles.getSubtitleDelaySeconds,
 		onErrorRetry,
 		onErrorBack,
-		onCloseAudio,
-		onCloseSubtitle,
 	};
 };

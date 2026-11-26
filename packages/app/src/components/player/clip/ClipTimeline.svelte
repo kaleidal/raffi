@@ -2,7 +2,7 @@
     import { untrack } from "svelte";
     import { pointerScrub, type ScrubPosition } from "../../common/controls/pointerScrub";
     import type { SeekPreview } from "../../../lib/media/preview/seekPreview";
-    import { latestPreviewFrame } from "../seek/latestPreviewFrame.svelte";
+    import { restingPreviewFrame } from "../seek/restingPreviewFrame.svelte";
     import SeekPreviewCard from "../seek/SeekPreviewCard.svelte";
     import ClipFilmstrip from "./ClipFilmstrip.svelte";
     import {
@@ -45,7 +45,7 @@
     let grabOffset = 0;
     let anchor = $state({ x: 0, top: 0 });
 
-    const frames = $derived(preview && latestPreviewFrame(preview));
+    const frames = $derived(preview && restingPreviewFrame(preview));
     const percent = (time: number) => clamp(fractionOf(time, view), 0, 1) * 100;
     const startPercent = $derived(percent(range.start));
     const endPercent = $derived(percent(range.end));

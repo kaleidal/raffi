@@ -1,6 +1,7 @@
 <script lang="ts">
     import PlayerChrome from "../../../components/player/chrome/PlayerChrome.svelte";
     import type { PlayerControlsProps } from "../../../components/player/chrome/PlayerControls.svelte";
+    import type { TrackOptions } from "../../../components/player/tracks/types";
     import type { ShowResponse } from "../../../lib/library/types/meta_types";
     import type { Chapter } from "../types";
     import AndroidSeekBar from "./AndroidSeekBar.svelte";
@@ -13,8 +14,6 @@
         season,
         episode,
         chapters = [],
-        audioLabel,
-        subtitleLabel,
         skipLabel,
         hasNextEpisode = false,
         nextEpisodeHighlighted = false,
@@ -28,8 +27,9 @@
         onClose,
         onSkip,
         onNextEpisode,
-        onAudio,
-        onSubtitles,
+        tracks,
+        tracksOpen,
+        onTracksOpenChange,
         onToggleFit,
     }: {
         visible?: boolean;
@@ -38,8 +38,6 @@
         season: number | null;
         episode: number | null;
         chapters?: Chapter[];
-        audioLabel: string;
-        subtitleLabel: string;
         skipLabel: string | null;
         hasNextEpisode?: boolean;
         nextEpisodeHighlighted?: boolean;
@@ -53,8 +51,9 @@
         onClose: () => void;
         onSkip: () => void;
         onNextEpisode: () => void;
-        onAudio: () => void;
-        onSubtitles: () => void;
+        tracks: TrackOptions;
+        tracksOpen: boolean;
+        onTracksOpenChange: (open: boolean) => void;
         onToggleFit: () => void;
     } = $props();
 
@@ -76,8 +75,9 @@
         buffered,
         visible,
         canDownload: false,
-        currentAudioLabel: audioLabel,
-        currentSubtitleLabel: subtitleLabel,
+        tracks,
+        tracksOpen,
+        onTracksOpenChange,
         objectFit: fit,
         togglePlay: onToggle,
         onSeekInput: () => {},
@@ -85,8 +85,6 @@
         onVolumeChange: () => {},
         toggleFullscreen: () => {},
         toggleObjectFit: onToggleFit,
-        onAudioClick: onAudio,
-        onSubtitleClick: onSubtitles,
     });
 
     function handleScrub(time: number | null) {
@@ -106,6 +104,7 @@
     {nextEpisodeHighlighted}
     {onNextEpisode}
     {onClose}
+    panelOpen={tracksOpen}
     bind:panel
     {controls}
 >

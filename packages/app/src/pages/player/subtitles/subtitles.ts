@@ -371,7 +371,7 @@ export async function fetchAddonSubtitles(
                 if (data.subtitles && Array.isArray(data.subtitles)) {
                     const addonTracks = data.subtitles.map((s: any) => ({
                         id: s.id || s.url,
-                        label: `${s.lang} (${addon.manifest.name || "Addon"})`,
+                        label: addon.manifest.name || "Addon",
                         lang: s.lang,
                         url: s.url,
                         selected: false,

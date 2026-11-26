@@ -4,16 +4,19 @@
     let {
         label,
         active = false,
+        controls,
         onclick,
         children,
-    }: { label: string; active?: boolean; onclick: () => void; children: Snippet } = $props();
+    }: { label: string; active?: boolean; controls?: string; onclick: () => void; children: Snippet } = $props();
 </script>
 
 <button
     class="player-button flex shrink-0 cursor-pointer items-center justify-center rounded-full text-ink/80 transition-[background-color,color,scale] duration-150 hover:bg-ink/12 hover:text-ink active:scale-90"
     class:active
     aria-label={label}
-    aria-pressed={active}
+    aria-pressed={controls ? undefined : active}
+    aria-controls={controls}
+    aria-expanded={controls ? active : undefined}
     title={label}
     {onclick}
 >

@@ -52,3 +52,29 @@ const ALIAS_TO_CODE = new Map(
 export const languageCode = (alias: string | null | undefined) => ALIAS_TO_CODE.get(String(alias ?? "").toUpperCase()) ?? null;
 
 export const preferredLanguage = () => languageCode(new Intl.Locale(Intl.DateTimeFormat().resolvedOptions().locale).language) ?? "EN";
+
+/** OpenSubtitles codes that are not language tags. */
+const SUBTITLE_SITE_TAGS: Record<string, string> = {
+    pob: "pt-BR",
+    pb: "pt-BR",
+    zht: "zh-Hant",
+    zhs: "zh-Hans",
+    ze: "zh",
+    spn: "es-ES",
+    spl: "es-419",
+    ea: "es-419",
+};
+
+let displayNames: Intl.DisplayNames | undefined;
+
+/** A language's name in the viewer's own language, from a tag or an ISO 639 code; null when unknown. */
+export function languageName(lang: string | null | undefined) {
+    const tag = lang?.trim().toLowerCase();
+    if (!tag || tag === "und") return null;
+    displayNames ??= new Intl.DisplayNames([Intl.DateTimeFormat().resolvedOptions().locale], { type: "language", fallback: "none" });
+    try {
+        return displayNames.of(SUBTITLE_SITE_TAGS[tag] ?? tag) ?? tag.toUpperCase();
+    } catch {
+        return tag.toUpperCase();
+    }
+}

@@ -28,12 +28,8 @@ export const showNextEpisode = writable(false);
 // Track state
 export const audioTracks = writable<any[]>([]);
 export const subtitleTracks = writable<any[]>([]);
-export const currentAudioLabel = writable("Default");
-export const currentSubtitleLabel = writable("Off");
 
 // UI state
-export const showAudioSelection = writable(false);
-export const showSubtitleSelection = writable(false);
 export const seekFeedback = writable<SeekFeedback | null>(null);
 
 // First-play guidance
@@ -72,10 +68,6 @@ export function resetPlayerState() {
     showNextEpisode.set(false);
     audioTracks.set([]);
     subtitleTracks.set([]);
-    currentAudioLabel.set("Default");
-    currentSubtitleLabel.set("Off");
-    showAudioSelection.set(false);
-    showSubtitleSelection.set(false);
     seekFeedback.set(null);
     showError.set(false);
     errorMessage.set("");

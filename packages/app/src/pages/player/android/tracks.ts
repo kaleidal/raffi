@@ -33,6 +33,3 @@ export function subtitleChoice(track: Track): SubtitleChoice {
 	}
 	return { kind: "embedded", id: String(track.id) };
 }
-
-export const selectedLabel = (tracks: Track[], fallback: string) =>
-	tracks.find((track) => track.selected)?.label ?? fallback;

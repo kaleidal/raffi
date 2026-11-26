@@ -14,7 +14,7 @@ import {
 } from "../registerCoders";
 import type { EmbeddedSubtitleTrack } from "../subtitles/embeddedSubtitles";
 import { acquireStreamInput, type StreamInput } from "./streamInput";
-import { languageCode, preferredLanguage } from "../../utils/languages";
+import { languageCode, languageName, preferredLanguage } from "../../utils/languages";
 import {
 	codecsCompatible,
 	isMseFriendlyVideo,
@@ -61,55 +61,6 @@ export type ProbedStream = {
 	subtitleTracks: EmbeddedSubtitleTrack[];
 };
 
-const LANGUAGE_LABELS: Record<string, string> = {
-	eng: "English",
-	en: "English",
-	ita: "Italian",
-	it: "Italian",
-	spa: "Spanish",
-	es: "Spanish",
-	fre: "French",
-	fra: "French",
-	fr: "French",
-	ger: "German",
-	deu: "German",
-	de: "German",
-	por: "Portuguese",
-	pt: "Portuguese",
-	jpn: "Japanese",
-	ja: "Japanese",
-	kor: "Korean",
-	ko: "Korean",
-	chi: "Chinese",
-	zho: "Chinese",
-	zh: "Chinese",
-	rus: "Russian",
-	ru: "Russian",
-	pol: "Polish",
-	pl: "Polish",
-	hun: "Hungarian",
-	hu: "Hungarian",
-	cze: "Czech",
-	ces: "Czech",
-	cs: "Czech",
-	dut: "Dutch",
-	nld: "Dutch",
-	nl: "Dutch",
-	swe: "Swedish",
-	sv: "Swedish",
-	nor: "Norwegian",
-	no: "Norwegian",
-	fin: "Finnish",
-	fi: "Finnish",
-	tur: "Turkish",
-	tr: "Turkish",
-	ara: "Arabic",
-	ar: "Arabic",
-	hin: "Hindi",
-	hi: "Hindi",
-	und: "Unknown",
-};
-
 export function normalizeLang(lang: string | null | undefined): string {
 	const value = (lang || "").trim().toLowerCase();
 	if (!value || value === "und" || value === "null") return "";
@@ -118,14 +69,32 @@ export function normalizeLang(lang: string | null | undefined): string {
 	return short;
 }
 
-export function formatAudioTrackLabel(track: {
-	title?: string | null;
-	language?: string | null;
-	codecName?: string | null;
-	index: number;
-}): string {
-	const lang = normalizeLang(track.language);
-	return lang ? LANGUAGE_LABELS[lang] || lang.toUpperCase() : "Unknown";
+export function formatAudioTrackLabel(track: { language?: string | null }): string {
+	return languageName(track.language) ?? "Unknown";
+}
+
+const CODEC_NAMES: Record<string, string> = {
+	aac: "AAC",
+	ac3: "Dolby Digital",
+	eac3: "Dolby Digital Plus",
+	dts: "DTS",
+	truehd: "Dolby TrueHD",
+	opus: "Opus",
+	flac: "FLAC",
+	mp3: "MP3",
+	vorbis: "Vorbis",
+};
+
+const channelLayout = (channels: number) =>
+	channels === 1 ? "Mono" : channels === 2 ? "Stereo" : `${channels - 1}.1`;
+
+/** What sets an audio track apart besides its language: its name, channel layout and format. */
+export function formatAudioTrackDetail(track: Pick<ProbedAudioTrack, "title" | "language" | "channels" | "codec" | "codecName">) {
+	const codecId = track.codec || normalizeCodecId(track.codecName);
+	const codec = codecId ? CODEC_NAMES[codecId] ?? (codecId.startsWith("pcm") ? "PCM" : codecId.toUpperCase()) : null;
+	const title = track.title?.trim();
+	const named = title && title.toLowerCase() !== languageName(track.language)?.toLowerCase() ? title : null;
+	return [named, track.channels ? channelLayout(track.channels) : null, codec].filter(Boolean).join(" · ");
 }
 
 const speaksLanguage = (track: ProbedAudioTrack, code: string) =>

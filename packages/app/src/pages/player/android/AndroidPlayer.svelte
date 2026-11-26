@@ -2,7 +2,6 @@
     import { onDestroy, tick, untrack } from "svelte";
     import { get } from "svelte/store";
     import ShapeLoader from "../../../components/common/loading/ShapeLoader.svelte";
-    import TrackSelectionModal from "../../../components/player/TrackSelectionModal.svelte";
     import { flushPendingLibraryProgress } from "../../../lib/db/db";
     import type { ShowResponse } from "../../../lib/library/types/meta_types";
     import { localMode } from "../../../lib/stores/authStore";
@@ -27,7 +26,7 @@
     import type AndroidSeekBar from "./AndroidSeekBar.svelte";
     import { createNativePlayback, explainNativeError, type NativePlaybackState } from "./nativePlayback";
     import { createLimboTorrentStream } from "./limboTorrent";
-    import { audioTrackOptions, selectedLabel, subtitleChoice, subtitleTrackOptions } from "./tracks";
+    import { audioTrackOptions, subtitleChoice, subtitleTrackOptions } from "./tracks";
     import { findSubtitleInLanguage, readSubtitlePreference, rememberSubtitleChoice } from "../subtitles/subtitlePreference";
 
     let {
@@ -69,7 +68,7 @@
     let lastAutoSkip: number | null = null;
     let controlsVisible = $state(false);
     let scrubbing = false;
-    let trackModal = $state<"audio" | "subtitles" | null>(null);
+    let tracksOpen = $state(false);
     let fit = $state<"contain" | "cover">("contain");
     let hideTimer: ReturnType<typeof setTimeout> | null = null;
     let seekBar = $state<AndroidSeekBar | null>(null);
@@ -292,7 +291,7 @@
     function scheduleHide() {
         if (hideTimer) clearTimeout(hideTimer);
         hideTimer = setTimeout(() => {
-            if (playback.current().playWhenReady && !scrubbing && !trackModal) hideControls();
+            if (playback.current().playWhenReady && !scrubbing && !tracksOpen) hideControls();
             else scheduleHide();
         }, CONTROLS_HIDE_MS);
     }
@@ -368,7 +367,7 @@
     }
 
     function claimKey(event: KeyboardEvent) {
-        if (trackModal || blockingError || !hasStarted) return false;
+        if (tracksOpen || blockingError || !hasStarted) return false;
         const { position } = playback.current();
         switch (event.key) {
             case "MediaPlayPause":
@@ -397,7 +396,7 @@
     const releaseKeys = claimKeys(claimKey);
 
     const removeBackHandler = onBack(() => {
-        if (trackModal) trackModal = null;
+        if (tracksOpen) tracksOpen = false;
         else if (controlsVisible && hasStarted && !blockingError) hideControls();
         else close();
         return true;
@@ -441,8 +440,6 @@
             {season}
             {episode}
             chapters={chapterMarkers}
-            audioLabel={selectedLabel(audioOptions, "Audio")}
-            subtitleLabel={selectedLabel(subtitleOptions, "Off")}
             {skipLabel}
             {hasNextEpisode}
             {nextEpisodeHighlighted}
@@ -453,8 +450,14 @@
             onClose={close}
             onSkip={skipChapter}
             onNextEpisode={() => void playNextEpisode()}
-            onAudio={() => (trackModal = "audio")}
-            onSubtitles={() => (trackModal = "subtitles")}
+            tracks={{
+                audio: audioOptions,
+                subtitles: subtitleOptions,
+                onSelectAudio: (track) => playback.selectAudio(String(track.id)),
+                onSelectSubtitle: selectSubtitle,
+            }}
+            {tracksOpen}
+            onTracksOpenChange={(open) => (tracksOpen = open)}
             onToggleFit={toggleFit}
         />
     {/if}
@@ -476,22 +479,3 @@
     onRetry={retry}
     onBack={returnToStreams}
 />
-
-{#if trackModal === "audio"}
-    <TrackSelectionModal
-        title="Audio"
-        kind="audio"
-        tracks={audioOptions}
-        onSelect={(track) => playback.selectAudio(String(track.id))}
-        onClose={() => (trackModal = null)}
-    />
-{:else if trackModal === "subtitles"}
-    <TrackSelectionModal
-        title="Subtitles"
-        kind="subtitles"
-        tracks={subtitleOptions}
-        subtitleTools={false}
-        onSelect={selectSubtitle}
-        onClose={() => (trackModal = null)}
-    />
-{/if}

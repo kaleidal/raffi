@@ -11,7 +11,6 @@ import {
     loadingDetails,
     playbackBuffering,
     showCanvas,
-    currentSubtitleLabel,
     showError,
     errorMessage,
     errorDetails,
@@ -59,7 +58,6 @@ export const enableDefaultSubtitles = (
         cueLinePercent,
         setSubtitleTracks: (updater: (tracks: Track[]) => Track[]) =>
             subtitleTracks.update(updater),
-        setCurrentSubtitleLabel: currentSubtitleLabel.set,
         handleSubtitleSelect: Subtitles.handleSubtitleSelect,
     });
 

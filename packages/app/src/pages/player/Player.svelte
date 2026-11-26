@@ -9,7 +9,7 @@
     import ShapeLoader from "../../components/common/loading/ShapeLoader.svelte";
     import PlayerVideo from "./components/PlayerVideo.svelte";
     import PlayerLoadingScreen from "./components/PlayerLoadingScreen.svelte";
-    import PlayerModals from "./components/PlayerModals.svelte";
+    import PlayerErrorModal from "../../components/player/modals/PlayerErrorModal.svelte";
     import { flushPendingLibraryProgress } from "../../lib/db/db";
     import { miniPlayerOnMinimize } from "../../lib/stores/playbackPreferences";
     import { openExternal } from "../../lib/shell/openExternal";
@@ -29,14 +29,10 @@
         volume,
         controlsVisible,
         showSkipIntro,
-        currentAudioLabel,
-        currentSubtitleLabel,
         seekFeedback,
         showError,
         errorMessage,
         errorDetails,
-        showAudioSelection,
-        showSubtitleSelection,
         audioTracks,
         subtitleTracks,
         objectFit,
@@ -57,7 +53,7 @@
     import { createSeekTimeline } from "./controls/seekTimeline.svelte";
     import { hasNextEpisode as seriesHasNextEpisode } from "./controls/playerNextEpisode";
     import { createNextEpisodeFlow } from "./controls/nextEpisodeFlow";
-    import { createPlayerModalHandlers } from "./controls/playerModalHandlers";
+    import { createPlayerActions } from "./controls/playerActions";
     import { isSamePlaybackSource } from "./session/prefetch/nextEpisodePrefetch";
     import { captureBackdrop, episodeArtwork, type LoadingBackdrop } from "./session/loadingBackdrop";
     import { createCuePositioning } from "./subtitles/cuePositioning.svelte";
@@ -91,6 +87,7 @@
     let loadingBackdrop = $state.raw<LoadingBackdrop>({ src: null, mode: "art" });
     let pictureAspect = $state<number | null>(null);
     let clipEditorOpen = $state(false);
+    let tracksOpen = $state(false);
     let controlsPinned = $state(readControlsPinned());
     let playPauseFeedback = $state.raw<{ type: "play" | "pause"; id: number } | null>(null);
     let playPauseFeedbackTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -211,7 +208,7 @@
     const healthPromptVisible = playbackHealth.promptVisible;
     const availabilityNoticeVisible = session.preflight.noticeVisible;
 
-    const modalHandlers = createPlayerModalHandlers({
+    const actions = createPlayerActions({
         getVideoElem: () => media.video,
         getCueLinePercent: () => cues.linePercent,
         getVideoSrc: () => videoSrc,
@@ -282,8 +279,19 @@
                   visible: $controlsVisible,
                   videoSrc,
                   canDownload: Boolean(metaData),
-                  currentAudioLabel: $currentAudioLabel,
-                  currentSubtitleLabel: $currentSubtitleLabel,
+                  tracks: {
+                      audio: $audioTracks,
+                      subtitles: $subtitleTracks,
+                      onSelectAudio: actions.onAudioSelect,
+                      onSelectSubtitle: actions.onSubtitleSelect,
+                      subtitleTools: {
+                          delay: actions.subtitleDelay(),
+                          onDelayChange: actions.onSubtitleDelayChange,
+                          onUpload: actions.onSubtitleUpload,
+                      },
+                  },
+                  tracksOpen,
+                  onTracksOpenChange: (open) => (tracksOpen = open),
                   objectFit: $objectFit,
                   togglePlay: togglePlayWithFeedback,
                   onSeekInput: (time) => controlsManager.onSeekInput(time, pendingSeek.set),
@@ -291,8 +299,6 @@
                   onVolumeChange: (value) => controlsManager.onVolumeChange(value, volume.set),
                   toggleFullscreen: () => void controlsManager.toggleFullscreen(),
                   toggleObjectFit: () => Controls.switchObjectFit(media.video, media.canvas),
-                  onAudioClick: () => showAudioSelection.set(true),
-                  onSubtitleClick: () => showSubtitleSelection.set(true),
                   onClipEditorOpenChange: (open) => (clipEditorOpen = open),
                   pinned: controlsPinned,
                   onTogglePin: () => persistControlsPinned((controlsPinned = !controlsPinned)),
@@ -304,7 +310,7 @@
     });
 
     $effect(() => {
-        controlsManager.setPinned(clipEditorOpen || controlsPinned, controlsVisible.set);
+        controlsManager.setPinned(clipEditorOpen || tracksOpen || controlsPinned, controlsVisible.set);
     });
 
     $effect(() => {
@@ -446,8 +452,8 @@
         showError={$showError && !hasStarted && !miniPlayer.active}
         errorMessage={$errorMessage}
         errorDetails={$errorDetails}
-        onRetry={() => session.retry(modalHandlers.onErrorRetry)}
-        onBack={modalHandlers.onErrorBack}
+        onRetry={() => session.retry(actions.onErrorRetry)}
+        onBack={actions.onErrorBack}
         onDownloadDesktop={() => void openExternal(DESKTOP_DOWNLOAD_URL)}
         showNotice={$availabilityNoticeVisible && !miniPlayer.active}
         noticeTitle="Not available on demand"
@@ -483,28 +489,19 @@
             onKeepWatching={playbackHealth.dismiss}
             onClose={handleClose}
             {pictureAspect}
-            clipping={clipEditorOpen}
+            panelOpen={clipEditorOpen || tracksOpen}
             bind:panel={controlsPanel}
             controls={chromeControls}
         />
     {/if}
 
-    <PlayerModals
-        showAudioSelection={$showAudioSelection}
-        showSubtitleSelection={$showSubtitleSelection}
-        showError={$showError && (hasStarted || miniPlayer.active)}
-        audioTracks={$audioTracks}
-        subtitleTracks={$subtitleTracks}
-        errorMessage={$errorMessage}
-        errorDetails={$errorDetails}
-        onAudioSelect={modalHandlers.onAudioSelect}
-        onSubtitleSelect={modalHandlers.onSubtitleSelect}
-        onSubtitleUpload={modalHandlers.onSubtitleUpload}
-        onSubtitleDelayChange={modalHandlers.onSubtitleDelayChange}
-        onErrorRetry={modalHandlers.onErrorRetry}
-        onErrorBack={modalHandlers.onErrorBack}
-        onDownloadDesktop={() => void openExternal(DESKTOP_DOWNLOAD_URL)}
-        onCloseAudio={modalHandlers.onCloseAudio}
-        onCloseSubtitle={modalHandlers.onCloseSubtitle}
-    />
+    {#if $showError && (hasStarted || miniPlayer.active)}
+        <PlayerErrorModal
+            errorMessage={$errorMessage}
+            errorDetails={$errorDetails}
+            onRetry={actions.onErrorRetry}
+            onBack={actions.onErrorBack}
+            onDownloadDesktop={() => void openExternal(DESKTOP_DOWNLOAD_URL)}
+        />
+    {/if}
 </div>
