@@ -1,15 +1,16 @@
 <script lang="ts">
-    export let label: string = "";
-    export let onClick: () => void = () => {};
+    import type { Snippet } from "svelte";
+
+    let { label = "", onClick, children }: { label?: string; onClick: () => void; children: Snippet } = $props();
 </script>
 
 <button
     class="icon-button flex w-auto cursor-pointer flex-row items-center rounded-full bg-ink/12 text-ink backdrop-blur-md duration-200 ease-out hover:bg-ink/20 active:scale-95"
-    on:click={onClick}
+    onclick={onClick}
     aria-label={label}
     title={label}
 >
-    <slot />
+    {@render children()}
 </button>
 
 <style>

@@ -5,27 +5,40 @@
     import type { LiveChannel } from "../../../lib/live/types";
     import { remToPx, trackViewport, visibleRows } from "../guide/virtualRows";
 
-    export let channels: LiveChannel[];
-    export let now: number;
-    export let onPlay: (channel: LiveChannel) => void;
-    export let onMenu: (event: MouseEvent, channel: LiveChannel) => void;
-    export let onHighlight: (channel: LiveChannel) => void;
+    let {
+        channels,
+        now,
+        onPlay,
+        onMenu,
+        onHighlight,
+    }: {
+        channels: LiveChannel[];
+        now: number;
+        onPlay: (channel: LiveChannel) => void;
+        onMenu: (event: MouseEvent, channel: LiveChannel) => void;
+        onHighlight: (channel: LiveChannel) => void;
+    } = $props();
 
     let scroller: HTMLDivElement;
     let width = 0;
-    let gap = 0;
-    let columns = 1;
-    let rowHeight = 0;
-    let scrollTop = 0;
-    let viewportHeight = 0;
+    let gap = $state(0);
+    let columns = $state(1);
+    let rowHeight = $state(0);
+    let scrollTop = $state(0);
+    let viewportHeight = $state(0);
 
-    $: rowCount = Math.ceil(channels.length / columns);
-    $: ({ first, last } = visibleRows(scrollTop, viewportHeight, rowHeight, rowCount));
-    $: rows = Array.from({ length: Math.max(0, last - first) }, (_, offset) => {
-        const row = first + offset;
-        return { row, channels: channels.slice(row * columns, (row + 1) * columns) };
+    const rowCount = $derived(Math.ceil(channels.length / columns));
+    const { first, last } = $derived(visibleRows(scrollTop, viewportHeight, rowHeight, rowCount));
+    const rows = $derived(
+        Array.from({ length: Math.max(0, last - first) }, (_, offset) => {
+            const row = first + offset;
+            return { row, channels: channels.slice(row * columns, (row + 1) * columns) };
+        }),
+    );
+
+    $effect(() => {
+        requestProgrammes(rows.flatMap((row) => row.channels.map((channel) => channel.guideId)));
     });
-    $: requestProgrammes(rows.flatMap((row) => row.channels.map((channel) => channel.guideId)));
 
     function measure() {
         width = scroller.clientWidth;

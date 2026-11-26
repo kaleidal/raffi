@@ -2,10 +2,15 @@
     import type { StremioImportPreviewItem } from "../../../../lib/import/stremioLibrary/types";
     import CheckMark from "./CheckMark.svelte";
 
-    export let items: StremioImportPreviewItem[];
-    export let selected: string[];
+    let {
+        items,
+        selected = $bindable(),
+    }: {
+        items: StremioImportPreviewItem[];
+        selected: string[];
+    } = $props();
 
-    $: allSelected = items.length > 0 && selected.length === items.length;
+    const allSelected = $derived(items.length > 0 && selected.length === items.length);
 
     const isSelected = (imdbId: string) => selected.includes(imdbId);
 
@@ -32,7 +37,7 @@
         <button
             type="button"
             class="text-xs text-ink/50 hover:text-ink/80 transition-colors cursor-pointer"
-            on:click={() => setAll(!allSelected)}
+            onclick={() => setAll(!allSelected)}
         >
             {allSelected ? "Clear all" : "Select all"}
         </button>
@@ -46,7 +51,7 @@
                         type="checkbox"
                         class="sr-only"
                         checked={checked}
-                        on:change={() => toggle(item.imdbId)}
+                        onchange={() => toggle(item.imdbId)}
                     />
                     <CheckMark {checked} />
                     <span class="min-w-0 flex-1">

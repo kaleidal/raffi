@@ -40,16 +40,16 @@
 		{ value: HOME_SEARCH_BAR_POSITION_BOTTOM, label: "Bottom" },
 	];
 
-	let searchBarPosition: HomeSearchBarPosition = getStoredHomeSearchBarPosition();
-	let heroSource = getStoredHomeHeroSource();
-	let heroCatalogs: HeroCatalogSourceOption[] = [];
-	let traktAvailable = false;
+	let searchBarPosition = $state<HomeSearchBarPosition>(getStoredHomeSearchBarPosition());
+	let heroSource = $state(getStoredHomeHeroSource());
+	let heroCatalogs = $state.raw<HeroCatalogSourceOption[]>([]);
+	let traktAvailable = $state(false);
 
-	$: heroOptions = [
+	const heroOptions = $derived([
 		{ value: HOME_HERO_SOURCE_CINEMETA, label: "Cinemeta" },
 		...(traktAvailable ? [{ value: HOME_HERO_SOURCE_TRAKT_RECOMMENDATIONS, label: "Trakt recommendations" }] : []),
 		...heroCatalogs.map((option) => ({ value: option.id, label: option.label })),
-	];
+	]);
 
 	onMount(async () => {
 		const [addons, trakt] = await Promise.all([
@@ -91,7 +91,7 @@
 	<SettingRow title="Custom themes" description="Stylesheets in this folder load on top of Raffi's look.">
 		<button
 			class={secondaryButton}
-			on:click={openThemesFolder}
+			onclick={openThemesFolder}
 		>
 			Open folder
 		</button>
@@ -110,6 +110,6 @@
 		options={heroOptions}
 		buttonClass={selectClass}
 		align="right"
-		on:change={(event) => setHeroSource(event.detail.value)}
+		onChange={setHeroSource}
 	/>
 </SettingRow>

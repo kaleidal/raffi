@@ -1,6 +1,5 @@
 <script lang="ts">
-    export let size = "40px";
-    export let color = "currentColor";
+    let { size = "40px", color = "currentColor" }: { size?: string; color?: string } = $props();
 </script>
 
 <div class="spinner" style="--size: {size}; --color: {color}">

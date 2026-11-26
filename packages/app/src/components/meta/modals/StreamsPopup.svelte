@@ -7,7 +7,7 @@
     import { failedStreamKeys, streamFailureMessage } from "../../../pages/meta/metaState";
     import type { Addon } from "../../../lib/db/db";
     import type { ShowResponse } from "../../../lib/library/types/meta_types";
-    import type { ProgressItem, ProgressMap } from "../../../pages/meta/types";
+    import type { ProgressMap } from "../../../pages/meta/types";
     import { allowTorrenting, isTorrentSource } from "../../../lib/stores/torrenting";
     import EpisodeHeader from "./streams/EpisodeHeader.svelte";
     import StreamsToolbar from "./streams/StreamsToolbar.svelte";
@@ -26,7 +26,6 @@
     import type { EnrichedStream } from "../../../lib/streams/ranking/types";
     import { computeProgressDetails, getProgressEntry, getReleaseInfo } from "./streams/episodeDetails";
     import type {
-        EpisodeProgressDetails,
         ResolutionFilter,
         StreamSortOption,
         VideoCodecFilter,
@@ -35,32 +34,40 @@
         SizeFilter,
     } from "./streams/types";
 
-    export let streamsPopupVisible = false;
-    export let addons: Addon[] = [];
-    export let selectedAddon: string;
-    export let loadingStreams = false;
-    export let streams: any[] = [];
-    export let metaData: ShowResponse | null = null;
-    export let selectedEpisode: any = null;
-    export let progressMap: ProgressMap | null = null;
-    export let progressSignature: string | number | null = null;
+    let {
+        streamsPopupVisible = $bindable(false),
+        addons = [],
+        selectedAddon = $bindable(),
+        loadingStreams = false,
+        streams = [],
+        metaData = null,
+        selectedEpisode = null,
+        progressMap = null,
+        progressSignature = null,
+        onClose = () => {},
+        onStreamClick = () => {},
+    }: {
+        streamsPopupVisible?: boolean;
+        addons?: Addon[];
+        selectedAddon: string;
+        loadingStreams?: boolean;
+        streams?: any[];
+        metaData?: ShowResponse | null;
+        selectedEpisode?: any;
+        progressMap?: ProgressMap | null;
+        progressSignature?: string | number | null;
+        onClose?: () => void;
+        onStreamClick?: (stream: any) => void;
+    } = $props();
 
-    export let onClose: () => void = () => {};
-    export let onStreamClick: (stream: any) => void = () => {};
-
-
-    let resolutionFilter: ResolutionFilter = "all";
-    let audioLanguageFilter = "all";
-    let sortOption: StreamSortOption = "recommended";
-    let filtersCollapsed = true;
-    let videoCodecFilter: VideoCodecFilter = "all";
-    let dynamicRangeFilter: DynamicRangeFilter = "all";
-    let availabilityFilter: AvailabilityFilter = "all";
-    let sizeFilter: SizeFilter = "all";
-    let wasOpen = false;
-
-    let episodeProgressEntry: ProgressItem | null = null;
-    let progressDetails: EpisodeProgressDetails | null = null;
+    let resolutionFilter = $state<ResolutionFilter>("all");
+    let audioLanguageFilter = $state("all");
+    let sortOption = $state<StreamSortOption>("recommended");
+    let filtersCollapsed = $state(true);
+    let videoCodecFilter = $state<VideoCodecFilter>("all");
+    let dynamicRangeFilter = $state<DynamicRangeFilter>("all");
+    let availabilityFilter = $state<AvailabilityFilter>("all");
+    let sizeFilter = $state<SizeFilter>("all");
 
     function resetFilters() {
         resolutionFilter = "all";
@@ -121,8 +128,7 @@
         onStreamClick(withAvailabilityHint(item));
     }
 
-
-    $: filterState = {
+    const filterState = $derived({
         resolutionFilter,
         audioLanguageFilter,
         sortOption,
@@ -130,70 +136,72 @@
         dynamicRangeFilter,
         availabilityFilter,
         sizeFilter,
-    };
+    });
 
-    $: filteredAddons = getFilteredAddons(addons);
-    $: visibleStreams = $allowTorrenting
-        ? streams
-        : streams.filter((stream) => !isTorrentSource(stream));
-    $: enrichedStreams = buildEnrichedStreams(visibleStreams, $failedStreamKeys);
-    $: audioLanguageFilterOptions = getAudioLanguageFilterOptions(enrichedStreams);
-    $: availableFilterOptions = getAvailableStreamFilterOptions(enrichedStreams);
-    $: if (audioLanguageFilter !== "all" && !audioLanguageFilterOptions.includes(audioLanguageFilter)) {
-        audioLanguageFilter = "all";
-    }
-    $: if (!availableFilterOptions.resolutions.some((option) => option.value === resolutionFilter)) {
-        resolutionFilter = "all";
-    }
-    $: if (!availableFilterOptions.codecs.some((option) => option.value === videoCodecFilter)) {
-        videoCodecFilter = "all";
-    }
-    $: if (!availableFilterOptions.dynamicRanges.some((option) => option.value === dynamicRangeFilter)) {
-        dynamicRangeFilter = "all";
-    }
-    $: if (!availableFilterOptions.availability.some((option) => option.value === availabilityFilter)) {
-        availabilityFilter = "all";
-    }
-    $: if (!availableFilterOptions.sizes.some((option) => option.value === sizeFilter)) {
-        sizeFilter = "all";
-    }
+    const filteredAddons = $derived(getFilteredAddons(addons));
+    const visibleStreams = $derived(
+        $allowTorrenting
+            ? streams
+            : streams.filter((stream) => !isTorrentSource(stream)),
+    );
+    const enrichedStreams = $derived(buildEnrichedStreams(visibleStreams, $failedStreamKeys));
+    const audioLanguageFilterOptions = $derived(getAudioLanguageFilterOptions(enrichedStreams));
+    const availableFilterOptions = $derived(getAvailableStreamFilterOptions(enrichedStreams));
+
+    $effect.pre(() => {
+        if (audioLanguageFilter !== "all" && !audioLanguageFilterOptions.includes(audioLanguageFilter)) {
+            audioLanguageFilter = "all";
+        }
+        if (!availableFilterOptions.resolutions.some((option) => option.value === resolutionFilter)) {
+            resolutionFilter = "all";
+        }
+        if (!availableFilterOptions.codecs.some((option) => option.value === videoCodecFilter)) {
+            videoCodecFilter = "all";
+        }
+        if (!availableFilterOptions.dynamicRanges.some((option) => option.value === dynamicRangeFilter)) {
+            dynamicRangeFilter = "all";
+        }
+        if (!availableFilterOptions.availability.some((option) => option.value === availabilityFilter)) {
+            availabilityFilter = "all";
+        }
+        if (!availableFilterOptions.sizes.some((option) => option.value === sizeFilter)) {
+            sizeFilter = "all";
+        }
+    });
 
     const ranking = rankingContext();
 
-    $: filteredStreams = applyStreamFilters(enrichedStreams, filterState, ranking);
-    $: ({ localFilteredStreams, addonFilteredStreams } = splitStreamsBySource(filteredStreams));
-    $: bestStream = pickBestStream(filteredStreams, ranking) ?? filteredStreams.find((item) => !item.isFailed) ?? null;
-    $: hasDirectStream = visibleStreams.some((stream) => stream?.raffiSource === "direct");
-    $: showAddonSetupGuide =
+    const filteredStreams = $derived(applyStreamFilters(enrichedStreams, filterState, ranking));
+    const { localFilteredStreams, addonFilteredStreams } = $derived(splitStreamsBySource(filteredStreams));
+    const bestStream = $derived(
+        pickBestStream(filteredStreams, ranking) ?? filteredStreams.find((item) => !item.isFailed) ?? null,
+    );
+    const hasDirectStream = $derived(visibleStreams.some((stream) => stream?.raffiSource === "direct"));
+    const showAddonSetupGuide = $derived(
         visibleStreams.length === 0 &&
-        filteredAddons.length === 0 &&
-        !$streamFailureMessage?.toLowerCase().includes("direct link");
-
-    $: releaseInfo = getReleaseInfo(
-        selectedEpisode?.released ||
-            selectedEpisode?.firstAired ||
-            metaData?.meta?.released ||
-            null,
+            filteredAddons.length === 0 &&
+            !$streamFailureMessage?.toLowerCase().includes("direct link"),
     );
 
-    $: progressSignature;
-    $: episodeProgressEntry = getProgressEntry(
-        progressMap,
-        streamsPopupVisible,
-        selectedEpisode,
-        metaData,
+    const releaseInfo = $derived(
+        getReleaseInfo(
+            selectedEpisode?.released ||
+                selectedEpisode?.firstAired ||
+                metaData?.meta?.released ||
+                null,
+        ),
     );
-    $: progressDetails = computeProgressDetails(episodeProgressEntry);
 
-    $: if (streamsPopupVisible && !wasOpen) {
-        filtersCollapsed = true;
-        wasOpen = true;
-    }
+    const progressDetails = $derived.by(() => {
+        void progressSignature;
+        return computeProgressDetails(
+            getProgressEntry(progressMap, streamsPopupVisible, selectedEpisode, metaData),
+        );
+    });
 
-    $: if (!streamsPopupVisible && wasOpen) {
-        wasOpen = false;
-    }
-
+    $effect.pre(() => {
+        if (streamsPopupVisible) filtersCollapsed = true;
+    });
 </script>
 
 {#if streamsPopupVisible}
@@ -202,8 +210,8 @@
         use:lockPageScroll
         class="fixed inset-0 z-50 bg-canvas/35"
         transition:fade={{ duration: 200 }}
-        on:click|self={close}
-        on:keydown={(e) => e.key === "Escape" && close()}
+        onclick={(event) => event.target === event.currentTarget && close()}
+        onkeydown={(e) => e.key === "Escape" && close()}
         role="presentation"
     >
         <div
@@ -217,7 +225,7 @@
                 <EpisodeHeader {selectedEpisode} {metaData} {releaseInfo} {progressDetails} />
                 <button
                     class="-mr-2 shrink-0 cursor-pointer rounded-full p-2 text-ink/50 transition-colors hover:bg-ink/8 hover:text-ink"
-                    on:click={close}
+                    onclick={close}
                     aria-label="Close streams"
                 >
                     <X size={24} strokeWidth={2} />
@@ -232,7 +240,7 @@
                 <button
                     data-tv-autofocus
                     class="flex w-full cursor-pointer items-center gap-4 rounded-full bg-accent px-6 py-3.5 text-left text-on-accent transition-colors hover:bg-accent/85"
-                    on:click={() => bestStream && handleStreamClick(bestStream)}
+                    onclick={() => bestStream && handleStreamClick(bestStream)}
                 >
                     <Play size={22} strokeWidth={2.5} fill="currentColor" />
                     <span class="font-semibold">Play</span>
@@ -250,7 +258,7 @@
                             class="shrink-0 cursor-pointer rounded-full px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors {selectedAddon === addon.transport_url
                                 ? 'bg-accent text-on-accent'
                                 : 'bg-ink/8 text-ink/75 hover:bg-ink/14 hover:text-ink'}"
-                            on:click={() => selectAddon(addon)}
+                            onclick={() => selectAddon(addon)}
                         >
                             {addon.manifest.name}
                         </button>

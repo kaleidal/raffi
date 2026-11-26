@@ -4,10 +4,17 @@
     import ChannelLogo from "../components/ChannelLogo.svelte";
     import type { LiveChannel } from "../../../lib/live/types";
 
-    export let channel: LiveChannel | null;
-    export let error: string | null;
-    export let onRetry: () => void;
-    export let onBack: () => void;
+    let {
+        channel,
+        error,
+        onRetry,
+        onBack,
+    }: {
+        channel: LiveChannel | null;
+        error: string | null;
+        onRetry: () => void;
+        onBack: () => void;
+    } = $props();
 </script>
 
 <div class="absolute inset-0 z-40 flex items-center justify-center bg-canvas px-6" transition:fade={{ duration: 200 }}>

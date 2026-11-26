@@ -20,74 +20,89 @@
 	import SettingRow from "../SettingRow.svelte";
 	import { primaryButton, secondaryButton } from "../buttons";
 
-	let traktLoading = false;
-	let traktStatus: TraktStatus | null = null;
-	let traktBusy = false;
-	let traktMessage = "";
-	let traktError = "";
+	let {
+		error,
+		stremioConnectionRevision,
+		onSyncNow,
+		onDownloadData,
+		onImportStremio,
+		onRequestSignOut,
+	}: {
+		error: string;
+		stremioConnectionRevision: number;
+		onSyncNow: () => void | Promise<void>;
+		onDownloadData: () => void;
+		onImportStremio: () => void;
+		onRequestSignOut: () => void;
+	} = $props();
+
+	let traktLoading = $state(false);
+	let traktStatus = $state<TraktStatus | null>(null);
+	let traktBusy = $state(false);
+	let traktMessage = $state("");
+	let traktError = $state("");
 	let traktStatusRequested = false;
-	let traktCode: TraktDeviceCode | null = null;
+	let traktCode = $state<TraktDeviceCode | null>(null);
 	let traktSignIn: AbortController | null = null;
 
-	let stremioStatus: StremioConnectionStatus = getStremioStatus();
-	let stremioBusy = false;
-	let stremioMessage = "";
-	let stremioError = "";
-
-	export let error = "";
-	export let stremioConnectionRevision = 0;
-	export let onSyncNow: () => void | Promise<void> = () => {};
-	export let onDownloadData: () => void = () => {};
-	export let onImportStremio: () => void = () => {};
-	export let onRequestSignOut: () => void = () => {};
+	let stremioStatus = $derived.by<StremioConnectionStatus>(() => {
+		stremioConnectionRevision;
+		return getStremioStatus();
+	});
+	let stremioBusy = $state(false);
+	let stremioMessage = $state("");
+	let stremioError = $state("");
 
 	const formatTimestamp = (value: number | null) =>
 		value ? new Date(value).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "never";
 
-	$: pendingSyncCount = $cloudSyncStatus.pendingUploads + $cloudSyncStatus.pendingDeletes;
-	$: syncDescription = [
-		$cloudSyncStatus.isSyncing ? "Syncing now" : `Last synced ${formatTimestamp($cloudSyncStatus.lastSuccessAt)}`,
-		pendingSyncCount > 0 ? `${pendingSyncCount} waiting` : "",
-	]
-		.filter(Boolean)
-		.join(" · ");
-	$: traktDescription = !$cloudSyncStatus.cloudFeaturesAvailable
-		? "Unavailable while sync is offline."
-		: traktStatus && !traktStatus.configured
-			? "Not available in this build."
-			: traktStatus?.connected
-				? "Sends your progress to your Trakt profile."
-				: "Send your progress to your Trakt profile.";
-	$: stremioDescription = stremioStatus.connected
-		? `Connected as ${stremioStatus.email}`
-		: "Import your library and addons, or stay connected to keep progress in sync.";
-	$: traktActionLabel = traktLoading
-		? "Loading..."
-		: traktBusy
-			? traktStatus?.connected
-				? "Disconnecting..."
-				: traktCode
-					? "Waiting for Trakt..."
-					: "Connecting..."
-			: traktStatus?.connected
-				? "Disconnect"
-				: "Connect";
+	const pendingSyncCount = $derived($cloudSyncStatus.pendingUploads + $cloudSyncStatus.pendingDeletes);
+	const syncDescription = $derived(
+		[
+			$cloudSyncStatus.isSyncing ? "Syncing now" : `Last synced ${formatTimestamp($cloudSyncStatus.lastSuccessAt)}`,
+			pendingSyncCount > 0 ? `${pendingSyncCount} waiting` : "",
+		]
+			.filter(Boolean)
+			.join(" · "),
+	);
+	const traktDescription = $derived(
+		!$cloudSyncStatus.cloudFeaturesAvailable
+			? "Unavailable while sync is offline."
+			: traktStatus && !traktStatus.configured
+				? "Not available in this build."
+				: traktStatus?.connected
+					? "Sends your progress to your Trakt profile."
+					: "Send your progress to your Trakt profile.",
+	);
+	const stremioDescription = $derived(
+		stremioStatus.connected
+			? `Connected as ${stremioStatus.email}`
+			: "Import your library and addons, or stay connected to keep progress in sync.",
+	);
+	const traktActionLabel = $derived(
+		traktLoading
+			? "Loading..."
+			: traktBusy
+				? traktStatus?.connected
+					? "Disconnecting..."
+					: traktCode
+						? "Waiting for Trakt..."
+						: "Connecting..."
+				: traktStatus?.connected
+					? "Disconnect"
+					: "Connect",
+	);
+	const stremioActionLabel = $derived(stremioBusy ? "Syncing..." : "Sync now");
 
-	$: if (stremioConnectionRevision >= 0) {
-		stremioStatus = getStremioStatus();
-	}
-
-	$: stremioActionLabel = stremioBusy ? "Syncing..." : "Sync now";
-
-	$: if (!$cloudSyncStatus.cloudFeaturesAvailable) {
-		traktStatusRequested = false;
-		traktStatus = null;
-	}
-
-	$: if ($cloudSyncStatus.cloudFeaturesAvailable && !traktStatusRequested) {
-		traktStatusRequested = true;
-		void loadTraktStatus();
-	}
+	$effect(() => {
+		if (!$cloudSyncStatus.cloudFeaturesAvailable) {
+			traktStatusRequested = false;
+			traktStatus = null;
+		} else if (!traktStatusRequested) {
+			traktStatusRequested = true;
+			void loadTraktStatus();
+		}
+	});
 
 	async function loadTraktStatus() {
 		traktLoading = true;
@@ -196,7 +211,7 @@
 <div class="pt-4">
 	<SettingRow title="Sync" description={syncDescription}>
 		{#if $cloudSyncStatus.cloudFeaturesAvailable}
-			<button class={secondaryButton} on:click={onSyncNow} disabled={$cloudSyncStatus.isSyncing}>
+			<button class={secondaryButton} onclick={onSyncNow} disabled={$cloudSyncStatus.isSyncing}>
 				Sync now
 			</button>
 		{/if}
@@ -206,11 +221,11 @@
 	{/if}
 
 	<SettingRow title="Export" description="Download your library and lists as a file.">
-		<button class={secondaryButton} on:click={onDownloadData}>Export</button>
+		<button class={secondaryButton} onclick={onDownloadData}>Export</button>
 	</SettingRow>
 
 	<SettingRow title="Sign out" description="You can keep your data on this device.">
-		<button class={secondaryButton} on:click={onRequestSignOut}>Sign out</button>
+		<button class={secondaryButton} onclick={onRequestSignOut}>Sign out</button>
 	</SettingRow>
 </div>
 
@@ -220,7 +235,7 @@
 	{#if $cloudSyncStatus.cloudFeaturesAvailable && !traktLoading && (!traktStatus || traktStatus.configured)}
 		<button
 			class={traktStatus?.connected ? secondaryButton : primaryButton}
-			on:click={traktStatus?.connected ? disconnectTrakt : connectTrakt}
+			onclick={traktStatus?.connected ? disconnectTrakt : connectTrakt}
 			disabled={traktBusy}
 		>
 			{traktActionLabel}
@@ -233,8 +248,8 @@
 		<p class="text-sm text-ink/60">Go to {traktCode.verificationUrl.replace("https://", "")} and enter this code.</p>
 		<p class="select-all text-3xl font-semibold tracking-widest text-ink">{traktCode.userCode}</p>
 		<div class="flex flex-wrap gap-2">
-			<button class={primaryButton} on:click={() => traktCode && openTrakt(traktCode.verificationUrl)}>Open Trakt</button>
-			<button class={secondaryButton} on:click={cancelTraktSignIn}>Cancel</button>
+			<button class={primaryButton} onclick={() => traktCode && openTrakt(traktCode.verificationUrl)}>Open Trakt</button>
+			<button class={secondaryButton} onclick={cancelTraktSignIn}>Cancel</button>
 		</div>
 	</div>
 {/if}
@@ -248,10 +263,10 @@
 <SettingRow title="Stremio" description={stremioDescription}>
 	<div class="flex flex-wrap gap-2">
 		{#if stremioStatus.connected}
-			<button class={primaryButton} on:click={syncStremio} disabled={stremioBusy}>{stremioActionLabel}</button>
-			<button class={secondaryButton} on:click={disconnectStremioAccount} disabled={stremioBusy}>Disconnect</button>
+			<button class={primaryButton} onclick={syncStremio} disabled={stremioBusy}>{stremioActionLabel}</button>
+			<button class={secondaryButton} onclick={disconnectStremioAccount} disabled={stremioBusy}>Disconnect</button>
 		{:else}
-			<button class={secondaryButton} on:click={onImportStremio}>Import</button>
+			<button class={secondaryButton} onclick={onImportStremio}>Import</button>
 		{/if}
 	</div>
 </SettingRow>

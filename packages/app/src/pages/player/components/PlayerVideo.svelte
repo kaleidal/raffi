@@ -1,35 +1,58 @@
 <script lang="ts">
-    import { createEventDispatcher, onDestroy, onMount } from "svelte";
+    import { onDestroy, onMount } from "svelte";
     import { createAmbientGlow } from "./video/ambientGlow";
     import { resolveVideoFit } from "./video/videoFit";
 
-    export let videoA: HTMLVideoElement | undefined = undefined;
-    export let videoB: HTMLVideoElement | undefined = undefined;
-    export let activeSurface: 0 | 1 = 0;
-    export let canvasElem: HTMLCanvasElement | undefined = undefined;
-    export let objectFit: "contain" | "cover";
-    export let showCanvas: boolean;
-    export let hidden: boolean = false;
+    type VideoEventHandler = () => void;
 
-    const dispatch = createEventDispatcher();
+    let {
+        videoA = $bindable(),
+        videoB = $bindable(),
+        activeSurface = 0,
+        canvasElem = $bindable(),
+        objectFit,
+        showCanvas,
+        onTimeUpdate,
+        onProgress,
+        onPlay,
+        onPause,
+        onEnded,
+        onClick,
+        onWaiting,
+        onPlaying,
+        onCanPlay,
+        onError,
+    }: {
+        videoA?: HTMLVideoElement;
+        videoB?: HTMLVideoElement;
+        activeSurface?: 0 | 1;
+        canvasElem?: HTMLCanvasElement;
+        objectFit: "contain" | "cover";
+        showCanvas: boolean;
+        onTimeUpdate: VideoEventHandler;
+        onProgress: VideoEventHandler;
+        onPlay: VideoEventHandler;
+        onPause: VideoEventHandler;
+        onEnded: VideoEventHandler;
+        onClick: VideoEventHandler;
+        onWaiting: VideoEventHandler;
+        onPlaying: VideoEventHandler;
+        onCanPlay: VideoEventHandler;
+        onError: VideoEventHandler;
+    } = $props();
 
-    $: videoElem = activeSurface === 0 ? videoA : videoB;
+    const videoElem = $derived(activeSurface === 0 ? videoA : videoB);
 
-    const isActiveVideo = (target: EventTarget | null) =>
-        Boolean(target) && target === (activeSurface === 0 ? videoA : videoB);
+    const relay = (handler: VideoEventHandler) => (event: Event) => {
+        if (event.currentTarget === videoElem) handler();
+    };
 
-    const relay =
-        (type: string) => (event: Event) => {
-            if (!isActiveVideo(event.currentTarget)) return;
-            dispatch(type, event);
-        };
-
-    let containerElem: HTMLDivElement | undefined = undefined;
-    let ambientCanvasElem: HTMLCanvasElement | undefined = undefined;
-    let ambientDisplayVisible = false;
-    let effectiveObjectFit: "contain" | "cover" = "contain";
-    let effectiveObjectPosition = "center center";
-    let effectiveTransform = "none";
+    let containerElem = $state<HTMLDivElement>();
+    let ambientCanvasElem = $state<HTMLCanvasElement>();
+    let ambientDisplayVisible = $state(false);
+    let effectiveObjectFit = $state<"contain" | "cover">("contain");
+    let effectiveObjectPosition = $state("center center");
+    let effectiveTransform = $state("none");
 
     const updateEffectiveVideoFit = () => {
         const fit = resolveVideoFit(objectFit, containerElem, videoElem);
@@ -42,15 +65,15 @@
         getContainer: () => containerElem,
         getCanvas: () => ambientCanvasElem,
         getVideo: () => videoElem,
-        isHidden: () => hidden,
         getObjectFit: () => objectFit,
         syncVideoFit: updateEffectiveVideoFit,
         onVisibilityChange: (visible) => (ambientDisplayVisible = visible),
     });
 
-    $: ambientGlow.bindVideo(videoElem);
-    $: ambientGlow.refresh();
-    $: updateEffectiveVideoFit();
+    $effect.pre(() => {
+        ambientGlow.bindVideo(videoElem);
+    });
+    $effect.pre(updateEffectiveVideoFit);
 
     onMount(ambientGlow.mount);
     onDestroy(ambientGlow.destroy);
@@ -65,54 +88,54 @@
 
     <video
         bind:this={videoA}
-        class="absolute z-10 {activeSurface === 0 && !hidden
+        class="absolute z-10 {activeSurface === 0
             ? `top-0 left-0 h-full w-full ${effectiveObjectFit === 'contain' ? 'object-contain' : 'object-cover'}`
             : 'left-[-9999px] top-0 h-px w-px opacity-0 pointer-events-none'}"
-        style={activeSurface === 0 && !hidden
+        style={activeSurface === 0
             ? `object-position: ${effectiveObjectPosition}; transform: ${effectiveTransform}; transform-origin: center center;`
             : undefined}
         playsinline
         preload="auto"
         muted={activeSurface !== 0}
         disablepictureinpicture
-        aria-hidden={activeSurface !== 0 || hidden}
-        on:timeupdate={relay("timeupdate")}
-        on:progress={relay("progress")}
-        on:play={relay("play")}
-        on:pause={relay("pause")}
-        on:ended={relay("ended")}
-        on:click={relay("click")}
-        on:waiting={relay("waiting")}
-        on:playing={relay("playing")}
-        on:canplay={relay("canplay")}
-        on:error={relay("error")}
+        aria-hidden={activeSurface !== 0}
+        ontimeupdate={relay(onTimeUpdate)}
+        onprogress={relay(onProgress)}
+        onplay={relay(onPlay)}
+        onpause={relay(onPause)}
+        onended={relay(onEnded)}
+        onclick={relay(onClick)}
+        onwaiting={relay(onWaiting)}
+        onplaying={relay(onPlaying)}
+        oncanplay={relay(onCanPlay)}
+        onerror={relay(onError)}
     >
         <track kind="captions" />
     </video>
 
     <video
         bind:this={videoB}
-        class="absolute z-10 {activeSurface === 1 && !hidden
+        class="absolute z-10 {activeSurface === 1
             ? `top-0 left-0 h-full w-full ${effectiveObjectFit === 'contain' ? 'object-contain' : 'object-cover'}`
             : 'left-[-9999px] top-0 h-px w-px opacity-0 pointer-events-none'}"
-        style={activeSurface === 1 && !hidden
+        style={activeSurface === 1
             ? `object-position: ${effectiveObjectPosition}; transform: ${effectiveTransform}; transform-origin: center center;`
             : undefined}
         playsinline
         preload="auto"
         muted={activeSurface !== 1}
         disablepictureinpicture
-        aria-hidden={activeSurface !== 1 || hidden}
-        on:timeupdate={relay("timeupdate")}
-        on:progress={relay("progress")}
-        on:play={relay("play")}
-        on:pause={relay("pause")}
-        on:ended={relay("ended")}
-        on:click={relay("click")}
-        on:waiting={relay("waiting")}
-        on:playing={relay("playing")}
-        on:canplay={relay("canplay")}
-        on:error={relay("error")}
+        aria-hidden={activeSurface !== 1}
+        ontimeupdate={relay(onTimeUpdate)}
+        onprogress={relay(onProgress)}
+        onplay={relay(onPlay)}
+        onpause={relay(onPause)}
+        onended={relay(onEnded)}
+        onclick={relay(onClick)}
+        onwaiting={relay(onWaiting)}
+        onplaying={relay(onPlaying)}
+        oncanplay={relay(onCanPlay)}
+        onerror={relay(onError)}
     >
         <track kind="captions" />
     </video>
@@ -121,7 +144,7 @@
         bind:this={canvasElem}
         class="absolute top-0 left-0 z-20 h-full w-full {effectiveObjectFit === 'contain'
             ? 'object-contain'
-            : 'object-cover'} {showCanvas && !hidden ? 'block' : 'hidden'}"
+            : 'object-cover'} {showCanvas ? 'block' : 'hidden'}"
         style={`object-position: ${effectiveObjectPosition}; transform: ${effectiveTransform}; transform-origin: center center;`}
     ></canvas>
 </div>

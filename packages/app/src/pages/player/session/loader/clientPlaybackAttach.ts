@@ -26,7 +26,6 @@ type ClientPlaybackAttachContext = {
     sessionSource: string;
     session: { sessionData: any };
     effectiveStartTime: number;
-    autoStart: boolean;
     signal: AbortSignal;
     isStale: () => boolean;
     deps: PlayerSessionLoaderDeps;
@@ -36,7 +35,6 @@ const attachAddonHls = async ({
     videoElem,
     sessionSource,
     effectiveStartTime,
-    autoStart,
     deps,
 }: ClientPlaybackAttachContext) => {
     attachSeekHandler(videoElem, deps.getPlaybackController);
@@ -44,7 +42,6 @@ const attachAddonHls = async ({
         video: videoElem,
         source: sessionSource,
         startTime: effectiveStartTime,
-        autoPlay: autoStart,
         onReady: hideLoadingScreen,
         onFatalError: (error, failedInstance) => {
             hideLoadingScreen();
@@ -65,7 +62,6 @@ const attachMediaBunny = async ({
     sessionSource,
     session,
     effectiveStartTime,
-    autoStart,
     signal,
     isStale,
     deps,
@@ -126,11 +122,9 @@ const attachMediaBunny = async ({
     attachSeekHandler(videoElem, deps.getPlaybackController);
 
     hideLoadingScreen();
-    if (autoStart) {
-        videoElem.play().catch(() => {
-            // ignore
-        });
-    }
+    videoElem.play().catch(() => {
+        // ignore
+    });
 };
 
 const attachDirect = ({
@@ -139,7 +133,6 @@ const attachDirect = ({
     sessionSource,
     session,
     effectiveStartTime,
-    autoStart,
     signal,
     isStale,
     deps,
@@ -167,11 +160,9 @@ const attachDirect = ({
 
         hideLoadingScreen();
 
-        if (autoStart) {
-            currentVideo.play().catch(() => {
-                // ignore
-            });
-        }
+        currentVideo.play().catch(() => {
+            // ignore
+        });
     };
 
     videoElem.addEventListener("loadedmetadata", onLoaded, {

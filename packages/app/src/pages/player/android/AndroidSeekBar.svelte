@@ -7,27 +7,37 @@
     import { formatTime } from "../../../lib/utils/time";
     import type { Chapter } from "../types";
 
-    export let time = 0;
-    export let duration = 0;
-    export let buffered: TimeRange[] = [];
-    export let chapters: Chapter[] = [];
-    export let element: HTMLDivElement | null = null;
-    export let onCommit: (time: number) => void;
-    /** The time being scrubbed to, or null once the scrub is committed. */
-    export let onScrub: (time: number | null) => void = () => {};
+    let {
+        time = 0,
+        duration = 0,
+        buffered = [],
+        chapters = [],
+        element = $bindable(null),
+        onCommit,
+        onScrub,
+    }: {
+        time?: number;
+        duration?: number;
+        buffered?: TimeRange[];
+        chapters?: Chapter[];
+        element?: HTMLDivElement | null;
+        onCommit: (time: number) => void;
+        /** The time being scrubbed to, or null once the scrub is committed. */
+        onScrub: (time: number | null) => void;
+    } = $props();
 
     const STEP_SECONDS = 10;
     const MAX_STEP_MULTIPLIER = 6;
     const PRESSES_PER_SPEEDUP = 4;
     const COMMIT_DELAY_MS = 700;
 
-    let scrubTime: number | null = null;
+    let scrubTime = $state<number | null>(null);
     let presses = 0;
-    let focused = false;
+    let focused = $state(false);
     let commitTimer: ReturnType<typeof setTimeout> | null = null;
     let releaseKeys: (() => void) | null = null;
 
-    $: shownTime = scrubTime ?? time;
+    const shownTime = $derived(scrubTime ?? time);
 
     function commit() {
         if (commitTimer) clearTimeout(commitTimer);
@@ -98,8 +108,8 @@
     aria-valuenow={shownTime}
     aria-valuetext={formatTime(shownTime)}
     data-own-focus
-    on:focus={handleFocus}
-    on:blur={handleBlur}
+    onfocus={handleFocus}
+    onblur={handleBlur}
 >
     <SeekBar
         {duration}

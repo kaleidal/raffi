@@ -1,16 +1,17 @@
 <script lang="ts">
     import { fade } from "svelte/transition";
 
-    export let type: "forward" | "backward";
-    export let id: number;
+    let { type, id }: { type: "forward" | "backward"; id: number } = $props();
 
-    let rotation = 0;
+    let rotation = $state(0);
 
-    $: side = type === "forward" ? "right" : "left";
+    const side = $derived(type === "forward" ? "right" : "left");
 
-    $: if (id) {
-        triggerAnimation();
-    }
+    $effect.pre(() => {
+        if (id) {
+            triggerAnimation();
+        }
+    });
 
     function triggerAnimation() {
         rotation = -30;

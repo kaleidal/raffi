@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { onDestroy, onMount, tick } from "svelte";
+    import { onDestroy, onMount, tick, untrack } from "svelte";
     import { get, writable } from "svelte/store";
     import { fade } from "svelte/transition";
     import { ChevronLeft } from "@lucide/svelte";
@@ -18,34 +18,44 @@
     import { liveSettings, toggleFavourite } from "../../../lib/live/sources";
     import type { LiveChannel, Programme } from "../../../lib/live/types";
 
-    export let sourceId: string;
-    export let channelId: string;
+    let { sourceId, channelId }: { sourceId: string; channelId: string } = $props();
 
     const CONTROLS_HIDE_MS = 4000;
     const CLOCK_TICK_MS = 15_000;
     const VOLUME_KEY = "raffi:live-volume";
 
-    let video: HTMLVideoElement;
+    let video = $state.raw<HTMLVideoElement>();
     let container: HTMLDivElement;
-    let controlsPanel: HTMLDivElement;
-    let engine: LiveEngine | null = null;
+    let controlsPanel = $state.raw<HTMLDivElement>();
+    let engine = $state.raw<LiveEngine | null>(null);
     const status = writable<EngineStatus>(STARTING);
-    let channel: LiveChannel | null = null;
-    let programmes: Programme[] = [];
-    let missing = false;
-    let now = Date.now();
-    let volume = Number(localStorage.getItem(VOLUME_KEY) ?? 1);
-    let objectFit: "contain" | "cover" = "contain";
-    let controlsVisible = true;
+    let channel = $state.raw<LiveChannel | null>(null);
+    let programmes = $state.raw<Programme[]>([]);
+    let missing = $state(false);
+    let now = $state(Date.now());
+    let volume = $state(Number(localStorage.getItem(VOLUME_KEY) ?? 1));
+    let objectFit = $state<"contain" | "cover">("contain");
+    let controlsVisible = $state(true);
     let hideTimer: ReturnType<typeof setTimeout> | null = null;
     let tunedTo = "";
 
-    $: airing = nowAndNext(programmes, now).now;
-    $: favourite = $liveSettings.favourites.includes(channelId);
-    $: started = !$status.buffering || $status.playing;
-    $: if (engine && channelId !== tunedTo) void tune(channelId);
-    $: if (video) video.volume = volume;
-    $: if (channel) bindLiveMediaSession(channel, airing, { toggle, zap });
+    const airing = $derived(nowAndNext(programmes, now).now);
+    const favourite = $derived($liveSettings.favourites.includes(channelId));
+    const started = $derived(!$status.buffering || $status.playing);
+
+    $effect(() => {
+        if (!engine || channelId === tunedTo) return;
+        const id = channelId;
+        untrack(() => void tune(id));
+    });
+
+    $effect(() => {
+        if (video) video.volume = volume;
+    });
+
+    $effect(() => {
+        if (channel) bindLiveMediaSession(channel, airing, { toggle, zap });
+    });
 
     async function tune(id: string) {
         tunedTo = id;
@@ -203,7 +213,7 @@
         : () => {};
 
     onMount(() => {
-        engine = isAndroidPlatform ? nativeEngine(status) : browserEngine(video, status);
+        engine = isAndroidPlatform ? nativeEngine(status) : browserEngine(video!, status);
         const clock = setInterval(() => (now = Date.now()), CLOCK_TICK_MS);
         return () => clearInterval(clock);
     });
@@ -217,7 +227,7 @@
     });
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} />
 
 <div
     bind:this={container}

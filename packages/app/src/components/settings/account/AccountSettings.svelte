@@ -16,10 +16,10 @@
 	import { router } from "../../../lib/stores/router";
 	import { closeSettings } from "../../../lib/stores/settings";
 
-	let error = "";
-	let showSignOut = false;
-	let showStremioImport = false;
-	let stremioConnectionRevision = 0;
+	let error = $state("");
+	let showSignOut = $state(false);
+	let showStremioImport = $state(false);
+	let stremioConnectionRevision = $state(0);
 
 	async function downloadData() {
 		try {
@@ -87,13 +87,12 @@
 	/>
 {/if}
 
-
 {#if showSignOut}
 	<SignOutDialog onChoose={switchToLocalMode} onCancel={() => (showSignOut = false)} />
 {/if}
 
 <StremioImportModal
 	open={showStremioImport}
-	on:close={() => (showStremioImport = false)}
-	on:imported={() => (stremioConnectionRevision += 1)}
+	onClose={() => (showStremioImport = false)}
+	onImported={() => (stremioConnectionRevision += 1)}
 />

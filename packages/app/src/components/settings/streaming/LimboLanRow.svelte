@@ -6,9 +6,9 @@
 	import { allowTorrenting, setTorrentingAllowed } from "../../../lib/stores/torrenting";
 	import { forgetLimbo, limboPairing } from "../../../lib/streams/limboLan";
 
-	let pairing = false;
-	let saving = false;
-	let error = "";
+	let pairing = $state(false);
+	let saving = $state(false);
+	let error = $state("");
 
 	async function enable() {
 		saving = true;
@@ -49,14 +49,14 @@
 		{#if $limboPairing}
 			<button
 				class={secondaryButton}
-				on:click={unpair}
+				onclick={unpair}
 			>
 				Unpair
 			</button>
 		{:else if $allowTorrenting}
 			<button
 				class={secondaryButton}
-				on:click={() => (pairing = true)}
+				onclick={() => (pairing = true)}
 			>
 				Pair with Limbo
 			</button>

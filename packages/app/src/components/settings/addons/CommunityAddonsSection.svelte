@@ -18,29 +18,28 @@
 		formatResourceName,
 		getResourceNames,
 	} from "./addonsShared";
+	import type { AddonResourceFilter } from "../../../lib/stores/settings";
 
-	type ResourceFilter = "all" | "stream" | "subtitles" | "catalog" | "meta";
+	let { initialResourceFilter }: { initialResourceFilter: AddonResourceFilter } = $props();
 
 	const resourceSummary = (manifest: any) =>
 		getResourceNames(manifest)
 			.filter((name) => SUPPORTED_RESOURCES.has(name))
 			.map(formatResourceName)
 			.join(" · ");
-	export let initialResourceFilter: ResourceFilter = "all";
 
-	let loadingCommunity = false;
-	let communityAddons: any[] = [];
-	let communitySearch = "";
-	let communityResourceFilter: ResourceFilter = initialResourceFilter;
-	let appliedInitialResourceFilter: ResourceFilter = initialResourceFilter;
-	const filterOptions: ResourceFilter[] = [
+	let loadingCommunity = $state(false);
+	let communityAddons = $state.raw<any[]>([]);
+	let communitySearch = $state("");
+	let communityResourceFilter = $derived(initialResourceFilter);
+	const filterOptions: AddonResourceFilter[] = [
 		"all",
 		"stream",
 		"subtitles",
 		"catalog",
 		"meta",
 	];
-	let installedTransportUrls = new Set<string>();
+	let installedTransportUrls = $state.raw(new Set<string>());
 
 	onMount(() => {
 		void loadInstalledAddons();
@@ -54,14 +53,6 @@
 
 	function handleAddonsChanged() {
 		void loadInstalledAddons();
-	}
-
-	$: if (
-		initialResourceFilter !== appliedInitialResourceFilter &&
-		filterOptions.includes(initialResourceFilter)
-	) {
-		communityResourceFilter = initialResourceFilter;
-		appliedInitialResourceFilter = initialResourceFilter;
 	}
 
 	function emitAddonsChanged() {
@@ -147,24 +138,7 @@
 		}
 	}
 
-	function handleConfigure(url: string | undefined) {
-		if (!openConfigureUrl(url)) return;
-	}
-
-	function handleCommunitySearchInput(event: Event) {
-		communitySearch = (event.target as HTMLInputElement).value;
-	}
-
-	function setCommunityFilter(next: ResourceFilter) {
-		if (communityResourceFilter === next) return;
-		communityResourceFilter = next;
-	}
-
-	function handleFilterClick(filter: ResourceFilter) {
-		setCommunityFilter(filter);
-	}
-
-	$: filteredCommunityAddons = communityAddons.filter((addon: any) => {
+	const filteredCommunityAddons = $derived(communityAddons.filter((addon: any) => {
 		const manifest = addon?.manifest ?? {};
 
 		if (communityResourceFilter !== "all") {
@@ -183,7 +157,7 @@
 			id.includes(q) ||
 			transportUrl.includes(q)
 		);
-	});
+	}));
 </script>
 
 <section class="flex flex-col gap-4">
@@ -194,7 +168,6 @@
 			type="text"
 			placeholder="Search addons"
 			class="w-full rounded-full bg-ink/8 px-5 py-3 text-ink outline-none placeholder:text-ink/40 focus:bg-ink/12"
-			on:input={handleCommunitySearchInput}
 			bind:value={communitySearch}
 		/>
 	</div>
@@ -207,7 +180,7 @@
 						? "bg-accent text-on-accent"
 						: "bg-ink/10 text-ink/70 hover:text-ink"
 				}`}
-				on:click={() => handleFilterClick(filter)}
+				onclick={() => (communityResourceFilter = filter)}
 			>
 				{filter === "all" ? "All" : RESOURCE_LABELS[filter]}
 			</button>
@@ -247,7 +220,7 @@
 						{#if addon.manifest.behaviorHints?.configurable}
 							<button
 								class="px-4 py-2 rounded-full bg-ink/8 text-ink/80 hover:bg-ink/14 hover:text-ink cursor-pointer"
-								on:click={() => handleConfigure(transportUrl)}
+								onclick={() => openConfigureUrl(transportUrl)}
 							>
 								Configure
 							</button>
@@ -256,7 +229,7 @@
 							class={`px-4 py-2 rounded-full font-semibold cursor-pointer ${
 								installed ? "bg-ink/15 text-ink/40 cursor-not-allowed" : "bg-accent text-on-accent hover:bg-accent/85"
 							}`}
-							on:click={() => installCommunityAddon(addon)}
+							onclick={() => installCommunityAddon(addon)}
 							disabled={installed}
 						>
 							{installed ? "Installed" : "Install"}

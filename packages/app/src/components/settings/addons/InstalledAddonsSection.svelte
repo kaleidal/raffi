@@ -15,9 +15,9 @@
 		supportsResource,
 	} from "./addonsShared";
 
-	let addonsList: Addon[] = [];
-	let newAddonUrl = "";
-	let loadingAddons = false;
+	let addonsList = $state.raw<Addon[]>([]);
+	let newAddonUrl = $state("");
+	let loadingAddons = $state(false);
 
 	onMount(() => {
 		void loadAddons();
@@ -85,10 +85,6 @@
 		emitAddonsChanged();
 	}
 
-	function handleConfigure(url: string | undefined) {
-		if (!openConfigureUrl(url)) return;
-	}
-
 	async function handleRemoveAddon(url: string) {
 		if (!(await confirmDialog("Are you sure?", "Remove addon"))) return;
 		await removeAddon(url);
@@ -142,7 +138,7 @@
 					<div class="flex gap-2">
 						<button
 							class="px-2 py-2 rounded-full bg-ink/8 text-ink/80 hover:bg-ink/14 hover:text-ink cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-							on:click={() => moveAddon(addon, -1)}
+							onclick={() => moveAddon(addon, -1)}
 							disabled={addonsList[0]?.transport_url === addon.transport_url}
 							aria-label="Move addon up"
 						>
@@ -150,7 +146,7 @@
 						</button>
 						<button
 							class="px-2 py-2 rounded-full bg-ink/8 text-ink/80 hover:bg-ink/14 hover:text-ink cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-							on:click={() => moveAddon(addon, 1)}
+							onclick={() => moveAddon(addon, 1)}
 							disabled={addonsList[addonsList.length - 1]?.transport_url === addon.transport_url}
 							aria-label="Move addon down"
 						>
@@ -159,14 +155,14 @@
 						{#if addon.manifest.behaviorHints?.configurable}
 							<button
 								class="px-3 py-2 rounded-full bg-ink/8 text-ink/80 hover:bg-ink/14 hover:text-ink cursor-pointer"
-								on:click={() => handleConfigure(addon.transport_url)}
+								onclick={() => openConfigureUrl(addon.transport_url)}
 							>
 								Configure
 							</button>
 						{/if}
 						<button
 							class="text-danger hover:text-danger p-2 cursor-pointer"
-							on:click={() => handleRemoveAddon(addon.transport_url)}
+							onclick={() => handleRemoveAddon(addon.transport_url)}
 							aria-label="Remove addon"
 						>
 							<Trash size={20} strokeWidth={2} />
@@ -187,7 +183,7 @@
 			/>
 			<button
 				class="bg-accent text-on-accent px-6 py-3 rounded-full font-semibold hover:bg-accent/85 transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
-				on:click={handleAddAddon}
+				onclick={handleAddAddon}
 				disabled={!newAddonUrl}
 			>
 				Add

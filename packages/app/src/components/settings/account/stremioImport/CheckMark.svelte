@@ -1,7 +1,7 @@
 <script lang="ts">
     import { Check } from "@lucide/svelte";
 
-    export let checked = false;
+    let { checked = false }: { checked?: boolean } = $props();
 </script>
 
 <span

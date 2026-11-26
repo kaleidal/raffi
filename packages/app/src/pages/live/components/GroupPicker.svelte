@@ -5,19 +5,26 @@
     import { portal } from "../../../components/common/portal";
     import { matchKey } from "../../../lib/live/parse/text";
 
-    export let groups: string[];
-    export let value: string;
-    export let counts: Map<string, number>;
-    export let onChange: (group: string) => void;
+    let {
+        groups,
+        value,
+        counts,
+        onChange,
+    }: {
+        groups: string[];
+        value: string;
+        counts: Map<string, number>;
+        onChange: (group: string) => void;
+    } = $props();
 
-    let open = false;
-    let query = "";
+    let open = $state(false);
+    let query = $state("");
     let button: HTMLButtonElement;
-    let input: HTMLInputElement;
-    let position = "";
+    let input = $state.raw<HTMLInputElement>();
+    let position = $state("");
 
-    $: needle = matchKey(query);
-    $: shown = needle ? groups.filter((group) => matchKey(group).includes(needle)) : groups;
+    const needle = $derived(matchKey(query));
+    const shown = $derived(needle ? groups.filter((group) => matchKey(group).includes(needle)) : groups);
 
     async function toggle() {
         open = !open;
@@ -26,7 +33,7 @@
         const rect = button.getBoundingClientRect();
         position = `top:${rect.bottom + 8}px;left:${rect.left}px;`;
         await tick();
-        input.focus();
+        input?.focus();
     }
 
     function choose(group: string) {

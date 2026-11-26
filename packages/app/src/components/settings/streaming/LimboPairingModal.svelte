@@ -13,18 +13,23 @@
 		type LimboPairing,
 	} from "../../../lib/streams/limboLan";
 
-	export let onPaired: (pairing: LimboPairing) => void;
-	export let onClose: () => void;
+	let {
+		onPaired,
+		onClose,
+	}: {
+		onPaired: (pairing: LimboPairing) => void;
+		onClose: () => void;
+	} = $props();
 
 	type Target = { name: string; baseUrl: string };
 
-	let step: "searching" | "pick" | "address" | "code" = "searching";
-	let found: DiscoveredLimbo[] = [];
-	let target: Target | null = null;
-	let address = "";
-	let code = "";
-	let busy = false;
-	let error = "";
+	let step = $state<"searching" | "pick" | "address" | "code">("searching");
+	let found = $state.raw<DiscoveredLimbo[]>([]);
+	let target = $state.raw<Target | null>(null);
+	let address = $state("");
+	let code = $state("");
+	let busy = $state(false);
+	let error = $state("");
 
 	async function search() {
 		step = "searching";
@@ -71,7 +76,7 @@
 	use:portal
 	class="fixed inset-0 z-300 flex items-center justify-center bg-canvas/60 backdrop-blur-xl"
 	transition:fade={{ duration: 200 }}
-	on:keydown={(e) => e.key === "Escape" && onClose()}
+	onkeydown={(event) => event.key === "Escape" && onClose()}
 	role="dialog"
 	aria-modal="true"
 	aria-label="Pair with Limbo"
@@ -109,7 +114,7 @@
 				{#each found as service (service.id)}
 					<button
 						class="flex items-center gap-3 rounded-2xl bg-ink/8 px-4 py-3 text-left text-ink transition-colors hover:bg-ink/14 focus:bg-ink/14 cursor-pointer"
-						on:click={() => choose(service)}
+						onclick={() => choose(service)}
 					>
 						<Monitor size={20} strokeWidth={2} class="shrink-0 text-ink/70" />
 						<span class="truncate font-medium">{service.name}</span>
@@ -119,13 +124,13 @@
 			<div class="flex gap-3">
 				<button
 					class="flex-1 rounded-2xl bg-accent px-4 py-3 font-semibold text-on-accent transition-colors hover:bg-accent/85 cursor-pointer"
-					on:click={search}
+					onclick={search}
 				>
 					Search again
 				</button>
 				<button
 					class="flex-1 rounded-2xl bg-ink/10 px-4 py-3 font-semibold text-ink transition-colors hover:bg-ink/16 cursor-pointer"
-					on:click={() => {
+					onclick={() => {
 						error = "";
 						step = "address";
 					}}
@@ -134,7 +139,7 @@
 				</button>
 			</div>
 		{:else if step === "address"}
-			<form class="flex flex-col gap-3" on:submit|preventDefault={useAddress}>
+			<form class="flex flex-col gap-3" onsubmit={(event) => (event.preventDefault(), useAddress())}>
 				<input
 					type="text"
 					inputmode="decimal"
@@ -152,15 +157,12 @@
 				</button>
 			</form>
 		{:else}
-			<form class="flex flex-col gap-4" on:submit|preventDefault={pair}>
+			<form class="flex flex-col gap-4" onsubmit={(event) => (event.preventDefault(), pair())}>
 				<CodeInput
 					bind:value={code}
 					disabled={busy}
 					label="Pairing code"
-					on:complete={(event) => {
-						code = event.detail.value;
-						void pair();
-					}}
+					onComplete={() => void pair()}
 				/>
 				<button
 					type="submit"

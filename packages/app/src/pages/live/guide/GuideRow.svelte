@@ -5,26 +5,42 @@
     import type { LiveChannel } from "../../../lib/live/types";
     import { formatClock, MINUTE } from "./timeline";
 
-    export let channel: LiveChannel;
-    export let top: number;
-    export let height: number;
-    export let channelWidth: number;
-    export let minuteWidth: number;
-    export let origin: number;
-    export let from: number;
-    export let until: number;
-    export let now: number;
-    /** Where the visible timeline begins, so titles of programmes already under way stay readable. */
-    export let edge: number;
-    export let onPlay: (channel: LiveChannel) => void;
-    export let onMenu: (event: MouseEvent, channel: LiveChannel) => void;
-    export let onHighlight: (channel: LiveChannel) => void;
+    let {
+        channel,
+        top,
+        height,
+        channelWidth,
+        minuteWidth,
+        origin,
+        from,
+        until,
+        now,
+        edge,
+        onPlay,
+        onMenu,
+        onHighlight,
+    }: {
+        channel: LiveChannel;
+        top: number;
+        height: number;
+        channelWidth: number;
+        minuteWidth: number;
+        origin: number;
+        from: number;
+        until: number;
+        now: number;
+        /** Where the visible timeline begins, so titles of programmes already under way stay readable. */
+        edge: number;
+        onPlay: (channel: LiveChannel) => void;
+        onMenu: (event: MouseEvent, channel: LiveChannel) => void;
+        onHighlight: (channel: LiveChannel) => void;
+    } = $props();
 
-    $: all = channel.guideId ? $guideProgrammes.get(channel.guideId) : undefined;
-    $: programmes = programmesBetween(all, Math.max(from, origin), until);
-    $: hasGuide = Boolean(all?.length);
+    const all = $derived(channel.guideId ? $guideProgrammes.get(channel.guideId) : undefined);
+    const programmes = $derived(programmesBetween(all, Math.max(from, origin), until));
+    const hasGuide = $derived(Boolean(all?.length));
 
-    $: x = (time: number) => channelWidth + ((Math.max(time, origin) - origin) / MINUTE) * minuteWidth;
+    const x = (time: number) => channelWidth + ((Math.max(time, origin) - origin) / MINUTE) * minuteWidth;
 
     function menu(event: MouseEvent) {
         event.preventDefault();

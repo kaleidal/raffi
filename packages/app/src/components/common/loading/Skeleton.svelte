@@ -1,7 +1,9 @@
 <script lang="ts">
-    export let width = "100%";
-    export let height = "20px";
-    export let borderRadius = "8px";
+    let {
+        width = "100%",
+        height = "20px",
+        borderRadius = "8px",
+    }: { width?: string; height?: string; borderRadius?: string } = $props();
 </script>
 
 <div

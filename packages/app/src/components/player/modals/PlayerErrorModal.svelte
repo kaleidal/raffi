@@ -4,24 +4,19 @@
     import { isWeb } from "../../../lib/shell/platform";
     import { MonitorDown } from "@lucide/svelte";
 
-    export let errorMessage: string = "Stream failed to load";
-    export let errorDetails: string = "";
-
-    export let onRetry: () => void = () => {};
-    export let onBack: () => void = () => {};
-    export let onDownloadDesktop: () => void = () => {};
-
-    function retry() {
-        onRetry();
-    }
-
-    function goBack() {
-        onBack();
-    }
-
-    function downloadDesktop() {
-        onDownloadDesktop();
-    }
+    let {
+        errorMessage = "Stream failed to load",
+        errorDetails = "",
+        onRetry,
+        onBack,
+        onDownloadDesktop,
+    }: {
+        errorMessage?: string;
+        errorDetails?: string;
+        onRetry: () => void;
+        onBack: () => void;
+        onDownloadDesktop: () => void;
+    } = $props();
 </script>
 
 <div
@@ -66,20 +61,20 @@
         <div class="flex flex-col gap-3">
             <button
                 class="w-full py-3 px-4 bg-accent text-on-accent text-[15px] font-semibold rounded-xl hover:bg-accent/85 transition-colors cursor-pointer"
-                on:click={retry}
+                onclick={onRetry}
             >
                 Try Again
             </button>
             <button
                 class="w-full py-3 px-4 bg-raised text-ink text-[15px] font-semibold rounded-xl hover:bg-ink/15 transition-colors cursor-pointer"
-                on:click={goBack}
+                onclick={onBack}
             >
                 Back to Streams
             </button>
             {#if isWeb}
                 <button
                     class="w-full py-3 px-4 bg-ink/8 text-ink text-[15px] font-semibold rounded-xl hover:bg-ink/14 transition-colors cursor-pointer flex items-center justify-center gap-2"
-                    on:click={downloadDesktop}
+                    onclick={onDownloadDesktop}
                 >
                     <MonitorDown size={18} strokeWidth={2} />
                     Download Desktop App

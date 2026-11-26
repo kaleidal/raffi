@@ -9,7 +9,6 @@ type AmbientGlowOptions = {
     getContainer: () => HTMLDivElement | undefined;
     getCanvas: () => HTMLCanvasElement | undefined;
     getVideo: () => HTMLVideoElement | undefined;
-    isHidden: () => boolean;
     getObjectFit: () => "contain" | "cover";
     syncVideoFit: () => void;
     onVisibilityChange: (visible: boolean) => void;
@@ -93,9 +92,7 @@ export function createAmbientGlow(options: AmbientGlowOptions) {
     };
 
     const updateAmbientDisplayVisibility = () => {
-        options.onVisibilityChange(
-            !options.isHidden() && options.getObjectFit() === "contain" && (ambientActive || ambientHasFrame),
-        );
+        options.onVisibilityChange(options.getObjectFit() === "contain" && (ambientActive || ambientHasFrame));
     };
 
     const resizeAmbientCanvasPreservingFrame = (width: number, height: number) => {
@@ -159,7 +156,7 @@ export function createAmbientGlow(options: AmbientGlowOptions) {
     const updateAmbientState = () => {
         options.syncVideoFit();
 
-        if (options.isHidden() || options.getObjectFit() !== "contain") {
+        if (options.getObjectFit() !== "contain") {
             ambientActive = false;
             resetAmbientFrameState();
             updateAmbientDisplayVisibility();

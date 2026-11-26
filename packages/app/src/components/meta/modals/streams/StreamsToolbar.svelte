@@ -12,57 +12,91 @@
         VideoCodecFilter,
     } from "./types";
 
-    export let filtersCollapsed = false;
-    export let filteredCount = 0;
-    export let totalCount = 0;
-    export let resolutionFilter: ResolutionFilter = "all";
-    export let audioLanguageFilter = "all";
-    export let videoCodecFilter: VideoCodecFilter = "all";
-    export let dynamicRangeFilter: DynamicRangeFilter = "all";
-    export let availabilityFilter: AvailabilityFilter = "all";
-    export let sizeFilter: SizeFilter = "all";
-    export let sortOption: StreamSortOption = "recommended";
-    export let audioLanguageFilterOptions: string[] = ["all"];
-    export let resolutionFilters: Array<{ label: string; value: ResolutionFilter }> = [];
-    export let videoCodecFilters: Array<{ label: string; value: VideoCodecFilter }> = [];
-    export let dynamicRangeFilters: Array<{ label: string; value: DynamicRangeFilter }> = [];
-    export let availabilityFilters: Array<{ label: string; value: AvailabilityFilter }> = [];
-    export let sizeFilters: Array<{ label: string; value: SizeFilter }> = [];
-    export let sortOptions: Array<{ label: string; value: StreamSortOption }> = [];
+    let {
+        filtersCollapsed = false,
+        filteredCount = 0,
+        totalCount = 0,
+        resolutionFilter = "all",
+        audioLanguageFilter = "all",
+        videoCodecFilter = "all",
+        dynamicRangeFilter = "all",
+        availabilityFilter = "all",
+        sizeFilter = "all",
+        sortOption = "recommended",
+        audioLanguageFilterOptions = ["all"],
+        resolutionFilters = [],
+        videoCodecFilters = [],
+        dynamicRangeFilters = [],
+        availabilityFilters = [],
+        sizeFilters = [],
+        sortOptions = [],
+        onToggleFiltersCollapsed = () => {},
+        onSetResolutionFilter = () => {},
+        onSetAudioLanguageFilter = () => {},
+        onSetVideoCodecFilter = () => {},
+        onSetDynamicRangeFilter = () => {},
+        onSetAvailabilityFilter = () => {},
+        onSetSizeFilter = () => {},
+        onSetSortOption = () => {},
+        onResetFilters = () => {},
+    }: {
+        filtersCollapsed?: boolean;
+        filteredCount?: number;
+        totalCount?: number;
+        resolutionFilter?: ResolutionFilter;
+        audioLanguageFilter?: string;
+        videoCodecFilter?: VideoCodecFilter;
+        dynamicRangeFilter?: DynamicRangeFilter;
+        availabilityFilter?: AvailabilityFilter;
+        sizeFilter?: SizeFilter;
+        sortOption?: StreamSortOption;
+        audioLanguageFilterOptions?: string[];
+        resolutionFilters?: Array<{ label: string; value: ResolutionFilter }>;
+        videoCodecFilters?: Array<{ label: string; value: VideoCodecFilter }>;
+        dynamicRangeFilters?: Array<{ label: string; value: DynamicRangeFilter }>;
+        availabilityFilters?: Array<{ label: string; value: AvailabilityFilter }>;
+        sizeFilters?: Array<{ label: string; value: SizeFilter }>;
+        sortOptions?: Array<{ label: string; value: StreamSortOption }>;
+        onToggleFiltersCollapsed?: () => void;
+        onSetResolutionFilter?: (value: ResolutionFilter) => void;
+        onSetAudioLanguageFilter?: (value: string) => void;
+        onSetVideoCodecFilter?: (value: VideoCodecFilter) => void;
+        onSetDynamicRangeFilter?: (value: DynamicRangeFilter) => void;
+        onSetAvailabilityFilter?: (value: AvailabilityFilter) => void;
+        onSetSizeFilter?: (value: SizeFilter) => void;
+        onSetSortOption?: (value: StreamSortOption) => void;
+        onResetFilters?: () => void;
+    } = $props();
 
-    export let onToggleFiltersCollapsed: () => void = () => {};
-    export let onSetResolutionFilter: (value: ResolutionFilter) => void = () => {};
-    export let onSetAudioLanguageFilter: (value: string) => void = () => {};
-    export let onSetVideoCodecFilter: (value: VideoCodecFilter) => void = () => {};
-    export let onSetDynamicRangeFilter: (value: DynamicRangeFilter) => void = () => {};
-    export let onSetAvailabilityFilter: (value: AvailabilityFilter) => void = () => {};
-    export let onSetSizeFilter: (value: SizeFilter) => void = () => {};
-    export let onSetSortOption: (value: StreamSortOption) => void = () => {};
-    export let onResetFilters: () => void = () => {};
-
-    $: sortSelectOptions = sortOptions.map((option) => ({ label: option.label, value: option.value }));
-    $: languageSelectOptions = audioLanguageFilterOptions.map((value) => ({
-        label: value === "all" ? "Any language" : value,
-        value,
-    }));
-    $: codecSelectOptions = videoCodecFilters.map((option) => ({ label: option.label, value: option.value }));
-    $: rangeSelectOptions = dynamicRangeFilters.map((option) => ({ label: option.label, value: option.value }));
-    $: availabilitySelectOptions = availabilityFilters.map((option) => ({ label: option.label, value: option.value }));
-    $: sizeSelectOptions = sizeFilters.map((option) => ({ label: option.label, value: option.value }));
-    $: activeFilterCount = [
-        audioLanguageFilter !== "all",
-        videoCodecFilter !== "all",
-        dynamicRangeFilter !== "all",
-        availabilityFilter !== "all",
-        sizeFilter !== "all",
-    ].filter(Boolean).length;
-    $: usefulControlCount = [
-        audioLanguageFilterOptions.length > 2,
-        videoCodecFilters.length > 2,
-        dynamicRangeFilters.length > 2,
-        availabilityFilters.length > 1,
-        sizeFilters.length > 1,
-    ].filter(Boolean).length;
+    const sortSelectOptions = $derived(sortOptions.map((option) => ({ label: option.label, value: option.value })));
+    const languageSelectOptions = $derived(
+        audioLanguageFilterOptions.map((value) => ({
+            label: value === "all" ? "Any language" : value,
+            value,
+        })),
+    );
+    const codecSelectOptions = $derived(videoCodecFilters.map((option) => ({ label: option.label, value: option.value })));
+    const rangeSelectOptions = $derived(dynamicRangeFilters.map((option) => ({ label: option.label, value: option.value })));
+    const availabilitySelectOptions = $derived(availabilityFilters.map((option) => ({ label: option.label, value: option.value })));
+    const sizeSelectOptions = $derived(sizeFilters.map((option) => ({ label: option.label, value: option.value })));
+    const activeFilterCount = $derived(
+        [
+            audioLanguageFilter !== "all",
+            videoCodecFilter !== "all",
+            dynamicRangeFilter !== "all",
+            availabilityFilter !== "all",
+            sizeFilter !== "all",
+        ].filter(Boolean).length,
+    );
+    const usefulControlCount = $derived(
+        [
+            audioLanguageFilterOptions.length > 2,
+            videoCodecFilters.length > 2,
+            dynamicRangeFilters.length > 2,
+            availabilityFilters.length > 1,
+            sizeFilters.length > 1,
+        ].filter(Boolean).length,
+    );
 </script>
 
 <div class="flex shrink-0 flex-col gap-3">
@@ -75,7 +109,7 @@
                             class="shrink-0 cursor-pointer rounded-full px-4 py-2 text-sm font-medium transition-colors {resolutionFilter === option.value
                                 ? 'bg-accent text-on-accent'
                                 : 'bg-ink/8 text-ink/75 hover:bg-ink/14 hover:text-ink'}"
-                            on:click={() => onSetResolutionFilter(option.value)}
+                            onclick={() => onSetResolutionFilter(option.value)}
                         >
                             {option.label}
                         </button>
@@ -95,7 +129,7 @@
                 align="right"
                 buttonClass="rounded-full bg-ink/8 px-4 py-2 text-sm text-ink/80 hover:bg-ink/12"
                 menuClass="w-[200px]"
-                on:change={(event) => onSetSortOption(event.detail.value as StreamSortOption)}
+                onChange={(value) => onSetSortOption(value as StreamSortOption)}
             />
         </div>
 
@@ -106,7 +140,7 @@
                     ? 'bg-ink/8 text-ink/80 hover:bg-ink/12'
                     : 'bg-accent text-on-accent'}"
                 aria-expanded={!filtersCollapsed}
-                on:click={onToggleFiltersCollapsed}
+                onclick={onToggleFiltersCollapsed}
             >
                 <SlidersHorizontal size={15} strokeWidth={2} />
                 {activeFilterCount > 0 ? `Filters · ${activeFilterCount}` : "Filters"}
@@ -122,7 +156,7 @@
                         value={audioLanguageFilter}
                         options={languageSelectOptions}
                         buttonClass="w-full rounded-full bg-ink/8 px-3 py-2 text-sm text-ink hover:bg-ink/12"
-                        on:change={(event) => onSetAudioLanguageFilter(event.detail.value)}
+                        onChange={onSetAudioLanguageFilter}
                     />
                 </FilterSelect>
             {/if}
@@ -133,7 +167,7 @@
                         value={videoCodecFilter}
                         options={codecSelectOptions}
                         buttonClass="w-full rounded-full bg-ink/8 px-3 py-2 text-sm text-ink hover:bg-ink/12"
-                        on:change={(event) => onSetVideoCodecFilter(event.detail.value as VideoCodecFilter)}
+                        onChange={(value) => onSetVideoCodecFilter(value as VideoCodecFilter)}
                     />
                 </FilterSelect>
             {/if}
@@ -144,7 +178,7 @@
                         value={dynamicRangeFilter}
                         options={rangeSelectOptions}
                         buttonClass="w-full rounded-full bg-ink/8 px-3 py-2 text-sm text-ink hover:bg-ink/12"
-                        on:change={(event) => onSetDynamicRangeFilter(event.detail.value as DynamicRangeFilter)}
+                        onChange={(value) => onSetDynamicRangeFilter(value as DynamicRangeFilter)}
                     />
                 </FilterSelect>
             {/if}
@@ -155,7 +189,7 @@
                         value={availabilityFilter}
                         options={availabilitySelectOptions}
                         buttonClass="w-full rounded-full bg-ink/8 px-3 py-2 text-sm text-ink hover:bg-ink/12"
-                        on:change={(event) => onSetAvailabilityFilter(event.detail.value as AvailabilityFilter)}
+                        onChange={(value) => onSetAvailabilityFilter(value as AvailabilityFilter)}
                     />
                 </FilterSelect>
             {/if}
@@ -166,7 +200,7 @@
                         value={sizeFilter}
                         options={sizeSelectOptions}
                         buttonClass="w-full rounded-full bg-ink/8 px-3 py-2 text-sm text-ink hover:bg-ink/12"
-                        on:change={(event) => onSetSizeFilter(event.detail.value as SizeFilter)}
+                        onChange={(value) => onSetSizeFilter(value as SizeFilter)}
                     />
                 </FilterSelect>
             {/if}
@@ -174,7 +208,7 @@
                 <button
                     type="button"
                     class="flex cursor-pointer items-center gap-1.5 self-end justify-self-start rounded-full px-3 py-2 text-sm text-ink/55 transition-colors hover:bg-ink/8 hover:text-ink"
-                    on:click={onResetFilters}
+                    onclick={onResetFilters}
                 >
                     <X size={14} strokeWidth={2} />
                     Clear filters

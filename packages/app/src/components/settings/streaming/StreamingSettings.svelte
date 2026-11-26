@@ -9,8 +9,8 @@
 	import { allowTorrenting, setTorrentingAllowed } from "../../../lib/stores/torrenting";
 	import { LIMBO_INSTALL_URL } from "../../../lib/streams/limboClient";
 
-	let torrentingSaving = false;
-	let torrentingError = "";
+	let torrentingSaving = $state(false);
+	let torrentingError = $state("");
 
 	async function setTorrenting(enabled: boolean) {
 		torrentingSaving = true;

@@ -2,8 +2,7 @@
     import { portal } from "../../common/portal";
     import { fade, scale } from "svelte/transition";
 
-    export let onConfirm: () => void = () => {};
-    export let onCancel: () => void = () => {};
+    let { onConfirm = () => {}, onCancel = () => {} }: { onConfirm?: () => void; onCancel?: () => void } = $props();
 
     function confirm() {
         onConfirm();
@@ -57,13 +56,13 @@
         <div class="flex flex-col gap-3">
             <button
                 class="w-full py-3 px-4 bg-accent text-on-accent font-bold rounded-xl hover:bg-accent/85 transition-colors cursor-pointer"
-                on:click={confirm}
+                onclick={confirm}
             >
                 I Understand, Continue
             </button>
             <button
                 class="w-full py-3 px-4 bg-raised text-ink font-medium rounded-xl hover:bg-ink/15 transition-colors cursor-pointer"
-                on:click={cancel}
+                onclick={cancel}
             >
                 Cancel
             </button>

@@ -5,7 +5,7 @@
 	import { isDesktopPlatform } from "../../../lib/shell/platform";
 	import { autoSkipIntros, miniPlayerOnMinimize } from "../../../lib/stores/playbackPreferences";
 
-	let discordRpcEnabled = localStorage.getItem("discord_rpc_enabled") !== "false";
+	let discordRpcEnabled = $state(localStorage.getItem("discord_rpc_enabled") !== "false");
 
 	function setDiscordRpc(enabled: boolean) {
 		discordRpcEnabled = enabled;

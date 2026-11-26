@@ -1,10 +1,17 @@
 <script lang="ts">
     import CheckMark from "./CheckMark.svelte";
 
-    export let email: string;
-    export let password: string;
-    export let keepConnected: boolean;
-    export let disabled = false;
+    let {
+        email = $bindable(),
+        password = $bindable(),
+        keepConnected = $bindable(),
+        disabled = false,
+    }: {
+        email: string;
+        password: string;
+        keepConnected: boolean;
+        disabled?: boolean;
+    } = $props();
 </script>
 
 <label class="flex flex-col gap-2">

@@ -8,34 +8,37 @@
     import { followTrailerColours } from "../../lib/home/trailerAmbient";
     import IconButton from "../common/controls/IconButton.svelte";
 
-    export let showcasedTitle: PopularTitleMeta | null;
+    let {
+        showcasedTitle,
+        onLogoError,
+    }: { showcasedTitle: PopularTitleMeta | null; onLogoError: () => void } = $props();
 
-    export let onLogoError: () => void = () => {};
-
-    let playerIframe: HTMLIFrameElement;
+    let playerIframe = $state.raw<HTMLIFrameElement>();
     let container: HTMLDivElement;
-    let isPaused = false;
-    let isMuted = true;
+    let isPaused = $state(false);
+    let isMuted = $state(true);
     let wasPlayingBeforeHidden = false;
     let canControlTrailer = false;
     let trailerPlaying = false;
-    let trailerSrc = "";
 
+    const trailerSrc = $derived(trailerUrl(showcasedTitle));
 
-    $: if (showcasedTitle) {
+    $effect.pre(() => {
+        if (!showcasedTitle) return;
         isMuted = true;
         isPaused = false;
         wasPlayingBeforeHidden = false;
         canControlTrailer = false;
         trailerPlaying = false;
-        const trailerId = isAndroidPlatform ? undefined : showcasedTitle.trailerStreams?.at(-1)?.ytId;
-        const origin = typeof window !== "undefined" ? window.location.origin : "";
-        const originParam = origin && origin !== "null" ? `&origin=${encodeURIComponent(origin)}` : "";
-        trailerSrc = trailerId
-            ? `https://www.youtube-nocookie.com/embed/${trailerId}?controls=0&modestbranding=1&rel=0&autoplay=1&mute=1&loop=1&playlist=${trailerId}&showinfo=0&iv_load_policy=3&cc_load_policy=0&disablekb=1&enablejsapi=1${originParam}`
-            : "";
-    }
+    });
 
+    function trailerUrl(title: PopularTitleMeta | null) {
+        const trailerId = isAndroidPlatform ? undefined : title?.trailerStreams?.at(-1)?.ytId;
+        if (!trailerId) return "";
+        const origin = window.location.origin;
+        const originParam = origin && origin !== "null" ? `&origin=${encodeURIComponent(origin)}` : "";
+        return `https://www.youtube-nocookie.com/embed/${trailerId}?controls=0&modestbranding=1&rel=0&autoplay=1&mute=1&loop=1&playlist=${trailerId}&showinfo=0&iv_load_policy=3&cc_load_policy=0&disablekb=1&enablejsapi=1${originParam}`;
+    }
 
     onMount(() => {
         const observer = new IntersectionObserver(
@@ -71,7 +74,7 @@
             { threshold: 0.1 },
         );
 
-        if (container) observer.observe(container);
+        observer.observe(container);
 
         return () => observer.disconnect();
     });
@@ -169,7 +172,7 @@
                     src={showcasedTitle.logo}
                     alt="Logo"
                     class="w-[clamp(300px,38vw,600px)] h-auto max-h-[clamp(130px,14vw,220px)] object-contain object-left"
-                    on:error={onLogoError}
+                    onerror={onLogoError}
                 />
             {:else}
                 <h1 class="text-ink text-[clamp(40px,4vw,64px)] font-bold max-w-[700px] leading-[1.05]">
@@ -182,8 +185,7 @@
                 <button
                     data-tv-autofocus
                     class="details-button bg-accent/85 hover:bg-accent/70 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-[clamp(10px,1vw,16px)] text-on-accent text-[clamp(20px,1.8vw,32px)] font-medium px-[clamp(36px,4.4vw,84px)] py-[clamp(12px,1vw,18px)] w-fit rounded-full shadow-[0_10px_30px_rgba(0,0,0,0.18)] transition-colors duration-200"
-                    on:click={() =>
-                        navigateToMeta(showcasedTitle.imdb_id, showcasedTitle.type)}
+                    onclick={() => navigateToMeta(showcasedTitle.imdb_id, showcasedTitle.type)}
                 >
                     <Info size={48} strokeWidth={3} />
 
@@ -225,7 +227,7 @@
                     src={trailerSrc}
                     class="hero-frame"
                     title="Trailer"
-                    on:load={handleTrailerLoad}
+                    onload={handleTrailerLoad}
                 ></iframe>
             {:else if showcasedTitle.background}
                 <img src={showcasedTitle.background} alt="" class="hero-still" />

@@ -4,8 +4,6 @@
     import { onDestroy, onMount, tick } from "svelte";
     import { get } from "svelte/store";
     import { enableRPC, disableRPC } from "./lib/shell/rpc";
-
-
     import { X } from "@lucide/svelte";
     import ShapeLoader from "./components/common/loading/ShapeLoader.svelte";
     import SettingsModal from "./components/settings/SettingsModal.svelte";
@@ -42,8 +40,14 @@
     };
     const pendingPages: Record<string, Promise<PageComponent> | undefined> = {};
 
-    let activePage: PageComponent = Home;
-    let routeLoading = false;
+    const PREFETCH_AFTER: Record<string, string> = {
+        home: "meta",
+        meta: "player",
+        live: "live-player",
+    };
+
+    let ActivePage = $state.raw<PageComponent>(Home);
+    let routeLoading = $state(false);
     let pageLoadToken = 0;
 
     const loadPage = (page: string) => {
@@ -77,7 +81,7 @@
         const token = ++pageLoadToken;
         const cached = pageCache[page];
         if (cached) {
-            activePage = cached;
+            ActivePage = cached;
             routeLoading = false;
             return;
         }
@@ -87,28 +91,33 @@
         try {
             const component = await loadPage(page);
             if (token !== pageLoadToken) return;
-            activePage = component;
+            ActivePage = component;
         } catch (err) {
             console.error(`Failed to load page module: ${page}`, err);
             if (token !== pageLoadToken) return;
-            activePage = Home;
+            ActivePage = Home;
         } finally {
             if (token === pageLoadToken) routeLoading = false;
         }
     };
 
-    $: void ensurePageLoaded($router.page);
-    $: if ($router.page === "home") prefetchPage("meta");
-    $: if ($router.page === "meta") prefetchPage("player");
-    $: if ($router.page === "live") prefetchPage("live-player");
+    $effect.pre(() => {
+        void ensurePageLoaded($router.page);
+    });
 
-    let showTitleBar = false;
-    let showUpdatePrompt = false;
+    $effect(() => {
+        const next = PREFETCH_AFTER[$router.page];
+        if (next) prefetchPage(next);
+    });
+
+    let showTitleBar = $state(false);
+    let showUpdatePrompt = $state(false);
     let updateLaterTimeout: ReturnType<typeof setTimeout> | null = null;
     let updateTestArmed = false;
     let updateTestTimeout: ReturnType<typeof setTimeout> | null = null;
     let scrollContainerElem: HTMLDivElement | null = null;
-    let lastRouteKey = "";
+
+    const routeKey = $derived(`${$router.page}:${JSON.stringify($router.params)}`);
 
     const UPDATE_REMIND_DELAY = 30 * 60 * 1000;
     const UPDATE_TEST_ARM_DELAY = 1500;
@@ -301,17 +310,14 @@
         };
     });
 
-    $: if (typeof document !== "undefined") {
+    $effect(() => {
         document.body.classList.toggle("native-video", $nativeVideoVisible);
-    }
+    });
 
-    $: {
-        const nextRouteKey = `${$router.page}:${JSON.stringify($router.params)}`;
-        if (nextRouteKey !== lastRouteKey) {
-            lastRouteKey = nextRouteKey;
-            void resetRouteScroll();
-        }
-    }
+    $effect(() => {
+        routeKey;
+        void resetRouteScroll();
+    });
 </script>
 
 <div class="w-screen h-screen overflow-hidden flex flex-col {$nativeVideoVisible ? '' : 'bg-canvas'}">
@@ -324,7 +330,7 @@
 
     <div bind:this={scrollContainerElem} class="relative flex-1 min-h-0 overflow-x-hidden overflow-y-auto" data-scroll-container>
         <div class="w-full min-h-full">
-            <svelte:component this={activePage} {...$router.params as any} />
+            <ActivePage {...$router.params as any} />
 
             {#if routeLoading}
                 <div
@@ -344,15 +350,15 @@
     {#if showUpdatePrompt}
         <div
             class="raffi-modal-backdrop fixed inset-0 z-[500] bg-canvas/80 backdrop-blur-sm flex items-center justify-center"
-            on:click|self={handleUpdateLater}
-            on:keydown={(e) => e.key === "Escape" && handleUpdateLater()}
+            onclick={(event) => event.target === event.currentTarget && handleUpdateLater()}
+            onkeydown={(e) => e.key === "Escape" && handleUpdateLater()}
             role="button"
             tabindex="0"
         >
             <div
                 class="raffi-modal-surface bg-canvas w-full max-w-lg rounded-[32px] p-6 md:p-8 flex flex-col gap-5 shadow-[0_40px_160px_rgba(0,0,0,0.55)]"
-                on:click|stopPropagation
-                on:keydown|stopPropagation
+                onclick={(event) => event.stopPropagation()}
+                onkeydown={(event) => event.stopPropagation()}
                 role="dialog"
                 tabindex="-1"
             >
@@ -369,7 +375,7 @@
                     </div>
                     <button
                         class="text-ink/50 hover:text-ink transition-colors cursor-pointer"
-                        on:click={handleUpdateLater}
+                        onclick={handleUpdateLater}
                         aria-label="Close update dialog"
                     >
                         <X size={24} strokeWidth={2} />
@@ -385,13 +391,13 @@
                     <div class="flex flex-col gap-3 sm:flex-row">
                         <button
                             class="flex-1 sm:flex-none px-4 py-2 rounded-2xl bg-ink/10 text-ink font-semibold hover:bg-ink/20 transition-colors cursor-pointer"
-                            on:click={handleUpdateLater}
+                            onclick={handleUpdateLater}
                         >
                             Later
                         </button>
                         <button
                             class="flex-1 sm:flex-none px-4 py-2 rounded-2xl bg-accent text-on-accent font-semibold hover:bg-accent/85 transition-colors cursor-pointer"
-                            on:click={handleUpdateRestart}
+                            onclick={handleUpdateRestart}
                         >
                             Restart now
                         </button>

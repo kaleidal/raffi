@@ -5,7 +5,6 @@ import type { Chapter } from "../../types";
 export type PlayerSessionLoaderDeps = {
     getFileIdx: () => number | null;
     getStartTime: () => number;
-    autoPlay: boolean;
     getMetaData: () => ShowResponse | null;
     getSeason: () => number | null;
     getEpisode: () => number | null;

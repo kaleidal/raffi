@@ -4,11 +4,17 @@
     import { fade, scale } from "svelte/transition";
     import { AlertTriangle } from "@lucide/svelte";
 
-    export let title: string = "Unsupported Title";
-    export let message: string = "This title is not currently supported.";
-
-    export let onBack: () => void = () => {};
-    export let onRetry: () => void = () => {};
+    let {
+        title = "Unsupported Title",
+        message = "This title is not currently supported.",
+        onBack = () => {},
+        onRetry = () => {},
+    }: {
+        title?: string;
+        message?: string;
+        onBack?: () => void;
+        onRetry?: () => void;
+    } = $props();
 
     function goBack() {
         onBack();
@@ -44,13 +50,13 @@
         <div class="flex flex-col gap-3">
             <button
                 class="w-full py-3 px-4 bg-accent text-on-accent font-bold rounded-xl hover:bg-accent/85 transition-colors cursor-pointer"
-                on:click={retry}
+                onclick={retry}
             >
                 Try Again
             </button>
             <button
                 class="w-full py-3 px-4 bg-raised text-ink font-medium rounded-xl hover:bg-ink/15 transition-colors cursor-pointer"
-                on:click={goBack}
+                onclick={goBack}
             >
                 Go Back
             </button>

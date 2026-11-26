@@ -1,6 +1,5 @@
 <script lang="ts">
-    export let background: string | null;
-    export let backgroundFailed: boolean;
+    let { background, backgroundFailed = $bindable() }: { background: string | null; backgroundFailed: boolean } = $props();
 </script>
 
 {#if background && !backgroundFailed}
@@ -8,7 +7,7 @@
         src={background}
         alt="Background"
         class="w-full h-full object-cover"
-        on:error={() => (backgroundFailed = true)}
+        onerror={() => (backgroundFailed = true)}
     />
 {:else}
     <div

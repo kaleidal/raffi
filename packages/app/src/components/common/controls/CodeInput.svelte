@@ -1,23 +1,25 @@
 <script lang="ts">
-    import { createEventDispatcher, onMount } from "svelte";
+    import { onMount } from "svelte";
 
-    export let value = "";
-    export let disabled = false;
-    export let label = "Sign-in code";
+    let {
+        value = $bindable(""),
+        disabled = false,
+        label = "Sign-in code",
+        onComplete,
+    }: { value?: string; disabled?: boolean; label?: string; onComplete: () => void } = $props();
 
     const CODE_LENGTH = 6;
     const slots = Array.from({ length: CODE_LENGTH }, (_, index) => index);
-    const dispatch = createEventDispatcher<{ complete: { value: string } }>();
 
     let input: HTMLInputElement;
-    let focused = false;
+    let focused = $state(false);
 
-    $: activeSlot = Math.min(value.length, CODE_LENGTH - 1);
+    const activeSlot = $derived(Math.min(value.length, CODE_LENGTH - 1));
 
     const handleInput = () => {
         value = input.value.replace(/\D/g, "").slice(0, CODE_LENGTH);
         input.value = value;
-        if (value.length === CODE_LENGTH) dispatch("complete", { value });
+        if (value.length === CODE_LENGTH) onComplete();
     };
 
     onMount(() => input.focus());
@@ -45,9 +47,9 @@
         maxlength={CODE_LENGTH}
         aria-label={label}
         class="absolute inset-0 w-full h-full opacity-0 cursor-text"
-        on:input={handleInput}
-        on:focus={() => (focused = true)}
-        on:blur={() => (focused = false)}
+        oninput={handleInput}
+        onfocus={() => (focused = true)}
+        onblur={() => (focused = false)}
     />
 </label>
 

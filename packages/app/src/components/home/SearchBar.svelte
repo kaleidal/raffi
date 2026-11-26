@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { onMount } from "svelte";
+    import { onMount, untrack, type Snippet } from "svelte";
     import { Search, Mic } from "@lucide/svelte";
     import {
         mergeSearchRows,
@@ -15,12 +15,12 @@
     import { channelQuery } from "../../lib/live/library";
     import { fade } from "svelte/transition";
     import { portalToBody } from "../common/portal";
-	import TitleContextMenu from "./context_menus/TitleContextMenu.svelte";
-	import ListsPopup from "../meta/modals/ListsPopup.svelte";
-	import HeaderActions from "./header/HeaderActions.svelte";
-	import RaffiMark from "../common/RaffiMark.svelte";
-	import SearchResults from "./header/SearchResults.svelte";
-	import LinkResult from "./header/LinkResult.svelte";
+    import TitleContextMenu from "./context_menus/TitleContextMenu.svelte";
+    import ListsPopup from "../meta/modals/ListsPopup.svelte";
+    import HeaderActions from "./header/HeaderActions.svelte";
+    import RaffiMark from "../common/RaffiMark.svelte";
+    import SearchResults from "./header/SearchResults.svelte";
+    import LinkResult from "./header/LinkResult.svelte";
     import { parsePlayableLink } from "../../lib/streams/playableLink";
     import {
         HOME_SEARCH_BAR_POSITION_AUTO,
@@ -30,38 +30,33 @@
         getStoredHomeSearchBarPosition,
     } from "../../lib/home/searchBarSettings";
 
+    let {
+        absolute = true,
+        onLogoClick,
+        leading,
+    }: { absolute?: boolean; onLogoClick?: () => void; leading?: Snippet } = $props();
 
-
-    let searchQuery = "";
-    let searchResults: SplitSearchResults = { movies: [], series: [] };
-	let searchTimeout: any;
-	let searchArea: HTMLDivElement | null = null;
-	let showSearchResults = false;
-	let loading = false;
-	let commandHint = "";
-	let linkResult: LinkResult | null = null;
-    let totalSearchResults = 0;
-    let searchBarPositionPreference: HomeSearchBarPosition =
-        HOME_SEARCH_BAR_POSITION_AUTO;
-    let autoDockToBottom = false;
-    let searchDockBottom = false;
-    let portraitLayout = false;
-
-
-    export let absolute: boolean = true;
-    export let onLogoClick: () => void = () => {};
+    let searchQuery = $state("");
+    let searchResults = $state.raw<SplitSearchResults>({ movies: [], series: [] });
+    let searchTimeout: any;
+    let searchArea: HTMLDivElement | null = null;
+    let showSearchResults = $state(false);
+    let loading = $state(false);
+    let commandHint = $state("");
+    let linkResult = $state.raw<LinkResult>();
+    let searchBarPositionPreference = $state<HomeSearchBarPosition>(HOME_SEARCH_BAR_POSITION_AUTO);
+    let autoDockToBottom = $state(false);
+    let portraitLayout = $state(false);
 
     // Context Menu State
-    let showContextMenu = false;
-    let contextMenuX = 0;
-    let contextMenuY = 0;
-    let selectedImdbId = "";
-    let selectedType = "movie"; // Default to movie for search results
+    let showContextMenu = $state(false);
+    let contextMenuX = $state(0);
+    let contextMenuY = $state(0);
+    let selectedImdbId = $state("");
+    let selectedType = $state("movie"); // Default to movie for search results
     let selectedTitle = ""; // Store title for verification
-    let showListsPopup = false;
+    let showListsPopup = $state(false);
     let scrollContainer: HTMLElement | null = null;
-    let portalSearchDock = false;
-    let homeOverlayMode = false;
     const HEADER_SCROLL_ENTER_THRESHOLD = 140;
     const HEADER_SCROLL_LEAVE_THRESHOLD = 96;
 
@@ -98,77 +93,77 @@
         updateAutoDockPosition();
     }
 
-	const runCommand = (rawCommand: string) => {
-		const normalized = rawCommand.trim().toLowerCase();
-		if (!normalized) return false;
+    const runCommand = (rawCommand: string) => {
+        const normalized = rawCommand.trim().toLowerCase();
+        if (!normalized) return false;
 
-		switch (normalized) {
-			case "/test_update":
-			case "/test-update":
-				window.dispatchEvent(new CustomEvent("raffi-test-update"));
-				commandHint = "Triggered test update.";
-				return true;
-			default:
-				commandHint = `Unknown command: ${normalized}`;
-				return false;
-		}
-	};
+        switch (normalized) {
+            case "/test_update":
+            case "/test-update":
+                window.dispatchEvent(new CustomEvent("raffi-test-update"));
+                commandHint = "Triggered test update.";
+                return true;
+            default:
+                commandHint = `Unknown command: ${normalized}`;
+                return false;
+        }
+    };
 
-	const handleCommandEnter = () => {
-		const trimmed = searchQuery.trim();
-		if (!trimmed.startsWith("/")) return false;
-		const handled = runCommand(trimmed);
-		searchQuery = "";
-		searchResults = { movies: [], series: [] };
-		showSearchResults = false;
-		loading = false;
-		return handled;
-	};
+    const handleCommandEnter = () => {
+        const trimmed = searchQuery.trim();
+        if (!trimmed.startsWith("/")) return false;
+        const handled = runCommand(trimmed);
+        searchQuery = "";
+        searchResults = { movies: [], series: [] };
+        showSearchResults = false;
+        loading = false;
+        return handled;
+    };
 
-	function handleSearch(e: Event) {
-		runSearch((e.target as HTMLInputElement).value);
-	}
+    function handleSearch(e: Event) {
+        runSearch((e.target as HTMLInputElement).value);
+    }
 
-	async function searchByVoice() {
-		const spoken = await listenForSpeech();
-		if (!spoken) return;
-		if (channelMode) channelQuery.set(spoken);
-		else runSearch(spoken);
-	}
+    async function searchByVoice() {
+        const spoken = await listenForSpeech();
+        if (!spoken) return;
+        if (channelMode) channelQuery.set(spoken);
+        else runSearch(spoken);
+    }
 
-	function runSearch(query: string) {
-		searchQuery = query;
-		commandHint = "";
+    function runSearch(query: string) {
+        searchQuery = query;
+        commandHint = "";
 
-		clearTimeout(searchTimeout);
-		if (!query.trim()) {
-			searchResults = { movies: [], series: [] };
-			showSearchResults = false;
-			loading = false;
-			return;
-		}
+        clearTimeout(searchTimeout);
+        if (!query.trim()) {
+            searchResults = { movies: [], series: [] };
+            showSearchResults = false;
+            loading = false;
+            return;
+        }
 
-		if (query.trim().startsWith("/")) {
-			showSearchResults = false;
-			loading = false;
-			return;
-		}
+        if (query.trim().startsWith("/")) {
+            showSearchResults = false;
+            loading = false;
+            return;
+        }
 
-		if (parsePlayableLink(query)) {
-			showSearchResults = true;
-			loading = false;
-			return;
-		}
+        if (parsePlayableLink(query)) {
+            showSearchResults = true;
+            loading = false;
+            return;
+        }
 
-		loading = true;
-		showSearchResults = true;
+        loading = true;
+        showSearchResults = true;
 
-		searchTimeout = setTimeout(async () => {
-			const trimmed = query.trim();
-			try {
-				const nextResults = await searchTitlesSplit(trimmed);
-				if (searchQuery.trim() !== trimmed) return;
-				searchResults = nextResults;
+        searchTimeout = setTimeout(async () => {
+            const trimmed = query.trim();
+            try {
+                const nextResults = await searchTitlesSplit(trimmed);
+                if (searchQuery.trim() !== trimmed) return;
+                searchResults = nextResults;
                 // Non-blocking addon search enrichment.
                 void searchAddonTitlesSplit(trimmed)
                     .then((addonResults) => {
@@ -200,34 +195,32 @@
                     .catch((error) => {
                         console.error("Addon search enrichment failed", error);
                     });
-			} catch (e) {
-				console.error("Search failed", e);
-				if (searchQuery.trim() !== trimmed) return;
-				searchResults = { movies: [], series: [] };
-			} finally {
-				if (searchQuery.trim() === trimmed) {
-					loading = false;
-				}
-			}
-		}, 500);
-	}
+            } catch (e) {
+                console.error("Search failed", e);
+                if (searchQuery.trim() !== trimmed) return;
+                searchResults = { movies: [], series: [] };
+            } finally {
+                if (searchQuery.trim() === trimmed) {
+                    loading = false;
+                }
+            }
+        }, 500);
+    }
 
-	const handleSearchKeydown = (event: KeyboardEvent) => {
-		if (event.key !== "Enter") return;
-		if (link) {
-			event.preventDefault();
-			linkResult?.activate();
-			return;
-		}
-		if (searchQuery.trim().startsWith("/")) {
-			event.preventDefault();
-			handleCommandEnter();
-		}
-	};
+    const handleSearchKeydown = (event: KeyboardEvent) => {
+        if (event.key !== "Enter") return;
+        if (link) {
+            event.preventDefault();
+            linkResult?.activate();
+            return;
+        }
+        if (searchQuery.trim().startsWith("/")) {
+            event.preventDefault();
+            handleCommandEnter();
+        }
+    };
 
-
-
-	function closeSearch() {
+    function closeSearch() {
         // Delay closing to allow clicks on results or context menu
         setTimeout(() => {
             // Only close if we're not interacting with context menu or popup
@@ -237,46 +230,49 @@
         }, 200);
     }
 
-	function navigateToMeta(
-		imdbId: string,
-		type: string,
-		name: string,
-	) {
-		router.navigate("meta", { imdbId, type, name });
-	}
-
-	function handleContextMenu(
-		e: MouseEvent,
-		result: SearchTitleResult,
-	) {
-		contextMenuX = e.clientX;
-		contextMenuY = e.clientY;
-		selectedImdbId = result.imdbId;
-		selectedType = result.type;
-		selectedTitle = result.name;
-		showContextMenu = true;
-	}
-
-	const inputClass =
-		"bg-transparent text-ink/85 text-center px-[clamp(20px,2vw,40px)] w-full min-w-0 text-[clamp(18px,1.5vw,28px)] font-normal outline-none focus:outline-none focus:ring-0 transition-[font-size,padding] duration-300";
-
-	$: channelMode = $router.page === "live";
-	$: link = channelMode ? null : parsePlayableLink(searchQuery);
-	$: totalSearchResults = searchResults.movies.length + searchResults.series.length;
-    /** On TV the bar stays in the header, where it neither covers the rows nor catches the remote's Down key. */
-    $: searchDockBottom =
-        !isTvPlatform &&
-        (portraitLayout ||
-            searchBarPositionPreference === HOME_SEARCH_BAR_POSITION_BOTTOM ||
-            (searchBarPositionPreference === HOME_SEARCH_BAR_POSITION_AUTO &&
-                $router.page === "home" &&
-                autoDockToBottom));
-    $: homeOverlayMode = absolute && $router.page === "home";
-    $: portalSearchDock = homeOverlayMode || portraitLayout;
-    $: if (searchBarPositionPreference === HOME_SEARCH_BAR_POSITION_AUTO) {
-        $router.page;
-        updateAutoDockPosition();
+    function navigateToMeta(
+        imdbId: string,
+        type: string,
+        name: string,
+    ) {
+        router.navigate("meta", { imdbId, type, name });
     }
+
+    function handleContextMenu(
+        e: MouseEvent,
+        result: SearchTitleResult,
+    ) {
+        contextMenuX = e.clientX;
+        contextMenuY = e.clientY;
+        selectedImdbId = result.imdbId;
+        selectedType = result.type;
+        selectedTitle = result.name;
+        showContextMenu = true;
+    }
+
+    const inputClass =
+        "bg-transparent text-ink/85 text-center px-[clamp(20px,2vw,40px)] w-full min-w-0 text-[clamp(18px,1.5vw,28px)] font-normal outline-none focus:outline-none focus:ring-0 transition-[font-size,padding] duration-300";
+
+    const channelMode = $derived($router.page === "live");
+    const link = $derived(channelMode ? null : parsePlayableLink(searchQuery));
+    const totalSearchResults = $derived(searchResults.movies.length + searchResults.series.length);
+    /** On TV the bar stays in the header, where it neither covers the rows nor catches the remote's Down key. */
+    const searchDockBottom = $derived(
+        !isTvPlatform &&
+            (portraitLayout ||
+                searchBarPositionPreference === HOME_SEARCH_BAR_POSITION_BOTTOM ||
+                (searchBarPositionPreference === HOME_SEARCH_BAR_POSITION_AUTO &&
+                    $router.page === "home" &&
+                    autoDockToBottom)),
+    );
+    const homeOverlayMode = $derived(absolute && $router.page === "home");
+    const portalSearchDock = $derived(homeOverlayMode || portraitLayout);
+
+    $effect(() => {
+        if (searchBarPositionPreference !== HOME_SEARCH_BAR_POSITION_AUTO) return;
+        $router.page;
+        untrack(updateAutoDockPosition);
+    });
 
     onMount(() => {
         const portrait = window.matchMedia("(orientation: portrait)");
@@ -332,7 +328,7 @@
         class="cursor-pointer hover:opacity-80 transition-opacity"
         onclick={() => {
             router.navigate("home");
-            onLogoClick();
+            onLogoClick?.();
         }}
     >
         <RaffiMark class="header-logo h-[clamp(56px,4vw,80px)] w-auto text-ink/85" />
@@ -370,11 +366,13 @@
                         : ""
                 }`}
             >
-                <slot name="leading">
+                {#if leading}
+                    {@render leading()}
+                {:else}
                     <div class="search-icon flex w-[clamp(56px,4vw,80px)] shrink-0 items-center justify-center pl-2 text-ink/70">
                         <Search size={40} strokeWidth={2} />
                     </div>
-                </slot>
+                {/if}
 
                 {#if channelMode}
                     <input
@@ -445,7 +443,6 @@
             onAddToList={handleAddToList}
         />
     {/if}
-
 
     <ListsPopup
         bind:visible={showListsPopup}

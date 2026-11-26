@@ -4,13 +4,21 @@
     import { guideProgrammes } from "../../../lib/live/library";
     import type { LiveChannel } from "../../../lib/live/types";
 
-    export let channel: LiveChannel;
-    export let now: number;
-    export let onPlay: (channel: LiveChannel) => void;
-    export let onMenu: (event: MouseEvent, channel: LiveChannel) => void;
-    export let onHighlight: (channel: LiveChannel) => void;
+    let {
+        channel,
+        now,
+        onPlay,
+        onMenu,
+        onHighlight,
+    }: {
+        channel: LiveChannel;
+        now: number;
+        onPlay: (channel: LiveChannel) => void;
+        onMenu: (event: MouseEvent, channel: LiveChannel) => void;
+        onHighlight: (channel: LiveChannel) => void;
+    } = $props();
 
-    $: airing = nowAndNext(channel.guideId ? $guideProgrammes.get(channel.guideId) : undefined, now).now;
+    const airing = $derived(nowAndNext(channel.guideId ? $guideProgrammes.get(channel.guideId) : undefined, now).now);
 </script>
 
 <button

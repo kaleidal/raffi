@@ -1,6 +1,7 @@
 <script lang="ts">
     import { portal } from "../../common/portal";
     import { fade } from "svelte/transition";
+    import { SvelteSet } from "svelte/reactivity";
     import {
         getLists,
         addToList,
@@ -11,17 +12,23 @@
     } from "../../../lib/db/db";
     import ShapeLoader from "../../common/loading/ShapeLoader.svelte";
 
-    export let visible = false;
-    export let imdbId: string;
-    export let type: string;
+    let {
+        visible = $bindable(false),
+        imdbId,
+        type,
+        onClose = () => {},
+    }: {
+        visible?: boolean;
+        imdbId: string;
+        type: string;
+        onClose?: () => void;
+    } = $props();
 
-    export let onClose: () => void = () => {};
-
-    let lists: List[] = [];
-    let memberOf: Set<string> = new Set();
-    let loading = false;
-    let newListName = "";
-    let creatingList = false;
+    let lists = $state.raw<List[]>([]);
+    let memberOf = $state.raw(new SvelteSet<string>());
+    let loading = $state(false);
+    let newListName = $state("");
+    let creatingList = $state(false);
 
     async function handleCreateList() {
         if (!newListName.trim()) return;
@@ -40,7 +47,7 @@
     async function loadLists() {
         loading = true;
         lists = await getLists();
-        memberOf = await getListMembershipByImdb(imdbId);
+        memberOf = new SvelteSet(await getListMembershipByImdb(imdbId));
         loading = false;
     }
 
@@ -52,20 +59,19 @@
             await addToList(listId, imdbId, 0, type);
             memberOf.add(listId);
         }
-        memberOf = memberOf;
     }
 
-    $: if (visible) {
-        loadLists();
-    }
+    $effect(() => {
+        if (visible) loadLists();
+    });
 </script>
 
 {#if visible}
     <div
         use:portal
         class="raffi-modal-backdrop fixed inset-0 z-50 bg-canvas/58 backdrop-blur-xl flex items-center justify-center"
-        on:click|self={close}
-        on:keydown={(e) => e.key === "Escape" && close()}
+        onclick={(event) => event.target === event.currentTarget && close()}
+        onkeydown={(e) => e.key === "Escape" && close()}
         role="button"
         tabindex="0"
         transition:fade={{ duration: 200 }}
@@ -75,7 +81,7 @@
         >
             <button
                 class="absolute top-6 right-6 z-10 text-ink/50 hover:text-ink cursor-pointer"
-                on:click={close}
+                onclick={close}
                 aria-label="Close"
             >
                 <svg
@@ -107,7 +113,7 @@
                         placeholder="+ Create new list"
                         class="w-full bg-transparent border-2 border-dashed border-ink/20 text-ink px-4 py-3 rounded-xl outline-none focus:border-ink/50 transition-colors placeholder:text-ink/30"
                         bind:value={newListName}
-                        on:keydown={(e) =>
+                        onkeydown={(e) =>
                             e.key === "Enter" && handleCreateList()}
                         disabled={creatingList}
                     />
@@ -125,7 +131,7 @@
                     {#each lists as list}
                         <button
                             class="w-full bg-ink/5 hover:bg-ink/10 p-4 rounded-xl flex flex-row justify-between items-center transition-colors cursor-pointer"
-                            on:click={() => toggleList(list.list_id)}
+                            onclick={() => toggleList(list.list_id)}
                         >
                             <span class="text-ink font-medium "
                                 >{list.name}</span

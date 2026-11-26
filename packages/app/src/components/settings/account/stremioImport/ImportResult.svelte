@@ -1,7 +1,7 @@
 <script lang="ts">
     import type { ImportResultSummary } from "./importStatus";
 
-    export let summary: ImportResultSummary;
+    let { summary }: { summary: ImportResultSummary } = $props();
 </script>
 
 <div class="rounded-2xl bg-success/12 text-success px-4 py-3 text-sm flex flex-col gap-1">

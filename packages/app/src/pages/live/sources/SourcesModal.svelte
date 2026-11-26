@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { untrack } from "svelte";
     import { fade, scale } from "svelte/transition";
     import { ArrowLeft, Pencil, Plus, Trash2, X } from "@lucide/svelte";
     import { portal } from "../../../components/common/portal";
@@ -7,18 +8,23 @@
     import { liveSettings, removeSource } from "../../../lib/live/sources";
     import type { LiveSource } from "../../../lib/live/types";
 
-    export let open = false;
-    export let onSaved: (source: LiveSource) => void;
-    export let onRemoved: (sourceId: string) => void;
+    let {
+        open = $bindable(false),
+        onSaved,
+        onRemoved,
+    }: {
+        open?: boolean;
+        onSaved: (source: LiveSource) => void;
+        onRemoved: (sourceId: string) => void;
+    } = $props();
 
-    let editing: LiveSource | null | undefined;
-    let wasOpen = false;
+    let editing = $state.raw<LiveSource | null | undefined>();
 
-    $: if (open !== wasOpen) {
-        wasOpen = open;
-        if (open) editing = $liveSettings.sources.length ? undefined : null;
-    }
-    $: title = editing === undefined ? "Live TV sources" : editing ? "Edit source" : "Add a source";
+    $effect.pre(() => {
+        if (open) editing = untrack(() => $liveSettings.sources.length) ? undefined : null;
+    });
+
+    const title = $derived(editing === undefined ? "Live TV sources" : editing ? "Edit source" : "Add a source");
 
     const describe = (source: LiveSource) =>
         source.kind === "xtream" ? `Xtream · ${new URL(source.serverUrl).host}` : new URL(source.playlistUrl).host;

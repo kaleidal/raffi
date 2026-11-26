@@ -1,22 +1,25 @@
 <script lang="ts">
     import type { Episode, ShowResponse } from "../../lib/library/types/meta_types";
+    import { SvelteSet } from "svelte/reactivity";
     import { Check, FileVideo } from "@lucide/svelte";
 
-    export let metaData: ShowResponse;
-    export let currentSeason: number;
-    export let progressMap: any = {};
+    let {
+        metaData,
+        currentSeason,
+        progressMap = {},
+        onEpisodeClick = () => {},
+        onEpisodeContextMenu = () => {},
+    }: {
+        metaData: ShowResponse;
+        currentSeason: number;
+        progressMap?: any;
+        onEpisodeClick?: (episode: Episode) => void;
+        onEpisodeContextMenu?: (detail: { event: MouseEvent; episode: Episode }) => void;
+    } = $props();
 
-    export let onEpisodeClick: (episode: Episode) => void = () => {};
-    export let onEpisodeContextMenu: (detail: { event: MouseEvent; episode: Episode }) => void = () => {};
+    const failedImages = new SvelteSet<string>();
 
-    let failedImages = new Set<string>();
-
-    function handleImageError(key: string) {
-        failedImages.add(key);
-        failedImages = failedImages;
-    }
-
-    $: episodes = metaData.meta.videos.filter((video) => video.season === currentSeason);
+    const episodes = $derived(metaData.meta.videos.filter((video) => video.season === currentSeason));
 </script>
 
 <div class="episode-grid">
@@ -27,8 +30,11 @@
 
         <button
             class="group flex cursor-pointer flex-col gap-3 text-left"
-            on:click={() => onEpisodeClick(episode)}
-            on:contextmenu|preventDefault={(event) => onEpisodeContextMenu({ event, episode })}
+            onclick={() => onEpisodeClick(episode)}
+            oncontextmenu={(event) => {
+                event.preventDefault();
+                onEpisodeContextMenu({ event, episode });
+            }}
         >
             <div
                 class="relative aspect-video w-full overflow-hidden rounded-[18px] bg-surface transition-[translate,box-shadow] duration-200 ease-out group-hover:-translate-y-1 group-hover:shadow-[0_14px_30px_rgba(0,0,0,0.3)]"
@@ -43,7 +49,7 @@
                         class="h-full w-full object-cover transition-[scale,filter] duration-200 {watched
                             ? 'brightness-[0.55] grayscale'
                             : 'group-hover:scale-[1.03]'}"
-                        on:error={() => handleImageError(key)}
+                        onerror={() => failedImages.add(key)}
                     />
                 {:else}
                     <div class="flex h-full w-full items-center justify-center text-ink/25">

@@ -9,18 +9,33 @@
     import type { LiveChannel, Programme } from "../../../lib/live/types";
     import { formatClock } from "../guide/timeline";
 
-    export let channel: LiveChannel;
-    export let airing: Programme | null;
-    export let now: number;
-    export let playing: boolean;
-    export let volume: number;
-    export let favourite: boolean;
-    export let objectFit: "contain" | "cover";
-    export let togglePlay: () => void;
-    export let onVolumeChange: (volume: number) => void;
-    export let toggleFavourite: () => void;
-    export let toggleObjectFit: () => void;
-    export let toggleFullscreen: () => void;
+    let {
+        channel,
+        airing,
+        now,
+        playing,
+        volume,
+        favourite,
+        objectFit,
+        togglePlay,
+        onVolumeChange,
+        toggleFavourite,
+        toggleObjectFit,
+        toggleFullscreen,
+    }: {
+        channel: LiveChannel;
+        airing: Programme | null;
+        now: number;
+        playing: boolean;
+        volume: number;
+        favourite: boolean;
+        objectFit: "contain" | "cover";
+        togglePlay: () => void;
+        onVolumeChange: (volume: number) => void;
+        toggleFavourite: () => void;
+        toggleObjectFit: () => void;
+        toggleFullscreen: () => void;
+    } = $props();
 </script>
 
 <div class="live-controls relative z-10 flex items-center text-ink overflow-hidden">

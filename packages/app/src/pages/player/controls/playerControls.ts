@@ -1,4 +1,7 @@
 // Player control handlers and keyboard shortcuts
+import { get } from "svelte/store";
+import { loading, objectFit, showCanvas } from "../playerState";
+import { captureFrame } from "../session/videoSession";
 import type { SeekFeedback } from "../types";
 
 const IDLE_DELAY = 5000;
@@ -118,13 +121,6 @@ export function createControlsManager(
         }
     }
 
-    function toggleObjectFit(
-        objectFit: "contain" | "cover",
-        setObjectFit: (fit: "contain" | "cover") => void
-    ) {
-        setObjectFit(objectFit === "contain" ? "cover" : "contain");
-    }
-
     return {
         resetHideTimer,
         handleMouseMove,
@@ -135,7 +131,6 @@ export function createControlsManager(
         onVolumeChange,
         toggleFullscreen,
         handleKeydown,
-        toggleObjectFit,
     };
 }
 
@@ -148,7 +143,7 @@ export async function exitFullscreen() {
     if (document.fullscreenElement) await document.exitFullscreen();
 }
 
-export function applyObjectFit(fit: "contain" | "cover", ...surfaces: Array<HTMLElement | undefined>) {
+function applyObjectFit(fit: "contain" | "cover", ...surfaces: Array<HTMLElement | undefined>) {
     for (const surface of surfaces) {
         if (!surface) continue;
         surface.style.objectFit = fit;
@@ -156,4 +151,18 @@ export function applyObjectFit(fit: "contain" | "cover", ...surfaces: Array<HTML
         surface.style.transform = fit === "cover" ? "scale(1.035)" : "none";
         surface.style.transformOrigin = "center center";
     }
+}
+
+/** Flips between fitting and filling the frame, covering the switch with a still of the current frame. */
+export function switchObjectFit(video: HTMLVideoElement | undefined, canvas: HTMLCanvasElement | undefined) {
+    const nextFit = get(objectFit) === "contain" ? "cover" : "contain";
+    objectFit.set(nextFit);
+    applyObjectFit(nextFit, video, canvas);
+    if (!video || !canvas) return;
+    captureFrame(video, canvas);
+    if (get(showCanvas) || get(loading)) return;
+    showCanvas.set(true);
+    requestAnimationFrame(() => {
+        if (!get(loading)) showCanvas.set(false);
+    });
 }

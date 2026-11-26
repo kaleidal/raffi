@@ -4,10 +4,15 @@
     import { isAndroidPlatform } from "../../../lib/shell/platform";
     import { openInYouTube } from "../../../lib/android/youtube";
 
-    export let visible = false;
-    export let ytId: string;
-
-    export let onClose: () => void = () => {};
+    let {
+        visible = $bindable(false),
+        ytId,
+        onClose = () => {},
+    }: {
+        visible?: boolean;
+        ytId: string;
+        onClose?: () => void;
+    } = $props();
 
     function close() {
         visible = false;
@@ -15,9 +20,11 @@
     }
 
     /** In the Android app the YouTube app plays the trailer; the embedded player is only for devices without it. */
-    let embedded = !isAndroidPlatform;
+    let embedded = $state(!isAndroidPlatform);
 
-    $: if (visible && !embedded) void handOff(ytId);
+    $effect(() => {
+        if (visible && !embedded) void handOff(ytId);
+    });
 
     async function handOff(videoId: string) {
         if (await openInYouTube(videoId)) close();
@@ -26,13 +33,13 @@
 </script>
 
 {#if visible && embedded}
-    <!-- svelte-ignore a11y-click-events-have-key-events -->
-    <!-- svelte-ignore a11y-no-static-element-interactions -->
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
         use:portal
         class="raffi-modal-backdrop scheme-dark fixed inset-0 z-[220] flex items-center justify-center bg-canvas/80 backdrop-blur-sm"
         transition:fade={{ duration: 200 }}
-        on:click|self={close}
+        onclick={(event) => event.target === event.currentTarget && close()}
     >
         <div
             class="raffi-modal-surface relative w-full h-[min(80dvh,760px)] max-w-[1200px] bg-black rounded-2xl overflow-hidden shadow-2xl"
@@ -40,7 +47,7 @@
         >
             <button
                 class="absolute top-4 right-4 z-10 p-2 bg-canvas/50 hover:bg-canvas/80 rounded-full text-ink transition-colors cursor-pointer"
-                on:click={close}
+                onclick={close}
                 aria-label="Close Trailer"
             >
                 <svg

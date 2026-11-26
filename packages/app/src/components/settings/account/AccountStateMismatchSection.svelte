@@ -1,5 +1,5 @@
 <script lang="ts">
-	export let onRecoverToLocalMode: () => void = () => {};
+	let { onRecoverToLocalMode }: { onRecoverToLocalMode: () => void } = $props();
 </script>
 
 <section class="flex flex-col gap-4">
@@ -8,7 +8,7 @@
 	</p>
 	<button
 		class="self-start bg-accent text-on-accent px-5 py-2.5 rounded-full font-semibold hover:bg-accent/85 transition-colors cursor-pointer"
-		on:click={onRecoverToLocalMode}
+		onclick={onRecoverToLocalMode}
 	>
 		Switch to local mode
 	</button>

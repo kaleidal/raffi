@@ -6,37 +6,50 @@
     import { MINUTE, SLOT, SPAN, slotLabel, slotsBetween, timelineStart } from "./timeline";
     import { remToPx, trackViewport, visibleRows } from "./virtualRows";
 
-    export let channels: LiveChannel[];
-    export let now: number;
-    export let onPlay: (channel: LiveChannel) => void;
-    export let onMenu: (event: MouseEvent, channel: LiveChannel) => void;
-    export let onHighlight: (channel: LiveChannel) => void;
+    let {
+        channels,
+        now,
+        onPlay,
+        onMenu,
+        onHighlight,
+    }: {
+        channels: LiveChannel[];
+        now: number;
+        onPlay: (channel: LiveChannel) => void;
+        onMenu: (event: MouseEvent, channel: LiveChannel) => void;
+        onHighlight: (channel: LiveChannel) => void;
+    } = $props();
 
     const LOOKAROUND = 60 * MINUTE;
 
     let scroller: HTMLDivElement;
-    let rowHeight = 0;
-    let rulerHeight = 0;
-    let channelWidth = 0;
-    let minuteWidth = 0;
-    let scrollTop = 0;
-    let scrollLeft = 0;
-    let viewportWidth = 0;
-    let viewportHeight = 0;
+    let rowHeight = $state(0);
+    let rulerHeight = $state(0);
+    let channelWidth = $state(0);
+    let minuteWidth = $state(0);
+    let scrollTop = $state(0);
+    let scrollLeft = $state(0);
+    let viewportWidth = $state(0);
+    let viewportHeight = $state(0);
 
     const origin = timelineStart(Date.now());
 
-    $: timelineWidth = (SPAN / MINUTE) * minuteWidth;
-    $: ({ first, last } = visibleRows(scrollTop, viewportHeight - rulerHeight, rowHeight, channels.length));
-    $: rows = channels.slice(first, last);
-    $: viewStart = minuteWidth ? origin + (scrollLeft / minuteWidth) * MINUTE : origin;
-    $: from = Math.floor((viewStart - LOOKAROUND) / SLOT) * SLOT;
-    $: until = Math.ceil((viewStart + (minuteWidth ? (viewportWidth / minuteWidth) * MINUTE : 0) + LOOKAROUND) / SLOT) * SLOT;
-    $: slots = slotsBetween(Math.max(from, origin), Math.min(until, origin + SPAN));
-    $: nowX = channelWidth + ((now - origin) / MINUTE) * minuteWidth;
-    $: requestProgrammes(rows.map((channel) => channel.guideId));
+    const timelineWidth = $derived((SPAN / MINUTE) * minuteWidth);
+    const { first, last } = $derived(visibleRows(scrollTop, viewportHeight - rulerHeight, rowHeight, channels.length));
+    const rows = $derived(channels.slice(first, last));
+    const viewStart = $derived(minuteWidth ? origin + (scrollLeft / minuteWidth) * MINUTE : origin);
+    const from = $derived(Math.floor((viewStart - LOOKAROUND) / SLOT) * SLOT);
+    const until = $derived(
+        Math.ceil((viewStart + (minuteWidth ? (viewportWidth / minuteWidth) * MINUTE : 0) + LOOKAROUND) / SLOT) * SLOT,
+    );
+    const slots = $derived(slotsBetween(Math.max(from, origin), Math.min(until, origin + SPAN)));
+    const nowX = $derived(channelWidth + ((now - origin) / MINUTE) * minuteWidth);
 
-    $: slotX = (time: number) => channelWidth + ((time - origin) / MINUTE) * minuteWidth;
+    $effect(() => {
+        requestProgrammes(rows.map((channel) => channel.guideId));
+    });
+
+    const slotX = (time: number) => channelWidth + ((time - origin) / MINUTE) * minuteWidth;
 
     function measure() {
         rowHeight = remToPx(5.25);

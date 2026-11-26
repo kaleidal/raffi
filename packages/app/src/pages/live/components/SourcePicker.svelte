@@ -4,16 +4,23 @@
     import { portal } from "../../../components/common/portal";
     import type { LiveSource } from "../../../lib/live/types";
 
-    export let sources: LiveSource[];
-    export let activeId: string | undefined;
-    export let onSelect: (source: LiveSource) => void;
-    export let onManage: () => void;
+    let {
+        sources,
+        activeId,
+        onSelect,
+        onManage,
+    }: {
+        sources: LiveSource[];
+        activeId: string | undefined;
+        onSelect: (source: LiveSource) => void;
+        onManage: () => void;
+    } = $props();
 
-    let open = false;
+    let open = $state(false);
     let button: HTMLButtonElement;
-    let position = "";
+    let position = $state("");
 
-    $: activeIndex = sources.findIndex((source) => source.id === activeId);
+    const activeIndex = $derived(sources.findIndex((source) => source.id === activeId));
 
     function toggle() {
         if (!sources.length) {

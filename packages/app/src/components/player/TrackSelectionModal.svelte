@@ -1,13 +1,11 @@
 <script lang="ts">
     import { fullscreenPortal } from "../common/portal";
     import { fade, scale } from "svelte/transition";
-    import { onMount } from "svelte";
+    import { onMount, untrack } from "svelte";
 
     import * as Subtitles from "../../pages/player/subtitles/subtitles";
 
-    export let title: string;
-    export let kind: "audio" | "subtitles" = title === "Subtitles" ? "subtitles" : "audio";
-    export let tracks: {
+    type SelectableTrack = {
         id: string | number;
         label: string;
         selected?: boolean;
@@ -18,32 +16,44 @@
         isLocal?: boolean;
         isEmbedded?: boolean;
         format?: "vtt" | "srt";
-    }[];
+    };
 
-    export let onSelect: (track: any) => void = () => {};
-    export let onUpload: (file: File) => void | Promise<void> = () => {};
-    export let onClose: () => void = () => {};
-    export let onDelayChange: (detail: { seconds: number }) => void = () => {};
-    export let subtitleTools = true;
+    let {
+        title,
+        kind = "audio",
+        tracks,
+        onSelect,
+        onUpload,
+        onClose,
+        onDelayChange,
+        subtitleTools = true,
+    }: {
+        title: string;
+        kind?: "audio" | "subtitles";
+        tracks: SelectableTrack[];
+        onSelect: (track: any) => void;
+        onUpload?: (file: File) => void | Promise<void>;
+        onClose: () => void;
+        onDelayChange?: (detail: { seconds: number }) => void;
+        subtitleTools?: boolean;
+    } = $props();
 
     function select(track: any) {
         onSelect(track);
         onClose();
     }
 
-    function close() {
-        onClose();
-    }
-
     // Group tracks if needed
-    $: groupedTracks = tracks.reduce(
-        (acc, track) => {
-            const group = track.group || "Default";
-            if (!acc[group]) acc[group] = [];
-            acc[group].push(track);
-            return acc;
-        },
-        {} as Record<string, typeof tracks>,
+    const groupedTracks = $derived(
+        tracks.reduce(
+            (acc, track) => {
+                const group = track.group || "Default";
+                if (!acc[group]) acc[group] = [];
+                acc[group].push(track);
+                return acc;
+            },
+            {} as Record<string, SelectableTrack[]>,
+        ),
     );
 
     function normalizeLang(lang?: string) {
@@ -51,37 +61,39 @@
         return s ? s.toLowerCase() : "und";
     }
 
-    function subtitleLanguage(track: (typeof tracks)[number]) {
+    function subtitleLanguage(track: SelectableTrack) {
         return track.isLocal ? "local" : normalizeLang(track.lang);
     }
 
-    $: subtitleOffTrack = tracks.find((t) => String(t.id) === "off") || null;
+    const subtitleOffTrack = $derived(tracks.find((t) => String(t.id) === "off") || null);
 
-    $: subtitleTracksOnly = tracks.filter((t) => String(t.id) !== "off");
+    const subtitleTracksOnly = $derived(tracks.filter((t) => String(t.id) !== "off"));
 
-    $: subtitleLanguages = Array.from(
-        new Set(subtitleTracksOnly.map(subtitleLanguage)),
-    ).sort();
+    const subtitleLanguages = $derived(
+        Array.from(new Set(subtitleTracksOnly.map(subtitleLanguage))).sort(),
+    );
 
-    let languageQuery = "";
-    $: filteredSubtitleLanguages = subtitleLanguages.filter((lang) => {
-        const q = languageQuery.trim().toLowerCase();
-        if (!q) return true;
-        if (lang.includes(q)) return true;
+    let languageQuery = $state("");
+    const filteredSubtitleLanguages = $derived(
+        subtitleLanguages.filter((lang) => {
+            const q = languageQuery.trim().toLowerCase();
+            if (!q) return true;
+            if (lang.includes(q)) return true;
 
-        // Also match any variant label for that language.
-        return subtitleTracksOnly
-            .filter((t) => subtitleLanguage(t) === lang)
-            .some((t) => (t.label || "").toLowerCase().includes(q));
-    });
+            // Also match any variant label for that language.
+            return subtitleTracksOnly
+                .filter((t) => subtitleLanguage(t) === lang)
+                .some((t) => (t.label || "").toLowerCase().includes(q));
+        }),
+    );
 
-    let selectedSubtitleLanguage: string | null = null;
+    let selectedSubtitleLanguage = $state<string | null>(null);
     let userPinnedLanguage = false;
     let lastSelectedSubtitleId: string | number | null = null;
-    $: {
-        // Default to the currently selected subtitle track's language, but don't
-        // override if the user is browsing other languages.
-        const selected = subtitleTracksOnly.find((t) => t.selected);
+
+    // Default to the currently selected subtitle track's language, but don't
+    // override if the user is browsing other languages.
+    function syncSubtitleLanguage(languages: string[], selected: SelectableTrack | undefined) {
         const selectedId = selected?.id ?? null;
         const selectedLang = selected ? subtitleLanguage(selected) : null;
 
@@ -91,25 +103,31 @@
             userPinnedLanguage = false;
         }
 
-        if (!userPinnedLanguage && selectedLang && subtitleLanguages.includes(selectedLang)) {
+        if (!userPinnedLanguage && selectedLang && languages.includes(selectedLang)) {
             selectedSubtitleLanguage = selectedLang;
         }
 
         // Avoid preselecting a language when no subtitle is selected (Off).
-        if (selectedSubtitleLanguage && !subtitleLanguages.includes(selectedSubtitleLanguage)) {
+        if (selectedSubtitleLanguage && !languages.includes(selectedSubtitleLanguage)) {
             selectedSubtitleLanguage = null;
         }
     }
 
-    $: subtitleVariants = selectedSubtitleLanguage
-        ? subtitleTracksOnly.filter(
-              (t) => subtitleLanguage(t) === selectedSubtitleLanguage,
-          )
-        : [];
+    $effect.pre(() => {
+        const languages = subtitleLanguages;
+        const selected = subtitleTracksOnly.find((t) => t.selected);
+        untrack(() => syncSubtitleLanguage(languages, selected));
+    });
 
-    let subtitleFileInput: HTMLInputElement;
-    let uploadError = "";
-    let uploadInProgress = false;
+    const subtitleVariants = $derived(
+        selectedSubtitleLanguage
+            ? subtitleTracksOnly.filter((t) => subtitleLanguage(t) === selectedSubtitleLanguage)
+            : [],
+    );
+
+    let subtitleFileInput = $state<HTMLInputElement>();
+    let uploadError = $state("");
+    let uploadInProgress = $state(false);
 
     async function uploadSubtitle(event: Event) {
         const input = event.currentTarget as HTMLInputElement;
@@ -120,7 +138,7 @@
         uploadError = "";
         uploadInProgress = true;
         try {
-            await onUpload(file);
+            await onUpload?.(file);
             onClose();
         } catch (error) {
             uploadError = error instanceof Error
@@ -131,7 +149,7 @@
         }
     }
 
-    let delaySeconds = 0;
+    let delaySeconds = $state(0);
     onMount(() => {
         if (kind === "subtitles") {
             delaySeconds = Subtitles.getSubtitleDelaySeconds();
@@ -143,7 +161,7 @@
         const clamped = Math.max(-30, Math.min(30, Number(next)));
         delaySeconds = Number.isFinite(clamped) ? clamped : 0;
         Subtitles.setSubtitleDelaySeconds(delaySeconds);
-        onDelayChange({ seconds: delaySeconds });
+        onDelayChange?.({ seconds: delaySeconds });
     }
 
 </script>
@@ -152,8 +170,8 @@
     use:fullscreenPortal
     class="raffi-modal-backdrop fixed inset-0 z-[100] flex items-center justify-center bg-canvas/58 backdrop-blur-xl cursor-default"
     transition:fade={{ duration: 200 }}
-    on:click={close}
-    on:keydown={(e) => e.key === "Escape" && close()}
+    onclick={onClose}
+    onkeydown={(e) => e.key === "Escape" && onClose()}
     role="button"
     tabindex="0"
     aria-label="Close modal"
@@ -163,8 +181,8 @@
             ? 'max-w-[680px]'
             : 'max-w-[400px]'}"
         transition:scale={{ duration: 200, start: 0.9 }}
-        on:click|stopPropagation
-        on:keydown|stopPropagation
+        onclick={(e) => e.stopPropagation()}
+        onkeydown={(e) => e.stopPropagation()}
         role="dialog"
         tabindex="-1"
     >
@@ -182,7 +200,7 @@
             </div>
             <button
                 class="p-2 text-ink/50 hover:text-ink transition-colors cursor-pointer"
-                on:click={close}
+                onclick={onClose}
                 aria-label="Close"
             >
                 <svg
@@ -213,7 +231,7 @@
                         <button
                             type="button"
                             class="px-3 py-1.5 rounded-full text-[11px] font-semibold transition-colors duration-200 cursor-pointer bg-ink/10 text-ink/70 hover:bg-ink/20"
-                            on:click={() => setDelay(delaySeconds - 0.25)}
+                            onclick={() => setDelay(delaySeconds - 0.25)}
                         >
                             -0.25s
                         </button>
@@ -223,14 +241,14 @@
                         <button
                             type="button"
                             class="px-3 py-1.5 rounded-full text-[11px] font-semibold transition-colors duration-200 cursor-pointer bg-ink/10 text-ink/70 hover:bg-ink/20"
-                            on:click={() => setDelay(delaySeconds + 0.25)}
+                            onclick={() => setDelay(delaySeconds + 0.25)}
                         >
                             +0.25s
                         </button>
                         <button
                             type="button"
                             class="px-3 py-1.5 rounded-full text-[11px] font-semibold transition-colors duration-200 cursor-pointer bg-ink/10 text-ink/70 hover:bg-ink/20"
-                            on:click={() => setDelay(0)}
+                            onclick={() => setDelay(0)}
                         >
                             Reset
                         </button>
@@ -256,7 +274,7 @@
                                         lang
                                             ? 'bg-accent text-on-accent'
                                             : 'bg-ink/8 text-ink hover:bg-ink/14'}"
-                                        on:click={() => {
+                                        onclick={() => {
                                             selectedSubtitleLanguage = lang;
                                             userPinnedLanguage = true;
                                         }}
@@ -278,13 +296,13 @@
                                 type="file"
                                 accept=".srt,.vtt,application/x-subrip,text/vtt"
                                 bind:this={subtitleFileInput}
-                                on:change={uploadSubtitle}
+                                onchange={uploadSubtitle}
                             />
                             <button
                                 type="button"
                                 class="flex w-full items-center gap-2 rounded-xl bg-ink/8 px-3 py-2.5 text-sm font-medium text-ink/80 transition-colors hover:bg-ink/14 disabled:cursor-wait disabled:opacity-50 cursor-pointer"
                                 disabled={uploadInProgress}
-                                on:click={() => subtitleFileInput?.click()}
+                                onclick={() => subtitleFileInput?.click()}
                             >
                                 <svg
                                     width="18"
@@ -318,7 +336,7 @@
                                             ? 'bg-accent text-on-accent'
                                             : 'bg-ink/8 text-ink hover:bg-ink/14'}"
                                         data-tv-autofocus={subtitleOffTrack.selected || undefined}
-                                        on:click={() => select(subtitleOffTrack)}
+                                        onclick={() => select(subtitleOffTrack)}
                                     >
                                         <span class="font-medium truncate" title={subtitleOffTrack.label}>
                                             {subtitleOffTrack.label}
@@ -355,7 +373,7 @@
                                                 ? 'bg-accent text-on-accent'
                                                 : 'bg-ink/8 text-ink hover:bg-ink/14'}"
                                             data-tv-autofocus={track.selected || undefined}
-                                            on:click={() => select(track)}
+                                            onclick={() => select(track)}
                                         >
                                             <span
                                                 class="font-medium truncate"
@@ -402,7 +420,7 @@
                                         ? 'bg-accent text-on-accent'
                                         : 'bg-ink/8 text-ink hover:bg-ink/14'}"
                                     data-tv-autofocus={track.selected || undefined}
-                                    on:click={() => select(track)}
+                                    onclick={() => select(track)}
                                 >
                                     <span class="font-medium"
                                         >{track.label}</span

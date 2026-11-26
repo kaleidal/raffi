@@ -106,11 +106,9 @@ export async function resumeReusedSession({
 
     hideLoadingScreen();
     playbackBuffering.set(false);
-    if (deps.autoPlay) {
-        videoElem.play().catch(() => {
-            // ignore
-        });
-    }
+    videoElem.play().catch(() => {
+        // ignore
+    });
 
     void deps
         .resolvePlaybackStart({

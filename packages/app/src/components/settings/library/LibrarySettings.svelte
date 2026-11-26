@@ -7,9 +7,9 @@
 		scanAndIndex,
 	} from "../../../lib/library/localLibrary";
 
-	let localRoots: string[] = [];
-	let scanningLocal = false;
-	let localScanMessage = "";
+	let localRoots = $state<string[]>([]);
+	let scanningLocal = $state(false);
+	let localScanMessage = $state("");
 
 	onMount(async () => {
 		localRoots = await getLocalRoots();
@@ -56,7 +56,7 @@
 		<p class="min-w-0 break-all text-sm text-ink/80">{folder}</p>
 		<button
 			class="shrink-0 cursor-pointer text-sm text-ink/50 transition-colors hover:text-danger"
-			on:click={() => removeLocalFolder(folder)}
+			onclick={() => removeLocalFolder(folder)}
 		>
 			Remove
 		</button>
@@ -68,13 +68,13 @@
 <div class="flex flex-wrap items-center gap-3 pt-4">
 	<button
 		class={primaryButton}
-		on:click={addLocalFolder}
+		onclick={addLocalFolder}
 	>
 		Add folder
 	</button>
 	<button
 		class={secondaryButton}
-		on:click={rescanLocalLibrary}
+		onclick={rescanLocalLibrary}
 		disabled={scanningLocal}
 	>
 		Rescan

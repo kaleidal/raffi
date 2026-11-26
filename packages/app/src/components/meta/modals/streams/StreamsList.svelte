@@ -4,15 +4,23 @@
     import StreamRow from "./StreamRow.svelte";
     import type { EnrichedStream } from "../../../../lib/streams/ranking/types";
 
-    export let loadingStreams = false;
-    export let streams: any[] = [];
-    export let filteredStreams: EnrichedStream[] = [];
-    export let localFilteredStreams: EnrichedStream[] = [];
-    export let addonFilteredStreams: EnrichedStream[] = [];
-    export let showAddonSetupGuide = false;
-
-    export let onStreamClick: (item: EnrichedStream) => void = () => {};
-
+    let {
+        loadingStreams = false,
+        streams = [],
+        filteredStreams = [],
+        localFilteredStreams = [],
+        addonFilteredStreams = [],
+        showAddonSetupGuide = false,
+        onStreamClick = () => {},
+    }: {
+        loadingStreams?: boolean;
+        streams?: any[];
+        filteredStreams?: EnrichedStream[];
+        localFilteredStreams?: EnrichedStream[];
+        addonFilteredStreams?: EnrichedStream[];
+        showAddonSetupGuide?: boolean;
+        onStreamClick?: (item: EnrichedStream) => void;
+    } = $props();
 </script>
 
 <div class="no-scrollbar -mx-4 flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
@@ -35,7 +43,7 @@
                     type="button"
                     data-tv-autofocus
                     class="rounded-full bg-accent px-5 py-3 text-sm font-semibold text-on-accent transition-colors hover:bg-accent/85 cursor-pointer"
-                    on:click={() => openSettings("addons", "stream")}
+                    onclick={() => openSettings("addons", "stream")}
                 >
                     Open Addons
                 </button>

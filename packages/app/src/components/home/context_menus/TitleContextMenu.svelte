@@ -4,13 +4,21 @@
     import { fade } from "svelte/transition";
     import { Film, Plus } from "@lucide/svelte";
 
-    export let x: number;
-    export let y: number;
-    export let showTrailer = false;
-
-    export let onClose: () => void = () => {};
-    export let onAddToList: () => void = () => {};
-    export let onViewTrailer: () => void = () => {};
+    let {
+        x,
+        y,
+        showTrailer = false,
+        onClose,
+        onAddToList,
+        onViewTrailer = () => {},
+    }: {
+        x: number;
+        y: number;
+        showTrailer?: boolean;
+        onClose: () => void;
+        onAddToList: () => void;
+        onViewTrailer?: () => void;
+    } = $props();
 
     function close() {
         onClose();
@@ -46,14 +54,14 @@
     class="fixed z-[100] context-menu bg-surface rounded-xl py-2 min-w-[150px] flex flex-col"
     style="top: {y}px; left: {x}px;"
     transition:fade={{ duration: 100 }}
-    on:contextmenu|preventDefault
+    oncontextmenu={(event) => event.preventDefault()}
     role="menu"
     tabindex="-1"
 >
     {#if showTrailer}
         <button
             class="text-left px-4 py-2 text-ink/80 hover:text-ink hover:bg-ink/10 transition-colors text-sm flex flex-row gap-2 items-center cursor-pointer"
-            on:click={handleViewTrailer}
+            onclick={handleViewTrailer}
         >
             <Film size={16} strokeWidth={2} />
             View Trailer
@@ -61,7 +69,7 @@
     {/if}
     <button
         class="text-left px-4 py-2 text-ink/80 hover:text-ink hover:bg-ink/10 transition-colors text-sm flex flex-row gap-2 items-center cursor-pointer"
-        on:click={handleAddToList}
+        onclick={handleAddToList}
     >
         <Plus size={16} strokeWidth={2} />
         Add to List

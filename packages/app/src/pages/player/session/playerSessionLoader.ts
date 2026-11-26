@@ -314,7 +314,6 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                     sessionSource,
                     session: result,
                     effectiveStartTime,
-                    autoStart: deps.autoPlay,
                     signal: abortController.signal,
                     isStale,
                     deps,

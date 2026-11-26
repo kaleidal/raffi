@@ -4,11 +4,19 @@
     import { Star, StarOff } from "@lucide/svelte";
     import { portal } from "../../../components/common/portal";
 
-    export let x: number;
-    export let y: number;
-    export let favourite: boolean;
-    export let onToggleFavourite: () => void;
-    export let onClose: () => void;
+    let {
+        x,
+        y,
+        favourite,
+        onToggleFavourite,
+        onClose,
+    }: {
+        x: number;
+        y: number;
+        favourite: boolean;
+        onToggleFavourite: () => void;
+        onClose: () => void;
+    } = $props();
 
     let menu: HTMLDivElement;
 

@@ -25,28 +25,31 @@
     const CLOCK_TICK_MS = 30_000;
     const HIGHLIGHT_DELAY_MS = 120;
 
-    let showSources = false;
-    let settingsLoaded = false;
-    let now = Date.now();
-    let menu: { x: number; y: number; channel: LiveChannel } | null = null;
-    let highlighted: LiveChannel | null = null;
-    let header: HTMLDivElement;
-    let headerCollapsed = false;
+    let showSources = $state(false);
+    let settingsLoaded = $state(false);
+    let now = $state(Date.now());
+    let menu = $state.raw<{ x: number; y: number; channel: LiveChannel } | null>(null);
+    let highlighted = $state.raw<LiveChannel | null>(null);
+    let header = $state.raw<HTMLDivElement>();
+    let headerCollapsed = $state(false);
     let highlightTimer: ReturnType<typeof setTimeout> | undefined;
 
-    $: sources = $liveSettings.sources;
-    $: source = $library.source;
-    $: lineup = $library.lineup;
-    $: favourites = new Set($liveSettings.favourites);
-    $: hasFavourites = Boolean(lineup?.channels.some((channel) => favourites.has(channel.id)));
-    $: groups = lineup ? groupChoices(lineup.groups, hasFavourites) : [];
-    $: storedGroup = source ? $lastLiveGroups[source.id] : undefined;
-    $: group = storedGroup && groups.includes(storedGroup) ? storedGroup : hasFavourites ? FAVOURITES : ALL_CHANNELS;
-    $: channels = lineup ? filterChannels(lineup.channels, group, $channelQuery, favourites) : [];
-    $: counts = groupCounts(lineup?.channels ?? [], favourites);
-    $: hasGuide = Boolean(lineup?.channels.some((channel) => channel.guideId));
-    $: layout = $liveLayout === "auto" ? (hasGuide ? "guide" : "grid") : $liveLayout;
-    $: if (!channels.some((channel) => channel.id === highlighted?.id)) highlighted = channels[0] ?? null;
+    const sources = $derived($liveSettings.sources);
+    const source = $derived($library.source);
+    const lineup = $derived($library.lineup);
+    const favourites = $derived(new Set($liveSettings.favourites));
+    const hasFavourites = $derived(Boolean(lineup?.channels.some((channel) => favourites.has(channel.id))));
+    const groups = $derived(lineup ? groupChoices(lineup.groups, hasFavourites) : []);
+    const storedGroup = $derived(source ? $lastLiveGroups[source.id] : undefined);
+    const group = $derived(storedGroup && groups.includes(storedGroup) ? storedGroup : hasFavourites ? FAVOURITES : ALL_CHANNELS);
+    const channels = $derived(lineup ? filterChannels(lineup.channels, group, $channelQuery, favourites) : []);
+    const counts = $derived(groupCounts(lineup?.channels ?? [], favourites));
+    const hasGuide = $derived(Boolean(lineup?.channels.some((channel) => channel.guideId)));
+    const layout = $derived($liveLayout === "auto" ? (hasGuide ? "guide" : "grid") : $liveLayout);
+
+    $effect.pre(() => {
+        if (!channels.some((channel) => channel.id === highlighted?.id)) highlighted = channels[0] ?? null;
+    });
 
     function highlight(channel: LiveChannel) {
         clearTimeout(highlightTimer);
@@ -128,13 +131,14 @@
     <div bind:this={header} class="page-header relative z-20" class:collapsed={headerCollapsed}>
         <div>
             <SearchBar absolute={false}>
-                <SourcePicker
-                    slot="leading"
-                    {sources}
-                    activeId={source?.id}
-                    onSelect={(next) => select(next)}
-                    onManage={() => (showSources = true)}
-                />
+                {#snippet leading()}
+                    <SourcePicker
+                        {sources}
+                        activeId={source?.id}
+                        onSelect={(next) => select(next)}
+                        onManage={() => (showSources = true)}
+                    />
+                {/snippet}
             </SearchBar>
         </div>
     </div>

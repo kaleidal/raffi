@@ -2,11 +2,16 @@
     import type { StremioAddonPreviewItem } from "../../../../lib/import/stremioImportPreview";
     import CheckMark from "./CheckMark.svelte";
 
-    export let addons: StremioAddonPreviewItem[];
-    export let selected: string[];
+    let {
+        addons,
+        selected = $bindable(),
+    }: {
+        addons: StremioAddonPreviewItem[];
+        selected: string[];
+    } = $props();
 
-    $: importableCount = addons.filter((addon) => addon.supported && !addon.alreadyInstalled).length;
-    $: allSelected = importableCount > 0 && selected.length === importableCount;
+    const importableCount = $derived(addons.filter((addon) => addon.supported && !addon.alreadyInstalled).length);
+    const allSelected = $derived(importableCount > 0 && selected.length === importableCount);
 
     const isSelected = (id: string) => selected.includes(id);
 
@@ -37,7 +42,7 @@
             <button
                 type="button"
                 class="text-xs text-ink/50 hover:text-ink/80 transition-colors cursor-pointer"
-                on:click={() => setAll(!allSelected)}
+                onclick={() => setAll(!allSelected)}
             >
                 {allSelected ? "Clear all" : "Select all"}
             </button>
@@ -54,7 +59,7 @@
                         class="sr-only"
                         checked={checked}
                         disabled={disabled}
-                        on:change={() => toggle(addon.id, disabled)}
+                        onchange={() => toggle(addon.id, disabled)}
                     />
                     <CheckMark checked={checked && !disabled} />
                     <span class="min-w-0 flex-1">

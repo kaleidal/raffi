@@ -1,8 +1,7 @@
 <script lang="ts">
     import { portal } from "../../../common/portal";
     import { lockPageScroll } from "../../../common/scrollLock";
-    import { createEventDispatcher, tick } from "svelte";
-    import { fade, scale } from "svelte/transition";
+        import { fade, scale } from "svelte/transition";
     import { Check, X } from "@lucide/svelte";
     import {
         importStremioFromPreview,
@@ -28,60 +27,68 @@
         type ImportResultSummary,
     } from "./importStatus";
 
-    const dispatch = createEventDispatcher<{
-        close: void;
-        imported: { total: number; added: number; merged: number; skipped: number };
-    }>();
+    let {
+        open,
+        onClose,
+        onImported,
+    }: {
+        open: boolean;
+        onClose: () => void;
+        onImported: () => void;
+    } = $props();
 
-    export let open = false;
-
-    let phase: ImportPhase = "idle";
-    let email = "";
-    let password = "";
-    let keepConnected = true;
-    let errorMessage = "";
-    let progress: ImportProgress = { processed: 0, total: 0 };
-    let rawEntryCount: number | null = null;
-    let previewData: StremioImportPreview | null = null;
-    let selectedLibraryIds: string[] = [];
-    let selectedAddonIds: string[] = [];
-    let resultSummary: ImportResultSummary | null = null;
+    let phase = $state<ImportPhase>("idle");
+    let email = $state("");
+    let password = $state("");
+    let keepConnected = $state(true);
+    let errorMessage = $state("");
+    let progress = $state.raw<ImportProgress>({ processed: 0, total: 0 });
+    let rawEntryCount = $state<number | null>(null);
+    let previewData = $state.raw<StremioImportPreview | null>(null);
+    let selectedLibraryIds = $state.raw<string[]>([]);
+    let selectedAddonIds = $state.raw<string[]>([]);
+    let resultSummary = $state.raw<ImportResultSummary | null>(null);
     let abortController: AbortController | null = null;
-    let warnings: string[] = [];
+    let warnings = $state.raw<string[]>([]);
 
-    $: applyPercent = progress.total > 0
-        ? Math.min(100, Math.round((progress.processed / progress.total) * 100))
-        : 0;
+    const applyPercent = $derived(
+        progress.total > 0
+            ? Math.min(100, Math.round((progress.processed / progress.total) * 100))
+            : 0,
+    );
 
-    $: selectedLibraryCount = selectedLibraryIds.length;
-    $: selectedAddonCount = selectedAddonIds.length;
+    const statusLabel = $derived(importStatusLabel(phase, rawEntryCount, progress));
+    const statusHint = $derived(importStatusHint(phase, progress));
 
-    $: statusLabel = importStatusLabel(phase, rawEntryCount, progress);
-
-    $: statusHint = importStatusHint(phase, progress);
-
-    const isBusy = () =>
+    const busy = $derived(
         phase === "fetching"
         || phase === "parsing"
         || phase === "importing_addons"
         || phase === "applying"
         || phase === "reconciling"
-        || phase === "uploading";
+        || phase === "uploading",
+    );
 
-    $: canSignIn =
-        !isBusy()
+    const canSignIn = $derived(
+        !busy
         && phase !== "preview"
         && email.trim().length > 0
-        && password.length > 0;
+        && password.length > 0,
+    );
 
-    $: canImportSelection =
+    const canImportSelection = $derived(
         phase === "preview"
-        && !isBusy()
-        && (selectedLibraryCount > 0 || selectedAddonCount > 0);
+        && !busy
+        && (selectedLibraryIds.length > 0 || selectedAddonIds.length > 0),
+    );
+
+    $effect.pre(() => {
+        if (open) reset();
+    });
 
     function close() {
-        if (isBusy()) return;
-        dispatch("close");
+        if (busy) return;
+        onClose();
     }
 
     function reset() {
@@ -98,7 +105,7 @@
     }
 
     function backToSignIn() {
-        if (isBusy()) return;
+        if (busy) return;
         phase = "idle";
         errorMessage = "";
         previewData = null;
@@ -108,24 +115,12 @@
     }
 
     const onProgress = (event: StremioImportProgressEvent) => {
-        if (event.phase === "fetching") {
-            phase = "fetching";
-        } else if (event.phase === "parsing") {
-            phase = "parsing";
-            if (typeof event.rawCount === "number") rawEntryCount = event.rawCount;
-        } else if (event.phase === "importing_addons") {
-            phase = "importing_addons";
+        phase = event.phase;
+        if (event.phase === "parsing" && typeof event.rawCount === "number") {
+            rawEntryCount = event.rawCount;
         } else if (event.phase === "applying") {
-            phase = "applying";
             progress = { processed: event.processed, total: event.total, current: event.current };
-        } else if (event.phase === "reconciling") {
-            phase = "reconciling";
-        } else if (event.phase === "uploading") {
-            phase = "uploading";
-        } else if (event.phase === "done") {
-            phase = "done";
         } else if (event.phase === "error") {
-            phase = "error";
             errorMessage = event.message;
         }
     };
@@ -146,7 +141,6 @@
             warnings = preview.warnings;
             password = "";
             phase = "preview";
-            await tick();
         } catch (error: any) {
             errorMessage = error?.message || "Something went wrong while signing in.";
             phase = "error";
@@ -188,13 +182,7 @@
             };
             phase = "done";
             previewData = null;
-            dispatch("imported", {
-                total: summary.total,
-                added: summary.added,
-                merged: summary.merged,
-                skipped: summary.skipped,
-            });
-            await tick();
+            onImported();
         } catch (error: any) {
             errorMessage = error?.message || "Something went wrong while importing.";
             phase = "error";
@@ -211,12 +199,6 @@
         }
         void loadPreview();
     }
-
-
-    $: if (open) {
-        reset();
-    }
-
 </script>
 
 {#if open}
@@ -225,9 +207,12 @@
         use:lockPageScroll
         class="raffi-modal-backdrop fixed inset-0 z-200 bg-canvas/56 backdrop-blur-xl flex items-center justify-center"
         transition:fade={{ duration: 200 }}
-        on:click|self={close}
-        on:keydown={(e) => e.key === "Escape" && close()}
-        on:wheel|preventDefault|stopPropagation
+        onclick={(event) => event.target === event.currentTarget && close()}
+        onkeydown={(event) => event.key === "Escape" && close()}
+        onwheel={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+        }}
         role="button"
         tabindex="0"
         style="padding: clamp(20px, 4vw, 80px);"
@@ -235,29 +220,29 @@
         <div
             class="w-full max-w-xl max-h-full rounded-[32px] bg-raised/62 backdrop-blur-[40px] p-6 md:p-8 flex flex-col gap-6 relative overflow-hidden shadow-[0_40px_160px_rgba(0,0,0,0.45)]"
             transition:scale={{ start: 0.95, duration: 200 }}
-            on:click|stopPropagation
-            on:keydown|stopPropagation
-            on:wheel|stopPropagation
+            onclick={(event) => event.stopPropagation()}
+            onkeydown={(event) => event.stopPropagation()}
+            onwheel={(event) => event.stopPropagation()}
             role="dialog"
             tabindex="-1"
         >
             <div class="flex items-start justify-between gap-3 shrink-0">
                 <h2 class="text-ink text-2xl md:text-3xl font-semibold">Bring your watch history</h2>
                 <button
-                    on:click={close}
+                    onclick={close}
                     class="text-ink/50 hover:text-ink cursor-pointer transition-colors"
                     aria-label="Close import"
-                    disabled={isBusy()}
+                    disabled={busy}
                 >
                     <X size={24} strokeWidth={2} />
                 </button>
             </div>
 
-            <form class="flex flex-col gap-4 min-h-0" on:submit={handleSubmit}>
+            <form class="flex flex-col gap-4 min-h-0" onsubmit={handleSubmit}>
                 <p class="text-sm text-ink/65 shrink-0">{statusHint}</p>
 
                 {#if phase === "idle" || phase === "error"}
-                    <SignInFields bind:email bind:password bind:keepConnected disabled={isBusy()} />
+                    <SignInFields bind:email bind:password bind:keepConnected disabled={busy} />
                 {:else if phase === "preview" && previewData}
                     <div class="flex flex-col gap-4 min-h-0 overflow-hidden">
                         {#if previewData.libraryItems.length > 0}
@@ -302,7 +287,7 @@
                             <LoadingSpinner size="22px" />
                         {/if}
                         <p class="text-ink text-sm font-medium">{statusLabel}</p>
-                        {#if isBusy() && progress.total > 0}
+                        {#if busy && progress.total > 0}
                             <div class="w-full mt-1">
                                 <div class="h-1.5 rounded-full bg-ink/10 overflow-hidden">
                                     <div
@@ -336,7 +321,7 @@
                         <button
                             type="button"
                             class="px-4 py-2 rounded-2xl bg-ink/10 text-ink font-semibold hover:bg-ink/20 transition-colors cursor-pointer"
-                            on:click={backToSignIn}
+                            onclick={backToSignIn}
                         >
                             Back
                         </button>
@@ -344,8 +329,8 @@
                         <button
                             type="button"
                             class="px-4 py-2 rounded-2xl bg-ink/10 text-ink font-semibold hover:bg-ink/20 transition-colors cursor-pointer"
-                            on:click={close}
-                            disabled={isBusy()}
+                            onclick={close}
+                            disabled={busy}
                         >
                             {phase === "done" ? "Close" : "Cancel"}
                         </button>
@@ -371,7 +356,7 @@
                         <button
                             type="button"
                             class="px-5 py-2 rounded-2xl bg-accent text-on-accent font-semibold hover:bg-accent/85 transition-colors cursor-pointer"
-                            on:click={reset}
+                            onclick={reset}
                         >
                             Import again
                         </button>

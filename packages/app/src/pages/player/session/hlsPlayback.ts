@@ -4,7 +4,6 @@ type HlsPlaybackOptions = {
     video: HTMLVideoElement;
     source: string;
     startTime: number;
-    autoPlay: boolean;
     onReady: () => void;
     onFatalError: (error: Error, instance: Hls | null) => void;
 };
@@ -20,9 +19,7 @@ function startAt(video: HTMLVideoElement, startTime: number) {
 function finishLoading(options: HlsPlaybackOptions) {
     startAt(options.video, options.startTime);
     options.onReady();
-    if (options.autoPlay) {
-        options.video.play().catch(() => {});
-    }
+    options.video.play().catch(() => {});
 }
 
 export async function attachHlsPlayback(options: HlsPlaybackOptions): Promise<Hls | null> {

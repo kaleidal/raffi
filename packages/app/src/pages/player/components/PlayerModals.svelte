@@ -2,24 +2,41 @@
     import TrackSelectionModal from "../../../components/player/TrackSelectionModal.svelte";
     import PlayerErrorModal from "../../../components/player/modals/PlayerErrorModal.svelte";
 
-    export let showAudioSelection: boolean;
-    export let showSubtitleSelection: boolean;
-    export let showError: boolean;
-    export let audioTracks: any[];
-    export let subtitleTracks: any[];
-    export let errorMessage: string;
-    export let errorDetails: string;
-
-    export let onAudioSelect: (detail: any) => void;
-    export let onSubtitleSelect: (detail: any) => void;
-    export let onSubtitleUpload: (file: File) => void | Promise<void> = () => {};
-    export let onSubtitleDelayChange: (detail: { seconds: number }) => void = () => {};
-    export let onErrorRetry: () => void;
-    export let onErrorBack: () => void;
-    export let onDownloadDesktop: () => void = () => {};
-    export let onCloseAudio: () => void;
-    export let onCloseSubtitle: () => void;
-
+    let {
+        showAudioSelection,
+        showSubtitleSelection,
+        showError,
+        audioTracks,
+        subtitleTracks,
+        errorMessage,
+        errorDetails,
+        onAudioSelect,
+        onSubtitleSelect,
+        onSubtitleUpload,
+        onSubtitleDelayChange,
+        onErrorRetry,
+        onErrorBack,
+        onDownloadDesktop,
+        onCloseAudio,
+        onCloseSubtitle,
+    }: {
+        showAudioSelection: boolean;
+        showSubtitleSelection: boolean;
+        showError: boolean;
+        audioTracks: any[];
+        subtitleTracks: any[];
+        errorMessage: string;
+        errorDetails: string;
+        onAudioSelect: (detail: any) => void;
+        onSubtitleSelect: (detail: any) => void;
+        onSubtitleUpload: (file: File) => void | Promise<void>;
+        onSubtitleDelayChange: (detail: { seconds: number }) => void;
+        onErrorRetry: () => void;
+        onErrorBack: () => void;
+        onDownloadDesktop: () => void;
+        onCloseAudio: () => void;
+        onCloseSubtitle: () => void;
+    } = $props();
 </script>
 
 {#if showAudioSelection}

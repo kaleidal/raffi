@@ -3,19 +3,30 @@
     import { pointerScrub, type ScrubPosition } from "../common/controls/pointerScrub";
     import { fractionToTime, timeToFraction } from "./seek/seekTrack";
 
-    export let currentTime = 0;
-    export let duration = 0;
-    export let pendingSeek: number | null = null;
-    export let loading = false;
-    export let isPlaying = false;
-    export let onSeekInput: (time: number) => void;
-    export let onSeekChange: (time: number) => void;
-    export let onTogglePlayback: () => void;
+    let {
+        currentTime = 0,
+        duration = 0,
+        pendingSeek = null,
+        loading = false,
+        isPlaying = false,
+        onSeekInput,
+        onSeekChange,
+        onTogglePlayback,
+    }: {
+        currentTime?: number;
+        duration?: number;
+        pendingSeek?: number | null;
+        loading?: boolean;
+        isPlaying?: boolean;
+        onSeekInput: (time: number) => void;
+        onSeekChange: (time: number) => void;
+        onTogglePlayback: () => void;
+    } = $props();
 
-    let hovering = false;
+    let hovering = $state(false);
 
-    $: displayedTime = pendingSeek ?? currentTime;
-    $: fill = timeToFraction(displayedTime, duration);
+    const displayedTime = $derived(pendingSeek ?? currentTime);
+    const fill = $derived(timeToFraction(displayedTime, duration));
 
     const timeAt = ({ ratio }: ScrubPosition) => fractionToTime(ratio, duration);
 </script>
@@ -24,10 +35,10 @@
     class="absolute inset-0 z-40"
     role="presentation"
     style="-webkit-app-region: drag"
-    on:mouseenter={() => {
+    onmouseenter={() => {
         hovering = true;
     }}
-    on:mouseleave={() => {
+    onmouseleave={() => {
         hovering = false;
     }}
 >
@@ -44,7 +55,10 @@
     <div class="absolute inset-0 flex items-center justify-center">
         <button
             class={`mini-player-action pointer-events-auto h-15 w-15 cursor-pointer transition-all duration-200 ${hovering ? "opacity-100 scale-100" : "opacity-0 scale-90 pointer-events-none"}`}
-            on:click|stopPropagation={onTogglePlayback}
+            onclick={(event) => {
+                event.stopPropagation();
+                onTogglePlayback();
+            }}
             aria-label={isPlaying ? "Pause playback" : "Resume playback"}
             type="button"
         >

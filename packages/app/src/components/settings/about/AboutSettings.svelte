@@ -13,7 +13,6 @@
 		{ title: "Report a problem", description: "Something broken or acting odd.", url: "https://github.com/kaleidal/raffi/issues" },
 		{ title: "Ideas and questions", description: "Talk with other people using Raffi.", url: "https://github.com/kaleidal/raffi/discussions" },
 	];
-
 </script>
 
 <div class="flex items-center gap-4 pb-6">
@@ -28,7 +27,7 @@
 
 {#each links as link (link.url)}
 	<SettingRow title={link.title} description={link.description}>
-		<button class={secondaryButton} on:click={() => void openExternal(link.url)}>
+		<button class={secondaryButton} onclick={() => void openExternal(link.url)}>
 			Open
 			<ExternalLink size={15} strokeWidth={2} />
 		</button>

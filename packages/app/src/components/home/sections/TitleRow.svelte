@@ -5,27 +5,28 @@
     import { ChevronLeft, ChevronRight } from "@lucide/svelte";
     import PosterCard from "./PosterCard.svelte";
 
-    export let title: string;
-    export let titles: PopularTitleMeta[];
-    export let onSeeAll: (() => void) | null = null;
-
-    let scrollContainer: HTMLDivElement;
-    let showLeftButton = false;
-    let showRightButton = false;
-    let visibleCount = 24;
-    let previousTitles = titles;
-    let scrollFrame: number | null = null;
-    let resizeObserver: ResizeObserver | null = null;
+    let {
+        title,
+        titles,
+        onSeeAll = null,
+    }: { title: string; titles: PopularTitleMeta[]; onSeeAll?: (() => void) | null } = $props();
 
     const BATCH_SIZE = 24;
     const LOAD_AHEAD_PX = 1200;
 
-    $: renderedTitles = titles.slice(0, visibleCount);
-    $: if (titles !== previousTitles) {
-        previousTitles = titles;
-        visibleCount = Math.min(BATCH_SIZE, titles.length);
+    let scrollContainer: HTMLDivElement;
+    let showLeftButton = $state(false);
+    let showRightButton = $state(false);
+    let visibleCount = $derived(Math.min(BATCH_SIZE, titles.length));
+    let scrollFrame: number | null = null;
+    let resizeObserver: ResizeObserver | null = null;
+
+    const renderedTitles = $derived(titles.slice(0, visibleCount));
+
+    $effect(() => {
+        renderedTitles;
         scheduleScrollCheck();
-    }
+    });
 
     function checkScroll() {
         if (!scrollContainer) return;
@@ -43,7 +44,7 @@
     }
 
     function scheduleScrollCheck() {
-        if (typeof requestAnimationFrame === "undefined" || scrollFrame !== null) return;
+        if (scrollFrame !== null) return;
         scrollFrame = requestAnimationFrame(() => {
             scrollFrame = null;
             checkScroll();
@@ -53,7 +54,6 @@
     function revealMore() {
         if (visibleCount >= titles.length) return;
         visibleCount = Math.min(visibleCount + BATCH_SIZE, titles.length);
-        void tick().then(scheduleScrollCheck);
     }
 
     function scrollLeft() {
@@ -72,12 +72,9 @@
         scrollContainer.scrollBy({ left: 800, behavior: "smooth" });
     }
 
-
     onMount(() => {
-        if (!scrollContainer) return;
         resizeObserver = new ResizeObserver(scheduleScrollCheck);
         resizeObserver.observe(scrollContainer);
-        scheduleScrollCheck();
     });
 
     onDestroy(() => {
@@ -94,7 +91,7 @@
         {#if onSeeAll}
             <button
                 class="cursor-pointer rounded-full px-4 py-2 font-medium text-ink/60 transition-colors hover:bg-ink/8 hover:text-ink"
-                on:click={onSeeAll}
+                onclick={onSeeAll}
             >
                 See all
             </button>
@@ -105,7 +102,7 @@
         {#if showLeftButton}
             <button
                 class="rail-button absolute inset-y-3 left-0 z-20 flex items-center justify-center rounded-r-2xl bg-gradient-to-r from-canvas/90 to-canvas/35 text-ink backdrop-blur-sm transition-opacity duration-200 cursor-pointer"
-                on:click={scrollLeft}
+                onclick={scrollLeft}
                 aria-label="Scroll left"
                 transition:fade={{ duration: 200 }}
             >
@@ -115,7 +112,7 @@
 
     <div
         bind:this={scrollContainer}
-        on:scroll={scheduleScrollCheck}
+        onscroll={scheduleScrollCheck}
         data-scroll-row
         class="flex flex-row gap-[20px] overflow-x-scroll overflow-y-visible pt-3 pb-6 no-scrollbar scroll-smooth"
     >
@@ -127,7 +124,7 @@
         {#if showRightButton}
             <button
                 class="rail-button absolute inset-y-3 right-0 z-20 flex items-center justify-center rounded-l-2xl bg-gradient-to-l from-canvas/90 to-canvas/35 text-ink backdrop-blur-sm transition-opacity duration-200 cursor-pointer"
-                on:click={scrollRight}
+                onclick={scrollRight}
                 aria-label="Scroll right"
                 transition:fade={{ duration: 200 }}
             >

@@ -3,7 +3,7 @@
 	import { formatReleaseNotes } from "../../../lib/shell/updateNotes";
 	import { updateStatus } from "../../../lib/stores/authStore";
 
-	let showNotes = false;
+	let showNotes = $state(false);
 </script>
 
 {#if $updateStatus.available}
@@ -15,7 +15,7 @@
 				</p>
 				<button
 					class="mt-0.5 cursor-pointer text-sm text-ink/55 underline underline-offset-4 hover:text-ink"
-					on:click={() => (showNotes = !showNotes)}
+					onclick={() => (showNotes = !showNotes)}
 				>
 					{showNotes ? "Hide changes" : "See what's new"}
 				</button>
@@ -23,7 +23,7 @@
 			{#if $updateStatus.downloaded}
 				<button
 					class={primaryButton}
-					on:click={() => window.electronAPI?.installUpdate?.()}
+					onclick={() => window.electronAPI?.installUpdate?.()}
 				>
 					Restart to update
 				</button>

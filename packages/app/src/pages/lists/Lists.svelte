@@ -15,8 +15,8 @@
     const HOME_REFRESH_EVENT = "raffi:home-refresh";
 
     let refreshRequestId = 0;
-    let header: HTMLDivElement;
-    let headerCollapsed = false;
+    let header = $state.raw<HTMLDivElement>();
+    let headerCollapsed = $state(false);
 
     async function refreshLists(showLoading = false) {
         const requestId = ++refreshRequestId;

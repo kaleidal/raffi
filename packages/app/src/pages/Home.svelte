@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { onMount } from "svelte";
+    import { onMount, untrack } from "svelte";
     import { fade } from "svelte/transition";
     import { getPopularTitles } from "../lib/library/library";
     import { sanitizeCatalogTitles } from "../lib/library/catalogQuality";
@@ -42,29 +42,30 @@
     import PageLoading from "../components/common/loading/PageLoading.svelte";
     import TitleRowSkeleton from "../components/home/sections/TitleRowSkeleton.svelte";
 
-    let showcasedTitle: PopularTitleMeta | null = null;
-    $: setRestingAmbient(showcasedTitle?.background);
-    let fetchedTitles = false;
-    let continueWatchingMeta: LoadedWatchingItem[] = [];
-    let popularMeta: PopularTitleMeta[] = [];
+    let showcasedTitle = $state.raw<PopularTitleMeta | null>(null);
+    let fetchedTitles = $state(false);
+    let continueWatchingMeta = $state.raw<LoadedWatchingItem[]>([]);
+    let popularMeta = $state.raw<PopularTitleMeta[]>([]);
     let absolutePopularTitles: PopularTitleMeta[] = [];
     let heroPoolTitles: PopularTitleMeta[] = [];
-    let addonSections: { id: string; title: string; titles: PopularTitleMeta[] }[] =
-        [];
-    let traktRecommendations: PopularTitleMeta[] = [];
-    let traktRecommendationsConnected = false;
-    let spotlight: PopularTitleMeta | null = null;
-    $: spotlight = pickSpotlight(
-        [traktRecommendations, ...addonSections.map((section) => section.titles), popularMeta],
-        showcasedTitle?.imdb_id,
-        spotlight,
-    );
+    let addonSections = $state.raw<{ id: string; title: string; titles: PopularTitleMeta[] }[]>([]);
+    let traktRecommendations = $state.raw<PopularTitleMeta[]>([]);
+    let traktRecommendationsConnected = $state(false);
+    let spotlight = $state.raw<PopularTitleMeta | null>(null);
+
+    $effect.pre(() => setRestingAmbient(showcasedTitle?.background));
+
+    $effect.pre(() => {
+        const pools = [traktRecommendations, ...addonSections.map((section) => section.titles), popularMeta];
+        const excludeId = showcasedTitle?.imdb_id;
+        spotlight = pickSpotlight(pools, excludeId, untrack(() => spotlight));
+    });
 
     function seeAllPopular() {
         browseSelection.update((selection) => ({ ...selection, genre: null }));
         document.getElementById(BROWSE_SECTION_ID)?.scrollIntoView({ behavior: "smooth" });
     }
-    let addonSectionsLoading = false;
+    let addonSectionsLoading = $state(false);
     let continueWatchingLoadGeneration = 0;
     const HOME_REFRESH_EVENT = "raffi:home-refresh";
 
@@ -279,8 +280,6 @@
             window.removeEventListener(HOME_REFRESH_EVENT, handleHomeRefresh);
         };
     });
-
-
 </script>
 
 <div class="bg-canvas h-fit min-h-screen flex flex-col pb-[clamp(64px,7vw,100px)]">

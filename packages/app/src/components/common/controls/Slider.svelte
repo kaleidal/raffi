@@ -1,17 +1,19 @@
 <script lang="ts">
     import { pointerScrub, type ScrubPosition } from "./pointerScrub";
 
-    export let value: number;
-    export let label: string;
-    export let min = 0;
-    export let max = 1;
-    export let onInput: (value: number) => void;
+    let {
+        value,
+        label,
+        min = 0,
+        max = 1,
+        onInput,
+    }: { value: number; label: string; min?: number; max?: number; onInput: (value: number) => void } = $props();
 
-    let hovering = false;
-    let dragging = false;
+    let hovering = $state(false);
+    let dragging = $state(false);
 
-    $: fraction = max > min ? Math.min(1, Math.max(0, (value - min) / (max - min))) : 0;
-    $: active = hovering || dragging;
+    const fraction = $derived(max > min ? Math.min(1, Math.max(0, (value - min) / (max - min))) : 0);
+    const active = $derived(hovering || dragging);
 
     const valueAt = ({ ratio }: ScrubPosition) => onInput(min + ratio * (max - min));
 </script>
