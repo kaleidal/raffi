@@ -127,7 +127,7 @@
     let miniPlayerActive = false;
     let loadingBackdrop: LoadingBackdrop = { src: null, mode: "art" };
     let pictureAspect: number | null = null;
-    let clipPanelOpen = false;
+    let clipEditorOpen = false;
     let controlsPinned = readControlsPinned();
     let cueLinePercent = 92;
     let resizeCounter = 0;
@@ -642,7 +642,7 @@
     $: nextEpisodeHighlighted = $currentChapter?.kind === "outro";
     $: hasStartedStore.set(hasStarted);
     $: controlsManager = Controls.createControlsManager(playerContainer, videoElem);
-    $: controlsManager?.setPinned(clipPanelOpen || controlsPinned, controlsVisible.set);
+    $: controlsManager?.setPinned(clipEditorOpen || controlsPinned, controlsVisible.set);
     $: effectiveChapterMarkers = Chapters.getEffectiveChapterSegments($sessionData, introDbChapters);
     $: followSeekPreviewSource($sessionData?.isDirectHttp ? $sessionData.sourceUrl : null);
     $: if (videoElem) videoElem.muted = false;
@@ -855,7 +855,7 @@
                 toggleObjectFit: handleToggleObjectFit,
                 onAudioClick: () => showAudioSelection.set(true),
                 onSubtitleClick: () => showSubtitleSelection.set(true),
-                onClipPanelOpenChange: (open) => (clipPanelOpen = open),
+                onClipEditorOpenChange: (open) => (clipEditorOpen = open),
                 pinned: controlsPinned,
                 onTogglePin: () => persistControlsPinned((controlsPinned = !controlsPinned)),
             }}
