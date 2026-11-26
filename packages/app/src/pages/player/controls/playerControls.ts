@@ -40,8 +40,9 @@ export function createControlsManager(
         }, IDLE_DELAY);
     }
 
-    function handleMouseMove(setControlsVisible: (visible: boolean) => void) {
-        if (pinned) {
+    /** Controls stay up while the pointer rests on them, so they never slide away from under it. */
+    function handleMouseMove(setControlsVisible: (visible: boolean) => void, overControls: boolean) {
+        if (pinned || overControls) {
             setControlsVisible(true);
             clearHideTimer();
             return;

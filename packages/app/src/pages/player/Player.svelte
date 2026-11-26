@@ -363,7 +363,7 @@
 
 <svelte:window
     onmessage={embedPlayback.handleMessage}
-    onmousemove={() => controlsManager.handleMouseMove(controlsVisible.set)}
+    onmousemove={(event) => controlsManager.handleMouseMove(controlsVisible.set, Boolean(controlsPanel?.contains(event.target as Node)))}
     onresize={cues.measure}
     onkeydown={(e) =>
         controlsManager.handleKeydown(e, $currentTime, $duration, $volume, seekToTime, volume.set, seekFeedback.set, togglePlayWithFeedback)}
@@ -372,6 +372,7 @@
 <div
     class="group fixed inset-0 z-100 h-full w-full overflow-hidden bg-black {$controlsVisible ? 'cursor-default' : 'cursor-none'}"
     bind:this={playerContainer}
+    onmouseleave={() => controlsManager.resetHideTimer(controlsVisible.set)}
     role="presentation"
 >
     <div class="h-full w-full">
