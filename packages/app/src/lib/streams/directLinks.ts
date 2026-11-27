@@ -1,6 +1,6 @@
 import type { ShowResponse } from "../library/types/meta_types";
 import type { DirectSourceConfig } from "./sourceSettings";
-import type { Stream } from "../../pages/meta/types";
+import type { Stream } from "./types";
 
 type DirectStreamContext = {
     metaData: ShowResponse;

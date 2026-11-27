@@ -8,22 +8,18 @@
 	import {
 		ADDONS_CHANGED_EVENT,
 		HOME_REFRESH_EVENT,
-		hasSupportedResource,
-		isUuid,
 		normalizeTransportUrl,
-		supportsResource,
 		openConfigureUrl,
 		RESOURCE_LABELS,
-		SUPPORTED_RESOURCES,
 		formatResourceName,
-		getResourceNames,
 	} from "./addonsShared";
+	import { addonIdFor, offersResource, offersSupportedResource, resourceNames, SUPPORTED_RESOURCES } from "../../../lib/library/addonManifest";
 	import type { AddonResourceFilter } from "../../../lib/stores/settings";
 
 	let { initialResourceFilter }: { initialResourceFilter: AddonResourceFilter } = $props();
 
 	const resourceSummary = (manifest: any) =>
-		getResourceNames(manifest)
+		resourceNames(manifest)
 			.filter((name) => SUPPORTED_RESOURCES.has(name))
 			.map(formatResourceName)
 			.join(" · ");
@@ -111,7 +107,7 @@
 			}
 
 			communityAddons = Array.from(deduped.values()).filter((addon: any) =>
-				hasSupportedResource(addon?.manifest),
+				offersSupportedResource(addon?.manifest),
 			);
 		} catch (e) {
 			console.error("Failed to load community addons", e);
@@ -123,12 +119,11 @@
 
 	async function installCommunityAddon(addon: any) {
 		try {
-			const manifestId = addon?.manifest?.id;
 			await addAddon({
 				transport_url: normalizeTransportUrl(addon.transportUrl ?? addon.transport_url),
 				manifest: addon.manifest,
 				flags: { protected: false, official: false },
-				addon_id: isUuid(manifestId) ? manifestId : crypto.randomUUID(),
+				addon_id: addonIdFor(addon.manifest.id),
 			});
 			emitAddonsChanged();
 			await loadInstalledAddons();
@@ -142,7 +137,7 @@
 		const manifest = addon?.manifest ?? {};
 
 		if (communityResourceFilter !== "all") {
-			if (!supportsResource(manifest, communityResourceFilter)) return false;
+			if (!offersResource(manifest, communityResourceFilter)) return false;
 		}
 
 		const q = String(communitySearch ?? "").trim().toLowerCase();

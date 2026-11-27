@@ -7,11 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "bun run build && wrangler dev",
-    "check": "svelte-check --tsgo --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
+    "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
     "deploy": "bun run build && wrangler deploy"
   },
   "devDependencies": {
-    "@typescript/native": "npm:typescript@^7.0.2",
     "@cloudflare/vite-plugin": "^1.69.1",
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@tsconfig/svelte": "^5.0.9",

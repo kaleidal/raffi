@@ -1,7 +1,7 @@
 <script lang="ts">
     import { Play } from "@lucide/svelte";
     import BusyIcon from "../../../components/common/loading/BusyIcon.svelte";
-    import type { ProgressItem } from "../types";
+    import type { ProgressItem } from "../../../lib/library/types/progress";
 
     let { progress, starting, onPlay }: { progress: ProgressItem | undefined; starting: boolean; onPlay: () => void } = $props();
 

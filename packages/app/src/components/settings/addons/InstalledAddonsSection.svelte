@@ -10,10 +10,9 @@
 		HOME_REFRESH_EVENT,
 		openConfigureUrl,
 		formatResourceName,
-		getResourceNames,
 		normalizeTransportUrl,
-		supportsResource,
 	} from "./addonsShared";
+	import { offersResource, resourceNames } from "../../../lib/library/addonManifest";
 
 	let addonsList = $state.raw<Addon[]>([]);
 	let newAddonUrl = $state("");
@@ -38,7 +37,7 @@
 	}
 
 	function addonSupportsStreams(addon: Addon) {
-		return supportsResource(addon?.manifest, "stream");
+		return offersResource(addon?.manifest, "stream");
 	}
 
 	function firstStreamAddonUrl(addons: Addon[]) {
@@ -120,7 +119,7 @@
 			<div class="text-ink/50 text-center py-6 text-sm">No addons installed yet.</div>
 		{:else}
 			{#each addonsList as addon}
-				{@const addonResources = getResourceNames(addon.manifest)}
+				{@const addonResources = resourceNames(addon.manifest)}
 				{@const isDefaultStreamAddon = firstStreamAddonUrl(addonsList) === addon.transport_url && addonSupportsStreams(addon)}
 				<div class="flex items-center gap-4 py-3">
 					<AddonLogo src={addon.manifest.logo} name={addon.manifest.name} sizeClass="w-12 h-12" />

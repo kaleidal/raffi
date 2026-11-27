@@ -1,6 +1,6 @@
 import { get, writable } from "svelte/store";
 import { selectedStream } from "../../meta/metaState";
-import type { StreamAvailabilityHint } from "../../meta/types";
+import type { StreamAvailabilityHint } from "../../../lib/streams/types";
 import { needsResolve, resolveBrowserStream } from "../../../lib/streams/browserStreams";
 import {
     isLikelyProviderStatusMedia,

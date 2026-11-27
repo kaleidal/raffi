@@ -1,4 +1,4 @@
-import type { Stream } from "../../../pages/meta/types";
+import type { Stream } from "../types";
 import type { EnrichedStream } from "./types";
 
 export function withAvailabilityHint({ stream, meta }: EnrichedStream): Stream {

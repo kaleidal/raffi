@@ -1,4 +1,5 @@
 import type { Addon } from "../../../../lib/db/db";
+import { offersResource } from "../../../../lib/library/addonManifest";
 import { getStreamFailureKey } from "../../../../pages/meta/streamFailures";
 import { parseStreamMetadata } from "../../../../lib/streams/ranking/streamParsing";
 import { compareRecommended, type RankingContext } from "../../../../lib/streams/ranking/streamRanking";
@@ -74,14 +75,7 @@ function compareBySort(left: EnrichedStream, right: EnrichedStream, sortOption: 
 }
 
 export function getFilteredAddons(addons: Addon[]): Addon[] {
-    return addons.filter((addon) => {
-        if (!addon.manifest || !addon.manifest.resources) return false;
-        return addon.manifest.resources.some(
-            (resource: any) =>
-                (typeof resource === "object" && resource.name === "stream") ||
-                resource === "stream",
-        );
-    });
+    return addons.filter((addon) => offersResource(addon.manifest, "stream"));
 }
 
 export function buildEnrichedStreams(

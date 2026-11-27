@@ -17,7 +17,7 @@
     "electron:dev:only": "cross-env ELECTRON_DISABLE_SANDBOX=1 electron .",
     "build": "bun scripts/build-electron.mjs && vite build",
     "dist": "bun run build && electron-builder",
-    "check": "svelte-check --tsgo --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
+    "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
     "check:all": "bun run --filter @raffi/app check && bun run check",
     "test": "bun test tests",
     "test:playback": "bun run test"
@@ -30,7 +30,6 @@
     "@tailwindcss/vite": "^4.3.5",
     "@tsconfig/svelte": "^5.0.9",
     "@types/node": "^26.6.6",
-    "@typescript/native": "npm:typescript@^7.0.2",
     "concurrently": "^10.0.7",
     "cross-env": "^10.1.0",
     "electron": "^45.3.3",

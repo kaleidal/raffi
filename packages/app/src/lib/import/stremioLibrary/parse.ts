@@ -1,7 +1,7 @@
+import type { ProgressItem } from "../../library/types/progress";
 import type {
     StremioExport,
     StremioImportPreviewItem,
-    StremioImportProgressEntry,
     StremioLibraryEntry,
     StremioLibraryState,
     StremioParseResult,
@@ -52,7 +52,7 @@ const buildProgressEntry = (
     duration: number,
     watchedFlag: boolean,
     lastWatchedIso: string | null,
-): StremioImportProgressEntry => {
+): ProgressItem => {
     const safeTime = Math.max(0, toFiniteNumber(timeWatched, 0));
     const safeDuration = Math.max(0, toFiniteNumber(duration, 0));
     const completionThreshold = safeDuration > 0 ? safeDuration * 0.9 : 0;
@@ -107,7 +107,7 @@ const normalizeLibraryState = (state: unknown): StremioLibraryState => {
 
 const buildSeriesProgressFromState = (
     state: StremioLibraryState,
-): { progress: Record<string, StremioImportProgressEntry>; lastWatched: string | null; season: number | null; episode: number | null; } => {
+): { progress: Record<string, ProgressItem>; lastWatched: string | null; season: number | null; episode: number | null; } => {
     let seasonRaw = state.season;
     let episodeRaw = state.episode;
     if ((seasonRaw === undefined || seasonRaw === null) && (episodeRaw === undefined || episodeRaw === null)) {
@@ -134,7 +134,7 @@ const buildSeriesProgressFromState = (
     };
 };
 
-const buildMovieProgressFromState = (state: StremioLibraryState): StremioImportProgressEntry => {
+const buildMovieProgressFromState = (state: StremioLibraryState): ProgressItem => {
     const time = toFiniteNumber(state.timeWatched, 0);
     const duration = toFiniteNumber(state.duration, 0);
     const watched = isStremioWatchedFlag(state.watched) || toFiniteNumber(state.flaggedWatched, 0) > 0;

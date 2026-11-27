@@ -1,4 +1,5 @@
-import type { LastWatched, ProgressItem } from "./types";
+import type { LastWatched } from "./types";
+import type { ProgressItem } from "../../lib/library/types/progress";
 
 type EpisodeLike = {
     season?: number;

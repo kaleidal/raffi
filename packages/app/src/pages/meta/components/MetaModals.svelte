@@ -2,7 +2,7 @@
     import StreamsPopup from "../../../components/meta/modals/StreamsPopup.svelte";
     import TorrentWarningModal from "../../../components/meta/modals/TorrentWarningModal.svelte";
     import type { ShowResponse } from "../../../lib/library/types/meta_types";
-    import type { ProgressMap } from "../types";
+    import type { ProgressMap } from "../../../lib/library/types/progress";
 
     let {
         streamsPopupVisible = $bindable(),

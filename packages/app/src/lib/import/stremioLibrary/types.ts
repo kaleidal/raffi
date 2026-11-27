@@ -1,3 +1,5 @@
+import type { ProgressMap } from "../../library/types/progress";
+
 export type StremioLibraryType = "movie" | "series" | "channel" | "tv" | string;
 
 export interface StremioLibraryState {
@@ -43,24 +45,13 @@ export interface StremioExport {
     [key: string]: unknown;
 }
 
-export interface StremioImportProgressEntry {
-    time: number;
-    duration: number;
-    watched: boolean;
-    updatedAt: number;
-}
-
-export type StremioImportProgress =
-    | StremioImportProgressEntry
-    | Record<string, StremioImportProgressEntry>;
-
 export interface StremioImportPreviewItem {
     imdbId: string;
     name: string;
     type: "movie" | "series";
     poster: string | undefined;
     lastWatched: string | null;
-    progress: StremioImportProgress;
+    progress: ProgressMap;
     watched: boolean;
     timeWatched: number;
     duration: number;
@@ -70,7 +61,7 @@ export interface StremioImportPreviewItem {
 
 export interface StremioImportResultItem extends StremioImportPreviewItem {
     progressChanged: boolean;
-    mergedProgress: StremioImportProgress;
+    mergedProgress: ProgressMap;
     newLastWatched: string | null;
     completedAt: string | null;
     action: "added" | "merged" | "skipped";

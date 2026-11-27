@@ -13,10 +13,9 @@
     "./*": "./src/*"
   },
   "scripts": {
-    "check": "svelte-check --tsgo --tsconfig ./tsconfig.json"
+    "check": "svelte-check --tsconfig ./tsconfig.json"
   },
   "devDependencies": {
-    "@typescript/native": "npm:typescript@^7.0.2",
     "@tsconfig/svelte": "^5.0.9",
     "svelte": "^5.57.3",
     "svelte-check": "^4.7.8",

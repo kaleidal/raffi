@@ -1,0 +1,24 @@
+export interface StreamAvailabilityHint {
+    cacheHint: boolean | null;
+    providerLabel: string | null;
+    dashboardUrl: string | null;
+    expectedSizeBytes: number | null;
+}
+
+export interface Stream {
+    name: string;
+    title: string;
+    description?: string;
+    url?: string;
+    infoHash?: string;
+    fileIdx?: number;
+    raffiSource?: "local" | "addon" | "direct";
+    directPlaybackMode?: "iframe" | "player";
+    directPlayerFormat?: "auto" | "hls" | "mp4" | "webm" | "dash" | "other";
+    raffiAvailability?: StreamAvailabilityHint;
+    behaviorHints?: {
+        bingeGroup?: string;
+        filename?: string;
+        videoSize?: number;
+    };
+}

@@ -1,28 +1,27 @@
 import type { LibraryItem } from "../../db/types";
+import type { ProgressItem } from "../../library/types/progress";
 import type {
     StremioImportPreviewItem,
-    StremioImportProgress,
-    StremioImportProgressEntry,
     StremioImportResultItem,
     StremioImportSummary,
 } from "./types";
 import { isPlainObject, toFiniteNumber } from "./values";
 
-const normalizeLocalProgressEntry = (value: unknown): StremioImportProgressEntry | null => {
+const normalizeLocalProgressEntry = (value: unknown): ProgressItem | null => {
     if (!isPlainObject(value)) return null;
-    const time = Math.max(0, toFiniteNumber((value as any).time, 0));
-    const duration = Math.max(0, toFiniteNumber((value as any).duration, 0));
-    const watched = Boolean((value as any).watched);
-    const updatedAt = toFiniteNumber((value as any).updatedAt, 0);
+    const time = Math.max(0, toFiniteNumber(value.time, 0));
+    const duration = Math.max(0, toFiniteNumber(value.duration, 0));
+    const watched = Boolean(value.watched);
+    const updatedAt = toFiniteNumber(value.updatedAt, 0);
     return { time, duration, watched, updatedAt: Number.isFinite(updatedAt) ? updatedAt : 0 };
 };
 
-const isEpisodeProgressMap = (value: unknown): value is Record<string, StremioImportProgressEntry> => {
+const isEpisodeProgressMap = (value: unknown): value is Record<string, ProgressItem> => {
     if (!isPlainObject(value)) return false;
     return Object.values(value).some((entry) => isPlainObject(entry) && ("time" in entry || "watched" in entry));
 };
 
-const compareProgressEntries = (left: StremioImportProgressEntry, right: StremioImportProgressEntry): number => {
+const compareProgressEntries = (left: ProgressItem, right: ProgressItem): number => {
     if (left.updatedAt !== right.updatedAt) {
         return left.updatedAt > right.updatedAt ? 1 : -1;
     }
@@ -41,19 +40,19 @@ const compareProgressEntries = (left: StremioImportProgressEntry, right: Stremio
 };
 
 const chooseProgressEntry = (
-    local: StremioImportProgressEntry | null,
-    incoming: StremioImportProgressEntry,
-): StremioImportProgressEntry => {
+    local: ProgressItem | null,
+    incoming: ProgressItem,
+): ProgressItem => {
     if (!local) return incoming;
     return compareProgressEntries(incoming, local) >= 0 ? { ...local, ...incoming } : { ...incoming, ...local };
 };
 
 const mergeSeriesProgress = (
     localProgress: unknown,
-    incoming: Record<string, StremioImportProgressEntry>,
-): { merged: Record<string, StremioImportProgressEntry>; changed: boolean } => {
+    incoming: Record<string, ProgressItem>,
+): { merged: Record<string, ProgressItem>; changed: boolean } => {
     const localMap = isEpisodeProgressMap(localProgress) ? localProgress : {};
-    const merged: Record<string, StremioImportProgressEntry> = { ...localMap };
+    const merged: Record<string, ProgressItem> = { ...localMap };
     let changed = false;
     for (const [key, incomingEntry] of Object.entries(incoming)) {
         const localEntry = normalizeLocalProgressEntry(merged[key]);
@@ -68,8 +67,8 @@ const mergeSeriesProgress = (
 
 const mergeMovieProgress = (
     localProgress: unknown,
-    incoming: StremioImportProgressEntry,
-): { merged: StremioImportProgressEntry; changed: boolean } => {
+    incoming: ProgressItem,
+): { merged: ProgressItem; changed: boolean } => {
     const localEntry = normalizeLocalProgressEntry(localProgress);
     const merged = chooseProgressEntry(localEntry, incoming);
     const changed = !localEntry || compareProgressEntries(merged, localEntry) !== 0;
@@ -100,14 +99,14 @@ export const mergeStremioImportIntoLibrary = (
         if (!current) {
             const completedAt = isSeries
                 ? null
-                : (incomingProgress as StremioImportProgressEntry).watched
+                : (incomingProgress as ProgressItem).watched
                     ? (preview.lastWatched || new Date().toISOString())
                     : null;
             const nextItem: LibraryItem = {
                 imdb_id: preview.imdbId,
                 progress: isSeries
-                    ? (incomingProgress as Record<string, StremioImportProgressEntry>)
-                    : (incomingProgress as StremioImportProgressEntry),
+                    ? (incomingProgress as Record<string, ProgressItem>)
+                    : (incomingProgress as ProgressItem),
                 last_watched: preview.lastWatched || new Date().toISOString(),
                 completed_at: completedAt,
                 type: preview.type,
@@ -125,7 +124,7 @@ export const mergeStremioImportIntoLibrary = (
             items.push({
                 ...preview,
                 progressChanged: true,
-                mergedProgress: nextItem.progress as StremioImportProgress,
+                mergedProgress: nextItem.progress,
                 newLastWatched: nextItem.last_watched,
                 completedAt: nextItem.completed_at,
                 action: "added",
@@ -138,14 +137,14 @@ export const mergeStremioImportIntoLibrary = (
         const localProgress = current.progress;
 
         if (isSeries) {
-            const incomingMap = incomingProgress as Record<string, StremioImportProgressEntry>;
+            const incomingMap = incomingProgress as Record<string, ProgressItem>;
             const { merged: mergedProgress, changed: progressChanged } = mergeSeriesProgress(localProgress, incomingMap);
             if (!progressChanged && nextLastWatched === existingLastWatched) {
                 skipped += 1;
                 items.push({
                     ...preview,
                     progressChanged: false,
-                    mergedProgress: mergedProgress as StremioImportProgress,
+                    mergedProgress,
                     newLastWatched: existingLastWatched,
                     completedAt: current.completed_at,
                     action: "skipped",
@@ -172,7 +171,7 @@ export const mergeStremioImportIntoLibrary = (
             items.push({
                 ...preview,
                 progressChanged,
-                mergedProgress: mergedProgress as StremioImportProgress,
+                mergedProgress,
                 newLastWatched: updated.last_watched,
                 completedAt: updated.completed_at,
                 action: "merged",
@@ -180,7 +179,7 @@ export const mergeStremioImportIntoLibrary = (
             continue;
         }
 
-        const incomingEntry = incomingProgress as StremioImportProgressEntry;
+        const incomingEntry = incomingProgress as ProgressItem;
         const { merged: mergedProgress, changed: progressChanged } = mergeMovieProgress(localProgress, incomingEntry);
         if (!progressChanged && nextLastWatched === existingLastWatched) {
             skipped += 1;

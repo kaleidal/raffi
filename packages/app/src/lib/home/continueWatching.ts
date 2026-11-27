@@ -2,7 +2,7 @@ import type { Episode, ShowResponse } from "../library/types/meta_types";
 import type { LibraryItem } from "../db/types";
 import { updateLibraryPoster } from "../db/db";
 import { getCachedMetaData } from "../library/metaCache";
-import type { ProgressItem } from "../../pages/meta/types";
+import type { ProgressItem } from "../library/types/progress";
 import { getSeriesResumeEpisode } from "../../pages/meta/episodeSelection";
 
 export type WatchingItem = ShowResponse & { libraryItem: { progress: unknown; poster?: string } };

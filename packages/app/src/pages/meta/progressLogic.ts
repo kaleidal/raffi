@@ -5,15 +5,15 @@ import {
     contextMenuPos, contextEpisode
 } from "./metaState";
 
-import type { ProgressMap, ProgressItem } from "./types";
+import type { ProgressMap, ProgressItem, SeriesProgress } from "../../lib/library/types/progress";
+import type { Episode } from "../../lib/library/types/meta_types";
 
 let lastUpdate = 0;
 let lastProgressMapWrite = 0;
 const PROGRESS_CLOUD_SYNC_DELAY_MS = 90_000;
 const PROGRESS_MAP_UI_THROTTLE_MS = 2000;
 
-const isEpisodeReleased = (episode: any): boolean => {
-    if (!episode) return false;
+const isEpisodeReleased = (episode: Episode): boolean => {
     if (!episode.released) return true;
     const releasedAt = new Date(episode.released).getTime();
     if (Number.isNaN(releasedAt)) return true;
@@ -22,7 +22,7 @@ const isEpisodeReleased = (episode: any): boolean => {
 
 const isSeriesCompleted = (
     progress: ProgressMap,
-    videos: any[] = [],
+    videos: Episode[] = [],
 ): boolean => {
     if (!progress) return false;
     const releasedEpisodes = videos.filter(
@@ -30,7 +30,7 @@ const isSeriesCompleted = (
     );
     if (releasedEpisodes.length === 0) return false;
 
-    const map = progress as Record<string, ProgressItem>;
+    const map = progress as SeriesProgress;
     return releasedEpisodes.every((episode) => {
         const key = `${episode.season}:${episode.episode}`;
         return Boolean(map[key]?.watched);
@@ -46,7 +46,7 @@ const isMovieCompleted = (progress: ProgressMap): boolean => {
 const determineCompletion = (
     type: string,
     progress: ProgressMap,
-    videos: any[] = [],
+    videos: Episode[] = [],
 ): boolean => {
     if (type === "movie") {
         return isMovieCompleted(progress);
@@ -57,7 +57,7 @@ const determineCompletion = (
 export const getProgress = (map: ProgressMap, key?: string): ProgressItem | undefined => {
     if (!map) return undefined;
     if (key) {
-        return (map as any)[key];
+        return (map as SeriesProgress)[key];
     }
     return map as ProgressItem;
 };
@@ -76,25 +76,21 @@ export const handleProgress = async (time: number, duration: number, imdbID: str
     const type = data.meta.type;
     let currentMap = get(progressMap);
     let existingProgress: ProgressItem | undefined;
+    const progress: ProgressItem = {
+        time,
+        duration,
+        watched: isWatched,
+        updatedAt: now,
+    };
 
     if (type === "movie") {
         existingProgress = currentMap as ProgressItem;
-        currentMap = {
-            time,
-            duration,
-            watched: isWatched,
-            updatedAt: now,
-        } as any;
+        currentMap = progress;
     } else {
         const key = `${episode.season}:${episode.episode}`;
-        existingProgress = (currentMap as Record<string, ProgressItem>)[key];
-        currentMap = { ...(currentMap as Record<string, ProgressItem>) };
-        (currentMap as any)[key] = {
-            time,
-            duration,
-            watched: isWatched,
-            updatedAt: now,
-        };
+        const seriesMap = currentMap as SeriesProgress;
+        existingProgress = seriesMap[key];
+        currentMap = { ...seriesMap, [key]: progress };
     }
 
     const watchedStateChanged = Boolean(existingProgress?.watched) !== isWatched;
@@ -129,7 +125,7 @@ export const handleProgress = async (time: number, duration: number, imdbID: str
     }
 };
 
-export const handleEpisodeContextMenu = (e: MouseEvent, episode: any) => {
+export const handleEpisodeContextMenu = (e: MouseEvent, episode: Episode) => {
     const target = e.currentTarget as HTMLElement | null;
     const container = document.querySelector(
         "[data-scroll-container]",
@@ -171,11 +167,10 @@ export const handleContextMarkWatched = async (imdbID: string) => {
     if (!episode || !imdbID) return;
 
     const key = `${episode.season}:${episode.episode}`;
-    let currentMap = get(progressMap);
-    const existing = (currentMap as any)[key] || {};
-    const duration = existing.duration || 0;
+    const currentMap = get(progressMap) as SeriesProgress;
+    const duration = currentMap[key]?.duration || 0;
 
-    (currentMap as any)[key] = {
+    currentMap[key] = {
         time: duration,
         duration: duration,
         watched: true,
@@ -205,11 +200,10 @@ export const handleContextMarkUnwatched = async (imdbID: string) => {
     if (!episode || !imdbID) return;
 
     const key = `${episode.season}:${episode.episode}`;
-    let currentMap = get(progressMap);
-    const existing = (currentMap as any)[key] || {};
+    const currentMap = get(progressMap) as SeriesProgress;
 
-    (currentMap as any)[key] = {
-        ...existing,
+    currentMap[key] = {
+        ...currentMap[key],
         time: 0,
         watched: false,
         updatedAt: Date.now(),
@@ -238,11 +232,11 @@ export const handleContextResetProgress = async (imdbID: string) => {
     if (!episode || !imdbID) return;
 
     const key = `${episode.season}:${episode.episode}`;
-    let currentMap = { ...get(progressMap) };
+    const currentMap = { ...(get(progressMap) as SeriesProgress) };
 
-    if ((currentMap as any)[key]) {
-        const existing = (currentMap as any)[key];
-        (currentMap as any)[key] = {
+    const existing = currentMap[key];
+    if (existing) {
+        currentMap[key] = {
             ...existing,
             time: 0,
             watched: false,
@@ -274,17 +268,16 @@ export const handleContextMarkSeasonWatched = async (imdbID: string) => {
 
     const season = episode.season;
     const episodesInSeason = data.meta.videos.filter(
-        (v: any) => v.season === season,
+        (v) => v.season === season,
     );
 
-    let currentMap = get(progressMap);
+    const currentMap = get(progressMap) as SeriesProgress;
 
     for (const ep of episodesInSeason) {
         const key = `${ep.season}:${ep.episode}`;
-        const existing = (currentMap as any)[key] || {};
-        const duration = existing.duration || 0;
+        const duration = currentMap[key]?.duration || 0;
 
-        (currentMap as any)[key] = {
+        currentMap[key] = {
             time: duration,
             duration: duration,
             watched: true,
@@ -313,17 +306,16 @@ export const handleContextMarkSeasonUnwatched = async (imdbID: string) => {
 
     const season = episode.season;
     const episodesInSeason = data.meta.videos.filter(
-        (v: any) => v.season === season,
+        (v) => v.season === season,
     );
 
-    let currentMap = get(progressMap);
+    const currentMap = get(progressMap) as SeriesProgress;
 
     for (const ep of episodesInSeason) {
         const key = `${ep.season}:${ep.episode}`;
-        const existing = (currentMap as any)[key] || {};
 
-        (currentMap as any)[key] = {
-            ...existing,
+        currentMap[key] = {
+            ...currentMap[key],
             time: 0,
             watched: false,
             updatedAt: Date.now(),

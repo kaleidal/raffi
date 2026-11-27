@@ -7,7 +7,8 @@
     import { getSeriesResumeEpisode, getStandardEpisodes } from "../episodeSelection";
     import { getProgress } from "../progressLogic";
     import type { ShowResponse } from "../../../lib/library/types/meta_types";
-    import type { LastWatched, ProgressMap } from "../types";
+    import type { LastWatched } from "../types";
+    import type { ProgressMap } from "../../../lib/library/types/progress";
 
     let {
         metaData,

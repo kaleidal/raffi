@@ -13,7 +13,6 @@
         "@sveltejs/vite-plugin-svelte": "^7.3.1",
         "@tailwindcss/vite": "^4.3.5",
         "@tsconfig/svelte": "^5.0.9",
-        "@typescript/native": "npm:typescript@^7.0.2",
         "svelte": "^5.57.3",
         "svelte-check": "^4.7.8",
         "tailwindcss": "^4.3.5",
@@ -32,7 +31,6 @@
         "@tailwindcss/vite": "^4.3.5",
         "@tsconfig/svelte": "^5.0.9",
         "@types/node": "^26.6.6",
-        "@typescript/native": "npm:typescript@^7.0.2",
         "concurrently": "^10.0.7",
         "cross-env": "^10.1.0",
         "electron": "^45.3.3",
@@ -59,7 +57,6 @@
         "@sveltejs/vite-plugin-svelte": "^7.3.1",
         "@tailwindcss/vite": "^4.3.5",
         "@types/node": "^26.6.6",
-        "@typescript/native": "npm:typescript@^7.0.2",
         "svelte": "^5.57.3",
         "svelte-check": "^4.7.8",
         "tailwindcss": "^4.3.5",
@@ -81,7 +78,6 @@
         "@sveltejs/vite-plugin-svelte": "^7.3.1",
         "@tsconfig/svelte": "^5.0.9",
         "@types/node": "^26.6.6",
-        "@typescript/native": "npm:typescript@^7.0.2",
         "svelte": "^5.57.3",
         "svelte-check": "^4.7.8",
         "typescript": "^6.0.3",
@@ -105,7 +101,6 @@
       },
       "devDependencies": {
         "@tsconfig/svelte": "^5.0.9",
-        "@typescript/native": "npm:typescript@^7.0.2",
         "svelte": "^5.57.3",
         "svelte-check": "^4.7.8",
         "tailwindcss": "^4.3.5",
@@ -497,8 +492,6 @@
     "@types/node": ["@types/node@26.6.6", "", { "dependencies": { "undici-types": "~8.9.0" } }, "sha512-MzQj+8Kx3XI40OmUAE6Qoh58ZMNstNNMwn2nfd3qWsfe7nDNSqJNzes4njhz6AHwrSHOffSLwXU6yb474Q4aog=="],
 
     "@types/responselike": ["@types/responselike@1.0.3", "", { "dependencies": { "@types/node": "*" } }, "sha512-H/+L+UkTV33uf49PH5pCAUBVPNj2nDBXTN+qS1dOwyyg24l3CcicicCA7ca+HMvJBZcFgl5r8e+RR6elsb4Lyw=="],
-
-    "@typescript/native": ["typescript@7.0.2", "", { "optionalDependencies": { "@typescript/typescript-aix-ppc64": "7.0.2", "@typescript/typescript-darwin-arm64": "7.0.2", "@typescript/typescript-darwin-x64": "7.0.2", "@typescript/typescript-freebsd-arm64": "7.0.2", "@typescript/typescript-freebsd-x64": "7.0.2", "@typescript/typescript-linux-arm": "7.0.2", "@typescript/typescript-linux-arm64": "7.0.2", "@typescript/typescript-linux-loong64": "7.0.2", "@typescript/typescript-linux-mips64el": "7.0.2", "@typescript/typescript-linux-ppc64": "7.0.2", "@typescript/typescript-linux-riscv64": "7.0.2", "@typescript/typescript-linux-s390x": "7.0.2", "@typescript/typescript-linux-x64": "7.0.2", "@typescript/typescript-netbsd-arm64": "7.0.2", "@typescript/typescript-netbsd-x64": "7.0.2", "@typescript/typescript-openbsd-arm64": "7.0.2", "@typescript/typescript-openbsd-x64": "7.0.2", "@typescript/typescript-sunos-x64": "7.0.2", "@typescript/typescript-win32-arm64": "7.0.2", "@typescript/typescript-win32-x64": "7.0.2" }, "bin": { "tsc": "bin/tsc" } }, "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA=="],
 
     "@typescript/typescript-aix-ppc64": ["@typescript/typescript-aix-ppc64@7.0.2", "", { "os": "aix", "cpu": "ppc64" }, "sha512-MTKKkWB7p/0E9xi1d1tHtZ5PiLkGEMIq88pK2CubZjOsLtYTLqhgIgi6zepFa+9GHZ6h05NMCkQxGKiPXMxXtQ=="],
 

@@ -7,7 +7,7 @@
     import { failedStreamKeys, streamFailureMessage } from "../../../pages/meta/metaState";
     import type { Addon } from "../../../lib/db/db";
     import type { ShowResponse } from "../../../lib/library/types/meta_types";
-    import type { ProgressMap } from "../../../pages/meta/types";
+    import type { ProgressMap } from "../../../lib/library/types/progress";
     import { allowTorrenting, isTorrentSource } from "../../../lib/stores/torrenting";
     import EpisodeHeader from "./streams/EpisodeHeader.svelte";
     import StreamsToolbar from "./streams/StreamsToolbar.svelte";

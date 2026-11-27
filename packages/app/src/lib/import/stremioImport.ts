@@ -222,7 +222,7 @@ export const importStremioLibrary = async (
                 [preview],
             );
             const mergedItem = library.find((item) => item.imdb_id === preview.imdbId);
-            const mergedProgress = mergedItem?.progress ?? existing?.progress;
+            const mergedProgress = mergedItem?.progress ?? existing?.progress ?? {};
             const completedAt = mergedItem
                 ? mergedItem.completed_at
                 : existing?.completed_at ?? null;

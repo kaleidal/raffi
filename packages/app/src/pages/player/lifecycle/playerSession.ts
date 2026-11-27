@@ -2,7 +2,7 @@ import { tick } from "svelte";
 import type { ShowResponse } from "../../../lib/library/types/meta_types";
 import { isDesktopPlatform } from "../../../lib/shell/platform";
 import { isLikelyProviderStatusMedia } from "../../../lib/streams/streamAvailability";
-import type { StreamAvailabilityHint } from "../../meta/types";
+import type { StreamAvailabilityHint } from "../../../lib/streams/types";
 import { requestIntroDbChapters, resolvePlaybackStart } from "../chapters/introStartup";
 import * as Discord from "../integrations/discord";
 import { createEmbedPlayback } from "../integrations/embedPlayback";

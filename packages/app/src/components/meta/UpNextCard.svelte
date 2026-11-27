@@ -2,7 +2,7 @@
     import { Play } from "@lucide/svelte";
     import BusyIcon from "../common/loading/BusyIcon.svelte";
     import type { Episode } from "../../lib/library/types/meta_types";
-    import type { ProgressItem } from "../../pages/meta/types";
+    import type { ProgressItem } from "../../lib/library/types/progress";
 
     let {
         episode,

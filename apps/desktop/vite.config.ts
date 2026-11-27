@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import tailwindcss from "@tailwindcss/vite";
 import { resolve } from 'node:path'
-import { runesOutsideDependencies } from '../../packages/app/svelte.config.js'
+import { runesOutsideDependencies } from '../../packages/app/runesMode'
 
 // https://vite.dev/config/
 export default defineConfig(({ command }) => ({
@@ -41,7 +41,7 @@ export default defineConfig(({ command }) => ({
             { name: 'mediabunny-truehd', test: 'node_modules/@mediabunny/truehd/' },
             { name: 'mediabunny-codecs', test: 'node_modules/@mediabunny/' },
             { name: 'mediabunny', test: 'node_modules/mediabunny/' },
-            { name: 'lucide', test: 'node_modules/lucide-svelte/' },
+            { name: 'lucide', test: 'node_modules/@lucide/svelte/' },
           ],
         },
       },

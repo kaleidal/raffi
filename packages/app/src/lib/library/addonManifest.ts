@@ -2,6 +2,31 @@ import type { Addon } from "../db/db";
 
 export type CatalogType = "movie" | "series";
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** The manifest's own id when it is a UUID, which the sync service requires, otherwise a fresh one. */
+export const addonIdFor = (manifestId: unknown) =>
+    typeof manifestId === "string" && UUID.test(manifestId) ? manifestId : crypto.randomUUID();
+
+export type ResourceName = "stream" | "subtitles" | "catalog" | "meta";
+
+export const SUPPORTED_RESOURCES = new Set<string>(["stream", "subtitles", "catalog", "meta"]);
+
+/** Lower-cased resource names, read leniently because community and imported manifests are not always well-formed. */
+export function resourceNames(manifest: { resources?: unknown } | null | undefined): string[] {
+    const resources: unknown[] = Array.isArray(manifest?.resources) ? manifest.resources : [];
+    const names = resources.map((resource) =>
+        String(typeof resource === "string" ? resource : (resource as { name?: unknown } | null)?.name ?? "").toLowerCase(),
+    );
+    return Array.from(new Set(names.filter(Boolean)));
+}
+
+export const offersResource = (manifest: { resources?: unknown } | null | undefined, name: ResourceName) =>
+    resourceNames(manifest).includes(name);
+
+export const offersSupportedResource = (manifest: { resources?: unknown } | null | undefined) =>
+    resourceNames(manifest).some((name) => SUPPORTED_RESOURCES.has(name));
+
 export function normalizeAddonBaseUrl(transportUrl: string) {
     return (transportUrl || "")
         .trim()
@@ -70,19 +95,8 @@ export function addonSupportsMeta(addon: Addon, id: string, type: CatalogType) {
 }
 
 export function addonHasCatalogResource(addon: Addon) {
-    const resources = Array.isArray(addon?.manifest?.resources)
-        ? addon.manifest.resources
-        : [];
-    if (resources.length === 0) return true;
-    return resources.some((resource: any) => {
-        if (typeof resource === "string") {
-            return resource.toLowerCase() === "catalog";
-        }
-        if (resource && typeof resource === "object") {
-            return String(resource.name || "").toLowerCase() === "catalog";
-        }
-        return false;
-    });
+    const names = resourceNames(addon.manifest);
+    return names.length === 0 || names.includes("catalog");
 }
 
 export function normalizeCatalogType(type: unknown): CatalogType | null {
