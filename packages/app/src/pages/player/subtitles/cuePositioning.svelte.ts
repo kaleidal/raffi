@@ -21,6 +21,7 @@ export function createCuePositioning({
     const measure = () => {
         linePercent = Subtitles.computeCueLinePercent(
             getContainer() ?? null,
+            getVideo() ?? null,
             getPanel(),
             isControlsVisible(),
             SUBTITLE_CONTROLS_MARGIN_PX,

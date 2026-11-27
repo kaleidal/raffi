@@ -1,3 +1,6 @@
+import type { ContentRect } from "../../../../lib/media/crop/barDetection";
+import { pictureAspect } from "./videoFit";
+
 const AMBIENT_ASPECT_EPSILON = 0.015;
 const AMBIENT_MIN_WIDTH = 160;
 const AMBIENT_MAX_WIDTH = 420;
@@ -9,7 +12,7 @@ type AmbientGlowOptions = {
     getContainer: () => HTMLDivElement | undefined;
     getCanvas: () => HTMLCanvasElement | undefined;
     getVideo: () => HTMLVideoElement | undefined;
-    getObjectFit: () => "contain" | "cover";
+    getCrop: () => ContentRect;
     syncVideoFit: () => void;
     onVisibilityChange: (visible: boolean) => void;
 };
@@ -92,7 +95,7 @@ export function createAmbientGlow(options: AmbientGlowOptions) {
     };
 
     const updateAmbientDisplayVisibility = () => {
-        options.onVisibilityChange(options.getObjectFit() === "contain" && (ambientActive || ambientHasFrame));
+        options.onVisibilityChange(ambientActive || ambientHasFrame);
     };
 
     const resizeAmbientCanvasPreservingFrame = (width: number, height: number) => {
@@ -156,13 +159,6 @@ export function createAmbientGlow(options: AmbientGlowOptions) {
     const updateAmbientState = () => {
         options.syncVideoFit();
 
-        if (options.getObjectFit() !== "contain") {
-            ambientActive = false;
-            resetAmbientFrameState();
-            updateAmbientDisplayVisibility();
-            return;
-        }
-
         const containerElem = options.getContainer();
         const videoElem = options.getVideo();
         if (!containerElem || !videoElem) {
@@ -183,7 +179,7 @@ export function createAmbientGlow(options: AmbientGlowOptions) {
             return;
         }
 
-        const videoAspect = videoWidth / videoHeight;
+        const videoAspect = pictureAspect({ width: videoWidth, height: videoHeight }, options.getCrop());
         const containerAspect = containerWidth / containerHeight;
         ambientActive = Math.abs(videoAspect - containerAspect) > AMBIENT_ASPECT_EPSILON;
 
@@ -218,8 +214,20 @@ export function createAmbientGlow(options: AmbientGlowOptions) {
         sourceCtx.imageSmoothingEnabled = true;
 
         try {
+            const crop = options.getCrop();
+            const { videoWidth, videoHeight } = videoElem;
             sourceCtx.clearRect(0, 0, width, height);
-            sourceCtx.drawImage(videoElem, 0, 0, width, height);
+            sourceCtx.drawImage(
+                videoElem,
+                crop.left * videoWidth,
+                crop.top * videoHeight,
+                (crop.right - crop.left) * videoWidth,
+                (crop.bottom - crop.top) * videoHeight,
+                0,
+                0,
+                width,
+                height,
+            );
         } catch {
             return;
         }

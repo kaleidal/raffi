@@ -43,7 +43,6 @@ export const errorDetails = writable("");
 export const sessionData = writable<any>(null);
 
 // Object fit
-export const objectFit = writable<"contain" | "cover">("contain");
 
 // Seeking state
 export const pendingSeek = writable<number | null>(null);
@@ -73,7 +72,6 @@ export function resetPlayerState() {
     errorMessage.set("");
     errorDetails.set("");
     sessionData.set(null);
-    objectFit.set("contain");
     pendingSeek.set(null);
     seekGuard.set(false);
     firstSeekLoad.set(false);

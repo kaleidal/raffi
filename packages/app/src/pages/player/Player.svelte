@@ -35,7 +35,6 @@
         errorDetails,
         audioTracks,
         subtitleTracks,
-        objectFit,
         sessionData,
         pendingSeek,
         hasStarted as hasStartedStore,
@@ -51,6 +50,8 @@
     import { createPlaybackReporting } from "./integrations/playbackReporting";
     import { persistControlsPinned, readControlsPinned } from "./controls/playerPreferences";
     import { createSeekTimeline } from "./controls/seekTimeline.svelte";
+    import { createAutocrop } from "./components/video/autocrop.svelte";
+    import { pictureAspect as pictureAspectOf } from "./components/video/videoFit";
     import { hasNextEpisode as seriesHasNextEpisode } from "./controls/playerNextEpisode";
     import { createNextEpisodeFlow } from "./controls/nextEpisodeFlow";
     import { createPlayerActions } from "./controls/playerActions";
@@ -76,6 +77,7 @@
 
     const imdbID = untrack(() => metaData?.meta?.imdb_id || null);
     const DESKTOP_DOWNLOAD_URL = "https://raffi.al/#download";
+    const CROP_SETTLE_MS = 500;
 
     const media = new PlayerMedia();
     let playerContainer = $state<HTMLDivElement>();
@@ -85,7 +87,7 @@
     let skipButtonLabel = $state("Skip Intro");
     let isTearingDown = false;
     let loadingBackdrop = $state.raw<LoadingBackdrop>({ src: null, mode: "art" });
-    let pictureAspect = $state<number | null>(null);
+    let videoSize = $state.raw<{ width: number; height: number } | null>(null);
     let clipEditorOpen = $state(false);
     let tracksOpen = $state(false);
     let controlsPinned = $state(readControlsPinned());
@@ -224,7 +226,7 @@
         hasStarted: () => hasStarted,
         onStarted: (video) => {
             hasStarted = true;
-            pictureAspect = video.videoHeight ? video.videoWidth / video.videoHeight : null;
+            videoSize = video.videoHeight ? { width: video.videoWidth, height: video.videoHeight } : null;
         },
         reporting,
         chapters: chapterAutomation,
@@ -251,6 +253,15 @@
     const seekTimeline = createSeekTimeline({
         getVideo: () => media.video,
         getPreviewSource: () => ($sessionData?.isDirectHttp ? $sessionData.sourceUrl : null),
+    });
+
+    const autocrop = createAutocrop({ getPreview: () => seekTimeline.preview, getDuration: () => $duration });
+    const pictureAspect = $derived(videoSize && pictureAspectOf(videoSize, autocrop.rect));
+
+    $effect(() => {
+        autocrop.rect;
+        const settled = setTimeout(cues.measure, CROP_SETTLE_MS);
+        return () => clearTimeout(settled);
     });
 
     const seekWithMediaKeys = (time: number) => seekToTime(Math.max(0, Math.min(time, $duration)));
@@ -292,13 +303,11 @@
                   },
                   tracksOpen,
                   onTracksOpenChange: (open) => (tracksOpen = open),
-                  objectFit: $objectFit,
                   togglePlay: togglePlayWithFeedback,
                   onSeekInput: (time) => controlsManager.onSeekInput(time, pendingSeek.set),
                   onSeekChange: (time) => controlsManager.onSeekChange(time, seekToTime),
                   onVolumeChange: (value) => controlsManager.onVolumeChange(value, volume.set),
                   toggleFullscreen: () => void controlsManager.toggleFullscreen(),
-                  toggleObjectFit: () => Controls.switchObjectFit(media.video, media.canvas),
                   onClipEditorOpenChange: (open) => (clipEditorOpen = open),
                   pinned: controlsPinned,
                   onTogglePin: () => persistControlsPinned((controlsPinned = !controlsPinned)),
@@ -398,7 +407,7 @@
                 bind:videoB={media.surfaceB}
                 activeSurface={media.activeSurface}
                 bind:canvasElem={media.canvas}
-                objectFit={$objectFit}
+                crop={autocrop.rect}
                 showCanvas={$showCanvas}
                 onTimeUpdate={() => {
                     playbackEvents.timeUpdate();

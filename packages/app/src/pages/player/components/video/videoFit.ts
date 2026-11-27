@@ -1,60 +1,27 @@
-const SMART_COVER_MAX_CROP_RATIO = 0.02;
-const MANUAL_ZOOM_SCALE = 1.035;
+import type { ContentRect } from "../../../../lib/media/crop/barDetection";
 
-export type VideoFit = {
-    objectFit: "contain" | "cover";
-    objectPosition: string;
-    transform: string;
-};
+/** Fills the frame instead of fitting it when that would hide less than this share of the picture. */
+const FILL_TOLERANCE = 0.02;
 
-const getSmartCoverCropRatio = (
-    containerElem: HTMLElement | undefined,
-    videoElem: HTMLVideoElement | undefined,
-) => {
-    if (!containerElem || !videoElem) return 1;
+type Size = { width: number; height: number };
 
-    const containerWidth = containerElem.clientWidth;
-    const containerHeight = containerElem.clientHeight;
-    const { videoWidth, videoHeight } = videoElem;
+export type VideoBox = { left: number; top: number; width: number; height: number };
 
-    if (!containerWidth || !containerHeight || !videoWidth || !videoHeight) {
-        return 1;
-    }
-
-    const videoAspect = videoWidth / videoHeight;
-    const containerAspect = containerWidth / containerHeight;
-
-    if (!Number.isFinite(videoAspect) || !Number.isFinite(containerAspect)) {
-        return 1;
-    }
-
-    if (videoAspect > containerAspect) {
-        return 1 - containerAspect / videoAspect;
-    }
-
-    return 1 - videoAspect / containerAspect;
-};
-
-/** Zooms slightly in "cover" mode, and fills the frame in "contain" mode when that crops almost nothing. */
-export const resolveVideoFit = (
-    objectFit: "contain" | "cover",
-    containerElem: HTMLElement | undefined,
-    videoElem: HTMLVideoElement | undefined,
-): VideoFit => {
-    if (objectFit === "cover") {
-        return {
-            objectFit: "cover",
-            objectPosition: "center center",
-            transform: `scale(${MANUAL_ZOOM_SCALE})`,
-        };
-    }
-
-    const cropRatio = getSmartCoverCropRatio(containerElem, videoElem);
-    const useSmartCover = cropRatio > 0 && cropRatio <= SMART_COVER_MAX_CROP_RATIO;
-
+/** Where to place the video so its picture, without the bars baked into it, fits the container. */
+export function videoBox(container: Size, video: Size, crop: ContentRect): VideoBox | null {
+    if (!container.width || !container.height || !video.width || !video.height) return null;
+    const pictureWidth = video.width * (crop.right - crop.left);
+    const pictureHeight = video.height * (crop.bottom - crop.top);
+    const fit = Math.min(container.width / pictureWidth, container.height / pictureHeight);
+    const fill = Math.max(container.width / pictureWidth, container.height / pictureHeight);
+    const scale = 1 - fit / fill <= FILL_TOLERANCE ? fill : fit;
     return {
-        objectFit: useSmartCover ? "cover" : "contain",
-        objectPosition: "center center",
-        transform: "none",
+        width: video.width * scale,
+        height: video.height * scale,
+        left: (container.width - pictureWidth * scale) / 2 - crop.left * video.width * scale,
+        top: (container.height - pictureHeight * scale) / 2 - crop.top * video.height * scale,
     };
-};
+}
+
+export const pictureAspect = (video: Size, crop: ContentRect) =>
+    (video.width * (crop.right - crop.left)) / (video.height * (crop.bottom - crop.top));

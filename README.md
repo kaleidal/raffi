@@ -12,7 +12,7 @@ Raffi doesn't come with anything to stream. What you can watch depends on the ad
 
 - **Addons:** use any Stremio addon, several at once, or add your own direct link templates. You can also import your Stremio library.
 - **One-click play:** Raffi starts the best source for your screen and language, and you can still pick one yourself.
-- **Player:** switch audio and subtitle tracks, adjust subtitle delay, preview frames on the seek bar and scroll up on it to scrub frame by frame, skip intros and recaps, save clips, and keep watching in a mini player.
+- **Player:** switch audio and subtitle tracks, adjust subtitle delay, preview frames on the seek bar and scroll up on it to scrub frame by frame, black bars baked into videos removed automatically, skip intros and recaps, save clips, and keep watching in a mini player.
 - **Audio:** Dolby Digital, Dolby Digital Plus, DTS and TrueHD all play in the app on desktop, and every text subtitle track in an MKV is available as it streams.
 - **Library:** continue watching, per-episode progress, and your own lists, synced across devices with an account or kept on your device in local mode.
 - **Trakt:** connect with a short code to send your progress to your profile.

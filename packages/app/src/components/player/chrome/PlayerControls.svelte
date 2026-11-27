@@ -18,13 +18,14 @@
         canDownload: boolean;
         tracks: TrackOptions;
         tracksOpen: boolean;
-        objectFit: "contain" | "cover";
+        /** The Fit and Fill toggle, for players that cannot remove baked-in bars themselves. */
+        objectFit?: "contain" | "cover";
         togglePlay: () => void;
         onSeekInput: (time: number) => void;
         onSeekChange: (time: number) => void;
         onVolumeChange: (volume: number) => void;
         toggleFullscreen: () => void;
-        toggleObjectFit: () => void;
+        toggleObjectFit?: () => void;
         onTracksOpenChange: (open: boolean) => void;
         onClipEditorOpenChange?: (open: boolean) => void;
         pinned?: boolean;
@@ -183,13 +184,15 @@
                     {/if}
                 {/if}
                 <span class="mx-[clamp(4px,0.5vw,10px)] h-6 w-px bg-ink/15" aria-hidden="true"></span>
-                <PlayerButton label={objectFit === "contain" ? "Fill screen" : "Fit to screen"} onclick={toggleObjectFit}>
-                    {#if objectFit === "contain"}
-                        <ZoomIn strokeWidth={2} />
-                    {:else}
-                        <ZoomOut strokeWidth={2} />
-                    {/if}
-                </PlayerButton>
+                {#if toggleObjectFit}
+                    <PlayerButton label={objectFit === "contain" ? "Fill screen" : "Fit to screen"} onclick={toggleObjectFit}>
+                        {#if objectFit === "contain"}
+                            <ZoomIn strokeWidth={2} />
+                        {:else}
+                            <ZoomOut strokeWidth={2} />
+                        {/if}
+                    </PlayerButton>
+                {/if}
                 {#if onTogglePin}
                     <PlayerButton label={pinned ? "Let controls hide" : "Keep controls on screen"} active={pinned} onclick={onTogglePin}>
                         {#if pinned}

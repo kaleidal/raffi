@@ -1,7 +1,8 @@
 <script lang="ts">
-    import { onDestroy, onMount } from "svelte";
+    import { onDestroy, onMount, untrack } from "svelte";
+    import type { ContentRect } from "../../../lib/media/crop/barDetection";
     import { createAmbientGlow } from "./video/ambientGlow";
-    import { resolveVideoFit } from "./video/videoFit";
+    import { videoBox, type VideoBox } from "./video/videoFit";
 
     type VideoEventHandler = () => void;
 
@@ -10,7 +11,7 @@
         videoB = $bindable(),
         activeSurface = 0,
         canvasElem = $bindable(),
-        objectFit,
+        crop,
         showCanvas,
         onTimeUpdate,
         onProgress,
@@ -27,7 +28,8 @@
         videoB?: HTMLVideoElement;
         activeSurface?: 0 | 1;
         canvasElem?: HTMLCanvasElement;
-        objectFit: "contain" | "cover";
+        /** The picture inside the video's frame, without the bars baked into it. */
+        crop: ContentRect;
         showCanvas: boolean;
         onTimeUpdate: VideoEventHandler;
         onProgress: VideoEventHandler;
@@ -50,30 +52,46 @@
     let containerElem = $state<HTMLDivElement>();
     let ambientCanvasElem = $state<HTMLCanvasElement>();
     let ambientDisplayVisible = $state(false);
-    let effectiveObjectFit = $state<"contain" | "cover">("contain");
-    let effectiveObjectPosition = $state("center center");
-    let effectiveTransform = $state("none");
+    const CROP_EASE_MS = 450;
 
-    const updateEffectiveVideoFit = () => {
-        const fit = resolveVideoFit(objectFit, containerElem, videoElem);
-        effectiveObjectFit = fit.objectFit;
-        effectiveObjectPosition = fit.objectPosition;
-        effectiveTransform = fit.transform;
+    let box = $state.raw<VideoBox | null>(null);
+    let easing = $state(false);
+
+    const placeVideo = () => {
+        box = videoBox(
+            { width: containerElem?.clientWidth ?? 0, height: containerElem?.clientHeight ?? 0 },
+            { width: videoElem?.videoWidth ?? 0, height: videoElem?.videoHeight ?? 0 },
+            crop,
+        );
     };
+
+    const placement = $derived(
+        box ? `left:${box.left}px;top:${box.top}px;width:${box.width}px;height:${box.height}px` : undefined,
+    );
 
     const ambientGlow = createAmbientGlow({
         getContainer: () => containerElem,
         getCanvas: () => ambientCanvasElem,
         getVideo: () => videoElem,
-        getObjectFit: () => objectFit,
-        syncVideoFit: updateEffectiveVideoFit,
+        getCrop: () => crop,
+        syncVideoFit: placeVideo,
         onVisibilityChange: (visible) => (ambientDisplayVisible = visible),
     });
 
     $effect.pre(() => {
         ambientGlow.bindVideo(videoElem);
     });
-    $effect.pre(updateEffectiveVideoFit);
+    $effect.pre(() => {
+        crop;
+        untrack(ambientGlow.refresh);
+    });
+
+    $effect(() => {
+        if (crop.top === 0 && crop.left === 0) return;
+        easing = true;
+        const settled = setTimeout(() => (easing = false), CROP_EASE_MS);
+        return () => clearTimeout(settled);
+    });
 
     onMount(ambientGlow.mount);
     onDestroy(ambientGlow.destroy);
@@ -89,11 +107,10 @@
     <video
         bind:this={videoA}
         class="absolute z-10 {activeSurface === 0
-            ? `top-0 left-0 h-full w-full ${effectiveObjectFit === 'contain' ? 'object-contain' : 'object-cover'}`
+            ? placement ? '' : 'top-0 left-0 h-full w-full object-contain'
             : 'left-[-9999px] top-0 h-px w-px opacity-0 pointer-events-none'}"
-        style={activeSurface === 0
-            ? `object-position: ${effectiveObjectPosition}; transform: ${effectiveTransform}; transform-origin: center center;`
-            : undefined}
+        class:crop-ease={easing}
+        style={activeSurface === 0 ? placement : undefined}
         playsinline
         preload="auto"
         muted={activeSurface !== 0}
@@ -116,11 +133,10 @@
     <video
         bind:this={videoB}
         class="absolute z-10 {activeSurface === 1
-            ? `top-0 left-0 h-full w-full ${effectiveObjectFit === 'contain' ? 'object-contain' : 'object-cover'}`
+            ? placement ? '' : 'top-0 left-0 h-full w-full object-contain'
             : 'left-[-9999px] top-0 h-px w-px opacity-0 pointer-events-none'}"
-        style={activeSurface === 1
-            ? `object-position: ${effectiveObjectPosition}; transform: ${effectiveTransform}; transform-origin: center center;`
-            : undefined}
+        class:crop-ease={easing}
+        style={activeSurface === 1 ? placement : undefined}
         playsinline
         preload="auto"
         muted={activeSurface !== 1}
@@ -142,10 +158,9 @@
 
     <canvas
         bind:this={canvasElem}
-        class="absolute top-0 left-0 z-20 h-full w-full {effectiveObjectFit === 'contain'
-            ? 'object-contain'
-            : 'object-cover'} {showCanvas ? 'block' : 'hidden'}"
-        style={`object-position: ${effectiveObjectPosition}; transform: ${effectiveTransform}; transform-origin: center center;`}
+        class="absolute z-20 {placement ? '' : 'top-0 left-0 h-full w-full object-contain'} {showCanvas ? 'block' : 'hidden'}"
+        class:crop-ease={easing}
+        style={placement}
     ></canvas>
 </div>
 
@@ -163,6 +178,12 @@
         background-color: transparent !important;
         text-shadow: 0 0 4px black;
         font-family: inherit;
+    }
+
+    .crop-ease {
+        transition-property: left, top, width, height;
+        transition-duration: 450ms;
+        transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
     }
 
     canvas[aria-hidden="true"] {

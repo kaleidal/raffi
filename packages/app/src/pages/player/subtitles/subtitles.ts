@@ -410,24 +410,27 @@ export function updateCuePositions(videoElem: HTMLVideoElement | null, cueLinePe
     }
 }
 
+/** Hidden controls leave subtitles this far above the bottom of the player. */
+const RESTING_CUE_OFFSET = 0.08;
+
+/**
+ * Where cues sit as a share of the video element, which can reach past the player once the bars
+ * baked into the video are cropped: just above the controls when they show, else near the bottom.
+ */
 export function computeCueLinePercent(
     playerContainer: HTMLElement | null,
+    videoElem: HTMLVideoElement | null,
     controlsOverlay: HTMLElement | null,
     controlsVisible: boolean,
-    marginPx: number = 14
+    marginPx: number,
 ) {
-    if (!playerContainer) return controlsVisible ? 78 : 92;
+    if (!playerContainer || !videoElem) return 92;
+    const player = playerContainer.getBoundingClientRect();
+    const video = videoElem.getBoundingClientRect();
+    if (!player.height || !video.height) return 92;
 
-    const containerRect = playerContainer.getBoundingClientRect();
-    if (!containerRect.height) return controlsVisible ? 78 : 92;
-
-    if (!controlsVisible || !controlsOverlay) {
-        return 92;
-    }
-
-    const overlayRect = controlsOverlay.getBoundingClientRect();
-    // Position the bottom of the cue box just above the controls overlay.
-    const targetY = overlayRect.top - containerRect.top - marginPx;
-    const pct = (targetY / containerRect.height) * 100;
-    return Math.max(5, Math.min(95, pct));
+    const target = controlsVisible && controlsOverlay
+        ? controlsOverlay.getBoundingClientRect().top - marginPx
+        : player.bottom - player.height * RESTING_CUE_OFFSET;
+    return Math.max(5, Math.min(95, ((target - video.top) / video.height) * 100));
 }
