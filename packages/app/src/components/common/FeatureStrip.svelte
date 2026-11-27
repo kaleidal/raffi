@@ -21,6 +21,9 @@
     let player = $state<HTMLIFrameElement | null>(null);
     let paused = $state(false);
     let muted = $state(true);
+    let failedKey = $state<string | null>(null);
+
+    const playable = $derived(Boolean(item.trailerId) && failedKey !== item.key);
 
     function command(func: string) {
         player?.contentWindow?.postMessage(JSON.stringify({ event: "command", func, args: [] }), "*");
@@ -37,15 +40,23 @@
     }
 
     function syncPlayer() {
+        player?.contentWindow?.postMessage(JSON.stringify({ event: "listening", id: item.key }), "*");
         command(muted ? "mute" : "unMute");
         command(paused ? "pauseVideo" : "playVideo");
     }
+
+    function noticeFailure(event: MessageEvent) {
+        if (event.source !== player?.contentWindow || typeof event.data !== "string" || !event.data.startsWith("{")) return;
+        if (JSON.parse(event.data).event === "onError") failedKey = item.key;
+    }
 </script>
+
+<svelte:window onmessage={noticeFailure} />
 
 <section class="feature scheme-dark relative w-full shrink-0 overflow-hidden rounded-[clamp(24px,2.2vw,36px)] bg-canvas">
     {#key item.key}
         <div class="feature-media absolute inset-y-0 right-0 w-[72%] overflow-hidden" in:fade={{ duration: 400 }}>
-            {#if item.trailerId}
+            {#if playable}
                 <iframe
                     bind:this={player}
                     frameborder="0"
@@ -85,7 +96,7 @@
                 <Info size={20} strokeWidth={2.5} />
                 Details
             </button>
-            {#if item.trailerId}
+            {#if playable}
                 <IconButton label={paused ? "Play" : "Pause"} onClick={togglePlay}>
                     {#if paused}
                         <Play size={22} strokeWidth={2.2} />
