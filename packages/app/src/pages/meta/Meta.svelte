@@ -106,9 +106,11 @@
 {#if $loadedMeta && $metaData && $metaData.meta}
     <div class="relative flex-1 bg-canvas" in:fade={{ duration: 300 }}>
         <AmbientBackdrop src={$metaData.meta.background} fill />
-        <div class="meta-shell relative w-full bg-canvas scheme-dark">
-            <div class="meta-backdrop absolute inset-0 opacity-60">
-                <MetaBackground background={$metaData.meta.background} bind:backgroundFailed={$backgroundFailed} />
+        <div class="relative w-full scheme-dark">
+            <div class="meta-backdrop pointer-events-none absolute inset-0 bg-canvas">
+                <div class="meta-picture absolute inset-0">
+                    <MetaBackground background={$metaData.meta.background} bind:backgroundFailed={$backgroundFailed} />
+                </div>
             </div>
 
             <button
@@ -205,11 +207,15 @@
 {/if}
 
 <style>
-    :global(:root[data-theme="light"]) .meta-backdrop {
+    .meta-picture {
+        opacity: 0.6;
+    }
+
+    :global(:root[data-theme="light"]) .meta-picture {
         opacity: 0.85;
     }
 
-    .meta-shell {
+    .meta-backdrop {
         --meta-fade: clamp(120px, 16vh, 180px);
         mask-image: linear-gradient(
             to top,
@@ -220,10 +226,6 @@
             rgb(0 0 0 / 0.9) calc(var(--meta-fade) * 0.85),
             black var(--meta-fade)
         );
-    }
-
-    :global(:root[data-theme="light"]) .meta-shell {
-        --meta-fade: 30%;
     }
 
     .meta-hero {

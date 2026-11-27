@@ -20,6 +20,7 @@
     let wasPlayingBeforeHidden = false;
     let canControlTrailer = false;
     let trailerPlaying = false;
+    let trailerFailed = $state(false);
 
     const trailerSrc = $derived(trailerUrl(showcasedTitle));
 
@@ -30,6 +31,7 @@
         wasPlayingBeforeHidden = false;
         canControlTrailer = false;
         trailerPlaying = false;
+        trailerFailed = false;
     });
 
     function trailerUrl(title: PopularTitleMeta | null) {
@@ -110,6 +112,7 @@
         if (payload?.event === "onReady") {
             initTrailerBridge();
         }
+        if (payload?.event === "onError") trailerFailed = true;
         if (payload?.event === "onStateChange") {
             const state = payload?.info?.playerState;
             if (state === 1) {
@@ -143,7 +146,7 @@
 
     onMount(() => {
         window.addEventListener("message", handleTrailerMessage);
-        const stopFollowing = followTrailerColours(() => (trailerSrc ? playerIframe : undefined), () => trailerPlaying);
+        const stopFollowing = followTrailerColours(() => (trailerSrc && !trailerFailed ? playerIframe : undefined), () => trailerPlaying);
         return () => {
             window.removeEventListener("message", handleTrailerMessage);
             stopFollowing();
@@ -159,7 +162,7 @@
 </script>
 
 <div
-    class="hero-shell scheme-dark w-full relative overflow-hidden bg-canvas isolate"
+    class="hero-shell scheme-dark w-full relative overflow-hidden isolate"
     bind:this={container}
 >
     {#if showcasedTitle}
@@ -192,7 +195,7 @@
                     Details
                 </button>
 
-                {#if trailerSrc}
+                {#if trailerSrc && !trailerFailed}
                     <IconButton
                         label={isPaused ? "Play" : "Pause"}
                         onClick={togglePlay}
@@ -218,8 +221,8 @@
             </div>
         </div>
 
-        <div in:fade={{ duration: 400 }} class="hero-media absolute inset-0 overflow-hidden pointer-events-none">
-            {#if trailerSrc}
+        <div in:fade={{ duration: 400 }} class="hero-backdrop hero-media absolute inset-0 overflow-hidden pointer-events-none">
+            {#if trailerSrc && !trailerFailed}
                 <iframe
                     bind:this={playerIframe}
                     frameborder="0"
@@ -235,41 +238,31 @@
         </div>
     {/if}
 
-    <div
-        class="hero-bottom-shade absolute inset-0 z-[1] bg-gradient-to-t from-canvas via-canvas/80 to-transparent"
-    ></div>
-    <div
-        class="absolute inset-0 z-[1] bg-gradient-to-r from-canvas/80 via-transparent to-transparent"
-    ></div>
+    <div class="hero-backdrop pointer-events-none absolute inset-0 z-[1] bg-gradient-to-t from-canvas via-canvas/80 to-transparent"></div>
+    <div class="hero-backdrop pointer-events-none absolute inset-0 z-[1] bg-gradient-to-r from-canvas/80 via-transparent to-transparent"></div>
 </div>
 
 <style>
     .hero-shell {
         --hero-content-gap: clamp(48px, 6vw, 100px);
-        --hero-fade: var(--hero-content-gap);
         height: clamp(440px, min(58vw, 76dvh), 760px);
         min-height: 440px;
+    }
+
+    .hero-backdrop {
         mask-image: linear-gradient(
             to top,
             transparent,
-            rgb(0 0 0 / 0.1) calc(var(--hero-fade) * 0.15),
-            rgb(0 0 0 / 0.35) calc(var(--hero-fade) * 0.38),
-            rgb(0 0 0 / 0.65) calc(var(--hero-fade) * 0.62),
-            rgb(0 0 0 / 0.9) calc(var(--hero-fade) * 0.85),
-            black var(--hero-fade)
+            rgb(0 0 0 / 0.1) calc(var(--hero-content-gap) * 0.15),
+            rgb(0 0 0 / 0.35) calc(var(--hero-content-gap) * 0.38),
+            rgb(0 0 0 / 0.65) calc(var(--hero-content-gap) * 0.62),
+            rgb(0 0 0 / 0.9) calc(var(--hero-content-gap) * 0.85),
+            black var(--hero-content-gap)
         );
-    }
-
-    :global(:root[data-theme="light"]) .hero-shell {
-        --hero-fade: 40%;
     }
 
     .hero-content {
         bottom: var(--hero-content-gap);
-    }
-
-    :global(:root[data-theme="light"]) .hero-bottom-shade {
-        opacity: 0.3;
     }
 
     .hero-frame {
