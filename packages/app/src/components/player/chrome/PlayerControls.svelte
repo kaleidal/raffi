@@ -41,6 +41,7 @@
     import ClipEditor from "../clip/ClipEditor.svelte";
     import PlayPauseIcon from "../PlayPauseIcon.svelte";
     import SeekBar from "../seek/SeekBar.svelte";
+    import SeekStrip from "../seek/SeekStrip.svelte";
     import TrackPanel from "../tracks/TrackPanel.svelte";
     import { TRACK_PANEL_ID } from "../tracks/types";
     import PlayerButton from "./PlayerButton.svelte";
@@ -75,6 +76,7 @@
     }: PlayerControlsProps & { seek?: Snippet } = $props();
 
     let clipEditorOpen = $state(false);
+    let stripCenter = $state<number | null>(null);
 
     const displayedTime = $derived(pendingSeek ?? currentTime);
     let showRemaining = $state(readShowRemaining());
@@ -115,6 +117,15 @@
             <div class="min-w-0 flex-1">
                 {#if seek}
                     {@render seek()}
+                {:else if stripCenter !== null}
+                    <SeekStrip
+                        {duration}
+                        time={displayedTime}
+                        center={stripCenter}
+                        preview={seekPreview}
+                        onSeek={onSeekChange}
+                        onClose={() => (stripCenter = null)}
+                    />
                 {:else}
                     <SeekBar
                         {duration}
@@ -125,6 +136,7 @@
                         {visible}
                         onScrub={onSeekInput}
                         onCommit={onSeekChange}
+                        onExpand={(time) => (stripCenter = time)}
                     />
                 {/if}
             </div>

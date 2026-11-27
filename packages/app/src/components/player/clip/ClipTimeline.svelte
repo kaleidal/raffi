@@ -4,21 +4,9 @@
     import type { SeekPreview } from "../../../lib/media/preview/seekPreview";
     import { restingPreviewFrame } from "../seek/restingPreviewFrame.svelte";
     import SeekPreviewCard from "../seek/SeekPreviewCard.svelte";
-    import ClipFilmstrip from "./ClipFilmstrip.svelte";
-    import {
-        clamp,
-        fractionOf,
-        grabAt,
-        initialClipView,
-        moveEdge,
-        panView,
-        revealTime,
-        shiftRange,
-        timeAt,
-        zoomView,
-        type ClipGrab,
-        type ClipRange,
-    } from "./clipTimeline";
+    import Filmstrip from "../seek/Filmstrip.svelte";
+    import { clamp, fractionOf, panView, revealTime, timeAt, viewAfterWheel } from "../seek/timelineView";
+    import { grabAt, initialClipView, moveEdge, shiftRange, type ClipGrab, type ClipRange } from "./clipTimeline";
 
     let {
         range = $bindable(),
@@ -90,13 +78,7 @@
 
     function onWheel(event: WheelEvent) {
         event.preventDefault();
-        const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect();
-        if (Math.abs(event.deltaX) > Math.abs(event.deltaY) || event.shiftKey) {
-            const delta = event.deltaX || event.deltaY;
-            view = panView(view, (delta / bounds.width) * (view.max - view.min), duration);
-            return;
-        }
-        view = zoomView(view, (event.clientX - bounds.left) / bounds.width, event.deltaY < 0, duration);
+        view = viewAfterWheel(view, event, (event.currentTarget as HTMLElement).getBoundingClientRect(), duration);
     }
 
     function nudge(edge: "start" | "end", event: KeyboardEvent) {
@@ -120,7 +102,7 @@
     use:pointerScrub={{ onStart, onMove, onEnd, onHover, onLeave: () => (hoverGrab = null) }}
     onwheel={onWheel}
 >
-    <ClipFilmstrip {preview} {view} />
+    <Filmstrip {preview} {view} />
     <div class="absolute inset-y-0 left-0 rounded-l-[inherit] bg-canvas/65" style:width="{startPercent}%"></div>
     <div class="absolute inset-y-0 right-0 rounded-r-[inherit] bg-canvas/65" style:width="{100 - endPercent}%"></div>
 

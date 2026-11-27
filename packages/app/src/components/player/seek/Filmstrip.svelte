@@ -1,8 +1,8 @@
 <script lang="ts">
     import type { SeekPreview } from "../../../lib/media/preview/seekPreview";
-    import type { ClipView } from "./clipTimeline";
+    import type { TimelineView } from "./timelineView";
 
-    let { preview, view }: { preview: SeekPreview | null; view: ClipView } = $props();
+    let { preview, view }: { preview: SeekPreview | null; view: TimelineView } = $props();
 
     const FRAME_ASPECT = 16 / 9;
     const SETTLE_MS = 120;

@@ -27,6 +27,7 @@
         emphasized = false,
         onScrub,
         onCommit,
+        onExpand,
     }: {
         duration?: number;
         time?: number;
@@ -38,6 +39,8 @@
         emphasized?: boolean;
         onScrub: (time: number) => void;
         onCommit: (time: number) => void;
+        /** Scrolling up over the bar asks to open a closer look around this time. */
+        onExpand?: (time: number) => void;
     } = $props();
 
     const SEGMENT_GAP_PX = 3;
@@ -82,6 +85,13 @@
     };
 
     const scrubTo = ({ ratio }: ScrubPosition) => onScrub(fractionToTime(ratio, duration));
+
+    function expand(event: WheelEvent) {
+        if (!onExpand || event.deltaY >= 0 || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+        event.preventDefault();
+        const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect();
+        onExpand(fractionToTime((event.clientX - bounds.left) / bounds.width, duration));
+    }
 </script>
 
 <div
@@ -89,6 +99,7 @@
     role="slider"
     tabindex="-1"
     aria-label="Seek"
+    onwheel={expand}
     aria-valuemin={0}
     aria-valuemax={duration}
     aria-valuenow={time}
