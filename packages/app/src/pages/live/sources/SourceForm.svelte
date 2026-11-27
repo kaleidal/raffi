@@ -1,5 +1,6 @@
 <script lang="ts">
     import { untrack } from "svelte";
+    import Button from "../../../components/common/controls/Button.svelte";
     import LoadingSpinner from "../../../components/common/loading/LoadingSpinner.svelte";
     import { refreshLineup } from "../../../lib/live/refresh/refresh";
     import { newSourceId, saveSource } from "../../../lib/live/sources";
@@ -141,25 +142,15 @@
         <p class="text-sm text-danger">{error}</p>
     {/if}
 
-    <div class="flex justify-end gap-3 pt-2">
-        <button
-            type="button"
-            class="rounded-2xl bg-ink/10 px-4 py-2 font-semibold text-ink hover:bg-ink/20 cursor-pointer"
-            onclick={onCancel}
-        >
-            Cancel
-        </button>
-        <button
-            type="submit"
-            class="flex min-w-24 items-center justify-center gap-2 rounded-2xl bg-accent px-4 py-2 font-semibold text-on-accent hover:bg-accent/85 cursor-pointer disabled:cursor-wait disabled:opacity-70"
-            disabled={saving}
-        >
+    <div class="flex justify-end gap-2 pt-2">
+        <Button type="button" onclick={onCancel}>Cancel</Button>
+        <Button type="submit" variant="primary" class="min-w-24 disabled:cursor-wait" disabled={saving}>
             {#if saving}
                 <LoadingSpinner size="16px" />
                 Loading channels
             {:else}
                 Save
             {/if}
-        </button>
+        </Button>
     </div>
 </form>

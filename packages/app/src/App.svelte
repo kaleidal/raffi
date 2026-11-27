@@ -4,7 +4,8 @@
     import { onDestroy, onMount, tick } from "svelte";
     import { get } from "svelte/store";
     import { enableRPC, disableRPC } from "./lib/shell/rpc";
-    import { X } from "@lucide/svelte";
+    import Button from "./components/common/controls/Button.svelte";
+    import Dialog from "./components/common/dialog/Dialog.svelte";
     import ShapeLoader from "./components/common/loading/ShapeLoader.svelte";
     import SettingsModal from "./components/settings/SettingsModal.svelte";
     import {
@@ -348,63 +349,20 @@
     <SettingsModal />
 
     {#if showUpdatePrompt}
-        <div
-            class="raffi-modal-backdrop fixed inset-0 z-[500] bg-canvas/80 backdrop-blur-sm flex items-center justify-center"
-            onclick={(event) => event.target === event.currentTarget && handleUpdateLater()}
-            onkeydown={(e) => e.key === "Escape" && handleUpdateLater()}
-            role="button"
-            tabindex="0"
+        <Dialog
+            title={$updateStatus.version ? `Raffi ${$updateStatus.version} is ready` : "Update ready"}
+            onClose={handleUpdateLater}
+            class="max-w-lg"
         >
-            <div
-                class="raffi-modal-surface bg-canvas w-full max-w-lg rounded-[32px] p-6 md:p-8 flex flex-col gap-5 shadow-[0_40px_160px_rgba(0,0,0,0.55)]"
-                onclick={(event) => event.stopPropagation()}
-                onkeydown={(event) => event.stopPropagation()}
-                role="dialog"
-                tabindex="-1"
-            >
-                <div class="flex items-start justify-between gap-4">
-                    <div>
-                        <h2 class="text-ink text-2xl font-semibold">
-                            Update ready
-                        </h2>
-                        {#if $updateStatus.version}
-                            <p class="text-ink/50 text-sm">
-                                Version {$updateStatus.version} is ready to install.
-                            </p>
-                        {/if}
-                    </div>
-                    <button
-                        class="text-ink/50 hover:text-ink transition-colors cursor-pointer"
-                        onclick={handleUpdateLater}
-                        aria-label="Close update dialog"
-                    >
-                        <X size={24} strokeWidth={2} />
-                    </button>
-                </div>
-
-                <div class="release-notes-content rounded-2xl bg-ink/[0.04] p-4 text-ink/70 text-sm overflow-y-auto max-h-[40vh]">
-                    {@html formatReleaseNotes($updateStatus.notes || "Release notes unavailable.")}
-                </div>
-
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <p class="text-ink/40 text-xs">We’ll remind you in 30 minutes.</p>
-                    <div class="flex flex-col gap-3 sm:flex-row">
-                        <button
-                            class="flex-1 sm:flex-none px-4 py-2 rounded-2xl bg-ink/10 text-ink font-semibold hover:bg-ink/20 transition-colors cursor-pointer"
-                            onclick={handleUpdateLater}
-                        >
-                            Later
-                        </button>
-                        <button
-                            class="flex-1 sm:flex-none px-4 py-2 rounded-2xl bg-accent text-on-accent font-semibold hover:bg-accent/85 transition-colors cursor-pointer"
-                            onclick={handleUpdateRestart}
-                        >
-                            Restart now
-                        </button>
-                    </div>
-                </div>
+            <div class="release-notes-content min-h-0 overflow-y-auto text-sm text-ink/70">
+                {@html formatReleaseNotes($updateStatus.notes || "Release notes unavailable.")}
             </div>
-        </div>
+
+            {#snippet actions()}
+                <Button onclick={handleUpdateLater}>Later</Button>
+                <Button variant="primary" onclick={handleUpdateRestart}>Restart now</Button>
+            {/snippet}
+        </Dialog>
     {/if}
 
 </div>

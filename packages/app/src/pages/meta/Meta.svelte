@@ -157,7 +157,6 @@
 
     {#if unsupportedReason}
         <UnsupportedTitleModal
-            title="Unsupported Title"
             message={unsupportedReason}
             onBack={() => router.navigate("home")}
             onRetry={() => window.location.reload()}
@@ -197,7 +196,6 @@
     {/if}
 {:else if unsupportedReason}
     <UnsupportedTitleModal
-        title="Unsupported Title"
         message={unsupportedReason}
         onBack={() => router.navigate("home")}
         onRetry={() => window.location.reload()}

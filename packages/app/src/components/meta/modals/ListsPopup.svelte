@@ -1,6 +1,5 @@
 <script lang="ts">
-    import { portal } from "../../common/portal";
-    import { fade } from "svelte/transition";
+    import { Check, Plus } from "@lucide/svelte";
     import { SvelteSet } from "svelte/reactivity";
     import {
         getLists,
@@ -10,6 +9,8 @@
         getListMembershipByImdb,
         type List,
     } from "../../../lib/db/db";
+    import Dialog from "../../common/dialog/Dialog.svelte";
+    import BusyIcon from "../../common/loading/BusyIcon.svelte";
     import ShapeLoader from "../../common/loading/ShapeLoader.svelte";
 
     let {
@@ -67,97 +68,55 @@
 </script>
 
 {#if visible}
-    <div
-        use:portal
-        class="raffi-modal-backdrop fixed inset-0 z-50 bg-canvas/58 backdrop-blur-xl flex items-center justify-center"
-        onclick={(event) => event.target === event.currentTarget && close()}
-        onkeydown={(e) => e.key === "Escape" && close()}
-        role="button"
-        tabindex="0"
-        transition:fade={{ duration: 200 }}
-    >
-        <div
-            class="w-full max-w-md max-h-[80vh] rounded-[32px] bg-raised/60 backdrop-blur-[40px] p-8 flex flex-col gap-6 overflow-hidden relative shadow-[0_40px_160px_rgba(0,0,0,0.45)]"
+    <Dialog title="Add to list" onClose={close} class="max-h-[80vh] max-w-[440px]">
+        <form
+            class="flex items-center gap-2 rounded-full bg-ink/6 py-1.5 pr-1.5 pl-5 focus-within:bg-ink/10"
+            onsubmit={(event) => {
+                event.preventDefault();
+                void handleCreateList();
+            }}
         >
+            <input
+                class="min-w-0 flex-1 bg-transparent py-1.5 outline-none placeholder:text-ink/35"
+                placeholder="New list"
+                bind:value={newListName}
+                disabled={creatingList}
+            />
             <button
-                class="absolute top-6 right-6 z-10 text-ink/50 hover:text-ink cursor-pointer"
-                onclick={close}
-                aria-label="Close"
+                class="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full bg-accent text-on-accent transition-opacity disabled:cursor-default disabled:opacity-40"
+                aria-label="Create list"
+                disabled={creatingList || !newListName.trim()}
             >
-                <svg
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    ><line x1="18" y1="6" x2="6" y2="18"></line><line
-                        x1="6"
-                        y1="6"
-                        x2="18"
-                        y2="18"
-                    ></line></svg
-                >
+                <span class="size-[18px]">
+                    <BusyIcon busy={creatingList} size="100%">
+                        <Plus class="size-full" strokeWidth={2.5} />
+                    </BusyIcon>
+                </span>
             </button>
+        </form>
 
-            <h2 class="relative z-10 text-ink text-2xl font-bold">
-                Add to List
-            </h2>
-
-            <div class="relative z-10 flex flex-col gap-3 overflow-y-auto pr-2">
-                <div class="relative">
-                    <input
-                        type="text"
-                        placeholder="+ Create new list"
-                        class="w-full bg-transparent border-2 border-dashed border-ink/20 text-ink px-4 py-3 rounded-xl outline-none focus:border-ink/50 transition-colors placeholder:text-ink/30"
-                        bind:value={newListName}
-                        onkeydown={(e) =>
-                            e.key === "Enter" && handleCreateList()}
-                        disabled={creatingList}
-                    />
+        <div class="-mx-2 flex min-h-0 flex-col gap-0.5 overflow-y-auto">
+            {#if loading}
+                <div class="flex justify-center py-6">
+                    <ShapeLoader size="30px" />
                 </div>
-
-                {#if loading}
-                    <div class="flex justify-center py-4">
-                        <ShapeLoader size="30px" />
-                    </div>
-                {:else if lists.length === 0}
-                    <div class="text-ink/50 text-center py-4">
-                        No lists found. Create one above.
-                    </div>
-                {:else}
-                    {#each lists as list}
-                        <button
-                            class="w-full bg-ink/5 hover:bg-ink/10 p-4 rounded-xl flex flex-row justify-between items-center transition-colors cursor-pointer"
-                            onclick={() => toggleList(list.list_id)}
-                        >
-                            <span class="text-ink font-medium "
-                                >{list.name}</span
-                            >
-                            {#if memberOf.has(list.list_id)}
-                                <div
-                                    class="bg-accent text-on-accent p-1 rounded-full"
-                                >
-                                    <svg
-                                        width="16"
-                                        height="16"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        stroke-width="3"
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        ><polyline points="20 6 9 17 4 12"
-                                        ></polyline></svg
-                                    >
-                                </div>
-                            {/if}
-                        </button>
-                    {/each}
-                {/if}
-            </div>
+            {:else if lists.length === 0}
+                <p class="py-6 text-center text-ink/50">No lists yet</p>
+            {:else}
+                {#each lists as list (list.list_id)}
+                    {@const member = memberOf.has(list.list_id)}
+                    <button
+                        class="flex w-full cursor-pointer items-center justify-between gap-3 rounded-[16px] px-4 py-3 text-left transition-colors hover:bg-ink/8"
+                        aria-pressed={member}
+                        onclick={() => toggleList(list.list_id)}
+                    >
+                        <span class="truncate font-medium {member ? 'text-ink' : 'text-ink/75'}">{list.name}</span>
+                        {#if member}
+                            <Check size={18} strokeWidth={2.5} class="shrink-0 text-accent" />
+                        {/if}
+                    </button>
+                {/each}
+            {/if}
         </div>
-    </div>
+    </Dialog>
 {/if}
