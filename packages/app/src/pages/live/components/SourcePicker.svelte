@@ -50,7 +50,7 @@
 
 <button
     bind:this={button}
-    class="source-picker flex w-[clamp(56px,4vw,80px)] shrink-0 items-center justify-center bg-surface/50 text-[clamp(18px,1.4vw,26px)] font-semibold text-ink/75 hover:bg-raised/60 cursor-pointer"
+    class="source-picker flex w-[clamp(56px,4vw,80px)] shrink-0 items-center justify-center pl-2 text-[clamp(18px,1.4vw,26px)] font-semibold text-ink/75 transition-colors hover:bg-ink/8 hover:text-ink cursor-pointer"
     aria-label={sources.length ? "Switch source" : "Add a source"}
     aria-haspopup={sources.length ? "menu" : undefined}
     aria-expanded={open}

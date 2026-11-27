@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { onMount } from "svelte";
-	import { fade, scale } from "svelte/transition";
 	import { Monitor } from "@lucide/svelte";
-	import { portal } from "../../common/portal";
+	import Button from "../../common/controls/Button.svelte";
 	import CodeInput from "../../common/controls/CodeInput.svelte";
+	import Dialog from "../../common/dialog/Dialog.svelte";
 	import ShapeLoader from "../../common/loading/ShapeLoader.svelte";
 	import {
 		discoverLimbo,
@@ -72,110 +72,70 @@
 	onMount(search);
 </script>
 
-<div
-	use:portal
-	class="fixed inset-0 z-300 flex items-center justify-center bg-canvas/60 backdrop-blur-xl"
-	transition:fade={{ duration: 200 }}
-	onkeydown={(event) => event.key === "Escape" && onClose()}
-	role="dialog"
-	aria-modal="true"
-	aria-label="Pair with Limbo"
-	tabindex="-1"
->
-	<div
-		class="flex w-full max-w-lg flex-col gap-6 rounded-[28px] bg-raised/60 p-8 backdrop-blur-[40px] shadow-[0_40px_160px_rgba(0,0,0,0.45)]"
-		transition:scale={{ duration: 200, start: 0.95 }}
-	>
-		<div class="flex flex-col gap-2">
-			<h2 class="text-2xl font-bold text-ink">Pair with Limbo</h2>
-			{#if step === "code" && target}
-				<p class="text-ink/60">
-					In Limbo on {target.name}, open Settings, choose Pair under Torrents, and enter the code it shows.
-				</p>
-			{:else}
-				<p class="text-ink/60">
-					Raffi plays torrents through Limbo on a computer on the same network.
-				</p>
-			{/if}
-		</div>
-
-		{#if step === "searching"}
-			<div class="flex items-center gap-3 text-ink/70">
-				<ShapeLoader size="24px" />
-				Looking for Limbo on your network…
-			</div>
-		{:else if step === "pick"}
-			{#if found.length === 0}
-				<p class="text-sm text-ink/60">
-					No Limbo found. Open Limbo on your computer and turn on Devices on your network under Settings → Torrents.
-				</p>
-			{/if}
-			<div class="flex flex-col gap-2">
-				{#each found as service (service.id)}
-					<button
-						class="flex items-center gap-3 rounded-2xl bg-ink/8 px-4 py-3 text-left text-ink transition-colors hover:bg-ink/14 focus:bg-ink/14 cursor-pointer"
-						onclick={() => choose(service)}
-					>
-						<Monitor size={20} strokeWidth={2} class="shrink-0 text-ink/70" />
-						<span class="truncate font-medium">{service.name}</span>
-					</button>
-				{/each}
-			</div>
-			<div class="flex gap-3">
-				<button
-					class="flex-1 rounded-2xl bg-accent px-4 py-3 font-semibold text-on-accent transition-colors hover:bg-accent/85 cursor-pointer"
-					onclick={search}
-				>
-					Search again
-				</button>
-				<button
-					class="flex-1 rounded-2xl bg-ink/10 px-4 py-3 font-semibold text-ink transition-colors hover:bg-ink/16 cursor-pointer"
-					onclick={() => {
-						error = "";
-						step = "address";
-					}}
-				>
-					Enter an address
-				</button>
-			</div>
-		{:else if step === "address"}
-			<form class="flex flex-col gap-3" onsubmit={(event) => (event.preventDefault(), useAddress())}>
-				<input
-					type="text"
-					inputmode="decimal"
-					bind:value={address}
-					placeholder="192.168.1.20"
-					aria-label="Computer address"
-					class="min-h-12 rounded-2xl bg-ink/8 px-4 text-ink outline-none placeholder:text-ink/30 focus:bg-ink/12"
-				/>
-				<button
-					type="submit"
-					class="rounded-2xl bg-accent px-4 py-3 font-semibold text-on-accent transition-colors hover:bg-accent/85 disabled:opacity-50 cursor-pointer"
-					disabled={!address.trim()}
-				>
-					Continue
-				</button>
-			</form>
+<Dialog title="Pair with Limbo" {onClose} class="max-w-lg">
+	<p class="-mt-3 text-ink/60">
+		{#if step === "code" && target}
+			In Limbo on {target.name}, open Settings, choose Pair under Torrents, and enter the code it shows.
 		{:else}
-			<form class="flex flex-col gap-4" onsubmit={(event) => (event.preventDefault(), pair())}>
-				<CodeInput
-					bind:value={code}
-					disabled={busy}
-					label="Pairing code"
-					onComplete={() => void pair()}
-				/>
-				<button
-					type="submit"
-					class="rounded-2xl bg-accent px-4 py-3 font-semibold text-on-accent transition-colors hover:bg-accent/85 disabled:opacity-50 cursor-pointer"
-					disabled={busy || code.length < 6}
-				>
-					{busy ? "Pairing…" : "Pair"}
-				</button>
-			</form>
+			Raffi plays torrents through Limbo on a computer on the same network.
 		{/if}
+	</p>
 
-		{#if error}
-			<div class="rounded-2xl bg-danger/12 p-3 text-sm text-danger">{error}</div>
+	{#if step === "searching"}
+		<div class="flex items-center gap-3 text-ink/70">
+			<ShapeLoader size="24px" />
+			Looking for Limbo on your network…
+		</div>
+	{:else if step === "pick"}
+		{#if found.length === 0}
+			<p class="text-sm text-ink/60">
+				No Limbo found. Open Limbo on your computer and turn on Devices on your network under Settings → Torrents.
+			</p>
 		{/if}
-	</div>
-</div>
+		<div class="-mx-2 flex flex-col gap-0.5">
+			{#each found as service (service.id)}
+				<button
+					class="flex cursor-pointer items-center gap-3 rounded-[16px] px-4 py-3 text-left transition-colors hover:bg-ink/8 focus:bg-ink/8"
+					onclick={() => choose(service)}
+				>
+					<Monitor size={20} strokeWidth={2} class="shrink-0 text-ink/70" />
+					<span class="truncate font-medium">{service.name}</span>
+				</button>
+			{/each}
+		</div>
+		<div class="flex flex-wrap justify-end gap-2">
+			<Button
+				onclick={() => {
+					error = "";
+					step = "address";
+				}}
+			>
+				Enter an address
+			</Button>
+			<Button variant="primary" onclick={search}>Search again</Button>
+		</div>
+	{:else if step === "address"}
+		<form class="flex flex-col gap-3" onsubmit={(event) => (event.preventDefault(), useAddress())}>
+			<input
+				type="text"
+				inputmode="decimal"
+				bind:value={address}
+				placeholder="192.168.1.20"
+				aria-label="Computer address"
+				class="min-h-12 rounded-full bg-ink/8 px-5 outline-none placeholder:text-ink/30 focus:bg-ink/12"
+			/>
+			<Button type="submit" variant="primary" class="self-end" disabled={!address.trim()}>Continue</Button>
+		</form>
+	{:else}
+		<form class="flex flex-col gap-4" onsubmit={(event) => (event.preventDefault(), pair())}>
+			<CodeInput bind:value={code} disabled={busy} label="Pairing code" onComplete={() => void pair()} />
+			<Button type="submit" variant="primary" class="self-end" disabled={busy || code.length < 6}>
+				{busy ? "Pairing…" : "Pair"}
+			</Button>
+		</form>
+	{/if}
+
+	{#if error}
+		<p class="text-sm text-danger">{error}</p>
+	{/if}
+</Dialog>
