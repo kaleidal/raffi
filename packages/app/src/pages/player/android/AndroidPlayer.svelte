@@ -1,8 +1,7 @@
 <script lang="ts">
-    import { onDestroy, tick } from "svelte";
+    import { onDestroy, tick, untrack } from "svelte";
     import { get } from "svelte/store";
-    import LoadingSpinner from "../../../components/common/LoadingSpinner.svelte";
-    import TrackSelectionModal from "../../../components/player/TrackSelectionModal.svelte";
+    import ShapeLoader from "../../../components/common/loading/ShapeLoader.svelte";
     import { flushPendingLibraryProgress } from "../../../lib/db/db";
     import type { ShowResponse } from "../../../lib/library/types/meta_types";
     import { localMode } from "../../../lib/stores/authStore";
@@ -20,7 +19,6 @@
     import * as IntroDb from "../chapters/introdb";
     import PlayerLoadingScreen from "../components/PlayerLoadingScreen.svelte";
     import { loadingDetails, loadingProgress, loadingStage } from "../playerState";
-    import { getSeekBarStyleFromStorage } from "../controls/seekStyle";
     import { createTraktScrobbler } from "../integrations/traktScrobbleManager";
     import * as Subtitles from "../subtitles/subtitles";
     import type { Chapter, Track } from "../types";
@@ -28,15 +26,26 @@
     import type AndroidSeekBar from "./AndroidSeekBar.svelte";
     import { createNativePlayback, explainNativeError, type NativePlaybackState } from "./nativePlayback";
     import { createLimboTorrentStream } from "./limboTorrent";
-    import { audioTrackOptions, selectedLabel, subtitleChoice, subtitleTrackOptions } from "./tracks";
+    import { audioTrackOptions, subtitleChoice, subtitleTrackOptions } from "./tracks";
+    import { findSubtitleInLanguage, readSubtitlePreference, rememberSubtitleChoice } from "../subtitles/subtitlePreference";
 
-    export let videoSrc: string | null = null;
-    export let embedSrc: string | null = null;
-    export let metaData: ShowResponse | null = null;
-    export let startTime = 0;
-    export let season: number | null = null;
-    export let episode: number | null = null;
-    export let fileIdx: number | null = null;
+    let {
+        videoSrc = null,
+        embedSrc = null,
+        metaData = null,
+        startTime = 0,
+        season = null,
+        episode = null,
+        fileIdx = null,
+    }: {
+        videoSrc?: string | null;
+        embedSrc?: string | null;
+        metaData?: ShowResponse | null;
+        startTime?: number;
+        season?: number | null;
+        episode?: number | null;
+        fileIdx?: number | null;
+    } = $props();
 
     const CONTROLS_HIDE_MS = 4000;
     const INTRO_DB_STARTUP_BUDGET_MS = 1500;
@@ -45,66 +54,88 @@
     const playback = createNativePlayback();
     const torrent = createLimboTorrentStream();
     const { state: playbackState, tracks, error } = playback;
-    const seekBarStyle = getSeekBarStyleFromStorage();
 
     let sessionKey: string | null = null;
     let sessionRun = 0;
-    let sourceError: { message: string; details: string } | null = null;
-    let hasStarted = false;
+    let sourceError = $state<{ message: string; details: string } | null>(null);
+    let hasStarted = $state(false);
     let ended = false;
     let playRequested = false;
-    let introDbChapters: Chapter[] = [];
-    let addonSubtitles: Track[] = [];
-    let selectedAddonSubtitle: Track["id"] | null = null;
+    let introDbChapters = $state.raw<Chapter[]>([]);
+    let addonSubtitles = $state.raw<Track[]>([]);
+    let selectedAddonSubtitle = $state<Track["id"] | null>(null);
+    let subtitlePreferenceApplied = $state(false);
     let lastAutoSkip: number | null = null;
-    let controlsVisible = false;
+    let controlsVisible = $state(false);
     let scrubbing = false;
-    let trackModal: "audio" | "subtitles" | null = null;
-    let fit: "contain" | "cover" = "contain";
+    let tracksOpen = $state(false);
+    let fit = $state<"contain" | "cover">("contain");
     let hideTimer: ReturnType<typeof setTimeout> | null = null;
-    let seekBar: AndroidSeekBar | null = null;
-    let seekElement: HTMLDivElement | null = null;
-    let controls: AndroidPlayerControls | null = null;
-    let controlsPanel: HTMLDivElement | null = null;
+    let seekBar = $state<AndroidSeekBar | null>(null);
+    let seekElement = $state<HTMLDivElement | null>(null);
+    let controls = $state<AndroidPlayerControls | null>(null);
+    let controlsPanel = $state<HTMLDivElement | null>(null);
 
-    $: imdbID = metaData?.meta?.imdb_id ?? null;
-    $: isSeries = metaData?.meta?.type === "series";
-    $: episodeInfo = isSeries
-        ? metaData?.meta?.videos?.find((video) => video.season === season && (video.episode === episode || video.number === episode)) ?? null
-        : null;
-    $: title = metaData?.meta?.name ?? "Raffi";
-    $: subtitle = isSeries && season != null && episode != null
-        ? [`S${season} E${episode}`, episodeInfo?.name].filter(Boolean).join(" · ")
-        : null;
-    $: nowPlaying = metaData?.meta?.name
-        ? isSeries && season != null && episode != null
-            ? `${metaData.meta.name} S${season} E${episode}`
-            : metaData.meta.name
-        : null;
-
-    $: chapterState = Chapters.checkChapters($playbackState.position, null, $playbackState.duration, metaData, introDbChapters);
-    $: hasNextEpisode = isSeries && Boolean(episodeInfo) && metaData?.meta?.videos?.at(-1) !== episodeInfo;
-    $: nextEpisodeOffered = hasNextEpisode && chapterState.showNextEpisode;
-    $: nextEpisodeHighlighted = hasNextEpisode && chapterState.currentChapter?.kind === "outro";
-    $: skipLabel = chapterState.showSkipIntro ? chapterState.skipButtonLabel : null;
-    $: if (hasStarted) autoSkip(chapterState.currentChapter);
-
-    $: audioOptions = audioTrackOptions($tracks);
-    $: subtitleOptions = subtitleTrackOptions($tracks, addonSubtitles, selectedAddonSubtitle);
-
-    $: unsupportedReason = unsupportedSource(videoSrc, embedSrc);
-    $: blockingError = unsupportedReason
-        ? { message: "This stream can't play on this device", details: unsupportedReason }
-        : sourceError ??
-          ($error ? { message: "Playback stopped", details: explainNativeError($error) } : null);
-
-    $: playback.setCaptionInset(
-        controlsVisible && controlsPanel ? 1 - controlsPanel.getBoundingClientRect().top / innerHeight : 0,
+    const imdbID = $derived(metaData?.meta?.imdb_id ?? null);
+    const isSeries = $derived(metaData?.meta?.type === "series");
+    const episodeInfo = $derived(
+        isSeries
+            ? metaData?.meta?.videos?.find((video) => video.season === season && (video.episode === episode || video.number === episode)) ?? null
+            : null,
+    );
+    const title = $derived(metaData?.meta?.name ?? "Raffi");
+    const subtitle = $derived(
+        isSeries && season != null && episode != null
+            ? [`S${season} E${episode}`, episodeInfo?.name].filter(Boolean).join(" · ")
+            : null,
     );
 
-    $: playbackKey = [videoSrc, embedSrc, fileIdx, season, episode].join("|");
-    $: void startSession(playbackKey);
-    $: followPlayback($playbackState);
+    const chapterState = $derived(
+        Chapters.checkChapters($playbackState.position, null, $playbackState.duration, metaData, introDbChapters),
+    );
+    const chapterMarkers = $derived(Chapters.getEffectiveChapterSegments(null, introDbChapters));
+    const hasNextEpisode = $derived(isSeries && Boolean(episodeInfo) && metaData?.meta?.videos?.at(-1) !== episodeInfo);
+    const nextEpisodeOffered = $derived(hasNextEpisode && chapterState.showNextEpisode);
+    const nextEpisodeHighlighted = $derived(hasNextEpisode && chapterState.currentChapter?.kind === "outro");
+    const skipLabel = $derived(chapterState.showSkipIntro ? chapterState.skipButtonLabel : null);
+
+    const audioOptions = $derived(audioTrackOptions($tracks));
+    const subtitleOptions = $derived(subtitleTrackOptions($tracks, addonSubtitles, selectedAddonSubtitle));
+
+    const unsupportedReason = $derived(unsupportedSource(videoSrc, embedSrc));
+    const blockingError = $derived(
+        unsupportedReason
+            ? { message: "This stream can't play on this device", details: unsupportedReason }
+            : sourceError ?? ($error ? { message: "Playback stopped", details: explainNativeError($error) } : null),
+    );
+
+    const playbackKey = $derived([videoSrc, embedSrc, fileIdx, season, episode].join("|"));
+
+    $effect(() => {
+        if (!hasStarted) return;
+        const chapter = chapterState.currentChapter;
+        untrack(() => autoSkip(chapter));
+    });
+
+    $effect(() => {
+        if (!subtitlePreferenceApplied) applySubtitlePreference(subtitleOptions);
+    });
+
+    $effect(() => {
+        playback.setCaptionInset(
+            controlsVisible && controlsPanel ? 1 - controlsPanel.getBoundingClientRect().top / innerHeight : 0,
+        );
+    });
+
+    $effect(() => {
+        const key = playbackKey;
+        untrack(() => void startSession(key));
+    });
+
+    $effect(() => {
+        const current = $playbackState;
+        untrack(() => followPlayback(current));
+    });
 
     function unsupportedSource(source: string | null, embed: string | null) {
         if (embed) return "This source opens a provider's web player. Pick another stream.";
@@ -145,6 +176,7 @@
         introDbChapters = [];
         addonSubtitles = [];
         selectedAddonSubtitle = null;
+        subtitlePreferenceApplied = false;
         lastAutoSkip = null;
         sourceError = null;
         hideControls();
@@ -259,7 +291,7 @@
     function scheduleHide() {
         if (hideTimer) clearTimeout(hideTimer);
         hideTimer = setTimeout(() => {
-            if (playback.current().playWhenReady && !scrubbing && !trackModal) hideControls();
+            if (playback.current().playWhenReady && !scrubbing && !tracksOpen) hideControls();
             else scheduleHide();
         }, CONTROLS_HIDE_MS);
     }
@@ -284,9 +316,26 @@
         playback.setFit(fit);
     }
 
-    function selectSubtitle(track: Track) {
+    function showSubtitle(track: Track) {
         selectedAddonSubtitle = track.isAddon ? track.id : null;
         playback.selectSubtitle(subtitleChoice(track));
+    }
+
+    function selectSubtitle(track: Track) {
+        subtitlePreferenceApplied = true;
+        rememberSubtitleChoice(track);
+        showSubtitle(track);
+    }
+
+    /** Starts each episode with subtitles the way the viewer last left them, once a matching track shows up. */
+    function applySubtitlePreference(options: Track[]) {
+        const preference = readSubtitlePreference();
+        if (!preference || options.length < 2) return;
+        const shown = options.find((track) => track.selected);
+        const wanted = preference.enabled ? findSubtitleInLanguage(options, preference.lang) : options.find((track) => track.id === "off");
+        if (!wanted) return;
+        subtitlePreferenceApplied = true;
+        if (wanted !== shown) showSubtitle(wanted);
     }
 
     async function startScrubbing(rightward: boolean) {
@@ -318,7 +367,7 @@
     }
 
     function claimKey(event: KeyboardEvent) {
-        if (trackModal || blockingError || !hasStarted) return false;
+        if (tracksOpen || blockingError || !hasStarted) return false;
         const { position } = playback.current();
         switch (event.key) {
             case "MediaPlayPause":
@@ -347,7 +396,7 @@
     const releaseKeys = claimKeys(claimKey);
 
     const removeBackHandler = onBack(() => {
-        if (trackModal) trackModal = null;
+        if (tracksOpen) tracksOpen = false;
         else if (controlsVisible && hasStarted && !blockingError) hideControls();
         else close();
         return true;
@@ -362,20 +411,20 @@
     });
 </script>
 
-<svelte:window on:pointerdown={() => controlsVisible && scheduleHide()} />
+<svelte:window onpointerdown={() => controlsVisible && scheduleHide()} />
 
 <div class="fixed inset-0">
     {#if !isTvPlatform && hasStarted && !blockingError}
         <button
             class="absolute inset-0"
             aria-label={controlsVisible ? "Hide controls" : "Show controls"}
-            on:click={() => (controlsVisible ? hideControls() : showControls())}
+            onclick={() => (controlsVisible ? hideControls() : showControls())}
         ></button>
     {/if}
 
     {#if hasStarted && $playbackState.buffering && !blockingError}
         <div class="absolute inset-0 flex items-center justify-center">
-            <LoadingSpinner size="56px" />
+            <ShapeLoader size="44px" class="opacity-80" />
         </div>
     {/if}
 
@@ -386,13 +435,11 @@
             bind:seekElement
             bind:panel={controlsPanel}
             visible={controlsVisible}
-            state={$playbackState}
+            playback={$playbackState}
             {metaData}
-            {nowPlaying}
-            chapters={Chapters.getEffectiveChapterSegments(null, introDbChapters)}
-            {seekBarStyle}
-            audioLabel={selectedLabel(audioOptions, "Audio")}
-            subtitleLabel={selectedLabel(subtitleOptions, "Off")}
+            {season}
+            {episode}
+            chapters={chapterMarkers}
             {skipLabel}
             {hasNextEpisode}
             {nextEpisodeHighlighted}
@@ -403,8 +450,14 @@
             onClose={close}
             onSkip={skipChapter}
             onNextEpisode={() => void playNextEpisode()}
-            onAudio={() => (trackModal = "audio")}
-            onSubtitles={() => (trackModal = "subtitles")}
+            tracks={{
+                audio: audioOptions,
+                subtitles: subtitleOptions,
+                onSelectAudio: (track) => playback.selectAudio(String(track.id)),
+                onSelectSubtitle: selectSubtitle,
+            }}
+            {tracksOpen}
+            onTracksOpenChange={(open) => (tracksOpen = open)}
             onToggleFit={toggleFit}
         />
     {/if}
@@ -414,6 +467,8 @@
     loading={!hasStarted || Boolean(blockingError)}
     onClose={close}
     {metaData}
+    {season}
+    {episode}
     stage={$loadingStage}
     details={$loadingDetails}
     progress={$loadingProgress}
@@ -424,22 +479,3 @@
     onRetry={retry}
     onBack={returnToStreams}
 />
-
-{#if trackModal === "audio"}
-    <TrackSelectionModal
-        title="Audio"
-        kind="audio"
-        tracks={audioOptions}
-        onSelect={(track) => playback.selectAudio(String(track.id))}
-        onClose={() => (trackModal = null)}
-    />
-{:else if trackModal === "subtitles"}
-    <TrackSelectionModal
-        title="Subtitles"
-        kind="subtitles"
-        tracks={subtitleOptions}
-        subtitleTools={false}
-        onSelect={selectSubtitle}
-        onClose={() => (trackModal = null)}
-    />
-{/if}

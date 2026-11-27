@@ -15,7 +15,7 @@ const storedAvatarKey = (env: Env, image: string | null | undefined) => {
   return image?.startsWith(prefix) ? image.slice(prefix.length) : null;
 };
 
-const replaceUserImage = async (env: Env, userId: string, image: string | null) => {
+const replaceUserImage = async (env: Env, userId: string, image: string) => {
   const user = await env.DB.prepare('SELECT image FROM "user" WHERE id = ?').bind(userId).first<{ image: string | null }>();
   if (!user) throw new HttpError(404, "Account not found", "not_found");
   await env.DB.prepare('UPDATE "user" SET image = ?, updatedAt = ? WHERE id = ?')
@@ -41,11 +41,6 @@ export const uploadAvatar = async (request: Request, env: Env, userId: string) =
   const image = `${avatarUrlPrefix(env)}${key}`;
   await replaceUserImage(env, userId, image);
   return json({ image });
-};
-
-export const removeAvatar = async (env: Env, userId: string) => {
-  await replaceUserImage(env, userId, null);
-  return json({ image: null });
 };
 
 export const serveAvatar = async (request: Request, env: Env, key: string, ctx: ExecutionContext) => {

@@ -21,7 +21,7 @@
     "moduleResolution": "bundler",
     "noEmit": true,
     "paths": {
-      "@raffi/app/*": ["../../packages/app/src/*"],
+      "@raffi/app/*": ["../../packages/app/*"],
       "@raffi/app": ["../../packages/app/src"]
     }
   },

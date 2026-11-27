@@ -5,6 +5,11 @@
 		<link rel="icon" href="%sveltekit.assets%/raffi.svg" />
 		<link rel="manifest" href="/manifest.json" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<script>
+			const theme = localStorage.getItem("raffi_theme");
+			const light = theme === "light" || (theme === "system" && matchMedia("(prefers-color-scheme: light)").matches);
+			document.documentElement.dataset.theme = light ? "light" : "dark";
+		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">

@@ -1,24 +1,30 @@
 <script lang="ts">
-    import { fade, scale } from "svelte/transition";
-    import { ArrowLeft, Pencil, Plus, Trash2, X } from "@lucide/svelte";
-    import { portal } from "../../../components/common/portal";
+    import { untrack } from "svelte";
+    import { ArrowLeft, Pencil, Plus, Trash2 } from "@lucide/svelte";
+    import Button from "../../../components/common/controls/Button.svelte";
+    import Dialog from "../../../components/common/dialog/Dialog.svelte";
     import SourceForm from "./SourceForm.svelte";
     import { confirmDialog } from "../../../lib/shell/systemDialogs";
     import { liveSettings, removeSource } from "../../../lib/live/sources";
     import type { LiveSource } from "../../../lib/live/types";
 
-    export let open = false;
-    export let onSaved: (source: LiveSource) => void;
-    export let onRemoved: (sourceId: string) => void;
+    let {
+        open = $bindable(false),
+        onSaved,
+        onRemoved,
+    }: {
+        open?: boolean;
+        onSaved: (source: LiveSource) => void;
+        onRemoved: (sourceId: string) => void;
+    } = $props();
 
-    let editing: LiveSource | null | undefined;
-    let wasOpen = false;
+    let editing = $state.raw<LiveSource | null | undefined>();
 
-    $: if (open !== wasOpen) {
-        wasOpen = open;
-        if (open) editing = $liveSettings.sources.length ? undefined : null;
-    }
-    $: title = editing === undefined ? "Live TV sources" : editing ? "Edit source" : "Add a source";
+    $effect.pre(() => {
+        if (open) editing = untrack(() => $liveSettings.sources.length) ? undefined : null;
+    });
+
+    const title = $derived(editing === undefined ? "Live TV sources" : editing ? "Edit source" : "Add a source");
 
     const describe = (source: LiveSource) =>
         source.kind === "xtream" ? `Xtream · ${new URL(source.serverUrl).host}` : new URL(source.playlistUrl).host;
@@ -35,74 +41,54 @@
 </script>
 
 {#if open}
-    <div
-        use:portal
-        class="raffi-modal-backdrop fixed inset-0 z-200 flex items-center justify-center bg-canvas/56 backdrop-blur-xl"
-        transition:fade={{ duration: 200 }}
-        onclick={(event) => event.target === event.currentTarget && close()}
-        onkeydown={(event) => event.key === "Escape" && close()}
-        role="button"
-        tabindex="0"
-    >
-        <div
-            class="raffi-modal-surface relative flex w-full max-w-xl flex-col gap-6 overflow-y-auto rounded-[32px] bg-raised/62 p-6 shadow-[0_40px_160px_rgba(0,0,0,0.45)] backdrop-blur-[40px] md:p-8"
-            transition:scale={{ start: 0.95, duration: 200 }}
-            role="dialog"
-            tabindex="-1"
-        >
-            <div class="flex items-center justify-between gap-3">
-                <div class="flex items-center gap-3">
-                    {#if editing !== undefined && $liveSettings.sources.length}
-                        <button class="text-ink/50 hover:text-ink cursor-pointer" aria-label="Back" onclick={() => (editing = undefined)}>
-                            <ArrowLeft size={22} strokeWidth={2} />
-                        </button>
-                    {/if}
-                    <h2 class="text-2xl font-semibold text-ink md:text-3xl">{title}</h2>
-                </div>
-                <button class="text-ink/50 hover:text-ink cursor-pointer" aria-label="Close" onclick={close}>
-                    <X size={24} strokeWidth={2} />
-                </button>
-            </div>
-
-            {#if editing === undefined}
-                <ul class="flex flex-col gap-1">
-                    {#each $liveSettings.sources as source, index (source.id)}
-                        <li class="group flex items-center gap-4 rounded-2xl px-3 py-2.5 hover:bg-ink/6">
-                            <span class="w-5 shrink-0 text-center font-semibold tabular-nums text-ink/35">{index + 1}</span>
-                            <span class="flex min-w-0 flex-1 flex-col">
-                                <span class="truncate text-ink">{source.name}</span>
-                                <span class="truncate text-xs text-ink/45">{describe(source)}</span>
-                            </span>
-                            <button class="rounded-full p-2 text-ink/50 hover:bg-ink/10 hover:text-ink cursor-pointer" aria-label="Edit {source.name}" onclick={() => (editing = source)}>
-                                <Pencil size={16} strokeWidth={2} />
-                            </button>
-                            <button class="rounded-full p-2 text-ink/50 hover:bg-ink/10 hover:text-danger cursor-pointer" aria-label="Remove {source.name}" onclick={() => remove(source)}>
-                                <Trash2 size={16} strokeWidth={2} />
-                            </button>
-                        </li>
-                    {/each}
-                </ul>
+    <Dialog {title} onClose={close} class="max-w-xl">
+        {#snippet leading()}
+            {#if editing !== undefined && $liveSettings.sources.length}
                 <button
-                    class="flex items-center justify-center gap-2 self-start rounded-2xl bg-ink/10 px-4 py-2 font-semibold text-ink hover:bg-ink/20 cursor-pointer"
-                    onclick={() => (editing = null)}
+                    class="-ml-2 cursor-pointer rounded-full p-2 text-ink/50 transition-colors hover:bg-ink/8 hover:text-ink"
+                    aria-label="Back"
+                    onclick={() => (editing = undefined)}
                 >
-                    <Plus size={18} strokeWidth={2} />
-                    Add a source
+                    <ArrowLeft size={22} strokeWidth={2} />
                 </button>
-            {:else}
-                {#key editing}
-                    <SourceForm
-                        source={editing}
-                        onDone={(source) => {
-                            const added = editing === null;
-                            onSaved(source);
-                            editing = undefined;
-                            if (added) close();
-                        }}
-                        onCancel={() => ($liveSettings.sources.length ? (editing = undefined) : close())}
-                    />
-                {/key}
             {/if}
-        </div>
-    </div>
+        {/snippet}
+
+        {#if editing === undefined}
+            <ul class="-mx-3 flex min-h-0 flex-col gap-0.5 overflow-y-auto">
+                {#each $liveSettings.sources as source, index (source.id)}
+                    <li class="flex items-center gap-4 rounded-[18px] px-3 py-2.5 hover:bg-ink/6">
+                        <span class="w-5 shrink-0 text-center font-semibold tabular-nums text-ink/35">{index + 1}</span>
+                        <span class="flex min-w-0 flex-1 flex-col">
+                            <span class="truncate">{source.name}</span>
+                            <span class="truncate text-xs text-ink/45">{describe(source)}</span>
+                        </span>
+                        <button class="cursor-pointer rounded-full p-2 text-ink/50 hover:bg-ink/10 hover:text-ink" aria-label="Edit {source.name}" onclick={() => (editing = source)}>
+                            <Pencil size={16} strokeWidth={2} />
+                        </button>
+                        <button class="cursor-pointer rounded-full p-2 text-ink/50 hover:bg-ink/10 hover:text-danger" aria-label="Remove {source.name}" onclick={() => remove(source)}>
+                            <Trash2 size={16} strokeWidth={2} />
+                        </button>
+                    </li>
+                {/each}
+            </ul>
+            <Button class="self-start" onclick={() => (editing = null)}>
+                <Plus size={18} strokeWidth={2} />
+                Add a source
+            </Button>
+        {:else}
+            {#key editing}
+                <SourceForm
+                    source={editing}
+                    onDone={(source) => {
+                        const added = editing === null;
+                        onSaved(source);
+                        editing = undefined;
+                        if (added) close();
+                    }}
+                    onCancel={() => ($liveSettings.sources.length ? (editing = undefined) : close())}
+                />
+            {/key}
+        {/if}
+    </Dialog>
 {/if}

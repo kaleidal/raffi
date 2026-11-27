@@ -1,27 +1,19 @@
 <script lang="ts">
     import { Film } from "@lucide/svelte";
 
-    export let src: string | null | undefined = null;
-    export let title: string | null | undefined = null;
-    export let alt = "Poster";
+    let {
+        src = null,
+        title = null,
+        alt = "Poster",
+    }: { src?: string | null; title?: string | null; alt?: string } = $props();
 
-    let failed = false;
-    let loaded = false;
-    let activeSrc = "";
+    let loadedSrc = $state<string | null>(null);
+    let failedSrc = $state<string | null>(null);
 
-    $: normalizedSrc = String(src || "").trim();
-    $: if (normalizedSrc !== activeSrc) {
-        activeSrc = normalizedSrc;
-        failed = false;
-        loaded = false;
-    }
-
-    $: displayTitle = String(title || "").trim();
-
-    function handleError() {
-        failed = true;
-        loaded = false;
-    }
+    const normalizedSrc = $derived(String(src || "").trim());
+    const loaded = $derived(loadedSrc === normalizedSrc);
+    const failed = $derived(failedSrc === normalizedSrc);
+    const displayTitle = $derived(String(title || "").trim());
 </script>
 
 {#if normalizedSrc && !failed}
@@ -33,12 +25,14 @@
         <img
             src={normalizedSrc}
             alt={alt}
+            width="300"
+            height="450"
             loading="lazy"
             decoding="async"
             draggable="false"
             class="block h-full w-full object-cover opacity-0 transition-opacity duration-300 ease-out {loaded ? 'opacity-100' : ''}"
-            on:load={() => (loaded = true)}
-            on:error={handleError}
+            onload={() => (loadedSrc = normalizedSrc)}
+            onerror={() => (failedSrc = normalizedSrc)}
         />
 
         <div
@@ -48,7 +42,7 @@
     </div>
 {:else}
     <div
-        class="flex h-full w-full flex-col items-center justify-center gap-3 rounded-[inherit] border border-ink/10 bg-surface p-4 text-center"
+        class="flex h-full w-full flex-col items-center justify-center gap-3 rounded-[inherit] bg-ink/8 p-4 text-center"
         aria-label={alt}
     >
         <Film size={26} strokeWidth={2} class="text-ink/50" />

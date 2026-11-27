@@ -1,22 +1,14 @@
 import { getCachedMetaData } from "../../lib/library/metaCache";
+import { offersResource } from "../../lib/library/addonManifest";
 import { getAddons, getLibraryItem } from "../../lib/db/db";
 import {
-    loadedMeta, metaData, episodes, seasons, seasonsArray,
+    loadedMeta, metaData, seasons, seasonsArray,
     progressMap, lastWatched, currentSeason, addons, selectedAddon,
     backgroundFailed, logoFailed, metaLoadError,
 } from "./metaState";
 import { get } from "svelte/store";
-import type { ProgressMap } from "./types";
-
-function addonHasStreamResource(addon: any): boolean {
-    const resources = addon?.manifest?.resources;
-    if (!Array.isArray(resources)) return false;
-    return resources.some(
-        (resource: any) =>
-            resource === "stream" ||
-            (resource && typeof resource === "object" && resource.name === "stream"),
-    );
-}
+import type { ProgressMap, SeriesProgress } from "../../lib/library/types/progress";
+import type { Episode, ShowResponse } from "../../lib/library/types/meta_types";
 
 let metaLoadGeneration = 0;
 
@@ -25,14 +17,10 @@ export function cancelMetaDataLoad() {
 }
 
 export async function loadAddons() {
-    try {
-        const dbAddons = await getAddons();
-        addons.set(dbAddons);
-        const streamAddon = dbAddons.find(addonHasStreamResource);
-        selectedAddon.set(streamAddon?.transport_url ?? "");
-    } catch (e) {
-        console.error("Failed to load addons", e);
-    }
+    const dbAddons = await getAddons();
+    addons.set(dbAddons);
+    const streamAddon = dbAddons.find((addon) => offersResource(addon.manifest, "stream"));
+    selectedAddon.set(streamAddon?.transport_url ?? "");
 }
 
 export async function loadMetaData(imdbID: string, titleType: string, expectedName: string) {
@@ -46,12 +34,11 @@ export async function loadMetaData(imdbID: string, titleType: string, expectedNa
     logoFailed.set(false);
     progressMap.set({});
     lastWatched.set({ season: 1, episode: 0 });
-    episodes.set(0);
     seasons.set(0);
     seasonsArray.set([]);
     currentSeason.set(1);
 
-    let data: any = null;
+    let data: ShowResponse | null = null;
 
     try {
         data = await getCachedMetaData(imdbID, titleType);
@@ -63,7 +50,7 @@ export async function loadMetaData(imdbID: string, titleType: string, expectedNa
             data = await getCachedMetaData(imdbID, fallbackType);
             if (isStale()) return;
         }
-    } catch (e) {
+    } catch {
         if (isStale()) return;
         console.warn(`Failed to load meta for ${titleType}, trying fallback`);
         try {
@@ -75,7 +62,7 @@ export async function loadMetaData(imdbID: string, titleType: string, expectedNa
         }
     }
 
-    const filterUnreleasedEpisodes = (videos: any[] = []) => {
+    const filterUnreleasedEpisodes = (videos: Episode[] = []) => {
         const now = Date.now();
         return videos.filter((video) => {
             if (!video) return false;
@@ -102,13 +89,11 @@ export async function loadMetaData(imdbID: string, titleType: string, expectedNa
 
     if (data && data.meta) {
         const availableEpisodes = (data.meta.videos || []).filter(
-            (video: any) => video.season > 0,
+            (video) => video.season > 0,
         );
-        const epCount = availableEpisodes.length;
-        episodes.set(epCount);
 
         const seasonSet = new Set<number>(
-            availableEpisodes.map((video: any) => Number(video.season) || 0),
+            availableEpisodes.map((video) => Number(video.season) || 0),
         );
         const uniqueSeasons: number[] = Array.from(seasonSet)
             .filter((season) => season > 0)
@@ -132,12 +117,9 @@ export async function loadMetaData(imdbID: string, titleType: string, expectedNa
                 // Calculate last watched
                 let latest = 0;
                 let latestKey = "";
-                const prog = progressData;
-
-                for (const [key, val] of Object.entries(prog)) {
-                    const v = val as any;
-                    if (v.updatedAt > latest) {
-                        latest = v.updatedAt;
+                for (const [key, val] of Object.entries(progressData as SeriesProgress)) {
+                    if (val.updatedAt > latest) {
+                        latest = val.updatedAt;
                         latestKey = key;
                     }
                 }

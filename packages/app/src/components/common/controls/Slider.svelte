@@ -1,30 +1,29 @@
 <script lang="ts">
     import { pointerScrub, type ScrubPosition } from "./pointerScrub";
 
-    export let value: number;
-    export let label = "";
-    export let min = 0;
-    export let max = 1;
-    export let onInput: (value: number) => void;
+    let {
+        value,
+        label,
+        min = 0,
+        max = 1,
+        onInput,
+    }: { value: number; label: string; min?: number; max?: number; onInput: (value: number) => void } = $props();
 
-    let hovering = false;
-    let dragging = false;
+    let hovering = $state(false);
+    let dragging = $state(false);
 
-    $: fraction = max > min ? Math.min(1, Math.max(0, (value - min) / (max - min))) : 0;
-    $: active = hovering || dragging;
+    const fraction = $derived(max > min ? Math.min(1, Math.max(0, (value - min) / (max - min))) : 0);
+    const active = $derived(hovering || dragging);
 
     const valueAt = ({ ratio }: ScrubPosition) => onInput(min + ratio * (max - min));
 </script>
 
-<div class="flex flex-col items-stretch gap-1 w-full min-w-0">
-    {#if label}
-        <span class="text-ink/55 text-[0.9375rem] font-medium">{label}</span>
-    {/if}
+<div class="w-full min-w-0">
     <div
         class="relative h-4 w-full cursor-pointer touch-none select-none"
         role="slider"
         tabindex="-1"
-        aria-label={label || undefined}
+        aria-label={label}
         aria-valuemin={min}
         aria-valuemax={max}
         aria-valuenow={value}

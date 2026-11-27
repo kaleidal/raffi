@@ -2,19 +2,31 @@
     import { portal } from "../../common/portal";
     import { onMount } from "svelte";
     import { fade } from "svelte/transition";
-    import { Play, Check, CircleX, CheckCircle, Ban, Trash } from "@lucide/svelte";
+    import { Play, ListVideo, Check, CircleX, CheckCircle, Ban, Trash } from "@lucide/svelte";
 
-    export let x: number;
-    export let y: number;
-
-    export let onClose: () => void = () => {};
-    export let onWatch: () => void = () => {};
-    export let onMarkWatched: () => void = () => {};
-    export let onMarkUnwatched: () => void = () => {};
-    export let onResetProgress: () => void = () => {};
-    export let onMarkSeasonWatched: () => void = () => {};
-    export let onMarkSeasonUnwatched: () => void = () => {};
-
+    let {
+        x,
+        y,
+        onClose = () => {},
+        onWatch = () => {},
+        onChooseSource = () => {},
+        onMarkWatched = () => {},
+        onMarkUnwatched = () => {},
+        onResetProgress = () => {},
+        onMarkSeasonWatched = () => {},
+        onMarkSeasonUnwatched = () => {},
+    }: {
+        x: number;
+        y: number;
+        onClose?: () => void;
+        onWatch?: () => void;
+        onChooseSource?: () => void;
+        onMarkWatched?: () => void;
+        onMarkUnwatched?: () => void;
+        onResetProgress?: () => void;
+        onMarkSeasonWatched?: () => void;
+        onMarkSeasonUnwatched?: () => void;
+    } = $props();
 
     function close() {
         onClose();
@@ -60,34 +72,44 @@
     class="fixed z-[300] context-menu bg-surface rounded-xl py-2 min-w-[200px] flex flex-col"
     style={`top: ${y}px; left: ${x}px;`}
     transition:fade={{ duration: 100 }}
-    on:contextmenu|preventDefault
+    oncontextmenu={(event) => event.preventDefault()}
     role="menu"
     tabindex="-1"
 >
     <button
         class="text-left px-4 py-2 text-ink/80 hover:text-ink hover:bg-ink/10 transition-colors text-sm flex flex-row gap-2 items-center cursor-pointer"
-        on:click={handleWatch}
+        onclick={handleWatch}
     >
         <Play size={16} strokeWidth={2} />
         Watch
     </button>
     <button
         class="text-left px-4 py-2 text-ink/80 hover:text-ink hover:bg-ink/10 transition-colors text-sm flex flex-row gap-2 items-center cursor-pointer"
-        on:click={handleMarkWatched}
+        onclick={() => {
+            onChooseSource();
+            close();
+        }}
+    >
+        <ListVideo size={16} strokeWidth={2} />
+        Choose Source
+    </button>
+    <button
+        class="text-left px-4 py-2 text-ink/80 hover:text-ink hover:bg-ink/10 transition-colors text-sm flex flex-row gap-2 items-center cursor-pointer"
+        onclick={handleMarkWatched}
     >
         <Check size={16} strokeWidth={2} />
         Mark as Watched
     </button>
     <button
         class="text-left px-4 py-2 text-ink/80 hover:text-ink hover:bg-ink/10 transition-colors text-sm flex flex-row gap-2 items-center cursor-pointer"
-        on:click={handleMarkUnwatched}
+        onclick={handleMarkUnwatched}
     >
         <CircleX size={16} strokeWidth={2} />
         Mark as Unwatched
     </button>
     <button
         class="text-left px-4 py-2 text-ink/80 hover:text-ink hover:bg-ink/10 transition-colors text-sm flex flex-row gap-2 items-center cursor-pointer"
-        on:click={() => {
+        onclick={() => {
             onMarkSeasonWatched();
             close();
         }}
@@ -97,7 +119,7 @@
     </button>
     <button
         class="text-left px-4 py-2 text-ink/80 hover:text-ink hover:bg-ink/10 transition-colors text-sm flex flex-row gap-2 items-center cursor-pointer"
-        on:click={() => {
+        onclick={() => {
             onMarkSeasonUnwatched();
             close();
         }}
@@ -108,7 +130,7 @@
     <div class="h-[1px] bg-ink/10 my-1"></div>
     <button
         class="text-left px-4 py-2 text-danger hover:bg-danger/10 transition-colors text-sm flex flex-row gap-2 items-center cursor-pointer"
-        on:click={handleResetProgress}
+        onclick={handleResetProgress}
     >
         <Trash size={16} strokeWidth={2} />
         Reset Progress

@@ -1,13 +1,21 @@
 <script lang="ts">
     import { fade } from "svelte/transition";
-    import LoadingSpinner from "../../../components/common/LoadingSpinner.svelte";
+    import Button from "../../../components/common/controls/Button.svelte";
+    import ShapeLoader from "../../../components/common/loading/ShapeLoader.svelte";
     import ChannelLogo from "../components/ChannelLogo.svelte";
     import type { LiveChannel } from "../../../lib/live/types";
 
-    export let channel: LiveChannel | null;
-    export let error: string | null;
-    export let onRetry: () => void;
-    export let onBack: () => void;
+    let {
+        channel,
+        error,
+        onRetry,
+        onBack,
+    }: {
+        channel: LiveChannel | null;
+        error: string | null;
+        onRetry: () => void;
+        onBack: () => void;
+    } = $props();
 </script>
 
 <div class="absolute inset-0 z-40 flex items-center justify-center bg-canvas px-6" transition:fade={{ duration: 200 }}>
@@ -24,26 +32,18 @@
                 </h1>
                 <p class="mt-3 text-pretty text-[15px] leading-6 text-ink/60">{error}</p>
             </div>
-            <div class="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+            <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
                 {#if channel}
-                    <button
-                        class="rounded-xl bg-accent px-7 py-3 text-[15px] font-semibold text-on-accent hover:bg-ink/88 cursor-pointer"
-                        onclick={onRetry}
-                        data-tv-autofocus
-                    >
-                        Try again
-                    </button>
+                    <Button variant="primary" onclick={onRetry} data-tv-autofocus>Try again</Button>
                 {/if}
-                <button class="rounded-xl bg-ink/10 px-7 py-3 text-[15px] font-semibold text-ink hover:bg-ink/16 cursor-pointer" onclick={onBack}>
-                    Back to channels
-                </button>
+                <Button onclick={onBack}>Back to channels</Button>
             </div>
         {:else}
             <div class="flex flex-col items-center gap-4">
                 {#if channel}
                     <p class="text-xl font-medium text-ink/85">{channel.name}</p>
                 {/if}
-                <LoadingSpinner size="40px" />
+                <ShapeLoader size="40px" />
             </div>
         {/if}
     </div>

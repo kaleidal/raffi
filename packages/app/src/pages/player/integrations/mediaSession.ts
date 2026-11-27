@@ -7,7 +7,7 @@ type NowPlaying = {
     artwork: MediaImage[];
 };
 
-type Controls = {
+export type MediaControls = {
     togglePlay: () => void;
     seekTo: (time: number) => void;
     seekBy: (seconds: number) => void;
@@ -44,7 +44,7 @@ export function setNowPlaying(metaData: ShowResponse | null, season: number | nu
     navigator.mediaSession.metadata = playing ? new MediaMetadata(playing) : null;
 }
 
-export function bindMediaControls({ togglePlay, seekTo, seekBy, nextEpisode }: Controls) {
+export function bindMediaControls({ togglePlay, seekTo, seekBy, nextEpisode }: MediaControls) {
     if (!("mediaSession" in navigator)) return;
     const session = navigator.mediaSession;
     session.setActionHandler("play", togglePlay);

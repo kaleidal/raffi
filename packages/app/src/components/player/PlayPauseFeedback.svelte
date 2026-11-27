@@ -1,12 +1,13 @@
 <script lang="ts">
-    export let type: "play" | "pause";
-    export let id: number;
+    let { type, id }: { type: "play" | "pause"; id: number } = $props();
 
-    let scale = 1;
+    let scale = $state(1);
 
-    $: if (id) {
-        triggerAnimation();
-    }
+    $effect.pre(() => {
+        if (id) {
+            triggerAnimation();
+        }
+    });
 
     function triggerAnimation() {
         scale = 0.92;

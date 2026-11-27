@@ -32,7 +32,6 @@ import {
     setRaffiSyncAuthFailureHandler,
     setRaffiSyncAuthRefreshHandler,
     setRaffiSyncAuthToken,
-    syncDelete,
     syncPut,
 } from "../db/raffiSync";
 import { writable } from "svelte/store";
@@ -90,9 +89,7 @@ export const enableLocalMode = () => {
     localMode.set(true);
     persistLocalMode(true);
     setRaffiSyncAuthToken(null);
-    ensureDefaultAddonsForLocal().catch(() => {
-        // ignore
-    });
+    void ensureDefaultAddonsForLocal();
 };
 
 export const disableLocalMode = () => {
@@ -137,32 +134,10 @@ async function seedDefaultsIfNeeded(user: AppUser | null) {
     await ensureDefaultAddonsForUser(userId);
 }
 
-async function hydrateSignedInState(context: string) {
-    try {
-        const result = await hydrateLocalBackupFromCloud();
-        return result.ok;
-    } catch (error) {
-        console.error(`${context} cloud hydrate failed`, error);
-        return false;
-    }
-}
-
-async function seedSignedInDefaults(user: AppUser, context: string) {
-    try {
-        await seedDefaultsIfNeeded(user);
-        return true;
-    } catch (error) {
-        console.error(`${context} default addon setup failed`, error);
-        return false;
-    }
-}
-
-async function syncSignedInUser(user: AppUser, context: string) {
-    let shouldRefreshHome = await hydrateSignedInState(context);
-
-    const syncResult = await syncLocalStateToUser(user.id);
-    shouldRefreshHome = shouldRefreshHome || syncResult.ok;
-    shouldRefreshHome = await seedSignedInDefaults(user, context) || shouldRefreshHome;
+async function syncSignedInUser(user: AppUser) {
+    await hydrateLocalBackupFromCloud();
+    await syncLocalStateToUser(user.id);
+    await seedDefaultsIfNeeded(user);
     void flushPendingLibraryProgress();
 
     if (hasLocalState()) {
@@ -171,9 +146,7 @@ async function syncSignedInUser(user: AppUser, context: string) {
         });
     }
 
-    if (shouldRefreshHome) {
-        emitHomeRefresh();
-    }
+    emitHomeRefresh();
 }
 
 async function restoreStoredSession(): Promise<AppUser | null> {
@@ -225,7 +198,7 @@ export async function initAuth() {
             disableLocalMode();
             resetRemoteStateCache();
             startCloudReconciliationLoop();
-            void syncSignedInUser(activeUser, "Startup sync");
+            void syncSignedInUser(activeUser);
         } else {
             enableLocalMode();
             void ensureDefaultAddonsForLocal().then(() => emitHomeRefresh());
@@ -245,7 +218,7 @@ export async function signInWithCode(email: string, code: string) {
     disableLocalMode();
     resetRemoteStateCache();
     startCloudReconciliationLoop();
-    await syncSignedInUser(session.user, "Sign-in sync");
+    await syncSignedInUser(session.user);
 }
 
 export async function signOutToLocalMode() {
@@ -273,11 +246,6 @@ export async function renameAccount(name: string) {
 export async function changeAccountAvatar(file: Blob) {
     const { image } = await syncPut<{ image: string }>("/profile/avatar", await prepareAvatarImage(file));
     updateActiveUser({ avatar: image });
-}
-
-export async function removeAccountAvatar() {
-    await syncDelete("/profile/avatar");
-    updateActiveUser({ avatar: null });
 }
 
 export function getCachedUser(): AppUser | null {

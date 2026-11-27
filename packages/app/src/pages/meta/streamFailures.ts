@@ -1,5 +1,5 @@
 import { get } from "svelte/store";
-import type { Stream } from "./types";
+import type { Stream } from "../../lib/streams/types";
 import { failedStreamKeys, streamFailureMessage } from "./metaState";
 
 const STREAM_FAILURES_STORAGE_KEY = "raffi.streamFailures.v1";

@@ -12,7 +12,7 @@ import {
 } from "./dataMutations";
 import { applySyncState, ensureDefaultAddon, getState } from "./db";
 import { empty, getPathParts, handleError, HttpError, json, readJson, withCors } from "./http";
-import { removeAvatar, serveAvatar, uploadAvatar } from "./profile/avatars";
+import { serveAvatar, uploadAvatar } from "./profile/avatars";
 import {
   disconnectTrakt,
   exchangeTraktCode,
@@ -24,19 +24,14 @@ import {
 import { resolveStreamUrl } from "./streamResolve";
 import { pollTraktDeviceSignIn, startTraktDeviceSignIn } from "./traktDevice";
 import type { Addon, SyncPayload } from "./types";
-import { WatchPartyObject } from "./party/object";
-import { connectPartySocket, partySocketTarget, routeWatchParty } from "./party/routes";
 import { getSyncDatabase } from "./d1Session";
-
-export { WatchPartyObject };
 
 const routeAuthedRequest = async (request: Request, env: Env, parts: string[]) => {
   const userId = await requireUserId(request, env);
   const db = getSyncDatabase(env);
 
-  if (parts[0] === "profile" && parts[1] === "avatar") {
-    if (request.method === "PUT") return uploadAvatar(request, env, userId);
-    if (request.method === "DELETE") return removeAvatar(env, userId);
+  if (parts[0] === "profile" && parts[1] === "avatar" && request.method === "PUT") {
+    return uploadAvatar(request, env, userId);
   }
 
   if (request.method === "GET" && parts[0] === "state") {
@@ -154,10 +149,6 @@ const routeAuthedRequest = async (request: Request, env: Env, parts: string[]) =
     }
   }
 
-  if (parts[0] === "watch-parties") {
-    return routeWatchParty(request, env, userId, parts);
-  }
-
   throw new HttpError(404, "Not found", "not_found");
 };
 
@@ -176,8 +167,6 @@ export default {
       if (request.method === "GET" && parts[0] === "avatars" && parts.length === 3) {
         return await serveAvatar(request, env, `${parts[1]}/${parts[2]}`, ctx);
       }
-      const socketParty = partySocketTarget(request, parts);
-      if (socketParty) return await connectPartySocket(request, env, socketParty);
       return await routeAuthedRequest(request, env, parts);
     } catch (error) {
       return handleError(error);

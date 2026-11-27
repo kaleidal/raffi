@@ -129,13 +129,6 @@ const syncRequest = async <T>(
     return response.json() as Promise<T>;
 };
 
-/** WebSockets can't carry headers from a browser, so the session token goes as the second subprotocol. */
-export const openSyncSocket = async (path: string, protocol: string) => {
-    await ensureValidAuthToken();
-    if (!authToken) throw new Error("Sign in to use this.");
-    return new WebSocket(`${RAFFI_SYNC_URL.replace(/^http/, "ws")}${path}`, [protocol, authToken]);
-};
-
 export const setRaffiSyncAuthToken = (token: string | null) => {
     authToken = token;
 };
@@ -165,8 +158,4 @@ export const syncPut = async <T = unknown>(path: string, body: Blob): Promise<T>
         headers: { "Content-Type": body.type },
         body,
     });
-};
-
-export const syncDelete = async <T = unknown>(path: string): Promise<T> => {
-    return syncRequest<T>(path, { method: "DELETE" });
 };

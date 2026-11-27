@@ -72,23 +72,3 @@ export interface SyncPayload {
   userMeta?: Pick<UserMeta, "settings" | "updated_at"> | null;
   deletes: SyncTombstone[];
 }
-
-export interface WatchParty {
-  party_id: string;
-  host_user_id: string;
-  imdb_id: string;
-  season: number | null;
-  episode: number | null;
-  stream_source: string | null;
-  file_idx: number | null;
-  created_at: string;
-  expires_at: string;
-  current_time_seconds: number;
-  is_playing: boolean;
-  last_update: string;
-}
-
-export interface WatchPartyInfo extends WatchParty {
-  memberCount: number;
-  is_local_source?: boolean;
-}

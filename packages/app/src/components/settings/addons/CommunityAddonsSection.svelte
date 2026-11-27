@@ -3,44 +3,39 @@
 	import { addAddon, getAddons } from "../../../lib/db/db";
 	import { hostFetch } from "../../../lib/shell/hostFetch";
 	import { alertDialog } from "../../../lib/shell/systemDialogs";
-	import LoadingSpinner from "../../common/LoadingSpinner.svelte";
+	import ShapeLoader from "../../common/loading/ShapeLoader.svelte";
 	import AddonLogo from "./AddonLogo.svelte";
 	import {
 		ADDONS_CHANGED_EVENT,
 		HOME_REFRESH_EVENT,
-		hasSupportedResource,
-		isUuid,
 		normalizeTransportUrl,
-		supportsResource,
 		openConfigureUrl,
 		RESOURCE_LABELS,
-		SUPPORTED_RESOURCES,
 		formatResourceName,
-		getResourceNames,
 	} from "./addonsShared";
+	import { addonIdFor, offersResource, offersSupportedResource, resourceNames, SUPPORTED_RESOURCES } from "../../../lib/library/addonManifest";
+	import type { AddonResourceFilter } from "../../../lib/stores/settings";
 
-	type ResourceFilter = "all" | "stream" | "subtitles" | "catalog" | "meta";
+	let { initialResourceFilter }: { initialResourceFilter: AddonResourceFilter } = $props();
 
 	const resourceSummary = (manifest: any) =>
-		getResourceNames(manifest)
+		resourceNames(manifest)
 			.filter((name) => SUPPORTED_RESOURCES.has(name))
 			.map(formatResourceName)
 			.join(" · ");
-	export let initialResourceFilter: ResourceFilter = "all";
 
-	let loadingCommunity = false;
-	let communityAddons: any[] = [];
-	let communitySearch = "";
-	let communityResourceFilter: ResourceFilter = initialResourceFilter;
-	let appliedInitialResourceFilter: ResourceFilter = initialResourceFilter;
-	const filterOptions: ResourceFilter[] = [
+	let loadingCommunity = $state(false);
+	let communityAddons = $state.raw<any[]>([]);
+	let communitySearch = $state("");
+	let communityResourceFilter = $derived(initialResourceFilter);
+	const filterOptions: AddonResourceFilter[] = [
 		"all",
 		"stream",
 		"subtitles",
 		"catalog",
 		"meta",
 	];
-	let installedTransportUrls = new Set<string>();
+	let installedTransportUrls = $state.raw(new Set<string>());
 
 	onMount(() => {
 		void loadInstalledAddons();
@@ -56,28 +51,16 @@
 		void loadInstalledAddons();
 	}
 
-	$: if (
-		initialResourceFilter !== appliedInitialResourceFilter &&
-		filterOptions.includes(initialResourceFilter)
-	) {
-		communityResourceFilter = initialResourceFilter;
-		appliedInitialResourceFilter = initialResourceFilter;
-	}
-
 	function emitAddonsChanged() {
 		window.dispatchEvent(new CustomEvent(ADDONS_CHANGED_EVENT));
 		window.dispatchEvent(new CustomEvent(HOME_REFRESH_EVENT));
 	}
 
 	async function loadInstalledAddons() {
-		try {
-			const addonsList = await getAddons();
-			installedTransportUrls = new Set(
-				addonsList.map((addon) => normalizeTransportUrl(addon.transport_url)),
-			);
-		} catch (e) {
-			console.error("Failed to load installed addons", e);
-		}
+		const addonsList = await getAddons();
+		installedTransportUrls = new Set(
+			addonsList.map((addon) => normalizeTransportUrl(addon.transport_url)),
+		);
 	}
 
 	async function loadCommunityAddons() {
@@ -124,7 +107,7 @@
 			}
 
 			communityAddons = Array.from(deduped.values()).filter((addon: any) =>
-				hasSupportedResource(addon?.manifest),
+				offersSupportedResource(addon?.manifest),
 			);
 		} catch (e) {
 			console.error("Failed to load community addons", e);
@@ -136,12 +119,11 @@
 
 	async function installCommunityAddon(addon: any) {
 		try {
-			const manifestId = addon?.manifest?.id;
 			await addAddon({
 				transport_url: normalizeTransportUrl(addon.transportUrl ?? addon.transport_url),
 				manifest: addon.manifest,
 				flags: { protected: false, official: false },
-				addon_id: isUuid(manifestId) ? manifestId : crypto.randomUUID(),
+				addon_id: addonIdFor(addon.manifest.id),
 			});
 			emitAddonsChanged();
 			await loadInstalledAddons();
@@ -151,28 +133,11 @@
 		}
 	}
 
-	function handleConfigure(url: string | undefined) {
-		if (!openConfigureUrl(url)) return;
-	}
-
-	function handleCommunitySearchInput(event: Event) {
-		communitySearch = (event.target as HTMLInputElement).value;
-	}
-
-	function setCommunityFilter(next: ResourceFilter) {
-		if (communityResourceFilter === next) return;
-		communityResourceFilter = next;
-	}
-
-	function handleFilterClick(filter: ResourceFilter) {
-		setCommunityFilter(filter);
-	}
-
-	$: filteredCommunityAddons = communityAddons.filter((addon: any) => {
+	const filteredCommunityAddons = $derived(communityAddons.filter((addon: any) => {
 		const manifest = addon?.manifest ?? {};
 
 		if (communityResourceFilter !== "all") {
-			if (!supportsResource(manifest, communityResourceFilter)) return false;
+			if (!offersResource(manifest, communityResourceFilter)) return false;
 		}
 
 		const q = String(communitySearch ?? "").trim().toLowerCase();
@@ -187,7 +152,7 @@
 			id.includes(q) ||
 			transportUrl.includes(q)
 		);
-	});
+	}));
 </script>
 
 <section class="flex flex-col gap-4">
@@ -198,7 +163,6 @@
 			type="text"
 			placeholder="Search addons"
 			class="w-full rounded-full bg-ink/8 px-5 py-3 text-ink outline-none placeholder:text-ink/40 focus:bg-ink/12"
-			on:input={handleCommunitySearchInput}
 			bind:value={communitySearch}
 		/>
 	</div>
@@ -211,7 +175,7 @@
 						? "bg-accent text-on-accent"
 						: "bg-ink/10 text-ink/70 hover:text-ink"
 				}`}
-				on:click={() => handleFilterClick(filter)}
+				onclick={() => (communityResourceFilter = filter)}
 			>
 				{filter === "all" ? "All" : RESOURCE_LABELS[filter]}
 			</button>
@@ -221,7 +185,7 @@
 	<div class="flex flex-col">
 		{#if loadingCommunity}
 			<div class="flex justify-center py-6">
-				<LoadingSpinner size="40px" />
+				<ShapeLoader size="40px" />
 			</div>
 		{:else if filteredCommunityAddons.length === 0}
 			<div class="text-ink/50 text-center py-6 text-sm">
@@ -251,7 +215,7 @@
 						{#if addon.manifest.behaviorHints?.configurable}
 							<button
 								class="px-4 py-2 rounded-full bg-ink/8 text-ink/80 hover:bg-ink/14 hover:text-ink cursor-pointer"
-								on:click={() => handleConfigure(transportUrl)}
+								onclick={() => openConfigureUrl(transportUrl)}
 							>
 								Configure
 							</button>
@@ -260,7 +224,7 @@
 							class={`px-4 py-2 rounded-full font-semibold cursor-pointer ${
 								installed ? "bg-ink/15 text-ink/40 cursor-not-allowed" : "bg-accent text-on-accent hover:bg-accent/85"
 							}`}
-							on:click={() => installCommunityAddon(addon)}
+							onclick={() => installCommunityAddon(addon)}
 							disabled={installed}
 						>
 							{installed ? "Installed" : "Install"}

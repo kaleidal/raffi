@@ -1,5 +1,5 @@
-import { formatAudioTrackLabel, type ProbedStream } from "../../../lib/media";
-import { audioTracks, currentAudioLabel } from "../playerState";
+import { formatAudioTrackDetail, formatAudioTrackLabel, type ProbedStream } from "../../../lib/media";
+import { audioTracks } from "../playerState";
 import type { Track } from "../types";
 
 export function sessionFromProbe(meta: ProbedStream | null, src: string) {
@@ -8,6 +8,7 @@ export function sessionFromProbe(meta: ProbedStream | null, src: string) {
 			type: "audio",
 			index: track.index,
 			title: formatAudioTrackLabel(track),
+			detail: formatAudioTrackDetail(track),
 			language: track.language || undefined,
 			codec: track.codecName || track.codec || undefined,
 			playable: track.playable,
@@ -34,7 +35,8 @@ export function applyClientAudioTracks(
 	const audioIndex = selectedIndex ?? data?.audioIndex ?? probed.audioIndex ?? 0;
 	const nextAudioTracks: Track[] = streams.map((stream) => ({
 		id: stream.index,
-		label: stream.title || stream.language || `Audio ${stream.index}`,
+		label: stream.title,
+		detail: stream.detail,
 		selected: stream.index === audioIndex,
 		group: "Embedded",
 	}));
@@ -42,8 +44,6 @@ export function applyClientAudioTracks(
 	if (nextAudioTracks.length === 0) return data;
 
 	audioTracks.set(nextAudioTracks);
-	const selected = nextAudioTracks.find((track) => track.selected);
-	if (selected) currentAudioLabel.set(selected.label);
 
 	return {
 		...data,
@@ -55,10 +55,10 @@ export function applyClientAudioTracks(
 
 export function embeddedSubtitleTracks(meta: ProbedStream | null, src: string): Track[] {
 	return (meta?.subtitleTracks ?? []).map((track) => {
-		const name = track.name || formatAudioTrackLabel({ language: track.language, index: track.number });
 		return {
 			id: `embedded:${track.number}`,
-			label: `${name}${track.isForced ? " · Forced" : ""} (Embedded)`,
+			label: track.name || formatAudioTrackLabel(track),
+			detail: track.isForced ? "Built in · Forced" : "Built in",
 			selected: false,
 			group: "Embedded",
 			lang: track.language ?? "und",

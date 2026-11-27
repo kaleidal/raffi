@@ -2,27 +2,30 @@
     import { logoUrl } from "../../../lib/live/network/proxy";
     import type { LiveChannel } from "../../../lib/live/types";
 
-    export let channel: LiveChannel;
-    export let size: "small" | "large" = "small";
+    let { channel, size = "small" }: { channel: LiveChannel; size?: "small" | "large" } = $props();
 
-    let failedFor = "";
+    let failedFor = $state("");
 
-    $: source = logoUrl(channel.logo);
-    $: showLogo = Boolean(source) && failedFor !== source;
-    $: initials = channel.name
-        .replace(/[^\p{L}\p{N} ]/gu, " ")
-        .split(/\s+/)
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((word) => word[0])
-        .join("")
-        .toUpperCase();
+    const source = $derived(logoUrl(channel.logo));
+    const showLogo = $derived(Boolean(source) && failedFor !== source);
+    const initials = $derived(
+        channel.name
+            .replace(/[^\p{L}\p{N} ]/gu, " ")
+            .split(/\s+/)
+            .filter(Boolean)
+            .slice(0, 2)
+            .map((word) => word[0])
+            .join("")
+            .toUpperCase(),
+    );
 </script>
 
 {#if showLogo}
     <img
         src={source}
         alt=""
+        width="120"
+        height="80"
         loading="lazy"
         decoding="async"
         draggable="false"

@@ -1,5 +1,5 @@
 <script lang="ts">
-    export let playing = false;
+    let { playing = false }: { playing?: boolean } = $props();
 </script>
 
 {#if playing}

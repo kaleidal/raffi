@@ -41,18 +41,14 @@
       "database_id": "f7754da9-3ab3-4c10-a6a5-c8e78740a353"
     }
   ],
-  "durable_objects": {
-    "bindings": [
-      {
-        "name": "WATCH_PARTIES",
-        "class_name": "WatchPartyObject"
-      }
-    ]
-  },
   "migrations": [
     {
       "tag": "v1",
       "new_sqlite_classes": ["WatchPartyObject"]
+    },
+    {
+      "tag": "v2",
+      "deleted_classes": ["WatchPartyObject"]
     }
   ]
 }

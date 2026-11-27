@@ -7,18 +7,17 @@
     "build:web": "vite build",
     "apk": "bun run build:web && cd native && ./gradlew assembleDebug",
     "install:device": "bun run apk && adb install -r native/app/build/outputs/apk/debug/app-debug.apk",
-    "check": "svelte-check --tsgo --tsconfig ./tsconfig.json"
+    "check": "svelte-check --tsconfig ./tsconfig.json"
   },
   "devDependencies": {
-    "@typescript/native": "npm:typescript@^7.0.2",
     "@raffi/app": "workspace:*",
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@tailwindcss/vite": "^4.3.5",
-    "@tsconfig/svelte": "^5.0.8",
+    "@tsconfig/svelte": "^5.0.9",
     "svelte": "^5.57.3",
     "svelte-check": "^4.7.8",
     "tailwindcss": "^4.3.5",
     "typescript": "^6.0.3",
-    "vite": "^8.3.6"
+    "vite": "^8.3.8"
   }
 }

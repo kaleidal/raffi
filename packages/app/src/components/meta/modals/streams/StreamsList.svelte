@@ -1,27 +1,32 @@
 <script lang="ts">
     import { openSettings } from "../../../../lib/stores/settings";
-    import LoadingSpinner from "../../../common/LoadingSpinner.svelte";
-    import StreamCard from "./StreamCard.svelte";
-    import type { EnrichedStream } from "./types";
+    import ShapeLoader from "../../../common/loading/ShapeLoader.svelte";
+    import StreamRow from "./StreamRow.svelte";
+    import type { EnrichedStream } from "../../../../lib/streams/ranking/types";
 
-    export let loadingStreams = false;
-    export let streams: any[] = [];
-    export let filteredStreams: EnrichedStream[] = [];
-    export let localFilteredStreams: EnrichedStream[] = [];
-    export let addonFilteredStreams: EnrichedStream[] = [];
-    export let showAddonSetupGuide = false;
-
-    export let onStreamClick: (item: EnrichedStream) => void = () => {};
-
-    const handleStreamClick = (item: EnrichedStream) => {
-        onStreamClick(item);
-    };
+    let {
+        loadingStreams = false,
+        streams = [],
+        filteredStreams = [],
+        localFilteredStreams = [],
+        addonFilteredStreams = [],
+        showAddonSetupGuide = false,
+        onStreamClick = () => {},
+    }: {
+        loadingStreams?: boolean;
+        streams?: any[];
+        filteredStreams?: EnrichedStream[];
+        localFilteredStreams?: EnrichedStream[];
+        addonFilteredStreams?: EnrichedStream[];
+        showAddonSetupGuide?: boolean;
+        onStreamClick?: (item: EnrichedStream) => void;
+    } = $props();
 </script>
 
-<div class="flex flex-col gap-4 overflow-y-auto pr-1 flex-1 min-h-0">
+<div class="no-scrollbar -mx-4 flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
     {#if loadingStreams}
         <div class="flex justify-center py-10">
-            <LoadingSpinner size="40px" />
+            <ShapeLoader size="40px" />
         </div>
     {:else if filteredStreams.length === 0}
         {#if showAddonSetupGuide}
@@ -38,7 +43,7 @@
                     type="button"
                     data-tv-autofocus
                     class="rounded-full bg-accent px-5 py-3 text-sm font-semibold text-on-accent transition-colors hover:bg-accent/85 cursor-pointer"
-                    on:click={() => openSettings("addons", "stream")}
+                    onclick={() => openSettings("addons", "stream")}
                 >
                     Open Addons
                 </button>
@@ -52,32 +57,19 @@
         {/if}
     {:else}
         {#if localFilteredStreams.length}
-            <div class="flex items-center justify-between">
-                <span class="text-ink/60 text-sm font-medium">
-                    Local files
-                </span>
-            </div>
+            <p class="px-4 pt-1 pb-1 text-sm font-medium text-ink/50">On this device</p>
             {#each localFilteredStreams as item (item.key)}
-                <StreamCard
-                    {item}
-                    disabled={item.isFailed}
-                    onClick={() => handleStreamClick(item)}
-                />
+                <StreamRow {item} onClick={() => onStreamClick(item)} />
             {/each}
 
             {#if addonFilteredStreams.length}
-                <div class="h-px bg-ink/10"></div>
+                <p class="px-4 pt-4 pb-1 text-sm font-medium text-ink/50">Online</p>
             {/if}
         {/if}
 
         {#if addonFilteredStreams.length}
             {#each addonFilteredStreams as item (item.key)}
-                <StreamCard
-                    {item}
-                    showPeers
-                    disabled={item.isFailed}
-                    onClick={() => handleStreamClick(item)}
-                />
+                <StreamRow {item} onClick={() => onStreamClick(item)} />
             {/each}
         {/if}
     {/if}

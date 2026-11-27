@@ -1,6 +1,6 @@
-import type { Addon } from "../db/types";
+import type { Addon, AddonManifest } from "../db/types";
+import { addonIdFor, offersSupportedResource } from "../library/addonManifest";
 
-const SUPPORTED_RESOURCES = new Set(["stream", "subtitles", "catalog", "meta"]);
 
 export interface StremioAddonDescriptor {
     transportUrl: string;
@@ -19,10 +19,6 @@ export interface StremioAddonImportResult {
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
     Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
-const isUuid = (value: unknown): value is string =>
-    typeof value === "string" &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
-
 export const normalizeStremioTransportUrl = (value: string) => {
     let trimmed = value.trim();
     if (!trimmed) return "";
@@ -37,22 +33,6 @@ export const normalizeStremioTransportUrl = (value: string) => {
 
 const manifestUrlForTransport = (transportUrl: string) =>
     `${transportUrl.replace(/\/$/, "")}/manifest.json`;
-
-const matchesResource = (manifest: Record<string, unknown>, predicate: (name: string) => boolean) => {
-    const resources = Array.isArray(manifest.resources) ? manifest.resources : [];
-    return resources.some((resource) => {
-        if (typeof resource === "string") {
-            return predicate(resource.toLowerCase());
-        }
-        if (isPlainObject(resource)) {
-            return predicate(String(resource.name || "").toLowerCase());
-        }
-        return false;
-    });
-};
-
-export const hasSupportedStremioAddonResources = (manifest: Record<string, unknown>) =>
-    matchesResource(manifest, (name) => SUPPORTED_RESOURCES.has(name));
 
 const readTransportUrl = (descriptor: Record<string, unknown>) => {
     const raw =
@@ -102,19 +82,17 @@ export const parseStremioAddonsFromExport = (raw: string | unknown): StremioAddo
     return normalizeStremioAddonDescriptors(parsed.addons);
 };
 
-const resolveManifest = async (
-    transportUrl: string,
-    manifest: Record<string, unknown>,
-): Promise<Record<string, unknown> | null> => {
-    if (manifest.id && manifest.name && Array.isArray(manifest.resources)) {
-        return manifest;
-    }
+const isAddonManifest = (value: unknown): value is AddonManifest =>
+    isPlainObject(value) && typeof value.id === "string" && typeof value.name === "string" && Array.isArray(value.resources);
+
+const resolveManifest = async (transportUrl: string, manifest: unknown): Promise<AddonManifest | null> => {
+    if (isAddonManifest(manifest)) return manifest;
 
     try {
         const response = await fetch(manifestUrlForTransport(transportUrl));
         if (!response.ok) return null;
         const fetched = await response.json();
-        return isPlainObject(fetched) ? fetched : null;
+        return isAddonManifest(fetched) ? fetched : null;
     } catch {
         return null;
     }
@@ -150,12 +128,11 @@ export const importStremioAddons = async (
         }
 
         const manifest = await resolveManifest(transportUrl, descriptor.manifest);
-        if (!manifest || !hasSupportedStremioAddonResources(manifest)) {
+        if (!manifest || !offersSupportedResource(manifest)) {
             unsupported += 1;
             continue;
         }
 
-        const manifestId = typeof manifest.id === "string" ? manifest.id : undefined;
         await deps.addAddon({
             transport_url: transportUrl,
             manifest,
@@ -164,7 +141,7 @@ export const importStremioAddons = async (
                 official: false,
                 ...(descriptor.flags || {}),
             },
-            addon_id: isUuid(manifestId) ? manifestId : crypto.randomUUID(),
+            addon_id: addonIdFor(manifest.id),
         });
 
         existingUrls.add(transportUrl);

@@ -28,8 +28,8 @@
 
   const extras = [
     {
-      title: "Watch together",
-      text: "Start a watch party and everyone stays in sync, with the host in control.",
+      title: "One click to play",
+      text: "Raffi picks the best source for your screen and language, and starts it right away.",
     },
     {
       title: "Trakt",

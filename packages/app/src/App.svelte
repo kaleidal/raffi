@@ -4,10 +4,9 @@
     import { onDestroy, onMount, tick } from "svelte";
     import { get } from "svelte/store";
     import { enableRPC, disableRPC } from "./lib/shell/rpc";
-
-
-    import { X } from "@lucide/svelte";
-    import LoadingSpinner from "./components/common/LoadingSpinner.svelte";
+    import Button from "./components/common/controls/Button.svelte";
+    import Dialog from "./components/common/dialog/Dialog.svelte";
+    import ShapeLoader from "./components/common/loading/ShapeLoader.svelte";
     import SettingsModal from "./components/settings/SettingsModal.svelte";
     import {
         initAuth,
@@ -15,7 +14,8 @@
     } from "./lib/stores/authStore";
     import { formatReleaseNotes } from "./lib/shell/updateNotes";
     import { warmTraktClientAuth } from "./lib/db/db";
-    import { isAndroidPlatform } from "./lib/shell/platform";
+    import { isAndroidPlatform, isDesktopPlatform } from "./lib/shell/platform";
+    import { acceptDroppedVideos, playLocalVideo } from "./lib/shell/localFile";
     import { nativeVideoVisible } from "./lib/android/nativeVideo";
     import { applyTheme } from "./lib/appearance/theme";
     import { loadCustomThemes } from "./lib/appearance/customThemes";
@@ -41,8 +41,14 @@
     };
     const pendingPages: Record<string, Promise<PageComponent> | undefined> = {};
 
-    let activePage: PageComponent = Home;
-    let routeLoading = false;
+    const PREFETCH_AFTER: Record<string, string> = {
+        home: "meta",
+        meta: "player",
+        live: "live-player",
+    };
+
+    let ActivePage = $state.raw<PageComponent>(Home);
+    let routeLoading = $state(false);
     let pageLoadToken = 0;
 
     const loadPage = (page: string) => {
@@ -76,7 +82,7 @@
         const token = ++pageLoadToken;
         const cached = pageCache[page];
         if (cached) {
-            activePage = cached;
+            ActivePage = cached;
             routeLoading = false;
             return;
         }
@@ -86,28 +92,33 @@
         try {
             const component = await loadPage(page);
             if (token !== pageLoadToken) return;
-            activePage = component;
+            ActivePage = component;
         } catch (err) {
             console.error(`Failed to load page module: ${page}`, err);
             if (token !== pageLoadToken) return;
-            activePage = Home;
+            ActivePage = Home;
         } finally {
             if (token === pageLoadToken) routeLoading = false;
         }
     };
 
-    $: void ensurePageLoaded($router.page);
-    $: if ($router.page === "home") prefetchPage("meta");
-    $: if ($router.page === "meta") prefetchPage("player");
-    $: if ($router.page === "live") prefetchPage("live-player");
+    $effect.pre(() => {
+        void ensurePageLoaded($router.page);
+    });
 
-    let showTitleBar = false;
-    let showUpdatePrompt = false;
+    $effect(() => {
+        const next = PREFETCH_AFTER[$router.page];
+        if (next) prefetchPage(next);
+    });
+
+    let showTitleBar = $state(false);
+    let showUpdatePrompt = $state(false);
     let updateLaterTimeout: ReturnType<typeof setTimeout> | null = null;
     let updateTestArmed = false;
     let updateTestTimeout: ReturnType<typeof setTimeout> | null = null;
     let scrollContainerElem: HTMLDivElement | null = null;
-    let lastRouteKey = "";
+
+    const routeKey = $derived(`${$router.page}:${JSON.stringify($router.params)}`);
 
     const UPDATE_REMIND_DELAY = 30 * 60 * 1000;
     const UPDATE_TEST_ARM_DELAY = 1500;
@@ -205,7 +216,7 @@
             } else {
                 disableRPC();
             }
-        } catch (e) {
+        } catch {
             // ignore
         }
 
@@ -222,19 +233,8 @@
         window.addEventListener("pointerup", handlePointerButtons);
         window.addEventListener("keydown", handleUpdateTestKey);
 
-        // Listen for file open events
-        if ((window as any).electronAPI?.onOpenFile) {
-            (window as any).electronAPI.onOpenFile((filePath: string) => {
-                router.navigate("player", { 
-                    videoSrc: filePath,
-                    startTime: 0,
-                    metaData: null,
-                    fileIdx: null,
-                    season: null,
-                    episode: null
-                });
-            });
-        }
+        (window as any).electronAPI?.onOpenFile?.(playLocalVideo);
+        const stopAcceptingDrops = isDesktopPlatform ? acceptDroppedVideos() : null;
 
         const handleUpdateTestEvent = () => {
             triggerUpdateTest();
@@ -287,6 +287,7 @@
 
         return () => {
             window.removeEventListener("pointerup", handlePointerButtons);
+            stopAcceptingDrops?.();
             if (typeof removeUpdateAvailable === "function") {
                 removeUpdateAvailable();
             }
@@ -310,17 +311,14 @@
         };
     });
 
-    $: if (typeof document !== "undefined") {
+    $effect(() => {
         document.body.classList.toggle("native-video", $nativeVideoVisible);
-    }
+    });
 
-    $: {
-        const nextRouteKey = `${$router.page}:${JSON.stringify($router.params)}`;
-        if (nextRouteKey !== lastRouteKey) {
-            lastRouteKey = nextRouteKey;
-            void resetRouteScroll();
-        }
-    }
+    $effect(() => {
+        routeKey;
+        void resetRouteScroll();
+    });
 </script>
 
 <div class="w-screen h-screen overflow-hidden flex flex-col {$nativeVideoVisible ? '' : 'bg-canvas'}">
@@ -333,7 +331,7 @@
 
     <div bind:this={scrollContainerElem} class="relative flex-1 min-h-0 overflow-x-hidden overflow-y-auto" data-scroll-container>
         <div class="w-full min-h-full">
-            <svelte:component this={activePage} {...$router.params as any} />
+            <ActivePage {...$router.params as any} />
 
             {#if routeLoading}
                 <div
@@ -341,7 +339,7 @@
                     aria-live="polite"
                     aria-label="Loading page"
                 >
-                    <LoadingSpinner size="60px" />
+                    <ShapeLoader size="60px" />
                 </div>
             {/if}
         </div>
@@ -351,63 +349,20 @@
     <SettingsModal />
 
     {#if showUpdatePrompt}
-        <div
-            class="raffi-modal-backdrop fixed inset-0 z-[500] bg-canvas/80 backdrop-blur-sm flex items-center justify-center"
-            on:click|self={handleUpdateLater}
-            on:keydown={(e) => e.key === "Escape" && handleUpdateLater()}
-            role="button"
-            tabindex="0"
+        <Dialog
+            title={$updateStatus.version ? `Raffi ${$updateStatus.version} is ready` : "Update ready"}
+            onClose={handleUpdateLater}
+            class="max-w-lg"
         >
-            <div
-                class="raffi-modal-surface bg-canvas w-full max-w-lg rounded-[32px] p-6 md:p-8 flex flex-col gap-5 shadow-[0_40px_160px_rgba(0,0,0,0.55)]"
-                on:click|stopPropagation
-                on:keydown|stopPropagation
-                role="dialog"
-                tabindex="-1"
-            >
-                <div class="flex items-start justify-between gap-4">
-                    <div>
-                        <h2 class="text-ink text-2xl font-semibold">
-                            Update ready
-                        </h2>
-                        {#if $updateStatus.version}
-                            <p class="text-ink/50 text-sm">
-                                Version {$updateStatus.version} is ready to install.
-                            </p>
-                        {/if}
-                    </div>
-                    <button
-                        class="text-ink/50 hover:text-ink transition-colors cursor-pointer"
-                        on:click={handleUpdateLater}
-                        aria-label="Close update dialog"
-                    >
-                        <X size={24} strokeWidth={2} />
-                    </button>
-                </div>
-
-                <div class="release-notes-content rounded-2xl bg-ink/[0.04] p-4 text-ink/70 text-sm overflow-y-auto max-h-[40vh]">
-                    {@html formatReleaseNotes($updateStatus.notes || "Release notes unavailable.")}
-                </div>
-
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <p class="text-ink/40 text-xs">We’ll remind you in 30 minutes.</p>
-                    <div class="flex flex-col gap-3 sm:flex-row">
-                        <button
-                            class="flex-1 sm:flex-none px-4 py-2 rounded-2xl bg-ink/10 text-ink font-semibold hover:bg-ink/20 transition-colors cursor-pointer"
-                            on:click={handleUpdateLater}
-                        >
-                            Later
-                        </button>
-                        <button
-                            class="flex-1 sm:flex-none px-4 py-2 rounded-2xl bg-accent text-on-accent font-semibold hover:bg-accent/85 transition-colors cursor-pointer"
-                            on:click={handleUpdateRestart}
-                        >
-                            Restart now
-                        </button>
-                    </div>
-                </div>
+            <div class="release-notes-content min-h-0 overflow-y-auto text-sm text-ink/70">
+                {@html formatReleaseNotes($updateStatus.notes || "Release notes unavailable.")}
             </div>
-        </div>
+
+            {#snippet actions()}
+                <Button onclick={handleUpdateLater}>Later</Button>
+                <Button variant="primary" onclick={handleUpdateRestart}>Restart now</Button>
+            {/snippet}
+        </Dialog>
     {/if}
 
 </div>

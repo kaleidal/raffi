@@ -1,392 +1,208 @@
 <script lang="ts">
-    import { fade } from "svelte/transition";
+    import { fade, fly } from "svelte/transition";
+    import { ExternalLink, MonitorDown } from "@lucide/svelte";
     import type { ShowResponse } from "../../../lib/library/types/meta_types";
-    import { ChevronLeft, ExternalLink, MonitorDown } from "@lucide/svelte";
     import { isWeb } from "../../../lib/shell/platform";
-    import LoadingSpinner from "../../../components/common/LoadingSpinner.svelte";
-    import { onDestroy } from "svelte";
+    import { fullscreenPortal } from "../../../components/common/portal";
+    import ShapeLoader from "../../../components/common/loading/ShapeLoader.svelte";
+    import TitleLogo from "../../../components/common/TitleLogo.svelte";
+    import { episodeLine } from "../../../components/player/chrome/episodeLine";
+    import PlayerBackButton from "../../../components/player/chrome/PlayerBackButton.svelte";
 
-    const portal = (node: HTMLElement) => {
-        if (typeof document === "undefined") {
-            return { destroy() {} };
-        }
-        const target = document.fullscreenElement || document.body;
-        target.appendChild(node);
-        return {
-            destroy() {
-                if (node.parentNode) {
-                    node.parentNode.removeChild(node);
-                }
-            },
-        };
-    };
+    let {
+        loading,
+        onClose,
+        metaData,
+        season,
+        episode,
+        stage = "",
+        details = "",
+        progress = null,
+        backdropSrc = null,
+        backdropMode = "art",
+        showError = false,
+        errorMessage = "",
+        errorDetails = "",
+        onRetry,
+        onBack,
+        onDownloadDesktop = () => {},
+        showNotice = false,
+        noticeTitle = "",
+        noticeDetails = "",
+        noticePrimaryLabel = "Back to Streams",
+        noticeSecondaryLabel = "",
+        onNoticePrimary = () => {},
+        onNoticeSecondary = () => {},
+    }: {
+        loading: boolean;
+        onClose: () => void;
+        metaData: ShowResponse | null;
+        season: number | null;
+        episode: number | null;
+        stage?: string;
+        details?: string;
+        progress?: number | null;
+        backdropSrc?: string | null;
+        backdropMode?: "art" | "frame";
+        showError?: boolean;
+        errorMessage?: string;
+        errorDetails?: string;
+        onRetry: () => void;
+        onBack: () => void;
+        onDownloadDesktop?: () => void;
+        showNotice?: boolean;
+        noticeTitle?: string;
+        noticeDetails?: string;
+        noticePrimaryLabel?: string;
+        noticeSecondaryLabel?: string;
+        onNoticePrimary?: () => void;
+        onNoticeSecondary?: () => void;
+    } = $props();
 
-    export let loading: boolean;
-    export let onClose: () => void;
-    export let metaData: ShowResponse | null;
+    let logoFailed = $state(false);
 
-    export let stage: string = "Loading...";
-    export let details: string = "";
-    export let progress: number | null = null;
-    export let backdropSrc: string | null = null;
-    export let backdropMode: "art" | "frame" = "art";
-    export let showError: boolean = false;
-    export let errorMessage: string = "";
-    export let errorDetails: string = "";
-    export let onRetry: () => void = () => {};
-    export let onBack: () => void = () => {};
-    export let onDownloadDesktop: () => void = () => {};
-    export let showNotice: boolean = false;
-    export let noticeTitle: string = "";
-    export let noticeDetails: string = "";
-    export let noticePrimaryLabel: string = "Back to Streams";
-    export let noticeSecondaryLabel: string = "";
-    export let onNoticePrimary: () => void = () => {};
-    export let onNoticeSecondary: () => void = () => {};
-    export let showSeekStyle: boolean = false;
-    export let seekBarStyle: "raffi" | "normal" = "raffi";
-    export let onSeekStyleChange: (style: "raffi" | "normal") => void = () => {};
-    export let onSeekStyleAcknowledge: () => void = () => {};
+    const blocked = $derived(showError || showNotice);
+    const resuming = $derived(backdropMode === "frame" && Boolean(backdropSrc) && !blocked);
+    const backdrop = $derived(backdropSrc ?? metaData?.meta?.background ?? metaData?.meta?.poster ?? null);
+    const fill = $derived(progress === null ? null : Math.max(0, Math.min(1, progress)));
+    const line = $derived(episodeLine(metaData, season, episode));
+    const label = $derived(
+        showError ? errorMessage || "Playback error" : showNotice ? noticeTitle : stage || "Loading video",
+    );
 
-    let tileElements: Array<HTMLElement | undefined> = [];
-    let errorContentVisible = false;
-    let settleTimer: ReturnType<typeof setTimeout> | null = null;
-    let settleFrame: number | null = null;
-    let lastBlockingState = "";
-    let blockingState = "";
-    let localSeekBarStyle: "raffi" | "normal" = seekBarStyle;
-
-    const MOSAIC_COLS = 8;
-    const MOSAIC_ROWS = 5;
-    const MOSAIC_TILE_COUNT = MOSAIC_COLS * MOSAIC_ROWS;
-
-    const mosaicTiles = Array.from({ length: MOSAIC_TILE_COUNT }, (_, index) => {
-        const col = index % MOSAIC_COLS;
-        const row = Math.floor(index / MOSAIC_COLS);
-        return {
-            index,
-            bgPosX: MOSAIC_COLS > 1 ? (col / (MOSAIC_COLS - 1)) * 100 : 0,
-            bgPosY: MOSAIC_ROWS > 1 ? (row / (MOSAIC_ROWS - 1)) * 100 : 0,
-            wave: (row + col) / (MOSAIC_COLS + MOSAIC_ROWS - 2),
-        };
-    });
-
-    $: effectiveBackdropSrc = backdropSrc ?? metaData?.meta?.background ?? metaData?.meta?.poster ?? "";
-    $: fallbackBackdropSrc = backdropSrc
-        ? metaData?.meta?.background ?? metaData?.meta?.poster ?? ""
-        : "";
-    $: tileBackground = (tile: (typeof mosaicTiles)[number]) => {
-        if (!effectiveBackdropSrc) return "";
-        const sources = fallbackBackdropSrc ? [effectiveBackdropSrc, fallbackBackdropSrc] : [effectiveBackdropSrc];
-        const layers = (value: string) => sources.map(() => value).join(",");
-        return `background-image:${sources.map((src) => `url('${src}')`).join(",")}; background-size:${layers(`${MOSAIC_COLS * 100}% ${MOSAIC_ROWS * 100}%`)}; background-position:${layers(`${tile.bgPosX}% ${tile.bgPosY}%`)};`;
-    };
-    $: revealFraction = progress === null ? null : Math.max(0, Math.min(1, progress));
-    $: revealCount = revealFraction === null ? 0 : Math.round(revealFraction * MOSAIC_TILE_COUNT);
-    $: void backdropMode;
-
-    function registerTile(node: HTMLElement, index: number) {
-        tileElements[index] = node;
-        return {
-            destroy() {
-                if (tileElements[index] === node) tileElements[index] = undefined;
-            },
-        };
-    }
-
-    function clearSettleWork() {
-        if (settleTimer) clearTimeout(settleTimer);
-        if (settleFrame !== null && typeof cancelAnimationFrame !== "undefined") {
-            cancelAnimationFrame(settleFrame);
-        }
-        settleTimer = null;
-        settleFrame = null;
-    }
-
-    function settleTilesForBlockingState() {
-        clearSettleWork();
-        errorContentVisible = false;
-
-        if (typeof window === "undefined") {
-            errorContentVisible = true;
-            return;
-        }
-
-        for (const tile of tileElements) {
-            if (!tile) continue;
-            const currentTransform = getComputedStyle(tile).transform;
-            tile.style.animation = "none";
-            tile.style.transform = currentTransform === "none" ? "rotateY(0deg)" : currentTransform;
-        }
-
-        // Preserve the exact in-flight rotation, then ease every tile onto its front face.
-        settleFrame = requestAnimationFrame(() => {
-            for (const tile of tileElements) {
-                if (!tile) continue;
-                tile.style.transform = "rotateY(0deg)";
-            }
-            settleFrame = null;
-        });
-
-        settleTimer = setTimeout(() => {
-            errorContentVisible = true;
-            settleTimer = null;
-        }, 760);
-    }
-
-    function resetTilesAfterError() {
-        clearSettleWork();
-        errorContentVisible = false;
-        for (const tile of tileElements) {
-            if (!tile) continue;
-            tile.style.animation = "";
-            tile.style.transform = "";
-        }
-    }
-
-    $: blockingState = showError ? "error" : showNotice ? "notice" : showSeekStyle ? "seek-style" : "";
-    $: if (blockingState !== lastBlockingState) {
-        lastBlockingState = blockingState;
-        if (blockingState) settleTilesForBlockingState();
-        else resetTilesAfterError();
-    }
-    $: if (seekBarStyle !== localSeekBarStyle) localSeekBarStyle = seekBarStyle;
-
-    function toggleSeekStyle() {
-        localSeekBarStyle = localSeekBarStyle === "raffi" ? "normal" : "raffi";
-        onSeekStyleChange(localSeekBarStyle);
-    }
-
-    onDestroy(clearSettleWork);
+    const button = "flex cursor-pointer items-center justify-center gap-2 rounded-full px-7 py-3 text-[15px] font-semibold whitespace-nowrap transition-colors";
 </script>
 
-{#if loading || blockingState}
+{#if loading || blocked}
     <div
-        use:portal
-        class="fixed inset-0 z-[200] overflow-hidden bg-canvas"
-        role={showError ? "alert" : showNotice || showSeekStyle ? "dialog" : "status"}
-        aria-busy={!blockingState}
-        aria-label={showError
-            ? errorMessage || "Playback error"
-            : showNotice
-              ? noticeTitle || "Stream status"
-            : showSeekStyle
-              ? "Choose seek bar style"
-              : stage || "Loading video"}
+        use:fullscreenPortal
+        class="fixed inset-0 z-[200] overflow-hidden bg-canvas text-ink scheme-dark"
+        role={showError ? "alert" : blocked ? "dialog" : "status"}
+        aria-busy={!blocked}
+        aria-label={label}
         transition:fade={{ duration: 280 }}
     >
-        <div
-            class="mosaic-grid"
-            class:mosaic-grid--blocked={Boolean(blockingState)}
-            style={`--mosaic-cols:${MOSAIC_COLS}; --mosaic-rows:${MOSAIC_ROWS};`}
-        >
-            {#each mosaicTiles as tile (tile.index)}
-                {@const settled = revealFraction !== null && tile.index < revealCount}
-                <div class="mosaic-tile">
-                    <div
-                        use:registerTile={tile.index}
-                        class="mosaic-tile-inner"
-                        class:mosaic-tile-inner--spinning={!settled && !blockingState}
-                        style={`--tile-delay:${(tile.wave * 1.4).toFixed(2)}s;${settled ? " transform: rotateY(0deg);" : ""}${tileBackground(tile)}`}
-                    ></div>
-                </div>
-            {/each}
+        {#if backdrop}
+            <img
+                src={backdrop}
+                alt=""
+                class="backdrop absolute inset-0 h-full w-full object-cover transition-opacity duration-700"
+                class:drift={!resuming}
+                style="opacity: {resuming ? 0.9 : blocked ? 0.22 : 0.42}"
+            />
+        {/if}
+        <div class="shade pointer-events-none absolute inset-0" class:shade--light={resuming}></div>
+
+        <div class="chrome-back absolute z-10">
+            <PlayerBackButton onclick={onClose} />
         </div>
 
-        <div class="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/10 via-black/20 to-canvas"></div>
-
-        {#if !blockingState}
-            <div class="absolute bottom-0 right-0 z-10 p-8 sm:p-10">
-                <LoadingSpinner size="44px" />
+        {#if resuming}
+            <div class="absolute right-0 bottom-0 p-[clamp(24px,3vw,48px)]">
+                <ShapeLoader size="48px" />
             </div>
-        {/if}
+        {:else}
+            <div class="content absolute inset-x-0 bottom-0 flex max-w-[900px] flex-col items-start gap-[clamp(18px,1.8vw,30px)]">
+                {#if metaData}
+                    <TitleLogo
+                        logo={logoFailed ? null : metaData.meta.logo}
+                        name={metaData.meta.name}
+                        progress={blocked ? null : fill}
+                        pending={!blocked && !fill}
+                        compact
+                        onLogoError={() => (logoFailed = true)}
+                    />
+                {/if}
 
-        {#if (showError || showNotice) && errorContentVisible}
-            <div class="error-state absolute inset-0 z-20 flex items-center justify-center px-6 py-24">
-                <div class="flex w-full flex-col items-center text-center {showNotice ? 'max-w-3xl' : 'max-w-lg'}">
-                    <h1 class="text-balance text-3xl font-semibold tracking-[-0.025em] text-ink sm:text-4xl">
-                        {showNotice ? noticeTitle || "Stream unavailable" : errorMessage || "Playback stopped"}
-                    </h1>
-                    {#if showNotice ? noticeDetails : errorDetails}
-                        <p class="mt-4 text-pretty text-[15px] leading-6 text-ink/62 sm:text-base {showNotice ? 'max-w-2xl' : 'max-w-md'}">
-                            {showNotice ? noticeDetails : errorDetails}
-                        </p>
-                    {/if}
-
-                    <div class="mt-8 flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:justify-center">
-                        <button
-                            class="cursor-pointer whitespace-nowrap rounded-xl bg-accent px-7 py-3 text-[15px] font-semibold text-on-accent transition-colors hover:bg-ink/88 sm:min-w-48"
-                            on:click={showNotice ? onNoticePrimary : onRetry}
-                        >
-                            {showNotice ? noticePrimaryLabel : "Try Again"}
-                        </button>
-                        {#if !showNotice || noticeSecondaryLabel}
-                            <button
-                                class="flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-ink/10 px-7 py-3 text-[15px] font-semibold text-ink transition-colors hover:bg-ink/16 sm:min-w-52"
-                                on:click={showNotice ? onNoticeSecondary : onBack}
-                            >
-                                {showNotice ? noticeSecondaryLabel : "Back to Streams"}
-                                {#if showNotice}<ExternalLink size={16} strokeWidth={2} />{/if}
-                            </button>
-                        {/if}
-                    </div>
-
-                    {#if showError && isWeb}
-                        <button
-                            class="mt-4 flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-ink/58 transition-colors hover:text-ink"
-                            on:click={onDownloadDesktop}
-                        >
-                            <MonitorDown size={17} strokeWidth={2} />
-                            Download Desktop App
-                        </button>
-                    {/if}
-                </div>
-            </div>
-        {:else if showSeekStyle && errorContentVisible}
-            <div class="error-state absolute inset-0 z-20 flex items-center justify-center px-6 py-24">
-                <div class="flex w-full max-w-lg flex-col items-center text-center">
-                    <h1 class="text-balance text-3xl font-semibold tracking-[-0.025em] text-ink sm:text-4xl">
-                        Choose how seeking feels
-                    </h1>
-                    <p class="mt-4 max-w-md text-pretty text-[15px] leading-6 text-ink/62 sm:text-base">
-                        Raffi’s seek bar is inverted: move left to go forward and right to go back. You can switch to the normal direction instead.
-                    </p>
-
-                    <div class="mt-8 w-full max-w-sm">
-                        <div class="mb-2 text-left text-xs font-medium uppercase tracking-[0.14em] text-ink/42">
-                            Seek direction
+                {#if showError || showNotice}
+                    <div class="flex max-w-xl flex-col items-start gap-5" in:fly={{ y: 10, duration: 320 }}>
+                        <div>
+                            <h1 class="text-[clamp(26px,2.2vw,38px)] leading-tight font-semibold text-balance">
+                                {showNotice ? noticeTitle : errorMessage || "Playback stopped"}
+                            </h1>
+                            {#if showNotice ? noticeDetails : errorDetails}
+                                <p class="mt-2 text-[clamp(14px,1vw,17px)] text-pretty text-ink/65">
+                                    {showNotice ? noticeDetails : errorDetails}
+                                </p>
+                            {/if}
                         </div>
-                        <button
-                            class="relative h-11 w-full cursor-pointer rounded-full border border-ink/10 bg-ink/8 p-1 transition-colors hover:bg-ink/12"
-                            on:click={toggleSeekStyle}
-                            aria-label="Toggle seek bar style"
-                            type="button"
-                        >
-                            <div class="relative z-10 flex h-full w-full items-center">
-                                <span class={`flex-1 text-center text-xs font-semibold tracking-wider transition-colors ${localSeekBarStyle === "raffi" ? "text-on-accent" : "text-ink/55"}`}>RAFFI</span>
-                                <span class={`flex-1 text-center text-xs font-semibold tracking-wider transition-colors ${localSeekBarStyle === "normal" ? "text-on-accent" : "text-ink/55"}`}>NORMAL</span>
-                            </div>
-                            <div class={`absolute bottom-1 left-1 top-1 w-[calc(50%-4px)] rounded-full bg-accent transition-transform duration-200 ${localSeekBarStyle === "normal" ? "translate-x-full" : "translate-x-0"}`}></div>
-                        </button>
-                        <button
-                            class="mt-3 w-full cursor-pointer rounded-xl bg-accent px-5 py-3 text-[15px] font-semibold text-on-accent transition-colors hover:bg-ink/88"
-                            on:click={onSeekStyleAcknowledge}
-                            type="button"
-                        >
-                            Continue
-                        </button>
+                        <div class="flex flex-wrap items-center gap-3">
+                            <button class="{button} bg-accent text-on-accent hover:bg-accent/85" onclick={showNotice ? onNoticePrimary : onRetry}>
+                                {showNotice ? noticePrimaryLabel : "Try Again"}
+                            </button>
+                            {#if !showNotice || noticeSecondaryLabel}
+                                <button class="{button} bg-ink/10 text-ink hover:bg-ink/16" onclick={showNotice ? onNoticeSecondary : onBack}>
+                                    {showNotice ? noticeSecondaryLabel : "Back to Streams"}
+                                    {#if showNotice}<ExternalLink size={16} strokeWidth={2} />{/if}
+                                </button>
+                            {/if}
+                            {#if showError && isWeb}
+                                <button
+                                    class="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm font-medium text-ink/60 transition-colors hover:text-ink"
+                                    onclick={onDownloadDesktop}
+                                >
+                                    <MonitorDown size={17} strokeWidth={2} />
+                                    Get the desktop app
+                                </button>
+                            {/if}
+                        </div>
                     </div>
-                </div>
+                {:else}
+                    <div class="flex items-center gap-4" in:fade={{ duration: 200 }}>
+                        <ShapeLoader size="clamp(40px,3vw,56px)" />
+                        <div class="flex flex-col gap-1">
+                            {#if line}
+                                <span class="text-[clamp(15px,1.1vw,20px)] font-medium whitespace-pre text-ink/85">{line}</span>
+                            {/if}
+                            <span class="text-[clamp(13px,0.9vw,16px)] text-ink/55">{stage || "Loading"}</span>
+                        </div>
+                    </div>
+                {/if}
             </div>
         {/if}
 
         {#if details}
             <span class="sr-only">{details}</span>
         {/if}
-
-        <div class="absolute left-0 top-0 p-4 sm:p-10 z-50">
-            <button
-                class="player-loading-nav bg-canvas/28 backdrop-blur-md hover:bg-ink/20 transition-colors duration-200 rounded-full cursor-pointer"
-                on:click={onClose}
-                aria-label="Close player"
-            >
-                <ChevronLeft size={26} strokeWidth={2} />
-            </button>
-        </div>
     </div>
 {/if}
 
 <style>
-    .mosaic-grid {
-        position: absolute;
-        inset: 0;
-        display: grid;
-        grid-template-columns: repeat(var(--mosaic-cols), 1fr);
-        grid-template-rows: repeat(var(--mosaic-rows), 1fr);
-        gap: 2px;
-        perspective: 1400px;
-        transition: filter 0.7s ease;
+    .chrome-back {
+        top: clamp(18px, 2.6vw, 48px);
+        left: clamp(20px, 3.4vw, 64px);
     }
 
-    .mosaic-grid--blocked {
-        filter: grayscale(1) brightness(0.62);
+    .content {
+        padding: 0 clamp(20px, 3.4vw, 64px) clamp(40px, 9vh, 110px);
     }
 
-    .mosaic-tile {
-        position: relative;
-        overflow: hidden;
+    .shade {
+        background:
+            linear-gradient(to top, var(--raffi-canvas) 0%, color-mix(in oklab, var(--raffi-canvas) 70%, transparent) 30%, transparent 70%),
+            linear-gradient(to right, color-mix(in oklab, var(--raffi-canvas) 60%, transparent), transparent 60%);
     }
 
-    .mosaic-tile-inner {
-        position: absolute;
-        inset: 0;
-        opacity: 0.6;
-        backface-visibility: hidden;
-        background-color: var(--raffi-surface);
-        background-repeat: no-repeat;
-        transition:
-            transform 0.7s cubic-bezier(0.4, 0, 0.2, 1),
-            opacity 0.7s ease;
+    .shade--light {
+        background: linear-gradient(to top, rgb(0 0 0 / 0.35), transparent 40%);
     }
 
-    .mosaic-grid--blocked .mosaic-tile-inner {
-        opacity: 0.2;
+    .drift {
+        animation: drift 24s ease-out both;
     }
 
-    .mosaic-tile-inner--spinning {
-        animation: mosaic-flip 3.4s ease-in-out infinite;
-        animation-delay: var(--tile-delay);
-    }
-
-    @keyframes mosaic-flip {
-        0%,
-        100% {
-            transform: rotateY(0deg);
-        }
-        50% {
-            transform: rotateY(180deg);
-        }
-    }
-
-    .error-state {
-        animation: error-content-in 0.38s ease-out both;
-    }
-
-    .player-loading-nav {
-        display: grid;
-        width: clamp(44px, 3.2vw, 54px);
-        height: clamp(44px, 3.2vw, 54px);
-        place-items: center;
-    }
-
-    .player-loading-nav :global(svg) {
-        width: clamp(21px, 1.55vw, 26px);
-        height: clamp(21px, 1.55vw, 26px);
-    }
-
-    @keyframes error-content-in {
+    @keyframes drift {
         from {
-            opacity: 0;
-            transform: translateY(8px);
+            scale: 1.02;
         }
         to {
-            opacity: 1;
-            transform: translateY(0);
+            scale: 1.12;
         }
     }
 
     @media (prefers-reduced-motion: reduce) {
-        .mosaic-tile-inner--spinning {
+        .drift {
             animation: none;
-        }
-
-        .mosaic-tile-inner,
-        .mosaic-grid {
-            transition-duration: 0.01ms;
-        }
-
-        .error-state {
-            animation-duration: 0.01ms;
         }
     }
 </style>

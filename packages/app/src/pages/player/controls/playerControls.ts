@@ -1,4 +1,7 @@
 // Player control handlers and keyboard shortcuts
+import { get } from "svelte/store";
+import { loading, objectFit, showCanvas } from "../playerState";
+import { captureFrame } from "../session/videoSession";
 import type { SeekFeedback } from "../types";
 
 const IDLE_DELAY = 5000;
@@ -6,8 +9,6 @@ const IDLE_DELAY = 5000;
 export function createControlsManager(
     playerContainer: HTMLDivElement | null,
     videoElem: HTMLVideoElement | null,
-    isWatchPartyActive: boolean,
-    isWatchPartyHost: boolean
 ) {
     let hideTimeout: ReturnType<typeof setTimeout> | null = null;
     let seekFeedbackTimeout: any = null;
@@ -39,8 +40,9 @@ export function createControlsManager(
         }, IDLE_DELAY);
     }
 
-    function handleMouseMove(setControlsVisible: (visible: boolean) => void) {
-        if (pinned) {
+    /** Controls stay up while the pointer rests on them, so they never slide away from under it. */
+    function handleMouseMove(setControlsVisible: (visible: boolean) => void, overControls: boolean) {
+        if (pinned || overControls) {
             setControlsVisible(true);
             clearHideTimer();
             return;
@@ -50,8 +52,6 @@ export function createControlsManager(
 
     function togglePlay(setControlsVisible: (visible: boolean) => void) {
         if (!videoElem) return;
-        // Disable for participants
-        if (isWatchPartyActive && !isWatchPartyHost) return;
 
         if (videoElem.paused) {
             void videoElem.play();
@@ -62,12 +62,10 @@ export function createControlsManager(
     }
 
     function onSeekInput(time: number, setPendingSeek: (time: number) => void) {
-        if (isWatchPartyActive && !isWatchPartyHost) return;
         setPendingSeek(time);
     }
 
     function onSeekChange(time: number, performSeek: (time: number) => void) {
-        if (isWatchPartyActive && !isWatchPartyHost) return;
         performSeek(time);
     }
 
@@ -100,42 +98,15 @@ export function createControlsManager(
         setSeekFeedback: (feedback: SeekFeedback | null) => void,
         togglePlayFn: () => void
     ) {
-        // Disable controls for participants
-        if (isWatchPartyActive && !isWatchPartyHost) return;
-
         if (event.code === "Space") {
             event.preventDefault();
             togglePlayFn();
-        } else if (event.code === "ArrowLeft") {
-            const seekBarStyle = localStorage.getItem("seek_bar_style") || "raffi";
-            if (seekBarStyle === "normal") {
-                // Backward 5s
-                performSeek(currentTime - 5);
-                if (seekFeedbackTimeout) clearTimeout(seekFeedbackTimeout);
-                setSeekFeedback({ type: "backward", id: Date.now() });
-                seekFeedbackTimeout = setTimeout(() => setSeekFeedback(null), 500);
-            } else {
-                // Forward 5s (inverted)
-                performSeek(currentTime + 5);
-                if (seekFeedbackTimeout) clearTimeout(seekFeedbackTimeout);
-                setSeekFeedback({ type: "forward", id: Date.now() });
-                seekFeedbackTimeout = setTimeout(() => setSeekFeedback(null), 500);
-            }
-        } else if (event.code === "ArrowRight") {
-            const seekBarStyle = localStorage.getItem("seek_bar_style") || "raffi";
-            if (seekBarStyle === "normal") {
-                // Forward 5s
-                performSeek(currentTime + 5);
-                if (seekFeedbackTimeout) clearTimeout(seekFeedbackTimeout);
-                setSeekFeedback({ type: "forward", id: Date.now() });
-                seekFeedbackTimeout = setTimeout(() => setSeekFeedback(null), 500);
-            } else {
-                // Backward 5s (inverted)
-                performSeek(currentTime - 5);
-                if (seekFeedbackTimeout) clearTimeout(seekFeedbackTimeout);
-                setSeekFeedback({ type: "backward", id: Date.now() });
-                seekFeedbackTimeout = setTimeout(() => setSeekFeedback(null), 500);
-            }
+        } else if (event.code === "ArrowLeft" || event.code === "ArrowRight") {
+            const type = event.code === "ArrowRight" ? "forward" : "backward";
+            performSeek(currentTime + (type === "forward" ? 5 : -5));
+            if (seekFeedbackTimeout) clearTimeout(seekFeedbackTimeout);
+            setSeekFeedback({ type, id: Date.now() });
+            seekFeedbackTimeout = setTimeout(() => setSeekFeedback(null), 500);
         } else if (event.code === "ArrowUp") {
             const newVolume = Math.min(1, volume + 0.1);
             setVolume(newVolume);
@@ -151,13 +122,6 @@ export function createControlsManager(
         }
     }
 
-    function toggleObjectFit(
-        objectFit: "contain" | "cover",
-        setObjectFit: (fit: "contain" | "cover") => void
-    ) {
-        setObjectFit(objectFit === "contain" ? "cover" : "contain");
-    }
-
     return {
         resetHideTimer,
         handleMouseMove,
@@ -168,6 +132,38 @@ export function createControlsManager(
         onVolumeChange,
         toggleFullscreen,
         handleKeydown,
-        toggleObjectFit,
     };
+}
+
+export async function exitFullscreen() {
+    const api = window.electronAPI;
+    if (api?.isFullscreen && (await api.isFullscreen())) {
+        api.toggleFullscreen?.();
+        return;
+    }
+    if (document.fullscreenElement) await document.exitFullscreen();
+}
+
+function applyObjectFit(fit: "contain" | "cover", ...surfaces: Array<HTMLElement | undefined>) {
+    for (const surface of surfaces) {
+        if (!surface) continue;
+        surface.style.objectFit = fit;
+        surface.style.objectPosition = "center center";
+        surface.style.transform = fit === "cover" ? "scale(1.035)" : "none";
+        surface.style.transformOrigin = "center center";
+    }
+}
+
+/** Flips between fitting and filling the frame, covering the switch with a still of the current frame. */
+export function switchObjectFit(video: HTMLVideoElement | undefined, canvas: HTMLCanvasElement | undefined) {
+    const nextFit = get(objectFit) === "contain" ? "cover" : "contain";
+    objectFit.set(nextFit);
+    applyObjectFit(nextFit, video, canvas);
+    if (!video || !canvas) return;
+    captureFrame(video, canvas);
+    if (get(showCanvas) || get(loading)) return;
+    showCanvas.set(true);
+    requestAnimationFrame(() => {
+        if (!get(loading)) showCanvas.set(false);
+    });
 }

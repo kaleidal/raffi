@@ -3,7 +3,8 @@
     import { fade } from "svelte/transition";
     import { RotateCw } from "@lucide/svelte";
     import SearchBar from "../../components/home/SearchBar.svelte";
-    import LoadingSpinner from "../../components/common/LoadingSpinner.svelte";
+    import LoadingSpinner from "../../components/common/loading/LoadingSpinner.svelte";
+    import ShapeLoader from "../../components/common/loading/ShapeLoader.svelte";
     import AmbientBackdrop from "../../components/common/AmbientBackdrop.svelte";
     import { collapseOnScroll } from "../../components/common/collapseOnScroll";
     import SourcePicker from "./components/SourcePicker.svelte";
@@ -24,28 +25,31 @@
     const CLOCK_TICK_MS = 30_000;
     const HIGHLIGHT_DELAY_MS = 120;
 
-    let showSources = false;
-    let settingsLoaded = false;
-    let now = Date.now();
-    let menu: { x: number; y: number; channel: LiveChannel } | null = null;
-    let highlighted: LiveChannel | null = null;
-    let header: HTMLDivElement;
-    let headerCollapsed = false;
+    let showSources = $state(false);
+    let settingsLoaded = $state(false);
+    let now = $state(Date.now());
+    let menu = $state.raw<{ x: number; y: number; channel: LiveChannel } | null>(null);
+    let highlighted = $state.raw<LiveChannel | null>(null);
+    let header = $state.raw<HTMLDivElement>();
+    let headerCollapsed = $state(false);
     let highlightTimer: ReturnType<typeof setTimeout> | undefined;
 
-    $: sources = $liveSettings.sources;
-    $: source = $library.source;
-    $: lineup = $library.lineup;
-    $: favourites = new Set($liveSettings.favourites);
-    $: hasFavourites = Boolean(lineup?.channels.some((channel) => favourites.has(channel.id)));
-    $: groups = lineup ? groupChoices(lineup.groups, hasFavourites) : [];
-    $: storedGroup = source ? $lastLiveGroups[source.id] : undefined;
-    $: group = storedGroup && groups.includes(storedGroup) ? storedGroup : hasFavourites ? FAVOURITES : ALL_CHANNELS;
-    $: channels = lineup ? filterChannels(lineup.channels, group, $channelQuery, favourites) : [];
-    $: counts = groupCounts(lineup?.channels ?? [], favourites);
-    $: hasGuide = Boolean(lineup?.channels.some((channel) => channel.guideId));
-    $: layout = $liveLayout === "auto" ? (hasGuide ? "guide" : "grid") : $liveLayout;
-    $: if (!channels.some((channel) => channel.id === highlighted?.id)) highlighted = channels[0] ?? null;
+    const sources = $derived($liveSettings.sources);
+    const source = $derived($library.source);
+    const lineup = $derived($library.lineup);
+    const favourites = $derived(new Set($liveSettings.favourites));
+    const hasFavourites = $derived(Boolean(lineup?.channels.some((channel) => favourites.has(channel.id))));
+    const groups = $derived(lineup ? groupChoices(lineup.groups, hasFavourites) : []);
+    const storedGroup = $derived(source ? $lastLiveGroups[source.id] : undefined);
+    const group = $derived(storedGroup && groups.includes(storedGroup) ? storedGroup : hasFavourites ? FAVOURITES : ALL_CHANNELS);
+    const channels = $derived(lineup ? filterChannels(lineup.channels, group, $channelQuery, favourites) : []);
+    const counts = $derived(groupCounts(lineup?.channels ?? [], favourites));
+    const hasGuide = $derived(Boolean(lineup?.channels.some((channel) => channel.guideId)));
+    const layout = $derived($liveLayout === "auto" ? (hasGuide ? "guide" : "grid") : $liveLayout);
+
+    $effect.pre(() => {
+        if (!channels.some((channel) => channel.id === highlighted?.id)) highlighted = channels[0] ?? null;
+    });
 
     function highlight(channel: LiveChannel) {
         clearTimeout(highlightTimer);
@@ -127,20 +131,21 @@
     <div bind:this={header} class="page-header relative z-20" class:collapsed={headerCollapsed}>
         <div>
             <SearchBar absolute={false}>
-                <SourcePicker
-                    slot="leading"
-                    {sources}
-                    activeId={source?.id}
-                    onSelect={(next) => select(next)}
-                    onManage={() => (showSources = true)}
-                />
+                {#snippet leading()}
+                    <SourcePicker
+                        {sources}
+                        activeId={source?.id}
+                        onSelect={(next) => select(next)}
+                        onManage={() => (showSources = true)}
+                    />
+                {/snippet}
             </SearchBar>
         </div>
     </div>
 
     <div class="page-body relative z-10 flex min-h-0 flex-1 flex-col gap-[clamp(14px,1.4vw,24px)] px-[var(--raffi-page-gutter)] pt-[clamp(8px,1vw,16px)]">
         {#if !settingsLoaded}
-            <div class="flex flex-1 items-center justify-center"><LoadingSpinner size="60px" /></div>
+            <div class="flex flex-1 items-center justify-center"><ShapeLoader size="60px" /></div>
         {:else if !sources.length}
             <LiveEmpty title="Watch live TV" actionLabel="Add a source" onAction={() => (showSources = true)}>
                 Add an M3U playlist or an Xtream Codes account.
@@ -151,7 +156,7 @@
                     {$library.error}
                 </LiveEmpty>
             {:else}
-                <div class="flex flex-1 items-center justify-center"><LoadingSpinner size="60px" /></div>
+                <div class="flex flex-1 items-center justify-center"><ShapeLoader size="60px" /></div>
             {/if}
         {:else}
             <div class="flex items-center justify-between gap-4" in:fade={{ duration: 200 }}>

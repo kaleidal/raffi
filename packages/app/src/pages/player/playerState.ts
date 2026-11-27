@@ -28,16 +28,11 @@ export const showNextEpisode = writable(false);
 // Track state
 export const audioTracks = writable<any[]>([]);
 export const subtitleTracks = writable<any[]>([]);
-export const currentAudioLabel = writable("Default");
-export const currentSubtitleLabel = writable("Off");
 
 // UI state
-export const showAudioSelection = writable(false);
-export const showSubtitleSelection = writable(false);
 export const seekFeedback = writable<SeekFeedback | null>(null);
 
 // First-play guidance
-export const showSeekStyleModal = writable(false);
 
 // Error state
 export const showError = writable(false);
@@ -54,11 +49,6 @@ export const objectFit = writable<"contain" | "cover">("contain");
 export const pendingSeek = writable<number | null>(null);
 export const seekGuard = writable(false);
 export const firstSeekLoad = writable(false);
-
-// Watch party state
-export const showWatchPartyModal = writable(false);
-export const showPartyEndModal = writable(false);
-export const partyEndReason = writable<"host_left" | "party_deleted">("host_left");
 
 export function resetPlayerState() {
     isPlaying.set(false);
@@ -78,12 +68,7 @@ export function resetPlayerState() {
     showNextEpisode.set(false);
     audioTracks.set([]);
     subtitleTracks.set([]);
-    currentAudioLabel.set("Default");
-    currentSubtitleLabel.set("Off");
-    showAudioSelection.set(false);
-    showSubtitleSelection.set(false);
     seekFeedback.set(null);
-    showSeekStyleModal.set(false);
     showError.set(false);
     errorMessage.set("");
     errorDetails.set("");
@@ -92,7 +77,4 @@ export function resetPlayerState() {
     pendingSeek.set(null);
     seekGuard.set(false);
     firstSeekLoad.set(false);
-    showWatchPartyModal.set(false);
-    showPartyEndModal.set(false);
-    partyEndReason.set("host_left");
 }

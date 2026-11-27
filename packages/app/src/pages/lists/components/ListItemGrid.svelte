@@ -4,9 +4,9 @@
     import { selectItem } from "../dataLoader";
     import { handleDragStart, handleDragOver, handleDrop } from "../dragDropLogic";
 
-    export let listId: string;
+    let { listId }: { listId: string } = $props();
 
-    $: items = $listItemsMap[listId] || [];
+    const items = $derived($listItemsMap[listId] || []);
 </script>
 
 <div class="list-item-grid grid gap-[clamp(14px,1.2vw,22px)] pb-[clamp(32px,4vw,64px)]">
@@ -18,13 +18,13 @@
                 : ''} {$dragState.draggedItem?.imdb_id === item.imdb_id ? 'opacity-30' : ''}"
             aria-label={item.name}
             aria-pressed={selected}
-            on:click={() => selectItem(item, listId)}
+            onclick={() => selectItem(item, listId)}
             draggable="true"
-            on:dragstart={(e) => handleDragStart(e, item, listId)}
-            on:dragover={handleDragOver}
-            on:drop={(e) => handleDrop(e, item, listId)}
+            ondragstart={(e) => handleDragStart(e, item, listId)}
+            ondragover={handleDragOver}
+            ondrop={(e) => handleDrop(e, item, listId)}
         >
-            <img src={item.poster} alt="" class="h-full w-full rounded-[16px] bg-surface object-cover" loading="lazy" />
+            <img src={item.poster} alt="" class="h-full w-full rounded-[16px] bg-surface object-cover" width="300" height="450" loading="lazy" />
 
             {#if $loadingItem === item.imdb_id}
                 <div

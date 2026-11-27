@@ -25,9 +25,3 @@ export async function waitForTraktApproval(code: TraktDeviceCode, signal: AbortS
     }
     throw new Error("That Trakt code expired. Try connecting again");
 }
-
-export async function openTraktActivation(url: string) {
-    const electronApi = (window as any).electronAPI as { openExternal?: (url: string) => Promise<void> } | undefined;
-    if (electronApi?.openExternal) await electronApi.openExternal(url);
-    else window.open(url, "_blank", "noopener");
-}

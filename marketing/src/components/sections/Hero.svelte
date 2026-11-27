@@ -15,7 +15,7 @@
     Your addons, finally in a good player.
   </h1>
   <p class="mt-6 max-w-2xl text-lg leading-8 text-ink-soft md:text-xl md:leading-9">
-    Raffi turns the Stremio addons you already use into one library, with a fast player, watch parties and Trakt.
+    Raffi turns the Stremio addons you already use into one library, with a fast player and Trakt.
   </p>
   <div class="mt-9 flex flex-wrap items-center gap-3">
     <a

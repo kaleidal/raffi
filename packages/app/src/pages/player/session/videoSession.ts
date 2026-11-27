@@ -89,8 +89,6 @@ export async function loadVideoSession(
 		setPendingSeek: (seek: number | null) => void;
 		setAudioTracks: (tracks: Track[]) => void;
 		setSubtitleTracks: (tracks: Track[]) => void;
-		setCurrentAudioLabel: (label: string) => void;
-		setCurrentSubtitleLabel: (label: string) => void;
 		setSessionData?: (sessionData: any) => void;
 	},
 	fetchAddonSubtitles: () => Promise<void>,
@@ -120,8 +118,6 @@ export async function loadVideoSession(
 		setPendingSeek,
 		setAudioTracks,
 		setSubtitleTracks,
-		setCurrentAudioLabel,
-		setCurrentSubtitleLabel,
 		setSessionData,
 	} = setStates;
 
@@ -155,8 +151,6 @@ export async function loadVideoSession(
 
 		setAudioTracks([]);
 		setSubtitleTracks([]);
-		setCurrentAudioLabel("Default");
-		setCurrentSubtitleLabel("Off");
 
 		if (options?.directHttp) {
 			const sessionData = {
@@ -197,9 +191,6 @@ export function performSeek({
 	videoElem,
 	captureFrame,
 	onAfterSeek,
-	isWatchPartyHost,
-	isPlaying,
-	updatePlaybackState,
 	setPendingSeek,
 	setCurrentTime,
 	setShowCanvas,
@@ -210,9 +201,6 @@ export function performSeek({
 	videoElem: HTMLVideoElement;
 	captureFrame: () => void;
 	onAfterSeek: () => void;
-	isWatchPartyHost: boolean;
-	isPlaying: boolean;
-	updatePlaybackState: (time: number, playing: boolean) => void;
 	setPendingSeek: (seek: number | null) => void;
 	setCurrentTime: (time: number) => void;
 	setShowCanvas: (show: boolean) => void;
@@ -240,10 +228,6 @@ export function performSeek({
 	}
 	setCurrentTime(target);
 	onAfterSeek();
-
-	if (isWatchPartyHost) {
-		updatePlaybackState(target, isPlaying);
-	}
 }
 
 export function createSeekHandler(
@@ -352,6 +336,7 @@ export function createSeekHandler(
 		setPendingSeek(null);
 		if (isTimeBuffered(videoElem, pending)) {
 			videoElem.currentTime = pending;
+			setShowCanvas(false);
 			return;
 		}
 
@@ -412,15 +397,9 @@ export function createSeekHandler(
 export function cleanupSession(
 	hls: Hls | null,
 	clearActivity: () => void,
-	leaveWatchParty: () => void,
-	isWatchPartyActive: boolean,
 	videoElem?: HTMLVideoElement | null,
 ) {
 	clearActivity();
-
-	if (isWatchPartyActive) {
-		leaveWatchParty();
-	}
 
 	if (hls) {
 		hls.destroy();
@@ -435,7 +414,6 @@ export async function handleAudioSelect(
 	videoElem: HTMLVideoElement,
 	setStates: {
 		setAudioTracks: (tracks: Track[]) => void;
-		setCurrentAudioLabel: (label: string) => void;
 		setLoading: (loading: boolean) => void;
 		setLoadingStage: (stage: string) => void;
 	},
@@ -443,12 +421,11 @@ export async function handleAudioSelect(
 		setAudioTrack: (index: number, time: number) => Promise<void>;
 	} | null,
 ) {
-	const { setAudioTracks, setCurrentAudioLabel, setLoading, setLoadingStage } = setStates;
+	const { setAudioTracks, setLoading, setLoadingStage } = setStates;
 
 	if (track.selected) return;
 
 	setAudioTracks(audioTracks.map((t) => ({ ...t, selected: t.id === track.id })));
-	setCurrentAudioLabel(track.label);
 
 	const wasPlaying = !videoElem.paused;
 	try {

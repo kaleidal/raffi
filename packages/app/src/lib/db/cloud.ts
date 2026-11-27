@@ -4,7 +4,6 @@ import type {
     TraktRecommendation,
     TraktScrobbleArgs,
     TraktStatus,
-    WatchParty,
 } from "./types";
 import { DEFAULT_TRAKT_STATUS, canUseCloudFeatures, getRequiredUserId, isLocalModeActive } from "./state";
 import {
@@ -13,7 +12,7 @@ import {
     traktScrobbleClient,
     warmTraktClientAuth as warmTraktClientAuthInternal,
 } from "./traktClient";
-import { openSyncSocket, syncGet, syncPost } from "./raffiSync";
+import { syncGet, syncPost } from "./raffiSync";
 
 export const getTraktStatus = async (): Promise<TraktStatus> => {
     if (isLocalModeActive() || !canUseCloudFeatures()) return DEFAULT_TRAKT_STATUS;
@@ -55,29 +54,3 @@ export const getTraktRecommendations = async (limit = 24): Promise<TraktRecommen
 export const warmTraktClientAuth = async () => {
     await warmTraktClientAuthInternal();
 };
-
-export const createWatchParty = async (imdbId: string, streamSource: string, season: number | null = null, episode: number | null = null, fileIdx: number | null = null) => {
-    if (!canUseCloudFeatures()) throw new Error("Watch Party is unavailable while cloud backup is offline");
-    getRequiredUserId();
-    return syncPost<WatchParty>("/watch-parties", { imdbId, streamSource, season, episode, fileIdx });
-};
-
-export const joinWatchParty = async (partyId: string) => {
-    if (!canUseCloudFeatures()) throw new Error("Watch Party is unavailable while cloud backup is offline");
-    getRequiredUserId();
-    return syncPost(`/watch-parties/${encodeURIComponent(partyId)}/join`, {});
-};
-
-export const leaveWatchParty = async (partyId: string) => {
-    if (!canUseCloudFeatures()) return { ok: true };
-    getRequiredUserId();
-    return syncPost(`/watch-parties/${encodeURIComponent(partyId)}/leave`, {});
-};
-
-export const getWatchPartyInfo = async (partyId: string) => {
-    if (!canUseCloudFeatures()) return null;
-    return syncGet<any>(`/watch-parties/${encodeURIComponent(partyId)}`);
-};
-
-export const openWatchPartySocket = (partyId: string) =>
-    openSyncSocket(`/watch-parties/${encodeURIComponent(partyId)}/socket`, "raffi-party");

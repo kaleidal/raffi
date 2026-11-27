@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import tailwindcss from "@tailwindcss/vite";
 import { resolve } from 'node:path'
+import { runesOutsideDependencies } from '../../packages/app/runesMode.ts'
 
 // https://vite.dev/config/
 export default defineConfig(({ command }) => ({
@@ -14,7 +15,7 @@ export default defineConfig(({ command }) => ({
         command === 'serve' ? "'unsafe-eval'" : '',
       ),
     },
-    svelte(),
+    svelte({ dynamicCompileOptions: runesOutsideDependencies }),
     tailwindcss(),
   ],
   resolve: {
@@ -25,7 +26,7 @@ export default defineConfig(({ command }) => ({
     dedupe: ['svelte'],
   },
   optimizeDeps: {
-    include: ['@raffi/app'],
+    exclude: ['@raffi/app'],
   },
   build: {
     chunkSizeWarningLimit: 1000,
@@ -40,7 +41,7 @@ export default defineConfig(({ command }) => ({
             { name: 'mediabunny-truehd', test: 'node_modules/@mediabunny/truehd/' },
             { name: 'mediabunny-codecs', test: 'node_modules/@mediabunny/' },
             { name: 'mediabunny', test: 'node_modules/mediabunny/' },
-            { name: 'lucide', test: 'node_modules/lucide-svelte/' },
+            { name: 'lucide', test: 'node_modules/@lucide/svelte/' },
           ],
         },
       },

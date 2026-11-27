@@ -6,10 +6,20 @@ import {
     streamFailureMessage,
     progressMap,
     streamsToReopen,
+    failedStreamKeys,
+    startingPlayback,
 } from "./metaState";
 import { router } from "../../lib/stores/router";
+import { buildEnrichedStreams } from "../../components/meta/modals/streams/streamFilters";
+import { pickBestStream, rankingContext } from "../../lib/streams/ranking/streamRanking";
+import { withAvailabilityHint } from "../../lib/streams/ranking/streamSelection";
 
-import type { Stream } from "./types";
+import type { EpisodeRef } from "./types";
+
+import type { ProgressMap } from "../../lib/library/types/progress";
+
+import type { Stream } from "../../lib/streams/types";
+import type { ShowResponse } from "../../lib/library/types/meta_types";
 import { getLocalStreamsFor } from "../../lib/library/localLibrary";
 import * as ProgressLogic from "./progressLogic";
 import { createDirectStream } from "../../lib/streams/directLinks";
@@ -26,14 +36,35 @@ import {
     isTorrentSource,
 } from "../../lib/stores/torrenting";
 
+interface AddonStreamResponse {
+    streams?: Stream[];
+}
+
 let streamFetchGeneration = 0;
+let shownStreamsKey = "";
+
+const streamsKey = (episode: EpisodeRef) => `${get(selectedAddon)}|${episode?.season}:${episode?.episode}`;
 
 const isStaleStreamFetch = (requestId: number) => requestId !== streamFetchGeneration;
 
 const hideDisabledTorrentSources = (items: Stream[]) =>
     get(allowTorrenting) ? items : items.filter((stream) => !isTorrentSource(stream));
 
-const getStartTimeForCurrentSelection = (progressMap: any, data: any, episode: any) => {
+const localStreamsFor = (imdbID: string, type: string, episode: EpisodeRef): Stream[] =>
+    getLocalStreamsFor(imdbID, type === "series" ? "series" : "movie", episode);
+
+const fetchAddonStreams = async (addonUrl: string, type: string, streamId: string): Promise<Stream[]> => {
+    const response = await fetch(
+        addonUrl + "/stream/" + type + "/" + streamId + ".json",
+    );
+    if (!response.ok) {
+        throw new Error(`Stream addon returned ${response.status}`);
+    }
+    const result: AddonStreamResponse = await response.json();
+    return Array.isArray(result.streams) ? result.streams : [];
+};
+
+const getStartTimeForCurrentSelection = (progressMap: ProgressMap, data: ShowResponse, episode: EpisodeRef) => {
     if (data?.meta?.type === "movie") {
         const prog = ProgressLogic.getProgress(progressMap);
         return prog && !prog.watched ? prog.time || 0 : 0;
@@ -46,12 +77,14 @@ const getStartTimeForCurrentSelection = (progressMap: any, data: any, episode: a
 };
 
 export const fetchStreams = async (
-    episode: any,
+    episode: EpisodeRef,
     silent: boolean = false,
     setActive: boolean = true,
     imdbID: string,
-) => {
+): Promise<Stream[]> => {
     const requestId = ++streamFetchGeneration;
+    shownStreamsKey = streamsKey(episode);
+    if (!silent) startingPlayback.set(false);
     loadingStreams.set(true);
     streams.set([]);
 
@@ -68,7 +101,7 @@ export const fetchStreams = async (
         if (isStaleStreamFetch(requestId)) return [];
 
         if (settings.mode === "direct") {
-            const localStreams = getLocalStreamsFor(imdbID, type as any, episode);
+            const localStreams = localStreamsFor(imdbID, type, episode);
             const currentProgressMap = get(progressMap);
             const directStream = createDirectStream(settings.direct, {
                 metaData: data,
@@ -76,7 +109,7 @@ export const fetchStreams = async (
                 episode,
                 progressSeconds: getStartTimeForCurrentSelection(currentProgressMap, data, episode),
             });
-            const combined = [...(localStreams as any), ...(directStream ? [directStream] : [])];
+            const combined = [...localStreams, ...(directStream ? [directStream] : [])];
             if (isStaleStreamFetch(requestId)) return [];
             streams.set(combined);
 
@@ -100,47 +133,34 @@ export const fetchStreams = async (
         }
 
         const addonUrl = get(selectedAddon);
-        const localStreams = getLocalStreamsFor(imdbID, type as any, episode);
+        const localStreams = localStreamsFor(imdbID, type, episode);
         if (!addonUrl) {
-            streams.set(localStreams as any);
+            streams.set(localStreams);
             clearStreamFailureMessage();
-            return localStreams as any;
+            return localStreams;
         }
-        const response = await fetch(
-            addonUrl + "/stream/" + type + "/" + streamId + ".json",
-        );
-        if (!response.ok) {
-            throw new Error(`Stream addon returned ${response.status}`);
-        }
-        const result = await response.json();
+        const addonStreams = await fetchAddonStreams(addonUrl, type, streamId);
         if (isStaleStreamFetch(requestId)) return [];
 
-        const remoteStreams = hideDisabledTorrentSources(Array.isArray(result.streams)
-            ? result.streams
-            : []);
+        const remoteStreams = hideDisabledTorrentSources(addonStreams);
 
-        const combined = [...(localStreams as any), ...remoteStreams];
+        const combined = [...localStreams, ...remoteStreams];
         streams.set(combined);
         return combined;
 
     } catch (e) {
         if (isStaleStreamFetch(requestId)) return [];
         console.error("Failed to fetch streams", e);
-        try {
-            const data = get(metaData);
-            const type = data?.meta?.type || "movie";
-            const localStreams = getLocalStreamsFor(imdbID, type as any, episode);
-            streams.set(localStreams as any);
-            return localStreams as any;
-        } catch {
-            // ignore
-        }
+        const data = get(metaData);
+        const type = data?.meta?.type || "movie";
+        const localStreams = localStreamsFor(imdbID, type, episode);
+        streams.set(localStreams);
+        return localStreams;
     } finally {
         if (!isStaleStreamFetch(requestId)) {
             loadingStreams.set(false);
         }
     }
-    return [];
 };
 
 export const streamToPlayableUrl = (stream: Stream): { url: string; fileIdx: number | null } | null => {
@@ -154,21 +174,21 @@ export const streamToPlayableUrl = (stream: Stream): { url: string; fileIdx: num
     return url ? { url, fileIdx } : null;
 };
 
-export const fetchStreamListForEpisodeOnly = async (episode: any, imdbID: string): Promise<Stream[]> => {
+export const fetchStreamListForEpisodeOnly = async (episode: EpisodeRef, imdbID: string): Promise<Stream[]> => {
     const data = get(metaData);
     if (!data) return [];
 
     const type = data.meta.type;
     const settings = await getStreamingSourceSettings();
     if (settings.mode === "direct") {
-        const localStreams = getLocalStreamsFor(imdbID, type as any, episode);
+        const localStreams = localStreamsFor(imdbID, type, episode);
         const directStream = createDirectStream(settings.direct, {
             metaData: data,
             imdbId: imdbID,
             episode,
             progressSeconds: 0,
         });
-        return [...(localStreams as any), ...(directStream ? [directStream] : [])];
+        return [...localStreams, ...(directStream ? [directStream] : [])];
     }
 
     let streamId = imdbID;
@@ -177,29 +197,14 @@ export const fetchStreamListForEpisodeOnly = async (episode: any, imdbID: string
     }
 
     const addonUrl = get(selectedAddon);
-    const localStreams = getLocalStreamsFor(imdbID, type as any, episode);
-    if (!addonUrl) return localStreams as any;
+    const localStreams = localStreamsFor(imdbID, type, episode);
+    if (!addonUrl) return localStreams;
     try {
-        const response = await fetch(
-            addonUrl + "/stream/" + type + "/" + streamId + ".json",
-        );
-        if (!response.ok) {
-            throw new Error(`Stream addon returned ${response.status}`);
-        }
-        const result = await response.json();
-        const remoteStreams = hideDisabledTorrentSources(Array.isArray(result.streams)
-            ? result.streams
-            : []);
-        return [...(localStreams as any), ...remoteStreams];
+        const remoteStreams = hideDisabledTorrentSources(await fetchAddonStreams(addonUrl, type, streamId));
+        return [...localStreams, ...remoteStreams];
     } catch (e) {
         console.error("fetchStreamListForEpisodeOnly failed", e);
-        try {
-            const type = data.meta.type;
-            const localStreams = getLocalStreamsFor(imdbID, type as any, episode);
-            return localStreams as any;
-        } catch {
-            return [];
-        }
+        return localStreams;
     }
 };
 
@@ -210,13 +215,32 @@ export const reopenStreamsOnReturn = (imdbId: string | null) => {
     if (imdbId && episode) streamsToReopen.set({ imdbId, episode });
 };
 
-export const episodeClicked = async (episode: any, imdbID: string) => {
+export const episodeClicked = async (episode: EpisodeRef, imdbID: string) => {
     await fetchStreams(episode, false, true, imdbID);
+};
+
+export const refreshStreamsForAddon = (episode: EpisodeRef, imdbID: string) => {
+    if (streamsKey(episode) !== shownStreamsKey) void fetchStreams(episode, false, false, imdbID);
+};
+
+export const playBestStream = async (episode: EpisodeRef, imdbID: string) => {
+    const settings = await getStreamingSourceSettings();
+    if (settings.mode === "direct") return episodeClicked(episode, imdbID);
+
+    const generation = streamFetchGeneration + 1;
+    startingPlayback.set(true);
+    const candidates = await fetchStreams(episode, true, true, imdbID);
+    if (generation !== streamFetchGeneration) return;
+    startingPlayback.set(false);
+
+    const best = pickBestStream(buildEnrichedStreams(candidates, get(failedStreamKeys)), rankingContext());
+    if (best) onStreamClick(withAvailabilityHint(best), get(progressMap));
+    else streamsPopupVisible.set(true);
 };
 
 export const playStream = (
     stream: Stream,
-    progressMap: any,
+    progressMap: ProgressMap,
     options?: { replace?: boolean },
 ) => {
     let url = stream.url;
@@ -253,13 +277,6 @@ export const playStream = (
 
         streamsPopupVisible.set(false);
 
-        const routerState = get(router);
-        const routeJoinPartyId =
-            typeof routerState?.params?.joinPartyId === "string"
-                ? routerState.params.joinPartyId
-                : null;
-        const routeAutoJoin = Boolean(routerState?.params?.autoJoin);
-
         router.navigate("player", {
             videoSrc: stream.directPlaybackMode === "iframe" ? null : url,
             embedSrc: stream.directPlaybackMode === "iframe" ? url : null,
@@ -268,8 +285,6 @@ export const playStream = (
             startTime,
             season: episode?.season ?? null,
             episode: episode?.episode ?? null,
-            joinPartyId: routeJoinPartyId,
-            autoJoin: routeJoinPartyId ? routeAutoJoin : false,
             streamAvailability: stream.raffiAvailability ?? null,
         }, { replace: options?.replace });
     } else {
@@ -277,7 +292,7 @@ export const playStream = (
     }
 };
 
-export const onStreamClick = (stream: Stream, progressMap: any) => {
+export const onStreamClick = (stream: Stream, progressMap: ProgressMap) => {
     if (isStreamFailed(stream)) {
         streamFailureMessage.set("This stream failed previously. Please select another stream.");
         return;
@@ -301,7 +316,7 @@ export const onStreamClick = (stream: Stream, progressMap: any) => {
     playStream(stream, progressMap);
 };
 
-export const handleTorrentWarningConfirm = (progressMap: any) => {
+export const handleTorrentWarningConfirm = (progressMap: ProgressMap) => {
     const pending = get(pendingTorrentStream);
     if (!pending) return;
     if (!get(allowTorrenting)) {
@@ -333,6 +348,8 @@ export const markCurrentStreamAsFailed = (reason?: string) => {
 
 export const closeStreamsPopup = () => {
     streamFetchGeneration += 1;
+    shownStreamsKey = "";
+    startingPlayback.set(false);
     loadingStreams.set(false);
     streamsPopupVisible.set(false);
     streams.set([]);

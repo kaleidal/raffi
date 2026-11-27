@@ -1,24 +1,34 @@
 <script lang="ts">
     import { portal } from "../portal";
-    import { createEventDispatcher, onDestroy, tick } from "svelte";
+    import { onDestroy, tick } from "svelte";
     import { ChevronDown } from "@lucide/svelte";
 
-    export let value = "";
-    export let options: Array<{ label: string; value: string }> = [];
-    export let placeholder = "Select";
-    export let buttonClass = "";
-    export let menuClass = "";
-    export let align: "left" | "right" = "left";
-    export let disabled = false;
+    let {
+        value = "",
+        options = [],
+        placeholder = "Select",
+        buttonClass = "",
+        menuClass = "",
+        align = "left",
+        disabled = false,
+        onChange,
+    }: {
+        value?: string;
+        options?: Array<{ label: string; value: string }>;
+        placeholder?: string;
+        buttonClass?: string;
+        menuClass?: string;
+        align?: "left" | "right";
+        disabled?: boolean;
+        onChange?: (value: string) => void;
+    } = $props();
 
-    const dispatch = createEventDispatcher<{ change: { value: string } }>();
-
-    let open = false;
+    let open = $state(false);
     let root: HTMLDivElement | null = null;
     let buttonEl: HTMLButtonElement | null = null;
-    let menuEl: HTMLDivElement | null = null;
-    let menuStyle = "";
-    let menuReady = false;
+    let menuEl = $state.raw<HTMLDivElement>();
+    let menuStyle = $state("");
+    let menuReady = $state(false);
 
     const handlePointerDown = (event: MouseEvent) => {
         if (!root) return;
@@ -58,7 +68,7 @@
         window.removeEventListener("scroll", handleViewportChange, true);
     });
 
-    $: selectedOption = options.find((option) => option.value === value) ?? null;
+    const selectedOption = $derived(options.find((option) => option.value === value) ?? null);
 
     async function toggleOpen() {
         if (disabled) return;
@@ -77,7 +87,7 @@
         value = nextValue;
         open = false;
         menuReady = false;
-        dispatch("change", { value: nextValue });
+        onChange?.(nextValue);
     }
 
     function updateMenuPosition() {
@@ -111,9 +121,11 @@
         menuReady = true;
     }
 
-    $: if (open) {
-        tick().then(updateMenuPosition);
-    }
+    $effect(() => {
+        if (open) {
+            tick().then(updateMenuPosition);
+        }
+    });
 </script>
 
 <div class="relative min-w-0" bind:this={root}>
@@ -121,7 +133,10 @@
         type="button"
         bind:this={buttonEl}
         class={`flex min-w-0 w-full items-center justify-between gap-3 ${buttonClass}`}
-        on:click|stopPropagation={toggleOpen}
+        onclick={(event) => {
+            event.stopPropagation();
+            toggleOpen();
+        }}
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -142,7 +157,10 @@
                 <button
                     type="button"
                     class={`flex w-full items-center rounded-xl px-3 py-2 text-left text-sm transition-colors duration-200 ${value === option.value ? 'bg-accent text-on-accent' : 'text-ink/78 hover:bg-ink/8 hover:text-ink'}`}
-                    on:click|stopPropagation={() => selectOption(option.value)}
+                    onclick={(event) => {
+                        event.stopPropagation();
+                        selectOption(option.value);
+                    }}
                     role="option"
                     aria-selected={value === option.value}
                 >

@@ -10,47 +10,51 @@
     import TrailerModal from "../../meta/modals/TrailerModal.svelte";
     import { getPrimaryTrailerId } from "../../../lib/home/trailers";
 
-    import { onMount, onDestroy, tick } from "svelte";
+    import { onDestroy, tick } from "svelte";
     import { ChevronDown, ChevronLeft, ChevronRight } from "@lucide/svelte";
     import PosterImage from "./PosterImage.svelte";
     import { resumePoint, type ResumePoint, type WatchingItem } from "../../../lib/home/continueWatching";
     import { streamsToReopen } from "../../../pages/meta/metaState";
+    import { endAmbientPreview, previewAmbient } from "../../../lib/home/ambient";
 
-    export let continueWatchingMeta: WatchingItem[] = [];
+    let { continueWatchingMeta = [] }: { continueWatchingMeta?: WatchingItem[] } = $props();
+
+    const BATCH_SIZE = 24;
+    const LOAD_AHEAD_PX = 1200;
 
     function resume(item: WatchingItem, point: ResumePoint) {
         streamsToReopen.set({ imdbId: item.meta.imdb_id, episode: point.episode });
         router.navigate("meta", { imdbId: item.meta.imdb_id, type: item.meta.type });
     }
-    let scrollContainer: HTMLDivElement;
-    let showLeftButton = false;
-    let showRightButton = false;
+    let scrollContainer = $state.raw<HTMLDivElement>();
+    let showLeftButton = $state(false);
+    let showRightButton = $state(false);
 
-    let showContextMenu = false;
-    let contextMenuX = 0;
-    let contextMenuY = 0;
-    let selectedImdbId = "";
-    let selectedType = "";
-    let selectedTrailerId = "";
-    let showListsPopup = false;
-    let showTrailerModal = false;
-    let isExpanded = false;
-    let resizeObserver: ResizeObserver | null = null;
-    let visibleCount = 24;
-    let previousItems = continueWatchingMeta;
+    let showContextMenu = $state(false);
+    let contextMenuX = $state(0);
+    let contextMenuY = $state(0);
+    let selectedImdbId = $state("");
+    let selectedType = $state("");
+    let selectedTrailerId = $state("");
+    let showListsPopup = $state(false);
+    let showTrailerModal = $state(false);
+    let isExpanded = $state(false);
+    let visibleCount = $derived(Math.min(BATCH_SIZE, continueWatchingMeta.length));
     let scrollFrame: number | null = null;
 
-    const BATCH_SIZE = 24;
-    const LOAD_AHEAD_PX = 1200;
+    const renderedItems = $derived(isExpanded ? continueWatchingMeta : continueWatchingMeta.slice(0, visibleCount));
 
-    $: renderedItems = isExpanded
-        ? continueWatchingMeta
-        : continueWatchingMeta.slice(0, visibleCount);
-    $: if (continueWatchingMeta !== previousItems) {
-        previousItems = continueWatchingMeta;
-        visibleCount = Math.min(BATCH_SIZE, continueWatchingMeta.length);
+    $effect(() => {
+        renderedItems;
         scheduleLayoutUpdate();
-    }
+    });
+
+    $effect(() => {
+        if (!scrollContainer) return;
+        const resizeObserver = new ResizeObserver(scheduleLayoutUpdate);
+        resizeObserver.observe(scrollContainer);
+        return () => resizeObserver.disconnect();
+    });
 
     function handleContextMenu(e: MouseEvent, imdbId: string, type: string, trailerId: string | null) {
         e.preventDefault();
@@ -64,26 +68,18 @@
 
     async function handleRemove() {
         if (!selectedImdbId) return;
-        try {
-            await hideFromContinueWatching(selectedImdbId);
-            continueWatchingMeta = continueWatchingMeta.filter(
-                (item) => item.meta.imdb_id !== selectedImdbId,
-            );
-        } catch (e) {
-            console.error("Failed to remove item", e);
-        }
+        await hideFromContinueWatching(selectedImdbId);
+        continueWatchingMeta = continueWatchingMeta.filter(
+            (item) => item.meta.imdb_id !== selectedImdbId,
+        );
     }
 
     async function handleForget() {
         if (!selectedImdbId) return;
-        try {
-            await forgetProgress(selectedImdbId);
-            continueWatchingMeta = continueWatchingMeta.filter(
-                (item) => item.meta.imdb_id !== selectedImdbId,
-            );
-        } catch (e) {
-            console.error("Failed to forget item", e);
-        }
+        await forgetProgress(selectedImdbId);
+        continueWatchingMeta = continueWatchingMeta.filter(
+            (item) => item.meta.imdb_id !== selectedImdbId,
+        );
     }
 
     function handleAddToList() {
@@ -115,7 +111,7 @@
     }
 
     function scheduleLayoutUpdate() {
-        if (typeof requestAnimationFrame === "undefined" || scrollFrame !== null) return;
+        if (scrollFrame !== null) return;
         scrollFrame = requestAnimationFrame(() => {
             scrollFrame = null;
             updateScrollButtons();
@@ -128,7 +124,6 @@
             visibleCount + BATCH_SIZE,
             continueWatchingMeta.length,
         );
-        void tick().then(scheduleLayoutUpdate);
     }
 
     function scrollLeft() {
@@ -151,44 +146,12 @@
         }
     }
 
-    function attachResizeObserver() {
-        if (typeof ResizeObserver === "undefined") return;
-        if (!scrollContainer) return;
-        if (resizeObserver) return;
-
-        resizeObserver = new ResizeObserver(scheduleLayoutUpdate);
-        resizeObserver.observe(scrollContainer);
-    }
-
-    async function recomputeAfterRender() {
-        await tick();
-        requestAnimationFrame(() => {
-            attachResizeObserver();
-            updateScrollButtons();
-        });
-    }
-
-    onMount(() => {
-        void recomputeAfterRender();
-
-        window.addEventListener("resize", scheduleLayoutUpdate);
-    });
-
     onDestroy(() => {
-        window.removeEventListener("resize", scheduleLayoutUpdate);
-        resizeObserver?.disconnect();
-        resizeObserver = null;
         if (scrollFrame !== null) cancelAnimationFrame(scrollFrame);
     });
-
-    $: if (continueWatchingMeta.length) {
-        void recomputeAfterRender();
-    }
-
-    $: if (scrollContainer && continueWatchingMeta.length) {
-        attachResizeObserver();
-    }
 </script>
+
+<svelte:window onresize={scheduleLayoutUpdate} />
 
 {#if showContextMenu}
     <WatchingContextMenu
@@ -225,7 +188,7 @@
 
             <button
                 class="ml-auto p-2 rounded-full hover:bg-ink/10 transition-colors duration-200 group/btn cursor-pointer"
-                on:click={() => (isExpanded = !isExpanded)}
+                onclick={() => (isExpanded = !isExpanded)}
                 aria-label={isExpanded ? "Collapse" : "Expand"}
             >
                 <div class="transition-transform duration-300 {isExpanded ? 'rotate-180' : ''}">
@@ -238,7 +201,7 @@
             {#if showLeftButton && !isExpanded}
                 <button
                     class="rail-button absolute inset-y-3 left-0 z-20 flex items-center justify-center rounded-r-2xl bg-gradient-to-r from-canvas/90 to-canvas/35 text-ink backdrop-blur-sm transition-[background-color,opacity] duration-200 cursor-pointer"
-                    on:click={scrollLeft}
+                    onclick={scrollLeft}
                     aria-label="Scroll left"
                     transition:fade={{ duration: 200 }}
                 >
@@ -252,7 +215,7 @@
                     ? 'watching-grid'
                     : 'flex flex-row overflow-x-auto overflow-y-visible no-scrollbar scroll-smooth'}"
                 bind:this={scrollContainer}
-                on:scroll={scheduleLayoutUpdate}
+                onscroll={scheduleLayoutUpdate}
             >
                 {#each renderedItems as title (`${title.meta.type}:${title.meta.imdb_id}`)}
                     {#if title.meta}
@@ -261,8 +224,12 @@
                         <button
                             class="watching-card scheme-dark group/card relative aspect-video h-fit flex-shrink-0 cursor-pointer overflow-clip rounded-[18px] bg-surface p-0 text-left transition-[translate,box-shadow] duration-300 ease-out hover:-translate-y-1.5 hover:shadow-[0_14px_30px_rgba(0,0,0,0.35)] focus-visible:-translate-y-1.5"
                             aria-label={`Resume ${title.meta.name}`}
-                            on:click={() => resume(title, point)}
-                            on:contextmenu={(e) =>
+                            onclick={() => resume(title, point)}
+                            onpointerenter={() => previewAmbient(point.image || title.meta.background)}
+                            onfocus={() => previewAmbient(point.image || title.meta.background)}
+                            onpointerleave={endAmbientPreview}
+                            onblur={endAmbientPreview}
+                            oncontextmenu={(e) =>
                                 handleContextMenu(
                                     e,
                                     title.meta.imdb_id,
@@ -282,7 +249,6 @@
                                         src={title.meta.logo}
                                         alt={title.meta.name}
                                         class="max-h-[clamp(30px,2.6vw,48px)] max-w-[60%] self-start object-contain object-left drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]"
-                                        loading="lazy"
                                     />
                                 {:else}
                                     <p class="line-clamp-1 text-lg font-semibold text-ink">{title.meta.name}</p>
@@ -304,7 +270,7 @@
             {#if showRightButton && !isExpanded}
                 <button
                     class="rail-button absolute inset-y-3 right-0 z-20 flex items-center justify-center rounded-l-2xl bg-gradient-to-l from-canvas/90 to-canvas/35 text-ink backdrop-blur-sm transition-[background-color,opacity] duration-200 cursor-pointer"
-                    on:click={scrollRight}
+                    onclick={scrollRight}
                     aria-label="Scroll right"
                     transition:fade={{ duration: 200 }}
                 >

@@ -1,4 +1,4 @@
-import type { ProgressItem, ProgressMap } from "../../../../pages/meta/types";
+import type { ProgressItem, ProgressMap } from "../../../../lib/library/types/progress";
 import type { EpisodeProgressDetails, ReleaseInfo } from "./types";
 
 const relativeTimeFormatter =

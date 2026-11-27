@@ -221,9 +221,7 @@ export const connectTraktTokens = async (
   let profile: { username?: string; slug?: string } = {};
   try {
     profile = getProfileValues(await fetchTraktSettings(clientId, accessToken));
-  } catch {
-    profile = {};
-  }
+  } catch {}
 
   const expiresAt = toExpiresAtMs(tokenPayload);
   await saveTraktIntegration(db, userId, {

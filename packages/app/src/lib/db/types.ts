@@ -1,9 +1,39 @@
+import type { ProgressMap } from "../library/types/progress";
+
+export type AddonResource = string | { name: string; types?: string[]; idPrefixes?: string[] };
+
+export interface AddonCatalog {
+    type: string;
+    id: string;
+    name?: string;
+    extra?: { name: string; isRequired?: boolean; options?: string[] }[];
+}
+
+export interface AddonManifest {
+    id: string;
+    name: string;
+    version?: string;
+    description?: string;
+    logo?: string;
+    icon?: string;
+    types?: string[];
+    idPrefixes?: string[];
+    resources: AddonResource[];
+    catalogs?: AddonCatalog[];
+    behaviorHints?: { configurable?: boolean; configurationRequired?: boolean };
+}
+
+export interface AddonFlags {
+    protected: boolean;
+    official: boolean;
+}
+
 export interface Addon {
     user_id: string;
     added_at: string;
     transport_url: string;
-    manifest: any;
-    flags: any;
+    manifest: AddonManifest;
+    flags: AddonFlags;
     addon_id: string;
     position?: number;
     updated_at: string;
@@ -12,7 +42,7 @@ export interface Addon {
 export interface LibraryItem {
     user_id: string;
     imdb_id: string;
-    progress: any;
+    progress: ProgressMap;
     last_watched: string;
     completed_at: string | null;
     type: string;
@@ -43,21 +73,6 @@ export interface UserMeta {
     user_id: string;
     settings: any;
     updated_at: string;
-}
-
-export interface WatchParty {
-    party_id: string;
-    host_user_id: string;
-    imdb_id: string;
-    season: number | null;
-    episode: number | null;
-    stream_source: string;
-    file_idx: number | null;
-    created_at: string;
-    expires_at: string;
-    current_time_seconds: number;
-    is_playing: boolean;
-    last_update: string;
 }
 
 export interface TraktDeviceCode {

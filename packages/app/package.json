@@ -13,26 +13,25 @@
     "./*": "./src/*"
   },
   "scripts": {
-    "check": "svelte-check --tsgo --tsconfig ./tsconfig.json"
+    "check": "svelte-check --tsconfig ./tsconfig.json"
   },
   "devDependencies": {
-    "@typescript/native": "npm:typescript@^7.0.2",
-    "@tsconfig/svelte": "^5.0.8",
+    "@tsconfig/svelte": "^5.0.9",
     "svelte": "^5.57.3",
     "svelte-check": "^4.7.8",
     "tailwindcss": "^4.3.5",
     "typescript": "^6.0.3",
-    "vite": "^8.3.6"
+    "vite": "^8.3.8"
   },
   "dependencies": {
     "@fontsource-variable/onest": "^5.3.1",
-    "@lucide/svelte": "^1.70.0",
-    "@mediabunny/aac-encoder": "^1.65.2",
-    "@mediabunny/ac3": "^1.65.2",
-    "@mediabunny/dts": "^1.65.2",
-    "@mediabunny/truehd": "^1.65.2",
+    "@lucide/svelte": "^1.73.0",
+    "@mediabunny/aac-encoder": "^1.66.0",
+    "@mediabunny/ac3": "^1.66.0",
+    "@mediabunny/dts": "^1.66.0",
+    "@mediabunny/truehd": "^1.66.0",
     "hls.js": "^1.7.4",
-    "mediabunny": "^1.65.2",
+    "mediabunny": "^1.66.0",
     "mpegts.js": "^1.8.2"
   },
   "peerDependencies": {

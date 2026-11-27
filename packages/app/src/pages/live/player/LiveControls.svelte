@@ -1,7 +1,7 @@
 <script lang="ts">
     import { Maximize, Star, ZoomIn, ZoomOut } from "@lucide/svelte";
     import IconButton from "../../../components/common/controls/IconButton.svelte";
-    import Slider from "../../../components/common/controls/Slider.svelte";
+    import VolumeControl from "../../../components/player/chrome/VolumeControl.svelte";
     import PlayPauseIcon from "../../../components/player/PlayPauseIcon.svelte";
     import ChannelLogo from "../components/ChannelLogo.svelte";
     import { isAndroidPlatform } from "../../../lib/shell/platform";
@@ -9,18 +9,33 @@
     import type { LiveChannel, Programme } from "../../../lib/live/types";
     import { formatClock } from "../guide/timeline";
 
-    export let channel: LiveChannel;
-    export let airing: Programme | null;
-    export let now: number;
-    export let playing: boolean;
-    export let volume: number;
-    export let favourite: boolean;
-    export let objectFit: "contain" | "cover";
-    export let togglePlay: () => void;
-    export let onVolumeChange: (volume: number) => void;
-    export let toggleFavourite: () => void;
-    export let toggleObjectFit: () => void;
-    export let toggleFullscreen: () => void;
+    let {
+        channel,
+        airing,
+        now,
+        playing,
+        volume,
+        favourite,
+        objectFit,
+        togglePlay,
+        onVolumeChange,
+        toggleFavourite,
+        toggleObjectFit,
+        toggleFullscreen,
+    }: {
+        channel: LiveChannel;
+        airing: Programme | null;
+        now: number;
+        playing: boolean;
+        volume: number;
+        favourite: boolean;
+        objectFit: "contain" | "cover";
+        togglePlay: () => void;
+        onVolumeChange: (volume: number) => void;
+        toggleFavourite: () => void;
+        toggleObjectFit: () => void;
+        toggleFullscreen: () => void;
+    } = $props();
 </script>
 
 <div class="live-controls relative z-10 flex items-center text-ink overflow-hidden">
@@ -65,9 +80,7 @@
             <IconButton label="Fullscreen" onClick={toggleFullscreen}>
                 <Maximize size={22} strokeWidth={2} />
             </IconButton>
-            <div class="live-volume">
-                <Slider onInput={onVolumeChange} value={volume} label="Volume" />
-            </div>
+            <VolumeControl {volume} onChange={onVolumeChange} />
         {/if}
     </div>
 </div>
@@ -85,10 +98,6 @@
         width: clamp(40px, 3.125vw, 60px);
         height: clamp(40px, 3.125vw, 60px);
         flex: 0 0 auto;
-    }
-
-    .live-volume {
-        width: clamp(96px, 8vw, 128px);
     }
 
     @media (max-width: 760px), (orientation: portrait) {

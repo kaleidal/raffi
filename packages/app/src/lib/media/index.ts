@@ -1,5 +1,6 @@
 export {
 	enrichProbedStreamAudio,
+	formatAudioTrackDetail,
 	formatAudioTrackLabel,
 	type ProbedStream,
 } from "./probe/probe";

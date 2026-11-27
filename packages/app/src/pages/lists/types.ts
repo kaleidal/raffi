@@ -21,11 +21,6 @@ export interface DragState {
     draggedFromListId: string | null;
 }
 
-export interface PlayerState {
-    isPaused: boolean;
-    isMuted: boolean;
-    playerIframe: HTMLIFrameElement | null;
-}
 
 export interface EditingState {
     listId: string | null;

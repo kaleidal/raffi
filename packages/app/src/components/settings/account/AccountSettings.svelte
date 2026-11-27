@@ -1,10 +1,10 @@
 <script lang="ts">
-	import LoadingSpinner from "../../common/LoadingSpinner.svelte";
+	import LoadingSpinner from "../../common/loading/LoadingSpinner.svelte";
 	import AccountSection from "./AccountSection.svelte";
 	import AccountStateMismatchSection from "./AccountStateMismatchSection.svelte";
 	import LocalModeSignInSection from "./LocalModeSignInSection.svelte";
 	import SignOutDialog from "./SignOutDialog.svelte";
-	import StremioImportModal from "./StremioImportModal.svelte";
+	import StremioImportModal from "./stremioImport/StremioImportModal.svelte";
 	import {
 		clearLocalState,
 		getLibrary,
@@ -16,10 +16,10 @@
 	import { router } from "../../../lib/stores/router";
 	import { closeSettings } from "../../../lib/stores/settings";
 
-	let error = "";
-	let showSignOut = false;
-	let showStremioImport = false;
-	let stremioConnectionRevision = 0;
+	let error = $state("");
+	let showSignOut = $state(false);
+	let showStremioImport = $state(false);
+	let stremioConnectionRevision = $state(0);
 
 	async function downloadData() {
 		try {
@@ -44,15 +44,10 @@
 		if (!$currentUser) return;
 		error = "";
 		showSignOut = false;
-		try {
-			if (keepData) await syncUserStateToLocal($currentUser.id);
-			else clearLocalState();
-			signOutToLocalMode();
-			router.navigate("home");
-		} catch (e) {
-			console.error("Failed to switch to local mode", e);
-			error = "Failed to switch to local mode";
-		}
+		if (keepData) await syncUserStateToLocal($currentUser.id);
+		else clearLocalState();
+		signOutToLocalMode();
+		router.navigate("home");
 	}
 
 	function handleSignedIn() {
@@ -62,13 +57,8 @@
 
 	async function syncNow() {
 		error = "";
-		try {
-			const result = await syncCloudBackupNow();
-			if (!result?.ok) error = "Cloud backup is currently unavailable.";
-		} catch (e: any) {
-			console.error("Failed to sync cloud backup", e);
-			error = e?.message || "Failed to sync cloud backup";
-		}
+		const result = await syncCloudBackupNow();
+		if (!result.ok) error = "Cloud backup is currently unavailable.";
 	}
 </script>
 
@@ -97,13 +87,12 @@
 	/>
 {/if}
 
-
 {#if showSignOut}
 	<SignOutDialog onChoose={switchToLocalMode} onCancel={() => (showSignOut = false)} />
 {/if}
 
 <StremioImportModal
 	open={showStremioImport}
-	on:close={() => (showStremioImport = false)}
-	on:imported={() => (stremioConnectionRevision += 1)}
+	onClose={() => (showStremioImport = false)}
+	onImported={() => (stremioConnectionRevision += 1)}
 />

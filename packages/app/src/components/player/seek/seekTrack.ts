@@ -21,23 +21,18 @@ export const KIND_COLORS: Partial<Record<ChapterKind, string>> = {
 	outro: "168,85,247",
 };
 
-/** Maps a media time to its position on the bar; the remaining-time style runs right to left. */
-export const timeToFraction = (time: number, duration: number, inverted: boolean) => {
-	const fraction = duration > 0 ? Math.min(1, Math.max(0, time / duration)) : 0;
-	return inverted ? 1 - fraction : fraction;
-};
+export const timeToFraction = (time: number, duration: number) =>
+	duration > 0 ? Math.min(1, Math.max(0, time / duration)) : 0;
 
-export const fractionToTime = (fraction: number, duration: number, inverted: boolean) =>
-	(inverted ? 1 - fraction : fraction) * duration;
+export const fractionToTime = (fraction: number, duration: number) => fraction * duration;
 
-function rangeToFractions(range: TimeRange, duration: number, inverted: boolean): [number, number] {
-	const a = timeToFraction(range.start, duration, inverted);
-	const b = timeToFraction(range.end, duration, inverted);
-	return a < b ? [a, b] : [b, a];
-}
+const rangeToFractions = (range: TimeRange, duration: number): [number, number] => [
+	timeToFraction(range.start, duration),
+	timeToFraction(range.end, duration),
+];
 
 /** Splits the timeline at chapter boundaries, filling uncovered time with plain segments. */
-export function trackSegments(chapters: Chapter[], duration: number, inverted: boolean): TrackSegment[] {
+export function trackSegments(chapters: Chapter[], duration: number): TrackSegment[] {
 	if (duration <= 0) return [];
 	const minLength = duration * MIN_SEGMENT_FRACTION;
 	const marked = chapters
@@ -62,12 +57,10 @@ export function trackSegments(chapters: Chapter[], duration: number, inverted: b
 	if (duration - cursor >= minLength || ranges.length === 0) ranges.push({ start: cursor, end: duration, kind: null });
 	else ranges.at(-1)!.end = duration;
 
-	const segments = ranges
-		.map((range) => {
-			const [left, right] = rangeToFractions(range, duration, inverted);
-			return { left, right, kind: range.kind };
-		})
-		.sort((a, b) => a.left - b.left);
+	const segments = ranges.map((range) => {
+		const [left, right] = rangeToFractions(range, duration);
+		return { left, right, kind: range.kind };
+	});
 	return segments.map((segment, index) => ({
 		...segment,
 		isFirst: index === 0,
@@ -84,8 +77,8 @@ export function fillWithin(segment: TrackSegment, from: number, to: number): Seg
 	return { left: (left - segment.left) / span, width: (right - left) / span };
 }
 
-export function bufferedFractions(ranges: TimeRange[], duration: number, inverted: boolean) {
-	return ranges.map((range) => rangeToFractions(range, duration, inverted));
+export function bufferedFractions(ranges: TimeRange[], duration: number) {
+	return ranges.map((range) => rangeToFractions(range, duration));
 }
 
 /** The media element's buffered ranges, reusing `previous` when nothing changed. */

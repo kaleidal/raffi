@@ -4,15 +4,25 @@
     import { fade } from "svelte/transition";
     import { Film, X, Plus, Trash } from "@lucide/svelte";
 
-    export let x: number;
-    export let y: number;
-    export let showTrailer = false;
-
-    export let onClose: () => void = () => {};
-    export let onRemove: () => void = () => {};
-    export let onForget: () => void = () => {};
-    export let onAddToList: () => void = () => {};
-    export let onViewTrailer: () => void = () => {};
+    let {
+        x,
+        y,
+        showTrailer = false,
+        onClose,
+        onRemove,
+        onForget,
+        onAddToList,
+        onViewTrailer,
+    }: {
+        x: number;
+        y: number;
+        showTrailer?: boolean;
+        onClose: () => void;
+        onRemove: () => void;
+        onForget: () => void;
+        onAddToList: () => void;
+        onViewTrailer: () => void;
+    } = $props();
 
     function close() {
         onClose();
@@ -58,13 +68,13 @@
     class="fixed z-[100] context-menu bg-surface rounded-xl py-2 min-w-[150px] flex flex-col"
     style="top: {y}px; left: {x}px;"
     transition:fade={{ duration: 100 }}
-    on:contextmenu|preventDefault
+    oncontextmenu={(event) => event.preventDefault()}
     role="menu"
     tabindex="-1"
 >
     <button
         class="text-left px-4 py-2 text-ink/80 hover:text-ink hover:bg-ink/10 transition-colors text-sm flex flex-row gap-2 items-center cursor-pointer"
-        on:click={handleRemove}
+        onclick={handleRemove}
     >
         <X size={16} strokeWidth={2} />
         Remove
@@ -72,7 +82,7 @@
     {#if showTrailer}
         <button
             class="text-left px-4 py-2 text-ink/80 hover:text-ink hover:bg-ink/10 transition-colors text-sm flex flex-row gap-2 items-center cursor-pointer"
-            on:click={handleViewTrailer}
+            onclick={handleViewTrailer}
         >
             <Film size={16} strokeWidth={2} />
             View Trailer
@@ -80,7 +90,7 @@
     {/if}
     <button
         class="text-left px-4 py-2 text-ink/80 hover:text-ink hover:bg-ink/10 transition-colors text-sm flex flex-row gap-2 items-center cursor-pointer"
-        on:click={handleAddToList}
+        onclick={handleAddToList}
     >
         <Plus size={16} strokeWidth={2} />
         Add to List
@@ -88,7 +98,7 @@
     <div class="h-[1px] bg-ink/10 my-1"></div>
     <button
         class="text-left px-4 py-2 text-danger hover:bg-danger/10 transition-colors text-sm flex flex-row gap-2 items-center cursor-pointer"
-        on:click={handleForget}
+        onclick={handleForget}
     >
         <Trash size={16} strokeWidth={2} />
         Forget

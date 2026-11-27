@@ -1,72 +1,17 @@
 <script lang="ts">
-    import { portal } from "../../common/portal";
-    import { fade, scale } from "svelte/transition";
+    import Button from "../../common/controls/Button.svelte";
+    import Dialog from "../../common/dialog/Dialog.svelte";
 
-    export let onConfirm: () => void = () => {};
-    export let onCancel: () => void = () => {};
-
-    function confirm() {
-        onConfirm();
-    }
-
-    function cancel() {
-        onCancel();
-    }
+    let { onConfirm, onCancel }: { onConfirm: () => void; onCancel: () => void } = $props();
 </script>
 
-<div
-    use:portal
-    class="raffi-modal-backdrop fixed inset-0 z-[200] flex items-center justify-center bg-canvas/80 backdrop-blur-sm"
-    transition:fade={{ duration: 200 }}
->
-    <div
-        class="bg-canvas rounded-2xl p-8 max-w-md w-full shadow-2xl flex flex-col gap-6"
-        transition:scale={{ duration: 200, start: 0.95 }}
-    >
-        <div class="flex flex-col gap-2 text-center">
-            <div class="flex justify-center mb-2">
-                <div class="p-4 bg-warning/10 rounded-full">
-                    <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        class="h-10 w-10 text-warning"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                    >
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                        />
-                    </svg>
-                </div>
-            </div>
-            <h2 class="text-2xl font-bold text-ink">Torrenting Warning</h2>
-            <p class="text-ink/55">
-                You are about to stream using BitTorrent. Depending on your
-                location and local laws, this may expose your IP address to
-                others.
-            </p>
-            <p class="text-ink/55 text-sm">
-                Please ensure you are using a VPN if required in your country to
-                avoid potential fines or legal issues.
-            </p>
-        </div>
+<Dialog title="Stream over BitTorrent?" onClose={onCancel}>
+    <p class="leading-relaxed text-ink/75">
+        Other peers can see your IP address while you stream. Use a VPN if torrenting isn't safe where you live.
+    </p>
 
-        <div class="flex flex-col gap-3">
-            <button
-                class="w-full py-3 px-4 bg-accent text-on-accent font-bold rounded-xl hover:bg-accent/85 transition-colors cursor-pointer"
-                on:click={confirm}
-            >
-                I Understand, Continue
-            </button>
-            <button
-                class="w-full py-3 px-4 bg-raised text-ink font-medium rounded-xl hover:bg-ink/15 transition-colors cursor-pointer"
-                on:click={cancel}
-            >
-                Cancel
-            </button>
-        </div>
-    </div>
-</div>
+    {#snippet actions()}
+        <Button onclick={onCancel}>Cancel</Button>
+        <Button variant="primary" onclick={onConfirm}>Continue</Button>
+    {/snippet}
+</Dialog>

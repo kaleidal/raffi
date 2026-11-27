@@ -97,6 +97,10 @@ export async function resolveHttpPlayback(
 		if (meta.subtitleTracks.length > 0 && canUseMediaBunnyRemux(meta)) {
 			return { mode: "mediabunny", meta, reason: "embedded-subtitles" };
 		}
+		// Native playback always plays the file's first audio track and can't switch to another.
+		if (meta.audioTracks.length > 1 && canUseMediaBunnyRemux(meta)) {
+			return { mode: "mediabunny", meta, reason: "multiple-audio-tracks" };
+		}
 
 		const audioOk = isNativeFriendlyAudio(meta.audio?.codec ?? null, supportsEac3);
 		const containerOk =

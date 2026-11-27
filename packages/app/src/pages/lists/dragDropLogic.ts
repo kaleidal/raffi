@@ -1,6 +1,5 @@
 import { updateListItemPosition } from "../../lib/db/db";
 import { listItemsMap, dragState } from "./listsState";
-import { loadListItems } from "./dataLoader";
 import { get } from "svelte/store";
 import type { ExtendedListItem } from "./types";
 
@@ -61,16 +60,11 @@ export async function handleDrop(
         [targetListId]: newItems
     }));
 
-    // Update positions in DB
-    try {
-        const updates = newItems.map((item, index) =>
+    await Promise.all(
+        newItems.map((item, index) =>
             updateListItemPosition(targetListId, item.imdb_id, index + 1),
-        );
-        await Promise.all(updates);
-    } catch (e) {
-        console.error("Failed to update item positions", e);
-        await loadListItems(targetListId); // Revert on error
-    }
+        ),
+    );
 
     dragState.set({
         draggedItem: null,

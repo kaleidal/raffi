@@ -1,24 +1,34 @@
 <script lang="ts">
-    import LoadingSpinner from "../../../components/common/LoadingSpinner.svelte";
+    import { untrack } from "svelte";
+    import Button from "../../../components/common/controls/Button.svelte";
+    import LoadingSpinner from "../../../components/common/loading/LoadingSpinner.svelte";
     import { refreshLineup } from "../../../lib/live/refresh/refresh";
     import { newSourceId, saveSource } from "../../../lib/live/sources";
     import { normalizeServerUrl } from "../../../lib/live/xtream";
     import { splitGuideUrls } from "../../../lib/live/parse/m3u";
     import type { LiveSource, LiveSourceKind } from "../../../lib/live/types";
 
-    export let source: LiveSource | null = null;
-    export let onDone: (source: LiveSource) => void;
-    export let onCancel: () => void;
+    let {
+        source = null,
+        onDone,
+        onCancel,
+    }: {
+        source?: LiveSource | null;
+        onDone: (source: LiveSource) => void;
+        onCancel: () => void;
+    } = $props();
 
-    let kind: LiveSourceKind = source?.kind ?? "m3u";
-    let name = source?.name ?? "";
-    let playlistUrl = source?.kind === "m3u" ? source.playlistUrl : "";
-    let guideUrl = source?.kind === "m3u" ? (source.guideUrl ?? "") : "";
-    let serverUrl = source?.kind === "xtream" ? source.serverUrl : "";
-    let username = source?.kind === "xtream" ? source.username : "";
-    let password = source?.kind === "xtream" ? source.password : "";
-    let saving = false;
-    let error = "";
+    const initial = untrack(() => source);
+
+    let kind = $state<LiveSourceKind>(initial?.kind ?? "m3u");
+    let name = $state(initial?.name ?? "");
+    let playlistUrl = $state(initial?.kind === "m3u" ? initial.playlistUrl : "");
+    let guideUrl = $state(initial?.kind === "m3u" ? (initial.guideUrl ?? "") : "");
+    let serverUrl = $state(initial?.kind === "xtream" ? initial.serverUrl : "");
+    let username = $state(initial?.kind === "xtream" ? initial.username : "");
+    let password = $state(initial?.kind === "xtream" ? initial.password : "");
+    let saving = $state(false);
+    let error = $state("");
 
     const input =
         "min-h-11 rounded-2xl bg-ink/8 px-4 text-sm text-ink outline-none placeholder:text-ink/30 focus:bg-ink/12";
@@ -132,25 +142,15 @@
         <p class="text-sm text-danger">{error}</p>
     {/if}
 
-    <div class="flex justify-end gap-3 pt-2">
-        <button
-            type="button"
-            class="rounded-2xl bg-ink/10 px-4 py-2 font-semibold text-ink hover:bg-ink/20 cursor-pointer"
-            onclick={onCancel}
-        >
-            Cancel
-        </button>
-        <button
-            type="submit"
-            class="flex min-w-24 items-center justify-center gap-2 rounded-2xl bg-accent px-4 py-2 font-semibold text-on-accent hover:bg-accent/85 cursor-pointer disabled:cursor-wait disabled:opacity-70"
-            disabled={saving}
-        >
+    <div class="flex justify-end gap-2 pt-2">
+        <Button type="button" onclick={onCancel}>Cancel</Button>
+        <Button type="submit" variant="primary" class="min-w-24 disabled:cursor-wait" disabled={saving}>
             {#if saving}
                 <LoadingSpinner size="16px" />
                 Loading channels
             {:else}
                 Save
             {/if}
-        </button>
+        </Button>
     </div>
 </form>

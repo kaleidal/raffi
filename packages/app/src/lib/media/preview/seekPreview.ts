@@ -7,6 +7,11 @@ import { RangeReader } from "../probe/rangeReader";
 
 const PREVIEW_WIDTH = 320;
 const MAX_CACHED_FRAMES = 160;
+const WARM_FRAMES = MAX_CACHED_FRAMES / 2;
+const WARM_INTERVAL_SECONDS = 60;
+const WARM_PAUSE_MS = 400;
+/** Keyframes of taller sources weigh several megabytes each, too much to fetch ahead of time. */
+const WARM_MAX_HEIGHT = 1600;
 
 type KeyframeSource = {
 	keyframeAt: (time: number) => Promise<PreviewKeyframe | null> | PreviewKeyframe | null;
@@ -14,7 +19,16 @@ type KeyframeSource = {
 	knownKeyframeAt: (time: number) => number | undefined;
 };
 
-type Previewer = { source: KeyframeSource; decoder: KeyframeDecoder };
+type Previewer = { source: KeyframeSource; decoder: KeyframeDecoder; height: number };
+
+export type WarmConditions = {
+	getDuration: () => number;
+	getPlayhead: () => number;
+	/** Whether fetching now would not compete with playback. */
+	canFetch: () => boolean;
+};
+
+const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Matroska clusters span seconds of video, so keyframes are fetched by their cued byte
@@ -25,12 +39,13 @@ async function openKeyframeSource(stream: StreamInput, src: string, signal: Abor
 	if (!track || !(await track.canDecode())) return null;
 	const config = await track.getDecoderConfig();
 	if (!config) return null;
+	const height = await track.getDisplayHeight();
 
 	if ((await stream.input.getFormat()) instanceof MatroskaInputFormat) {
-		const keyframes = await MatroskaKeyframes.open(new RangeReader(src, signal), track.id);
-		return keyframes && { config, source: keyframes };
+		const keyframes = await MatroskaKeyframes.open(new RangeReader(src, signal), track.number);
+		return keyframes && { config, height, source: keyframes };
 	}
-	return { config, source: new PacketKeyframes(track) };
+	return { config, height, source: new PacketKeyframes(track) };
 }
 
 /**
@@ -70,6 +85,40 @@ export class SeekPreview {
 		});
 	}
 
+	/**
+	 * Decodes frames across the whole video in the background, nearest the playhead first, so
+	 * zoomed-out timelines open filled in. Frames someone is pointing at always go first.
+	 */
+	async warm({ getDuration, getPlayhead, canFetch }: WarmConditions) {
+		const previewer = await this.loadPreviewer();
+		if (!previewer || previewer.height > WARM_MAX_HEIGHT) return;
+
+		while (!this.abort.signal.aborted && !(getDuration() > 0)) await pause(WARM_PAUSE_MS);
+		const duration = getDuration();
+		const interval = Math.max(WARM_INTERVAL_SECONDS, duration / WARM_FRAMES);
+		const times = Array.from({ length: Math.floor(duration / interval) + 1 }, (_, index) => index * interval);
+
+		while (times.length && !this.abort.signal.aborted) {
+			if (this.running || this.queued || !canFetch()) {
+				await pause(WARM_PAUSE_MS);
+				continue;
+			}
+			const playhead = getPlayhead();
+			times.sort((a, b) => Math.abs(a - playhead) - Math.abs(b - playhead));
+			const time = times.shift()!;
+			if (this.peek(time)) continue;
+
+			this.running = true;
+			try {
+				await this.decode(time).catch(() => null);
+			} finally {
+				this.running = false;
+			}
+			void this.drain();
+			await pause(WARM_PAUSE_MS);
+		}
+	}
+
 	dispose() {
 		this.abort.abort();
 		this.queued?.resolve(null);
@@ -97,7 +146,11 @@ export class SeekPreview {
 	private loadPreviewer(): Promise<Previewer | null> {
 		this.previewer ??= openKeyframeSource(this.stream, this.src, this.abort.signal)
 			.then((opened) => {
-				this.ready = opened && { source: opened.source, decoder: new KeyframeDecoder(opened.config, PREVIEW_WIDTH) };
+				this.ready = opened && {
+					source: opened.source,
+					decoder: new KeyframeDecoder(opened.config, PREVIEW_WIDTH),
+					height: opened.height,
+				};
 				return this.ready;
 			})
 			.catch(() => null);

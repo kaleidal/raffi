@@ -1,8 +1,8 @@
 import type { PopularTitleMeta } from "../library/types/popular_types";
-
-const MIN_GENRE_ROW_LENGTH = 6;
-
-export type GenreRow = { genre: string; titles: PopularTitleMeta[] };
+import { getTraktRecommendations, type TraktRecommendation } from "../db/db";
+import { getCachedMetaData } from "../library/metaCache";
+import { sanitizeCatalogTitles } from "../library/catalogQuality";
+import { mapMetaToPopular } from "./metaToTitle";
 
 export function uniqueTitles(titles: PopularTitleMeta[]) {
     const seen = new Set<string>();
@@ -13,17 +13,32 @@ export function uniqueTitles(titles: PopularTitleMeta[]) {
     });
 }
 
-/** Gives each title to the first genre row it fits, so rows further down don't repeat the ones above. */
-export function distinctGenreRows(
-    genres: string[],
-    titlesByGenre: Record<string, PopularTitleMeta[]>,
-    alreadyShown: PopularTitleMeta[],
-): GenreRow[] {
-    const seen = new Set(alreadyShown.map((title) => title.imdb_id));
-    return genres.flatMap((genre) => {
-        const titles = uniqueTitles(titlesByGenre[genre].filter((title) => !seen.has(title.imdb_id)));
-        if (titles.length < MIN_GENRE_ROW_LENGTH) return [];
-        for (const title of titles) seen.add(title.imdb_id);
-        return [{ genre, titles }];
-    });
+export async function fetchRecommendedTitles(): Promise<PopularTitleMeta[]> {
+    const traktItems: TraktRecommendation[] = await getTraktRecommendations(24);
+    if (!Array.isArray(traktItems) || traktItems.length === 0) {
+        return [];
+    }
+
+    const enriched = await Promise.all(
+        traktItems.map(async (item) => {
+            try {
+                const meta = await getCachedMetaData(item.imdbId, item.type);
+                if (!meta?.meta) return null;
+                return mapMetaToPopular(meta.meta);
+            } catch {
+                return null;
+            }
+        }),
+    );
+
+    const deduped = new Map<string, PopularTitleMeta>();
+    for (const item of enriched) {
+        if (item && !deduped.has(item.imdb_id)) {
+            deduped.set(item.imdb_id, item);
+        }
+    }
+
+    return sanitizeCatalogTitles(
+        Array.from(deduped.values()),
+    ).slice(0, 20);
 }

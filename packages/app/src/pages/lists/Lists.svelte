@@ -2,7 +2,7 @@
     import { onMount } from "svelte";
     import { fade } from "svelte/transition";
     import SearchBar from "../../components/home/SearchBar.svelte";
-    import LoadingSpinner from "../../components/common/LoadingSpinner.svelte";
+    import PageLoading from "../../components/common/loading/PageLoading.svelte";
     import AmbientBackdrop from "../../components/common/AmbientBackdrop.svelte";
     import { collapseOnScroll } from "../../components/common/collapseOnScroll";
     import ListsEmpty from "./components/ListsEmpty.svelte";
@@ -15,8 +15,8 @@
     const HOME_REFRESH_EVENT = "raffi:home-refresh";
 
     let refreshRequestId = 0;
-    let header: HTMLDivElement;
-    let headerCollapsed = false;
+    let header = $state.raw<HTMLDivElement>();
+    let headerCollapsed = $state(false);
 
     async function refreshLists(showLoading = false) {
         const requestId = ++refreshRequestId;
@@ -63,8 +63,6 @@
             </div>
         {/if}
     {:else}
-        <div class="flex h-full w-full items-center justify-center" out:fade={{ duration: 200 }}>
-            <LoadingSpinner size="60px" />
-        </div>
+        <PageLoading />
     {/if}
 </div>

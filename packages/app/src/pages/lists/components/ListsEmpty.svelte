@@ -14,7 +14,7 @@
     }
 </script>
 
-<div class="flex w-full flex-1 items-center justify-center px-6" in:fade={{ duration: 300 }}>
+<div class="relative z-10 flex w-full flex-1 items-center justify-center px-6" in:fade={{ duration: 300 }}>
     <form class="flex w-full max-w-md flex-col items-center gap-6 text-center" onsubmit={create}>
         <div>
             <h2 class="text-[clamp(28px,2.2vw,40px)] font-semibold text-ink">Start a list</h2>

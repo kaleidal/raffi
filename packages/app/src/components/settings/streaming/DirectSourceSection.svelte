@@ -216,7 +216,7 @@
                     options={idTypeOptions}
                     buttonClass="min-h-11 rounded-2xl bg-ink/8 px-4 text-sm text-ink hover:bg-ink/12"
                     menuClass="min-w-[132px]"
-                    on:change={(event) => setDirect({ idType: event.detail.value as DirectIdType })}
+                    onChange={(value) => setDirect({ idType: value as DirectIdType })}
                 />
             </label>
 
@@ -227,7 +227,7 @@
                     options={playbackModeOptions}
                     buttonClass="min-h-11 rounded-2xl bg-ink/8 px-4 text-sm text-ink hover:bg-ink/12"
                     menuClass="min-w-[180px]"
-                    on:change={(event) => setDirect({ playbackMode: event.detail.value as DirectPlaybackMode })}
+                    onChange={(value) => setDirect({ playbackMode: value as DirectPlaybackMode })}
                 />
             </label>
         </div>
@@ -265,7 +265,7 @@
                         options={playerFormatOptions}
                         buttonClass="min-h-11 rounded-2xl bg-ink/8 px-4 text-sm text-ink hover:bg-ink/12"
                         menuClass="min-w-[180px]"
-                        on:change={(event) => setDirect({ playerFormat: event.detail.value as DirectPlayerFormat })}
+                        onChange={(value) => setDirect({ playerFormat: value as DirectPlayerFormat })}
                     />
                 </label>
             </div>

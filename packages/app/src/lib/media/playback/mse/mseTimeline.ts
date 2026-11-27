@@ -231,20 +231,12 @@ export class MseTimeline {
 
 	endOfStream(error?: "decode" | "network") {
 		if (this.mediaSource.readyState !== "open" || this.sourceBuffer.updating) return;
-		try {
-			this.mediaSource.endOfStream(error);
-		} catch {
-			// The stream was already ending.
-		}
+		this.mediaSource.endOfStream(error);
 	}
 
 	destroy() {
 		URL.revokeObjectURL(this.objectUrl);
-		try {
-			this.video.removeAttribute("src");
-			this.video.load();
-		} catch {
-			// The element is already detached.
-		}
+		this.video.removeAttribute("src");
+		this.video.load();
 	}
 }

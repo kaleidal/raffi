@@ -1,36 +1,8 @@
+import type { Episode } from "../../lib/library/types/meta_types";
+
 export interface LastWatched {
     season: number;
     episode: number;
 }
 
-export interface StreamAvailabilityHint {
-    cacheHint: boolean | null;
-    providerLabel: string | null;
-    dashboardUrl: string | null;
-    expectedSizeBytes: number | null;
-}
-
-export interface Stream {
-    name: string;
-    title: string;
-    url?: string;
-    infoHash?: string;
-    fileIdx?: number;
-    raffiSource?: "local" | "addon" | "direct";
-    directPlaybackMode?: "iframe" | "player";
-    directPlayerFormat?: "auto" | "hls" | "mp4" | "webm" | "dash" | "other";
-    raffiAvailability?: StreamAvailabilityHint;
-    behaviorHints?: {
-        bingeGroup?: string;
-        filename?: string;
-    };
-}
-
-export interface ProgressItem {
-    time: number;
-    duration: number;
-    watched: boolean;
-    updatedAt: number;
-}
-
-export type ProgressMap = { [key: string]: ProgressItem } | ProgressItem;
+export type EpisodeRef = Pick<Episode, "season" | "episode">;

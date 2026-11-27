@@ -1,4 +1,5 @@
-import type { LastWatched, ProgressItem } from "./types";
+import type { LastWatched } from "./types";
+import type { ProgressItem } from "../../lib/library/types/progress";
 
 type EpisodeLike = {
     season?: number;
@@ -17,11 +18,6 @@ const compareEpisodes = (left: EpisodeLike, right: EpisodeLike) => {
 export const getStandardEpisodes = <T extends EpisodeLike>(videos: T[] | null | undefined): T[] => {
     if (!Array.isArray(videos)) return [];
     return videos.filter(isStandardEpisode).slice().sort(compareEpisodes);
-};
-
-export const getFirstStandardEpisode = <T extends EpisodeLike>(videos: T[] | null | undefined): T | null => {
-    const standardEpisodes = getStandardEpisodes(videos);
-    return standardEpisodes[0] ?? null;
 };
 
 export const getSeriesResumeEpisode = <T extends EpisodeLike>(

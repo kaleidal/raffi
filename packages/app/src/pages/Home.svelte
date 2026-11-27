@@ -1,7 +1,6 @@
 <script lang="ts">
-    import { onMount } from "svelte";
+    import { onMount, untrack } from "svelte";
     import { fade } from "svelte/transition";
-    import { getCachedMetaData } from "../lib/library/metaCache";
     import { getPopularTitles } from "../lib/library/library";
     import { sanitizeCatalogTitles } from "../lib/library/catalogQuality";
     import {
@@ -10,16 +9,12 @@
         getHeroCatalogSourceOptions,
         type HeroCatalogSourceOption,
     } from "../lib/library/addonCatalogs";
-    import type { ShowResponse } from "../lib/library/types/meta_types";
     import type { PopularTitleMeta } from "../lib/library/types/popular_types";
     import {
         getAddons,
-        getTraktRecommendations,
         getTraktStatus,
         getLibrary,
-        updateLibraryPoster,
         type Addon,
-        type TraktRecommendation,
     } from "../lib/db/db";
     import {
         getStoredHomeHeroSource,
@@ -27,116 +22,52 @@
         HOME_HERO_SOURCE_TRAKT_RECOMMENDATIONS,
     } from "../lib/home/heroSettings";
     import { mapWithConcurrency } from "../lib/utils/mapWithConcurrency";
+    import { loadWatchingItem, type LoadedWatchingItem } from "../lib/home/continueWatching";
 
     import Hero from "../components/home/Hero.svelte";
     import SearchBar from "../components/home/SearchBar.svelte";
     import ContinueWatching from "../components/home/sections/ContinueWatching.svelte";
     import TitleRow from "../components/home/sections/TitleRow.svelte";
-    import { distinctGenreRows, uniqueTitles } from "../lib/home/homeRows";
-    import LoadingSpinner from "../components/common/LoadingSpinner.svelte";
-    import Skeleton from "../components/common/Skeleton.svelte";
+    import { fetchRecommendedTitles, uniqueTitles } from "../lib/home/homeRows";
+    import { pickHeroTitle, pickSpotlight } from "../lib/home/featured";
+    import { homeAmbient, setRestingAmbient } from "../lib/home/ambient";
+    import { BROWSE_SECTION_ID, browseSelection } from "../lib/home/browse";
+    import BrowseSection from "../components/home/sections/BrowseSection.svelte";
+    import TitleMenuHost from "../components/home/TitleMenuHost.svelte";
+    import AmbientBackdrop from "../components/common/AmbientBackdrop.svelte";
+    import FeatureStrip from "../components/common/FeatureStrip.svelte";
+    import { router } from "../lib/stores/router";
+    import { getPrimaryTrailerId } from "../lib/home/trailers";
+    import { isAndroidPlatform } from "../lib/shell/platform";
+    import PageLoading from "../components/common/loading/PageLoading.svelte";
+    import TitleRowSkeleton from "../components/home/sections/TitleRowSkeleton.svelte";
 
-    let showcasedTitle: PopularTitleMeta | null = null;
-    let fetchedTitles = false;
-    let continueWatchingMeta: (ShowResponse & { libraryItem: any })[] = [];
-    let popularMeta: PopularTitleMeta[] = [];
-    let genreMap: Record<string, PopularTitleMeta[]> = {};
-    let topGenres: string[] = [];
-    $: genreRows = distinctGenreRows(topGenres, genreMap, popularMeta);
+    let showcasedTitle = $state.raw<PopularTitleMeta | null>(null);
+    let fetchedTitles = $state(false);
+    let continueWatchingMeta = $state.raw<LoadedWatchingItem[]>([]);
+    let popularMeta = $state.raw<PopularTitleMeta[]>([]);
     let absolutePopularTitles: PopularTitleMeta[] = [];
     let heroPoolTitles: PopularTitleMeta[] = [];
-    let addonSections: { id: string; title: string; titles: PopularTitleMeta[] }[] =
-        [];
-    let traktRecommendations: PopularTitleMeta[] = [];
-    let traktRecommendationsConnected = false;
-    let addonSectionsLoading = false;
+    let addonSections = $state.raw<{ id: string; title: string; titles: PopularTitleMeta[] }[]>([]);
+    let traktRecommendations = $state.raw<PopularTitleMeta[]>([]);
+    let traktRecommendationsConnected = $state(false);
+    let spotlight = $state.raw<PopularTitleMeta | null>(null);
+
+    $effect.pre(() => setRestingAmbient(showcasedTitle?.background));
+
+    $effect.pre(() => {
+        const pools = [traktRecommendations, ...addonSections.map((section) => section.titles), popularMeta];
+        const excludeId = showcasedTitle?.imdb_id;
+        spotlight = pickSpotlight(pools, excludeId, untrack(() => spotlight));
+    });
+
+    function seeAllPopular() {
+        browseSelection.update((selection) => ({ ...selection, genre: null }));
+        document.getElementById(BROWSE_SECTION_ID)?.scrollIntoView({ behavior: "smooth" });
+    }
+    let addonSectionsLoading = $state(false);
     let continueWatchingLoadGeneration = 0;
     const HOME_REFRESH_EVENT = "raffi:home-refresh";
-
-    function extractYouTubeId(value: unknown): string | null {
-        const raw = String(value || "").trim();
-        if (!raw) return null;
-        if (/^[A-Za-z0-9_-]{11}$/.test(raw)) return raw;
-
-        try {
-            const url = new URL(raw);
-            if (url.hostname.includes("youtube.com")) {
-                const id = url.searchParams.get("v");
-                if (id && /^[A-Za-z0-9_-]{11}$/.test(id)) return id;
-            }
-            if (url.hostname.includes("youtu.be")) {
-                const id = url.pathname.replace(/^\//, "");
-                if (id && /^[A-Za-z0-9_-]{11}$/.test(id)) return id;
-            }
-        } catch {
-            // ignore
-        }
-
-        return null;
-    }
-
-    function getTrailerStreamsFromMeta(meta: ShowResponse["meta"]) {
-        const richMeta = meta as any;
-        if (Array.isArray(richMeta?.trailerStreams) && richMeta.trailerStreams.length > 0) {
-            return richMeta.trailerStreams
-                .map((entry: any) => ({
-                    title: String(entry?.title || meta.name || "Trailer"),
-                    ytId: String(entry?.ytId || "").trim(),
-                }))
-                .filter((entry: any) => /^[A-Za-z0-9_-]{11}$/.test(entry.ytId));
-        }
-
-        const trailers = Array.isArray(meta.trailers) ? meta.trailers : [];
-        return trailers
-            .map((trailer) => {
-                const ytId = extractYouTubeId((trailer as any)?.source);
-                if (!ytId) return null;
-                return {
-                    title: String(meta.name || "Trailer"),
-                    ytId,
-                };
-            })
-            .filter((entry): entry is { title: string; ytId: string } => entry !== null);
-    }
-
-    function mapMetaToPopular(meta: ShowResponse["meta"]): PopularTitleMeta {
-        const normalizedType = meta.type === "series" ? "series" : "movie";
-        const richMeta = meta as any;
-        return {
-            imdb_id: meta.imdb_id,
-            id: meta.id || meta.imdb_id,
-            name: meta.name || "Unknown",
-            type: normalizedType,
-            popularities: { ...(meta.popularities ?? {}) },
-            description: meta.description || "",
-            poster: meta.poster || undefined,
-            genre: Array.isArray(meta.genre) ? meta.genre : undefined,
-            genres: Array.isArray(meta.genres) ? meta.genres : undefined,
-            imdbRating: meta.imdbRating || undefined,
-            released: meta.released || undefined,
-            slug: meta.slug || "",
-            year: meta.year || undefined,
-            director: Array.isArray(meta.director)
-                ? meta.director
-                : meta.director
-                    ? [meta.director]
-                    : null,
-            writer: Array.isArray(meta.writer) ? meta.writer : null,
-            trailers: Array.isArray(meta.trailers) ? meta.trailers : undefined,
-            status: meta.status || undefined,
-            background: meta.background || undefined,
-            logo: meta.logo || undefined,
-            popularity: meta.popularity,
-            releaseInfo: meta.releaseInfo || undefined,
-            trailerStreams: getTrailerStreamsFromMeta(meta),
-            links: Array.isArray(richMeta?.links) ? richMeta.links : undefined,
-            behaviorHints: richMeta?.behaviorHints,
-            awards: meta.awards || undefined,
-            runtime: meta.runtime || undefined,
-            dvdRelease: meta.dvdRelease || undefined,
-            cast: Array.isArray(meta.cast) ? meta.cast : undefined,
-        };
-    }
 
     async function loadTraktRecommendations() {
         try {
@@ -147,34 +78,7 @@
                 return;
             }
 
-            const traktItems: TraktRecommendation[] = await getTraktRecommendations(24);
-            if (!Array.isArray(traktItems) || traktItems.length === 0) {
-                traktRecommendations = [];
-                return;
-            }
-
-            const enriched = await Promise.all(
-                traktItems.map(async (item) => {
-                    try {
-                        const meta = await getCachedMetaData(item.imdbId, item.type);
-                        if (!meta?.meta) return null;
-                        return mapMetaToPopular(meta.meta);
-                    } catch {
-                        return null;
-                    }
-                }),
-            );
-
-            const deduped = new Map<string, PopularTitleMeta>();
-            for (const item of enriched) {
-                if (item && !deduped.has(item.imdb_id)) {
-                    deduped.set(item.imdb_id, item);
-                }
-            }
-
-            traktRecommendations = sanitizeCatalogTitles(
-                Array.from(deduped.values()),
-            ).slice(0, 20);
+            traktRecommendations = await fetchRecommendedTitles();
         } catch (error) {
             console.error("Failed to load Trakt recommendations", error);
             traktRecommendations = [];
@@ -182,88 +86,15 @@
         }
     }
 
-    function isHeroCandidate(title: PopularTitleMeta) {
-        const year = parseInt(title.year ?? "");
-        return (
-            Boolean(title.logo) &&
-            Array.isArray(title.trailerStreams) &&
-            title.trailerStreams.length > 0 &&
-            year >= 2010
-        );
-    }
-
-    function chooseRandom(items: PopularTitleMeta[]) {
-        if (items.length === 0) return undefined;
-        return items[Math.floor(Math.random() * items.length)];
-    }
-
-    const getTitleKey = (title: PopularTitleMeta | null | undefined) =>
-        title ? `${title.type}:${title.imdb_id || title.id}` : "";
-
-    function keepCurrentFeaturedIfPresent(items: PopularTitleMeta[]) {
-        const currentKey = getTitleKey(showcasedTitle);
-        if (!currentKey) return false;
-        return items.some((title) => getTitleKey(title) === currentKey);
-    }
-
     function setFeaturedFromPool(options: { preserveCurrent?: boolean } = {}) {
-        const selectedSourceId = getStoredHomeHeroSource();
-
-        if (
-            selectedSourceId === HOME_HERO_SOURCE_TRAKT_RECOMMENDATIONS &&
-            heroPoolTitles.length > 0
-        ) {
-            const traktHeroCandidates = heroPoolTitles.filter(
-                (title) =>
-                    Array.isArray(title.trailerStreams) &&
-                    title.trailerStreams.length > 0,
-            );
-            const traktLogoCandidates = traktHeroCandidates.filter((title) => Boolean(title.logo));
-            const traktCandidates = traktLogoCandidates.length > 0
-                ? traktLogoCandidates
-                : traktHeroCandidates.length > 0
-                    ? traktHeroCandidates
-                    : heroPoolTitles;
-            if (options.preserveCurrent && keepCurrentFeaturedIfPresent(traktCandidates)) {
-                return;
-            }
-            const traktSelected = chooseRandom(
-                traktCandidates,
-            );
-            if (traktSelected) {
-                showcasedTitle = traktSelected;
-                return;
-            }
-        }
-
-        const primaryCandidates = heroPoolTitles.filter(isHeroCandidate);
-        if (primaryCandidates.length > 0) {
-            if (options.preserveCurrent && keepCurrentFeaturedIfPresent(primaryCandidates)) {
-                return;
-            }
-            const selected = chooseRandom(primaryCandidates);
-            if (selected) showcasedTitle = selected;
-            return;
-        }
-
-        const fallbackCandidates = absolutePopularTitles.filter(isHeroCandidate);
-        if (fallbackCandidates.length > 0) {
-            if (options.preserveCurrent && keepCurrentFeaturedIfPresent(fallbackCandidates)) {
-                return;
-            }
-            const selected = chooseRandom(fallbackCandidates);
-            if (selected) showcasedTitle = selected;
-            return;
-        }
-
-        const looseCandidates = [...heroPoolTitles, ...absolutePopularTitles].filter(
-            (title) => Boolean(title.logo)
+        const selected = pickHeroTitle(
+            heroPoolTitles,
+            absolutePopularTitles,
+            showcasedTitle,
+            getStoredHomeHeroSource(),
+            options,
         );
-        if (options.preserveCurrent && keepCurrentFeaturedIfPresent(looseCandidates)) {
-            return;
-        }
-        const looseFallback = chooseRandom(looseCandidates);
-        if (looseFallback) showcasedTitle = looseFallback;
+        if (selected) showcasedTitle = selected;
     }
 
     async function refreshFeatured() {
@@ -275,120 +106,36 @@
         const previousById = new Map(
             continueWatchingMeta.map((item) => [item.meta.imdb_id, item]),
         );
-        try {
-            const library = await getLibrary();
-            library.sort(
-                (a, b) =>
-                    new Date(b.last_watched).getTime() -
-                    new Date(a.last_watched).getTime(),
+        const library = await getLibrary();
+        library.sort(
+            (a, b) =>
+                new Date(b.last_watched).getTime() -
+                new Date(a.last_watched).getTime(),
+        );
+
+        const recent = library.filter(
+            (item) => item.shown !== false && !item.completed_at,
+        );
+        const loadedItems: Array<LoadedWatchingItem | null> = [];
+        for (let offset = 0; offset < recent.length; offset += 24) {
+            const batch = await mapWithConcurrency(recent.slice(offset, offset + 24), 6, (item) =>
+                loadWatchingItem(item, previousById.get(item.imdb_id)),
             );
-
-            const recent = library.filter(
-                (item) => item.shown !== false && !item.completed_at,
-            );
-            const loadedItems: Array<(ShowResponse & { libraryItem: any }) | null> = [];
-            for (let offset = 0; offset < recent.length; offset += 24) {
-                const batch = await mapWithConcurrency(recent.slice(offset, offset + 24), 6, async (item) => {
-                try {
-                    let meta: ShowResponse;
-                    if (item.type) {
-                        meta = await getCachedMetaData(item.imdb_id, item.type, {
-                            allowStale: true,
-                        });
-                    } else {
-                        try {
-                            meta = await getCachedMetaData(
-                                item.imdb_id,
-                                "series",
-                                { allowStale: true },
-                            );
-                        } catch {
-                            meta = await getCachedMetaData(
-                                item.imdb_id,
-                                "movie",
-                                { allowStale: true },
-                            );
-                        }
-                    }
-
-                    if (meta && meta.meta) {
-                        if (!item.poster && meta.meta.poster) {
-                            try {
-                                await updateLibraryPoster(
-                                    item.imdb_id,
-                                    meta.meta.poster,
-                                );
-                                item.poster = meta.meta.poster;
-                            } catch (e) {
-                                console.error("Failed to backfill poster", e);
-                            }
-                        }
-
-                        return {
-                            ...meta,
-                            meta: {
-                                ...meta.meta,
-                                poster: item.poster || meta.meta.poster,
-                            },
-                            libraryItem: item,
-                        };
-                    } else {
-                        console.warn("No meta found for:", item.imdb_id);
-                    }
-                } catch (e) {
-                    console.error(`Failed to load meta for ${item.imdb_id}`, e);
-
-                    const previous = previousById.get(item.imdb_id);
-                    if (previous) {
-                        return {
-                            ...previous,
-                            meta: {
-                                ...previous.meta,
-                                poster: item.poster || previous.meta.poster,
-                            },
-                            libraryItem: item,
-                        };
-                    }
-
-                    if (item.poster) {
-                        return {
-                            meta: {
-                                poster: item.poster,
-                                imdb_id: item.imdb_id,
-                                type: item.type,
-                                name: "",
-                                id: item.imdb_id,
-                                genres: [],
-                                releaseInfo: "",
-                                description: "",
-                                cast: [],
-                                videos: [],
-                                popularities: {} as any,
-                            } as any,
-                            libraryItem: item,
-                        };
-                    }
-                }
-                return null;
-                });
-                loadedItems.push(...batch);
-                if (
-                    generation === continueWatchingLoadGeneration &&
-                    offset === 0 &&
-                    continueWatchingMeta.length === 0
-                ) {
-                    continueWatchingMeta = loadedItems.filter(
-                        (item): item is ShowResponse & { libraryItem: any } => item !== null,
-                    );
-                }
-            }
-            if (generation === continueWatchingLoadGeneration) {
+            loadedItems.push(...batch);
+            if (
+                generation === continueWatchingLoadGeneration &&
+                offset === 0 &&
+                continueWatchingMeta.length === 0
+            ) {
                 continueWatchingMeta = loadedItems.filter(
-                    (item): item is ShowResponse & { libraryItem: any } => item !== null,
+                    (item): item is LoadedWatchingItem => item !== null,
                 );
             }
-        } catch (e) {
-            console.error("Failed to load library", e);
+        }
+        if (generation === continueWatchingLoadGeneration) {
+            continueWatchingMeta = loadedItems.filter(
+                (item): item is LoadedWatchingItem => item !== null,
+            );
         }
     }
 
@@ -479,28 +226,6 @@
             popularMeta = uniqueTitles(absolutePopularTitles);
         }
 
-        const allTitlesForGenres = [...sanitizedMovies, ...sanitizedSeries];
-        const nextGenreMap: Record<string, PopularTitleMeta[]> = {};
-        const genreCount: Record<string, number> = {};
-
-        for (const title of allTitlesForGenres) {
-            if (title.genre && Array.isArray(title.genre)) {
-                for (const g of title.genre) {
-                    if (!nextGenreMap[g]) {
-                        nextGenreMap[g] = [];
-                        genreCount[g] = 0;
-                    }
-                    nextGenreMap[g].push(title);
-                    genreCount[g]++;
-                }
-            }
-        }
-
-        genreMap = nextGenreMap;
-        topGenres = Object.entries(genreCount)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 10)
-            .map(([genre]) => genre);
     }
 
     async function refreshPersonalHomeSections(
@@ -527,7 +252,7 @@
                     await Promise.all([
                         getPopularTitles("movie"),
                         getPopularTitles("series"),
-                        getAddons().catch(() => []),
+                        getAddons(),
                     ]);
 
                 applyPopularData(mostPopularMovies, mostPopularSeries);
@@ -543,7 +268,7 @@
         void loadHomeData();
 
         const handleHomeRefresh = async (event: Event) => {
-            const installedAddons = await getAddons().catch(() => [] as Addon[]);
+            const installedAddons = await getAddons();
             const preserveHero = event instanceof CustomEvent
                 ? event.detail?.preserveHero !== false
                 : true;
@@ -555,15 +280,15 @@
             window.removeEventListener(HOME_REFRESH_EVENT, handleHomeRefresh);
         };
     });
-
-
 </script>
 
 <div class="bg-canvas h-fit min-h-screen flex flex-col pb-[clamp(64px,7vw,100px)]">
+    <AmbientBackdrop src={$homeAmbient.image} live={$homeAmbient.live} fill />
+    <TitleMenuHost />
+
     {#if fetchedTitles}
-        <div in:fade={{ duration: 300 }}>
+        <div class="relative" in:fade={{ duration: 300 }}>
             <Hero {showcasedTitle} onLogoError={refreshFeatured} />
-            <div class="w-full h-[6px] -mt-[3px] bg-canvas relative z-20"></div>
 
             <SearchBar
                 onLogoClick={refreshFeatured}
@@ -574,7 +299,25 @@
             >
                 <ContinueWatching {continueWatchingMeta} />
                 {#if popularMeta.length > 0}
-                    <TitleRow title="Popular" titles={popularMeta} />
+                    <TitleRow title="Popular" titles={popularMeta} onSeeAll={seeAllPopular} />
+                {/if}
+
+                {#if spotlight}
+                    {@const pick = spotlight}
+                    <FeatureStrip
+                        item={{
+                            key: pick.imdb_id,
+                            name: pick.name,
+                            logo: pick.logo,
+                            background: pick.background,
+                            description: pick.description,
+                            details: [pick.year ?? pick.releaseInfo, pick.runtime, pick.imdbRating ? `${pick.imdbRating} IMDb` : ""]
+                                .filter(Boolean)
+                                .join(" · "),
+                            trailerId: isAndroidPlatform ? undefined : (getPrimaryTrailerId(pick) ?? undefined),
+                        }}
+                        onDetails={() => router.navigate("meta", { imdbId: pick.imdb_id, type: pick.type })}
+                    />
                 {/if}
 
                 {#if traktRecommendationsConnected && traktRecommendations.length > 0}
@@ -587,32 +330,14 @@
 
                 {#if addonSectionsLoading}
                     {#each Array(2) as _}
-                        <div class="w-full h-fit flex flex-col gap-4">
-                            <Skeleton width="min(460px, 42vw)" height="58px" borderRadius="14px" />
-                            <div class="flex flex-row gap-[20px] overflow-hidden pb-6 pt-3">
-                                {#each Array(7) as __}
-                                    <Skeleton
-                                        width="200px"
-                                        height="300px"
-                                        borderRadius="16px"
-                                    />
-                                {/each}
-                            </div>
-                        </div>
+                        <TitleRowSkeleton />
                     {/each}
                 {/if}
 
-                {#each genreRows as row (row.genre)}
-                    <TitleRow title={row.genre} titles={row.titles} />
-                {/each}
+                <BrowseSection />
             </div>
         </div>
     {:else}
-        <div
-            class="w-full h-screen flex items-center justify-center"
-            out:fade={{ duration: 200 }}
-        >
-            <LoadingSpinner size="60px" />
-        </div>
+        <PageLoading />
     {/if}
 </div>

@@ -1,5 +1,6 @@
 // Subtitle handling and parsing
 import { getAddons } from "../../../lib/db/db";
+import { offersResource } from "../../../lib/library/addonManifest";
 import type { ShowResponse } from "../../../lib/library/types/meta_types";
 import { embeddedSubtitlesFor } from "../../../lib/media/probe/streamInput";
 import type { Track } from "../types";
@@ -344,13 +345,7 @@ export async function fetchAddonSubtitles(
 
     try {
         const addons = await getAddons();
-        const subtitleAddons = addons.filter(
-            (a) =>
-                a.manifest.resources?.includes("subtitles") ||
-                a.manifest.resources?.some(
-                    (r: any) => r.name === "subtitles",
-                ),
-        );
+        const subtitleAddons = addons.filter((addon) => offersResource(addon.manifest, "subtitles"));
 
         let type = metaData.meta.type;
         let id = metaData.meta.imdb_id;
@@ -371,7 +366,7 @@ export async function fetchAddonSubtitles(
                 if (data.subtitles && Array.isArray(data.subtitles)) {
                     const addonTracks = data.subtitles.map((s: any) => ({
                         id: s.id || s.url,
-                        label: `${s.lang} (${addon.manifest.name || "Addon"})`,
+                        label: addon.manifest.name || "Addon",
                         lang: s.lang,
                         url: s.url,
                         selected: false,

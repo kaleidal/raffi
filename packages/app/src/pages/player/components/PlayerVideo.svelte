@@ -1,468 +1,82 @@
 <script lang="ts">
-    import { createEventDispatcher, onDestroy, onMount } from "svelte";
+    import { onDestroy, onMount } from "svelte";
+    import { createAmbientGlow } from "./video/ambientGlow";
+    import { resolveVideoFit } from "./video/videoFit";
 
-    export let videoA: HTMLVideoElement | undefined = undefined;
-    export let videoB: HTMLVideoElement | undefined = undefined;
-    export let activeSurface: 0 | 1 = 0;
-    export let canvasElem: HTMLCanvasElement | undefined = undefined;
-    export let objectFit: "contain" | "cover";
-    export let showCanvas: boolean;
-    export let hidden: boolean = false;
+    type VideoEventHandler = () => void;
 
-    const dispatch = createEventDispatcher();
+    let {
+        videoA = $bindable(),
+        videoB = $bindable(),
+        activeSurface = 0,
+        canvasElem = $bindable(),
+        objectFit,
+        showCanvas,
+        onTimeUpdate,
+        onProgress,
+        onPlay,
+        onPause,
+        onEnded,
+        onClick,
+        onWaiting,
+        onPlaying,
+        onCanPlay,
+        onError,
+    }: {
+        videoA?: HTMLVideoElement;
+        videoB?: HTMLVideoElement;
+        activeSurface?: 0 | 1;
+        canvasElem?: HTMLCanvasElement;
+        objectFit: "contain" | "cover";
+        showCanvas: boolean;
+        onTimeUpdate: VideoEventHandler;
+        onProgress: VideoEventHandler;
+        onPlay: VideoEventHandler;
+        onPause: VideoEventHandler;
+        onEnded: VideoEventHandler;
+        onClick: VideoEventHandler;
+        onWaiting: VideoEventHandler;
+        onPlaying: VideoEventHandler;
+        onCanPlay: VideoEventHandler;
+        onError: VideoEventHandler;
+    } = $props();
 
-    $: videoElem = activeSurface === 0 ? videoA : videoB;
+    const videoElem = $derived(activeSurface === 0 ? videoA : videoB);
 
-    const isActiveVideo = (target: EventTarget | null) =>
-        Boolean(target) && target === (activeSurface === 0 ? videoA : videoB);
-
-    const relay =
-        (type: string) => (event: Event) => {
-            if (!isActiveVideo(event.currentTarget)) return;
-            dispatch(type, event);
-        };
-
-    const AMBIENT_ASPECT_EPSILON = 0.015;
-    const SMART_COVER_MAX_CROP_RATIO = 0.02;
-    const MANUAL_ZOOM_SCALE = 1.035;
-    const AMBIENT_MIN_WIDTH = 160;
-    const AMBIENT_MAX_WIDTH = 420;
-    const AMBIENT_BLEND_FACTOR = 0.14;
-    const AMBIENT_SAMPLE_GRID = 4;
-    const AMBIENT_FRAME_INTERVAL_MS = 1000 / 10;
-
-    let containerElem: HTMLDivElement | undefined = undefined;
-    let ambientCanvasElem: HTMLCanvasElement | undefined = undefined;
-    let resizeObserver: ResizeObserver | undefined = undefined;
-    let ambientActive = false;
-    let ambientLoopRunning = false;
-    let ambientRaf = 0;
-    let lastAmbientWidth = 0;
-    let lastAmbientHeight = 0;
-    let lastAmbientDrawAt = 0;
-    let detachVideoListeners = () => {};
-    let ambientBlendCanvas: HTMLCanvasElement | undefined = undefined;
-    let ambientSourceCanvas: HTMLCanvasElement | undefined = undefined;
-    let ambientSampleCanvas: HTMLCanvasElement | undefined = undefined;
-    let ambientHasFrame = false;
-    let ambientDisplayVisible = false;
-    let ambientReadBlocked = false;
-    let effectiveObjectFit: "contain" | "cover" = "contain";
-    let effectiveObjectPosition = "center center";
-    let effectiveTransform = "none";
-
-    const getAmbientContext = () => ambientCanvasElem?.getContext("2d", { alpha: false }) ?? null;
-    const getCanvasContext = (canvas: HTMLCanvasElement | undefined) => canvas?.getContext("2d", { alpha: false }) ?? null;
-    const getSampleContext = () => ambientSampleCanvas?.getContext("2d", {
-        alpha: false,
-        willReadFrequently: true,
-    }) ?? null;
-
-    const syncCanvasSize = (canvas: HTMLCanvasElement | undefined, width: number, height: number) => {
-        if (!canvas) return;
-        if (canvas.width === width && canvas.height === height) return;
-        canvas.width = width;
-        canvas.height = height;
+    const relay = (handler: VideoEventHandler) => (event: Event) => {
+        if (event.currentTarget === videoElem) handler();
     };
 
-    const resetAmbientFrameState = () => {
-        ambientHasFrame = false;
-    };
-
-    const disableAmbientReadback = () => {
-        ambientReadBlocked = true;
-        ambientActive = false;
-        ambientDisplayVisible = false;
-        resetAmbientFrameState();
-        stopAmbientLoop();
-    };
-
-    const getSmartCoverCropRatio = () => {
-        if (!containerElem || !videoElem) return 1;
-
-        const containerWidth = containerElem.clientWidth;
-        const containerHeight = containerElem.clientHeight;
-        const { videoWidth, videoHeight } = videoElem;
-
-        if (!containerWidth || !containerHeight || !videoWidth || !videoHeight) {
-            return 1;
-        }
-
-        const videoAspect = videoWidth / videoHeight;
-        const containerAspect = containerWidth / containerHeight;
-
-        if (!Number.isFinite(videoAspect) || !Number.isFinite(containerAspect)) {
-            return 1;
-        }
-
-        if (videoAspect > containerAspect) {
-            return 1 - containerAspect / videoAspect;
-        }
-
-        return 1 - videoAspect / containerAspect;
-    };
+    let containerElem = $state<HTMLDivElement>();
+    let ambientCanvasElem = $state<HTMLCanvasElement>();
+    let ambientDisplayVisible = $state(false);
+    let effectiveObjectFit = $state<"contain" | "cover">("contain");
+    let effectiveObjectPosition = $state("center center");
+    let effectiveTransform = $state("none");
 
     const updateEffectiveVideoFit = () => {
-        if (objectFit === "cover") {
-            effectiveObjectFit = "cover";
-            effectiveObjectPosition = "center center";
-            effectiveTransform = `scale(${MANUAL_ZOOM_SCALE})`;
-            return;
-        }
-
-        const cropRatio = getSmartCoverCropRatio();
-        const useSmartCover = cropRatio > 0 && cropRatio <= SMART_COVER_MAX_CROP_RATIO;
-
-        effectiveObjectFit = useSmartCover ? "cover" : "contain";
-        effectiveObjectPosition = "center center";
-        effectiveTransform = "none";
+        const fit = resolveVideoFit(objectFit, containerElem, videoElem);
+        effectiveObjectFit = fit.objectFit;
+        effectiveObjectPosition = fit.objectPosition;
+        effectiveTransform = fit.transform;
     };
 
-    const updateAmbientDisplayVisibility = () => {
-        ambientDisplayVisible = !hidden && objectFit === "contain" && (ambientActive || ambientHasFrame);
-    };
-
-    const getAverageFrameColor = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
-        const sampleSize = AMBIENT_SAMPLE_GRID;
-
-        if (ctx.canvas.width !== sampleSize || ctx.canvas.height !== sampleSize) {
-            ctx.canvas.width = sampleSize;
-            ctx.canvas.height = sampleSize;
-        }
-
-        let pixels: Uint8ClampedArray;
-        try {
-            ctx.clearRect(0, 0, sampleSize, sampleSize);
-            ctx.drawImage(canvas, 0, 0, sampleSize, sampleSize);
-            pixels = ctx.getImageData(0, 0, sampleSize, sampleSize).data;
-        } catch {
-            return null;
-        }
-        let red = 0;
-        let green = 0;
-        let blue = 0;
-        const pixelCount = sampleSize * sampleSize;
-
-        for (let index = 0; index < pixels.length; index += 4) {
-            red += pixels[index];
-            green += pixels[index + 1];
-            blue += pixels[index + 2];
-        }
-
-        return {
-            r: red / pixelCount,
-            g: green / pixelCount,
-            b: blue / pixelCount,
-        };
-    };
-
-    const resizeAmbientCanvasPreservingFrame = (width: number, height: number) => {
-        if (!ambientCanvasElem) return;
-
-        const hadFrame = ambientHasFrame && ambientCanvasElem.width > 0 && ambientCanvasElem.height > 0;
-        let previousFrame: HTMLCanvasElement | undefined;
-
-        if (hadFrame) {
-            previousFrame = document.createElement("canvas");
-            previousFrame.width = ambientCanvasElem.width;
-            previousFrame.height = ambientCanvasElem.height;
-            const previousCtx = previousFrame.getContext("2d", { alpha: false });
-            previousCtx?.drawImage(ambientCanvasElem, 0, 0);
-        }
-
-        ambientCanvasElem.width = width;
-        ambientCanvasElem.height = height;
-        syncCanvasSize(ambientBlendCanvas, width, height);
-        syncCanvasSize(ambientSourceCanvas, width, height);
-
-        if (!hadFrame || !previousFrame) {
-            resetAmbientFrameState();
-            return;
-        }
-
-        const ambientCtx = getAmbientContext();
-        const blendCtx = getCanvasContext(ambientBlendCanvas);
-        if (!ambientCtx || !blendCtx || !ambientBlendCanvas) {
-            resetAmbientFrameState();
-            return;
-        }
-
-        ambientCtx.clearRect(0, 0, width, height);
-        ambientCtx.drawImage(previousFrame, 0, 0, width, height);
-        blendCtx.clearRect(0, 0, width, height);
-        blendCtx.drawImage(previousFrame, 0, 0, width, height);
-        ambientHasFrame = true;
-    };
-
-    const updateAmbientCanvasSize = () => {
-        if (!ambientCanvasElem || !containerElem) return;
-
-        const containerWidth = Math.max(containerElem.clientWidth, 1);
-        const containerHeight = Math.max(containerElem.clientHeight, 1);
-        const targetWidth = Math.max(
-            AMBIENT_MIN_WIDTH,
-            Math.min(AMBIENT_MAX_WIDTH, Math.round(containerWidth * 0.22)),
-        );
-        const targetHeight = Math.max(1, Math.round((containerHeight / containerWidth) * targetWidth));
-
-        if (targetWidth === lastAmbientWidth && targetHeight === lastAmbientHeight) return;
-
-        resizeAmbientCanvasPreservingFrame(targetWidth, targetHeight);
-        lastAmbientWidth = targetWidth;
-        lastAmbientHeight = targetHeight;
-    };
-
-    const updateAmbientState = () => {
-        updateEffectiveVideoFit();
-
-        if (hidden || objectFit !== "contain") {
-            ambientActive = false;
-            resetAmbientFrameState();
-            updateAmbientDisplayVisibility();
-            return;
-        }
-
-        if (!containerElem || !videoElem) {
-            ambientActive = false;
-            updateAmbientDisplayVisibility();
-            return;
-        }
-
-        const { videoWidth, videoHeight } = videoElem;
-        const containerWidth = containerElem.clientWidth;
-        const containerHeight = containerElem.clientHeight;
-
-        if (!videoWidth || !videoHeight || !containerWidth || !containerHeight) {
-            if (!ambientHasFrame) {
-                ambientActive = false;
-            }
-            updateAmbientDisplayVisibility();
-            return;
-        }
-
-        const videoAspect = videoWidth / videoHeight;
-        const containerAspect = containerWidth / containerHeight;
-        ambientActive = Math.abs(videoAspect - containerAspect) > AMBIENT_ASPECT_EPSILON;
-
-        if (ambientActive) {
-            updateAmbientCanvasSize();
-        } else {
-            stopAmbientLoop();
-        }
-
-        updateAmbientDisplayVisibility();
-    };
-
-    const drawAmbientFrame = () => {
-        if (ambientReadBlocked || !ambientActive || !videoElem || !ambientCanvasElem) return;
-        if (videoElem.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
-
-        const ctx = getAmbientContext();
-        const blendCtx = getCanvasContext(ambientBlendCanvas);
-        const sourceCtx = getCanvasContext(ambientSourceCanvas);
-        const sampleCtx = getSampleContext();
-        if (!ctx) return;
-        if (!blendCtx || !sourceCtx || !sampleCtx || !ambientSourceCanvas || !ambientBlendCanvas) {
-            return;
-        }
-
-        const width = ambientCanvasElem.width;
-        const height = ambientCanvasElem.height;
-        if (!width || !height) return;
-
-        sourceCtx.imageSmoothingEnabled = true;
-
-        try {
-            sourceCtx.clearRect(0, 0, width, height);
-            sourceCtx.drawImage(videoElem, 0, 0, width, height);
-        } catch {
-            return;
-        }
-
-        const hadPreviousFrame = ambientHasFrame;
-        if (!getAverageFrameColor(sampleCtx, ambientSourceCanvas)) {
-            disableAmbientReadback();
-            return;
-        }
-
-        blendCtx.imageSmoothingEnabled = true;
-        blendCtx.globalCompositeOperation = "source-over";
-        blendCtx.clearRect(0, 0, width, height);
-
-        if (ambientHasFrame) {
-            blendCtx.globalAlpha = 1;
-            blendCtx.drawImage(ambientCanvasElem, 0, 0, width, height);
-        }
-
-        blendCtx.globalAlpha = hadPreviousFrame ? AMBIENT_BLEND_FACTOR : 1;
-        blendCtx.drawImage(ambientSourceCanvas, 0, 0, width, height);
-        blendCtx.globalAlpha = 1;
-
-        ctx.drawImage(ambientBlendCanvas, 0, 0, width, height);
-
-        ambientHasFrame = true;
-    };
-
-    const stopAmbientLoop = () => {
-        ambientLoopRunning = false;
-        lastAmbientDrawAt = 0;
-
-        if (ambientRaf) {
-            cancelAnimationFrame(ambientRaf);
-            ambientRaf = 0;
-        }
-    };
-
-    const scheduleAmbientLoop = (forceRestart = false) => {
-        if (!ambientActive || !videoElem) {
-            stopAmbientLoop();
-            return;
-        }
-
-        if (forceRestart && ambientLoopRunning) {
-            stopAmbientLoop();
-        }
-
-        if (ambientLoopRunning) return;
-        ambientLoopRunning = true;
-
-        const tick = (now: number) => {
-            if (!ambientActive || !videoElem) {
-                stopAmbientLoop();
-                return;
-            }
-
-            if (
-                typeof document !== "undefined" &&
-                document.hidden
-            ) {
-                ambientRaf = requestAnimationFrame(tick);
-                return;
-            }
-
-            if (!videoElem.paused && (lastAmbientDrawAt === 0 || now - lastAmbientDrawAt >= AMBIENT_FRAME_INTERVAL_MS)) {
-                drawAmbientFrame();
-                lastAmbientDrawAt = now;
-            }
-
-            ambientRaf = requestAnimationFrame(tick);
-        };
-
-        ambientRaf = requestAnimationFrame(tick);
-    };
-
-    const refreshAmbient = () => {
-        updateAmbientState();
-        drawAmbientFrame();
-        updateAmbientDisplayVisibility();
-
-        if (!ambientActive) {
-            stopAmbientLoop();
-            return;
-        }
-
-        if (videoElem?.paused) return;
-        scheduleAmbientLoop();
-    };
-
-    const handleBufferResume = () => {
-        updateAmbientState();
-        drawAmbientFrame();
-        updateAmbientDisplayVisibility();
-
-        if (!ambientActive) {
-            stopAmbientLoop();
-            return;
-        }
-
-        if (videoElem?.paused) return;
-        scheduleAmbientLoop(true);
-    };
-
-    const bindVideoListeners = (element: HTMLVideoElement | undefined) => {
-        detachVideoListeners();
-
-        if (!element) return;
-        ambientReadBlocked = false;
-
-        const events = [
-            "loadedmetadata",
-            "loadeddata",
-            "canplay",
-            "play",
-            "playing",
-            "pause",
-            "seeked",
-        ] as const;
-        const handlePause = () => {
-            drawAmbientFrame();
-            stopAmbientLoop();
-            updateAmbientDisplayVisibility();
-        };
-
-        const listeners = new Map<string, EventListener>();
-
-        for (const eventName of events) {
-            let listener: EventListener;
-            if (eventName === "pause") {
-                listener = handlePause;
-            } else if (eventName === "playing") {
-                listener = handleBufferResume;
-            } else {
-                listener = refreshAmbient;
-            }
-            listeners.set(eventName, listener);
-            element.addEventListener(eventName, listener);
-        }
-
-        detachVideoListeners = () => {
-            for (const [eventName, listener] of listeners) {
-                element.removeEventListener(eventName, listener);
-            }
-        };
-    };
-
-    $: bindVideoListeners(videoElem);
-    $: refreshAmbient();
-    $: updateEffectiveVideoFit();
-
-    onMount(() => {
-        ambientBlendCanvas = document.createElement("canvas");
-        ambientSourceCanvas = document.createElement("canvas");
-        ambientSampleCanvas = document.createElement("canvas");
-
-        if (typeof ResizeObserver !== "undefined") {
-            resizeObserver = new ResizeObserver(() => {
-                updateAmbientCanvasSize();
-                refreshAmbient();
-            });
-
-            if (containerElem) {
-                resizeObserver.observe(containerElem);
-            }
-        }
-
-        const handleVisibility = () => {
-            if (document.hidden) {
-                stopAmbientLoop();
-                return;
-            }
-            refreshAmbient();
-        };
-        document.addEventListener("visibilitychange", handleVisibility);
-
-        refreshAmbient();
-
-        return () => {
-            document.removeEventListener("visibilitychange", handleVisibility);
-        };
+    const ambientGlow = createAmbientGlow({
+        getContainer: () => containerElem,
+        getCanvas: () => ambientCanvasElem,
+        getVideo: () => videoElem,
+        getObjectFit: () => objectFit,
+        syncVideoFit: updateEffectiveVideoFit,
+        onVisibilityChange: (visible) => (ambientDisplayVisible = visible),
     });
 
-    onDestroy(() => {
-        stopAmbientLoop();
-        detachVideoListeners();
-        resizeObserver?.disconnect();
+    $effect.pre(() => {
+        ambientGlow.bindVideo(videoElem);
     });
+    $effect.pre(updateEffectiveVideoFit);
+
+    onMount(ambientGlow.mount);
+    onDestroy(ambientGlow.destroy);
 </script>
 
 <div bind:this={containerElem} class="relative w-full h-full bg-black overflow-hidden">
@@ -474,54 +88,54 @@
 
     <video
         bind:this={videoA}
-        class="absolute z-10 {activeSurface === 0 && !hidden
+        class="absolute z-10 {activeSurface === 0
             ? `top-0 left-0 h-full w-full ${effectiveObjectFit === 'contain' ? 'object-contain' : 'object-cover'}`
             : 'left-[-9999px] top-0 h-px w-px opacity-0 pointer-events-none'}"
-        style={activeSurface === 0 && !hidden
+        style={activeSurface === 0
             ? `object-position: ${effectiveObjectPosition}; transform: ${effectiveTransform}; transform-origin: center center;`
             : undefined}
         playsinline
         preload="auto"
         muted={activeSurface !== 0}
         disablepictureinpicture
-        aria-hidden={activeSurface !== 0 || hidden}
-        on:timeupdate={relay("timeupdate")}
-        on:progress={relay("progress")}
-        on:play={relay("play")}
-        on:pause={relay("pause")}
-        on:ended={relay("ended")}
-        on:click={relay("click")}
-        on:waiting={relay("waiting")}
-        on:playing={relay("playing")}
-        on:canplay={relay("canplay")}
-        on:error={relay("error")}
+        aria-hidden={activeSurface !== 0}
+        ontimeupdate={relay(onTimeUpdate)}
+        onprogress={relay(onProgress)}
+        onplay={relay(onPlay)}
+        onpause={relay(onPause)}
+        onended={relay(onEnded)}
+        onclick={relay(onClick)}
+        onwaiting={relay(onWaiting)}
+        onplaying={relay(onPlaying)}
+        oncanplay={relay(onCanPlay)}
+        onerror={relay(onError)}
     >
         <track kind="captions" />
     </video>
 
     <video
         bind:this={videoB}
-        class="absolute z-10 {activeSurface === 1 && !hidden
+        class="absolute z-10 {activeSurface === 1
             ? `top-0 left-0 h-full w-full ${effectiveObjectFit === 'contain' ? 'object-contain' : 'object-cover'}`
             : 'left-[-9999px] top-0 h-px w-px opacity-0 pointer-events-none'}"
-        style={activeSurface === 1 && !hidden
+        style={activeSurface === 1
             ? `object-position: ${effectiveObjectPosition}; transform: ${effectiveTransform}; transform-origin: center center;`
             : undefined}
         playsinline
         preload="auto"
         muted={activeSurface !== 1}
         disablepictureinpicture
-        aria-hidden={activeSurface !== 1 || hidden}
-        on:timeupdate={relay("timeupdate")}
-        on:progress={relay("progress")}
-        on:play={relay("play")}
-        on:pause={relay("pause")}
-        on:ended={relay("ended")}
-        on:click={relay("click")}
-        on:waiting={relay("waiting")}
-        on:playing={relay("playing")}
-        on:canplay={relay("canplay")}
-        on:error={relay("error")}
+        aria-hidden={activeSurface !== 1}
+        ontimeupdate={relay(onTimeUpdate)}
+        onprogress={relay(onProgress)}
+        onplay={relay(onPlay)}
+        onpause={relay(onPause)}
+        onended={relay(onEnded)}
+        onclick={relay(onClick)}
+        onwaiting={relay(onWaiting)}
+        onplaying={relay(onPlaying)}
+        oncanplay={relay(onCanPlay)}
+        onerror={relay(onError)}
     >
         <track kind="captions" />
     </video>
@@ -530,7 +144,7 @@
         bind:this={canvasElem}
         class="absolute top-0 left-0 z-20 h-full w-full {effectiveObjectFit === 'contain'
             ? 'object-contain'
-            : 'object-cover'} {showCanvas && !hidden ? 'block' : 'hidden'}"
+            : 'object-cover'} {showCanvas ? 'block' : 'hidden'}"
         style={`object-position: ${effectiveObjectPosition}; transform: ${effectiveTransform}; transform-origin: center center;`}
     ></canvas>
 </div>

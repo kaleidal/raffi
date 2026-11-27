@@ -1,3 +1,5 @@
+import { languageCode } from "../utils/languages";
+
 export const PROVIDER_KEYWORDS = [
     "TorrentGalaxy",
     "Torrentio",
@@ -60,157 +62,6 @@ export function parseDebridAvailability(token: string | null | undefined): Debri
     };
 }
 
-type LanguageTag = {
-    code: string;
-    flag?: string;
-};
-
-const LANGUAGE_ALIAS_TO_TAG: Record<string, LanguageTag> = {
-    EN: { code: "EN", flag: "🇬🇧" },
-    ENG: { code: "EN", flag: "🇬🇧" },
-    ENGLISH: { code: "EN", flag: "🇬🇧" },
-    IT: { code: "IT", flag: "🇮🇹" },
-    ITA: { code: "IT", flag: "🇮🇹" },
-    ITALIAN: { code: "IT", flag: "🇮🇹" },
-    ES: { code: "ES", flag: "🇪🇸" },
-    SPA: { code: "ES", flag: "🇪🇸" },
-    SPANISH: { code: "ES", flag: "🇪🇸" },
-    FR: { code: "FR", flag: "🇫🇷" },
-    FRE: { code: "FR", flag: "🇫🇷" },
-    FRA: { code: "FR", flag: "🇫🇷" },
-    FRENCH: { code: "FR", flag: "🇫🇷" },
-    DE: { code: "DE", flag: "🇩🇪" },
-    GER: { code: "DE", flag: "🇩🇪" },
-    DEU: { code: "DE", flag: "🇩🇪" },
-    GERMAN: { code: "DE", flag: "🇩🇪" },
-    PT: { code: "PT", flag: "🇵🇹" },
-    POR: { code: "PT", flag: "🇵🇹" },
-    PORTUGUESE: { code: "PT", flag: "🇵🇹" },
-    RU: { code: "RU", flag: "🇷🇺" },
-    RUS: { code: "RU", flag: "🇷🇺" },
-    RUSSIAN: { code: "RU", flag: "🇷🇺" },
-    JA: { code: "JA", flag: "🇯🇵" },
-    JPN: { code: "JA", flag: "🇯🇵" },
-    JAPANESE: { code: "JA", flag: "🇯🇵" },
-    KO: { code: "KO", flag: "🇰🇷" },
-    KOR: { code: "KO", flag: "🇰🇷" },
-    KOREAN: { code: "KO", flag: "🇰🇷" },
-    ZH: { code: "ZH", flag: "🇨🇳" },
-    CHI: { code: "ZH", flag: "🇨🇳" },
-    CHT: { code: "ZH", flag: "🇨🇳" },
-    CHINESE: { code: "ZH", flag: "🇨🇳" },
-    MANDARIN: { code: "ZH", flag: "🇨🇳" },
-    HI: { code: "HI", flag: "🇮🇳" },
-    HIN: { code: "HI", flag: "🇮🇳" },
-    HINDI: { code: "HI", flag: "🇮🇳" },
-    TA: { code: "TA", flag: "🇮🇳" },
-    TAM: { code: "TA", flag: "🇮🇳" },
-    TAMIL: { code: "TA", flag: "🇮🇳" },
-    TE: { code: "TE", flag: "🇮🇳" },
-    TEL: { code: "TE", flag: "🇮🇳" },
-    TELUGU: { code: "TE", flag: "🇮🇳" },
-    ML: { code: "ML", flag: "🇮🇳" },
-    MAL: { code: "ML", flag: "🇮🇳" },
-    MALAYALAM: { code: "ML", flag: "🇮🇳" },
-    KN: { code: "KN", flag: "🇮🇳" },
-    KAN: { code: "KN", flag: "🇮🇳" },
-    KANNADA: { code: "KN", flag: "🇮🇳" },
-    BN: { code: "BN", flag: "🇮🇳" },
-    BEN: { code: "BN", flag: "🇮🇳" },
-    BENGALI: { code: "BN", flag: "🇮🇳" },
-    MR: { code: "MR", flag: "🇮🇳" },
-    MAR: { code: "MR", flag: "🇮🇳" },
-    MARATHI: { code: "MR", flag: "🇮🇳" },
-    PA: { code: "PA", flag: "🇮🇳" },
-    PAN: { code: "PA", flag: "🇮🇳" },
-    PUNJABI: { code: "PA", flag: "🇮🇳" },
-    AR: { code: "AR", flag: "🇸🇦" },
-    ARA: { code: "AR", flag: "🇸🇦" },
-    ARABIC: { code: "AR", flag: "🇸🇦" },
-    TR: { code: "TR", flag: "🇹🇷" },
-    TUR: { code: "TR", flag: "🇹🇷" },
-    TURKISH: { code: "TR", flag: "🇹🇷" },
-    NL: { code: "NL", flag: "🇳🇱" },
-    DUT: { code: "NL", flag: "🇳🇱" },
-    NLD: { code: "NL", flag: "🇳🇱" },
-    DUTCH: { code: "NL", flag: "🇳🇱" },
-    PL: { code: "PL", flag: "🇵🇱" },
-    POL: { code: "PL", flag: "🇵🇱" },
-    POLISH: { code: "PL", flag: "🇵🇱" },
-    SV: { code: "SV", flag: "🇸🇪" },
-    SWE: { code: "SV", flag: "🇸🇪" },
-    SWEDISH: { code: "SV", flag: "🇸🇪" },
-    NO: { code: "NO", flag: "🇳🇴" },
-    NOR: { code: "NO", flag: "🇳🇴" },
-    NORWEGIAN: { code: "NO", flag: "🇳🇴" },
-    DA: { code: "DA", flag: "🇩🇰" },
-    DAN: { code: "DA", flag: "🇩🇰" },
-    DANISH: { code: "DA", flag: "🇩🇰" },
-    FI: { code: "FI", flag: "🇫🇮" },
-    FIN: { code: "FI", flag: "🇫🇮" },
-    FINNISH: { code: "FI", flag: "🇫🇮" },
-    CS: { code: "CS", flag: "🇨🇿" },
-    CZE: { code: "CS", flag: "🇨🇿" },
-    CES: { code: "CS", flag: "🇨🇿" },
-    CZECH: { code: "CS", flag: "🇨🇿" },
-    EL: { code: "EL", flag: "🇬🇷" },
-    GRE: { code: "EL", flag: "🇬🇷" },
-    ELL: { code: "EL", flag: "🇬🇷" },
-    GREEK: { code: "EL", flag: "🇬🇷" },
-    HE: { code: "HE", flag: "🇮🇱" },
-    HEB: { code: "HE", flag: "🇮🇱" },
-    HEBREW: { code: "HE", flag: "🇮🇱" },
-    VI: { code: "VI", flag: "🇻🇳" },
-    VIE: { code: "VI", flag: "🇻🇳" },
-    VIETNAMESE: { code: "VI", flag: "🇻🇳" },
-    TH: { code: "TH", flag: "🇹🇭" },
-    THA: { code: "TH", flag: "🇹🇭" },
-    THAI: { code: "TH", flag: "🇹🇭" },
-    ID: { code: "ID", flag: "🇮🇩" },
-    IND: { code: "ID", flag: "🇮🇩" },
-    INDONESIAN: { code: "ID", flag: "🇮🇩" },
-    MS: { code: "MS", flag: "🇲🇾" },
-    MAY: { code: "MS", flag: "🇲🇾" },
-    MSA: { code: "MS", flag: "🇲🇾" },
-    MALAY: { code: "MS", flag: "🇲🇾" },
-    UK: { code: "UK", flag: "🇺🇦" },
-    UKR: { code: "UK", flag: "🇺🇦" },
-    UKRAINIAN: { code: "UK", flag: "🇺🇦" },
-    RO: { code: "RO", flag: "🇷🇴" },
-    RON: { code: "RO", flag: "🇷🇴" },
-    RUM: { code: "RO", flag: "🇷🇴" },
-    ROMANIAN: { code: "RO", flag: "🇷🇴" },
-    HU: { code: "HU", flag: "🇭🇺" },
-    HUN: { code: "HU", flag: "🇭🇺" },
-    HUNGARIAN: { code: "HU", flag: "🇭🇺" },
-    BG: { code: "BG", flag: "🇧🇬" },
-    BUL: { code: "BG", flag: "🇧🇬" },
-    BULGARIAN: { code: "BG", flag: "🇧🇬" },
-    SR: { code: "SR", flag: "🇷🇸" },
-    SRP: { code: "SR", flag: "🇷🇸" },
-    SERBIAN: { code: "SR", flag: "🇷🇸" },
-    HR: { code: "HR", flag: "🇭🇷" },
-    HRV: { code: "HR", flag: "🇭🇷" },
-    CROATIAN: { code: "HR", flag: "🇭🇷" },
-    SK: { code: "SK", flag: "🇸🇰" },
-    SLO: { code: "SK", flag: "🇸🇰" },
-    SLK: { code: "SK", flag: "🇸🇰" },
-    SLOVAK: { code: "SK", flag: "🇸🇰" },
-    SL: { code: "SL", flag: "🇸🇮" },
-    SLV: { code: "SL", flag: "🇸🇮" },
-    SLOVENIAN: { code: "SL", flag: "🇸🇮" },
-    CA: { code: "CA", flag: "🏴" },
-    CAT: { code: "CA", flag: "🏴" },
-    CATALAN: { code: "CA", flag: "🏴" },
-    FA: { code: "FA", flag: "🇮🇷" },
-    PER: { code: "FA", flag: "🇮🇷" },
-    FAS: { code: "FA", flag: "🇮🇷" },
-    PERSIAN: { code: "FA", flag: "🇮🇷" },
-    UR: { code: "UR", flag: "🇵🇰" },
-    URD: { code: "UR", flag: "🇵🇰" },
-    URDU: { code: "UR", flag: "🇵🇰" },
-};
-
 const FLAG_EMOJI_REGEX = /[\u{1F1E6}-\u{1F1FF}]{2}/gu;
 const COUNTRY_TO_LANG: Record<string, string> = {
     GB: "EN", IT: "IT", ES: "ES", FR: "FR", DE: "DE",
@@ -257,7 +108,7 @@ export const extractAudioLanguageCodes = (
         .toUpperCase()
         .split(/[^A-Z]+/)
         .filter(Boolean);
-    const mappedTokens = filenameTokens.map((token) => LANGUAGE_ALIAS_TO_TAG[token]?.code ?? null);
+    const mappedTokens = filenameTokens.map(languageCode);
 
     mappedTokens.forEach((code, index) => {
         if (!code) return;
@@ -270,7 +121,6 @@ export const extractAudioLanguageCodes = (
     return codes;
 };
 
-// Precompile regex patterns for better performance
 const PROVIDER_PATTERNS = PROVIDER_KEYWORDS.map(keyword => ({
     keyword,
     pattern: new RegExp(keyword.replace(/\s+/g, "\\s*"), "i")
@@ -299,7 +149,7 @@ export const detectProvider = (text: string | null): string | null => {
                 return false;
             if (/BLU-?RAY|BDRIP|WEB-?DL|WEBRIP|WEBMUX|REMUX|HDTV|DVD-?RIP|HDCAM/i.test(token))
                 return false;
-            if (LANGUAGE_ALIAS_TO_TAG[token.toUpperCase()])
+            if (languageCode(token))
                 return false;
             return true;
         }) || null

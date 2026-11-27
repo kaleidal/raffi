@@ -3,6 +3,7 @@
     import { formatTime } from "../../../lib/utils/time";
     import type { SeekPreview } from "../../../lib/media/preview/seekPreview";
     import type { Chapter } from "../../../pages/player/types";
+    import { restingPreviewFrame } from "./restingPreviewFrame.svelte";
     import SeekPreviewCard from "./SeekPreviewCard.svelte";
     import {
         KIND_COLORS,
@@ -15,38 +16,49 @@
         type TrackSegment,
     } from "./seekTrack";
 
-    export let duration = 0;
-    export let time = 0;
-    export let inverted = false;
-    export let chapters: Chapter[] = [];
-    export let buffered: TimeRange[] = [];
-    export let seekPreview: SeekPreview | null = null;
-    export let disabled = false;
-    export let visible = true;
-    export let emphasized = false;
-    export let onScrub: (time: number) => void;
-    export let onCommit: (time: number) => void;
+    let {
+        duration = 0,
+        time = 0,
+        chapters = [],
+        buffered = [],
+        seekPreview = null,
+        disabled = false,
+        visible = true,
+        emphasized = false,
+        onScrub,
+        onCommit,
+        onExpand,
+    }: {
+        duration?: number;
+        time?: number;
+        chapters?: Chapter[];
+        buffered?: TimeRange[];
+        seekPreview?: SeekPreview | null;
+        disabled?: boolean;
+        visible?: boolean;
+        emphasized?: boolean;
+        onScrub: (time: number) => void;
+        onCommit: (time: number) => void;
+        /** Scrolling up over the bar asks to open a closer look around this time. */
+        onExpand?: (time: number) => void;
+    } = $props();
 
     const SEGMENT_GAP_PX = 3;
 
-    let hovering = false;
-    let dragging = false;
-    let hoverTime = 0;
-    let hoverX = 0;
-    let hoverTop = 0;
-    let previewFrame: ImageBitmap | null = null;
-    let previewRequest = 0;
+    let hovering = $state(false);
+    let dragging = $state(false);
+    let hoverTime = $state(0);
+    let hoverX = $state(0);
+    let hoverTop = $state(0);
 
-    $: segments = trackSegments(chapters, duration, inverted);
-    $: cursor = timeToFraction(time, duration, inverted);
-    $: bufferedBar = bufferedFractions(buffered, duration, inverted);
-    $: active = hovering || dragging || emphasized;
-    $: hoverChapter = chapters.find((chapter) => hoverTime >= chapter.startTime && hoverTime < chapter.endTime) ?? null;
-
-    const forgetPreviewFrame = (_source: SeekPreview | null) => {
-        previewFrame = null;
-    };
-    $: forgetPreviewFrame(seekPreview);
+    const segments = $derived(trackSegments(chapters, duration));
+    const cursor = $derived(timeToFraction(time, duration));
+    const bufferedBar = $derived(bufferedFractions(buffered, duration));
+    const active = $derived(hovering || dragging || emphasized);
+    const hoverChapter = $derived(
+        chapters.find((chapter) => hoverTime >= chapter.startTime && hoverTime < chapter.endTime) ?? null,
+    );
+    const previewFrames = $derived(seekPreview && restingPreviewFrame(seekPreview));
 
     const segmentStyle = (segment: TrackSegment) => {
         const leftGap = segment.isFirst ? 0 : SEGMENT_GAP_PX / 2;
@@ -64,24 +76,22 @@
         return color ? `rgb(${color})` : "var(--raffi-accent)";
     };
 
-    const showPreview = (preview: SeekPreview, time: number) => {
-        const request = ++previewRequest;
-        previewFrame = preview.peek(time);
-        if (previewFrame) return;
-        void preview.frameAt(time).then((frame) => {
-            if (frame && request === previewRequest && preview === seekPreview) previewFrame = frame;
-        });
-    };
-
     const trackHover = ({ ratio, rect }: ScrubPosition) => {
         if (!hovering && !dragging) hoverTop = rect.top;
         hovering = true;
-        hoverTime = fractionToTime(ratio, duration, inverted);
+        hoverTime = fractionToTime(ratio, duration);
         hoverX = rect.left + ratio * rect.width;
-        if (seekPreview) showPreview(seekPreview, hoverTime);
+        previewFrames?.show(hoverTime);
     };
 
-    const scrubTo = ({ ratio }: ScrubPosition) => onScrub(fractionToTime(ratio, duration, inverted));
+    const scrubTo = ({ ratio }: ScrubPosition) => onScrub(fractionToTime(ratio, duration));
+
+    function expand(event: WheelEvent) {
+        if (!onExpand || event.deltaY >= 0 || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+        event.preventDefault();
+        const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect();
+        onExpand(fractionToTime((event.clientX - bounds.left) / bounds.width, duration));
+    }
 </script>
 
 <div
@@ -89,6 +99,7 @@
     role="slider"
     tabindex="-1"
     aria-label="Seek"
+    onwheel={expand}
     aria-valuemin={0}
     aria-valuemax={duration}
     aria-valuenow={time}
@@ -105,7 +116,7 @@
         onMove: scrubTo,
         onEnd: (position) => {
             dragging = false;
-            onCommit(fractionToTime(position.ratio, duration, inverted));
+            onCommit(fractionToTime(position.ratio, duration));
         },
     }}
 >
@@ -147,7 +158,7 @@
         anchorTop={hoverTop}
         time={hoverTime}
         chapterTitle={hoverChapter?.title ?? null}
-        frame={previewFrame}
+        frame={previewFrames?.frame ?? null}
         withImage={Boolean(seekPreview)}
     />
 {/if}

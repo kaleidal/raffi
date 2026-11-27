@@ -3,16 +3,16 @@
 	import CodeInput from "../../common/controls/CodeInput.svelte";
 	import { sendSignInCode, signInWithCode } from "../../../lib/stores/authStore";
 
-	export let onSignedIn: () => void | Promise<void> = () => {};
+	let { onSignedIn }: { onSignedIn: () => void | Promise<void> } = $props();
 
 	const RESEND_DELAY_SECONDS = 30;
 
-	let step: "email" | "code" = "email";
-	let email = "";
-	let code = "";
-	let busy = false;
-	let error = "";
-	let resendIn = 0;
+	let step = $state<"email" | "code">("email");
+	let email = $state("");
+	let code = $state("");
+	let busy = $state(false);
+	let error = $state("");
+	let resendIn = $state(0);
 	let resendTimer: ReturnType<typeof setInterval> | null = null;
 
 	const stopResendTimer = () => {
@@ -85,7 +85,7 @@
 	</div>
 
 	{#if step === "email"}
-		<form class="flex flex-col gap-3 sm:flex-row" on:submit|preventDefault={sendCode}>
+		<form class="flex flex-col gap-3 sm:flex-row" onsubmit={(event) => (event.preventDefault(), sendCode())}>
 			<input
 				type="email"
 				autocomplete="email"
@@ -103,14 +103,11 @@
 			</button>
 		</form>
 	{:else}
-		<form class="flex flex-col gap-4" on:submit|preventDefault={verifyCode}>
+		<form class="flex flex-col gap-4" onsubmit={(event) => (event.preventDefault(), verifyCode())}>
 			<CodeInput
 				bind:value={code}
 				disabled={busy}
-				on:complete={(event) => {
-					code = event.detail.value;
-					verifyCode();
-				}}
+				onComplete={verifyCode}
 			/>
 			<button
 				type="submit"
@@ -123,7 +120,7 @@
 				<button
 					type="button"
 					class="text-ink/60 hover:text-ink transition-colors cursor-pointer"
-					on:click={useDifferentEmail}
+					onclick={useDifferentEmail}
 				>
 					Use a different email
 				</button>
@@ -131,7 +128,7 @@
 					type="button"
 					class="text-ink/60 hover:text-ink transition-colors cursor-pointer disabled:text-ink/30 disabled:cursor-default"
 					disabled={busy || resendIn > 0}
-					on:click={sendCode}
+					onclick={sendCode}
 				>
 					{resendIn > 0 ? `Resend in ${resendIn}s` : "Resend code"}
 				</button>

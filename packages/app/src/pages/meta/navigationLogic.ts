@@ -6,23 +6,47 @@ import {
 } from "./metaState";
 import { router } from "../../lib/stores/router";
 import { fetchStreams, fetchStreamListForEpisodeOnly, playStream } from "./streamLogic";
-import type { Stream } from "./types";
+import type { ProgressMap } from "../../lib/library/types/progress";
+import type { Stream } from "../../lib/streams/types";
+import type { Episode } from "../../lib/library/types/meta_types";
 import {
     allowTorrenting,
     hasAcknowledgedTorrentWarning,
     isTorrentSource,
 } from "../../lib/stores/torrenting";
 
+type ResolvedNextEpisode = { stream: Stream; nextEpisode: Episode };
+
+const findBingeMatch = (currentStream: Stream | null, nextStreams: Stream[]): Stream | null => {
+    if (!currentStream || nextStreams.length === 0) return null;
+
+    const currentGroup = currentStream.behaviorHints?.bingeGroup;
+    const groupMatch = currentGroup
+        ? nextStreams.find((s) => s.behaviorHints?.bingeGroup === currentGroup)
+        : undefined;
+
+    return groupMatch
+        ?? nextStreams.find((s) => {
+            if (s.name !== currentStream.name) return false;
+            const currentTitle = currentStream.title?.split("\n")[0];
+            return currentTitle
+                ? s.title?.includes(currentTitle)
+                : true;
+        })
+        ?? nextStreams.find((s) => s.name === currentStream.name)
+        ?? null;
+};
+
 export const resolveNextEpisodeStream = async (
     imdbID: string,
-): Promise<{ stream: Stream; nextEpisode: any } | null> => {
+): Promise<ResolvedNextEpisode | null> => {
     const episode = get(selectedEpisode);
     const data = get(metaData);
 
     if (!episode || !data || !data.meta.videos) return null;
 
     const currentIndex = data.meta.videos.findIndex(
-        (v: any) =>
+        (v) =>
             v.season === episode.season &&
             v.episode === episode.episode,
     );
@@ -33,46 +57,15 @@ export const resolveNextEpisodeStream = async (
 
     const nextEp = data.meta.videos[currentIndex + 1];
     const nextStreams = await fetchStreamListForEpisodeOnly(nextEp, imdbID);
-    const currentStream = get(selectedStream);
-
-    let match: Stream | null = null;
-    if (currentStream && nextStreams.length > 0) {
-        const currentGroup = currentStream.behaviorHints?.bingeGroup;
-
-        if (currentGroup) {
-            match =
-                nextStreams.find(
-                    (s: any) =>
-                        s.behaviorHints?.bingeGroup === currentGroup,
-                ) ?? null;
-        }
-
-        if (!match) {
-            match =
-                nextStreams.find((s: any) => {
-                    if (s.name !== currentStream.name) return false;
-                    const currentTitle = currentStream.title?.split("\n")[0];
-                    return currentTitle
-                        ? s.title?.includes(currentTitle)
-                        : true;
-                }) ?? null;
-        }
-
-        if (!match) {
-            match =
-                nextStreams.find(
-                    (s: any) => s.name === currentStream.name,
-                ) ?? null;
-        }
-    }
+    const match = findBingeMatch(get(selectedStream), nextStreams);
 
     if (!match) return null;
     return { stream: match, nextEpisode: nextEp };
 };
 
 export const playResolvedNextEpisode = (
-    resolved: { stream: Stream; nextEpisode: any },
-    progressMap: any,
+    resolved: ResolvedNextEpisode,
+    progressMap: ProgressMap,
 ) => {
     const { stream, nextEpisode } = resolved;
     if (nextEpisode.season !== get(currentSeason)) {
@@ -97,14 +90,14 @@ export const playResolvedNextEpisode = (
     }
 };
 
-export const handleNextEpisode = async (imdbID: string, progressMap: any) => {
+export const handleNextEpisode = async (imdbID: string, progressMap: ProgressMap) => {
     const episode = get(selectedEpisode);
     const data = get(metaData);
 
     if (!episode || !data || !data.meta.videos) return;
 
     const currentIndex = data.meta.videos.findIndex(
-        (v: any) =>
+        (v) =>
             v.season === episode.season &&
             v.episode === episode.episode,
     );
@@ -117,35 +110,7 @@ export const handleNextEpisode = async (imdbID: string, progressMap: any) => {
         }
 
         const nextStreams = await fetchStreams(nextEp, true, false, imdbID);
-        const currentStream = get(selectedStream);
-
-        let match = null;
-        if (currentStream && nextStreams.length > 0) {
-            const currentGroup = currentStream.behaviorHints?.bingeGroup;
-
-            if (currentGroup) {
-                match = nextStreams.find(
-                    (s: any) =>
-                        s.behaviorHints?.bingeGroup === currentGroup,
-                );
-            }
-
-            if (!match) {
-                match = nextStreams.find((s: any) => {
-                    if (s.name !== currentStream.name) return false;
-                    const currentTitle = currentStream.title?.split("\n")[0];
-                    return currentTitle
-                        ? s.title?.includes(currentTitle)
-                        : true;
-                });
-            }
-
-            if (!match) {
-                match = nextStreams.find(
-                    (s: any) => s.name === currentStream.name,
-                );
-            }
-        }
+        const match = findBingeMatch(get(selectedStream), nextStreams);
 
         if (match) {
             playResolvedNextEpisode({ stream: match, nextEpisode: nextEp }, progressMap);

@@ -1,5 +1,5 @@
 import { writable } from "svelte/store";
-import type { List, ExtendedListItem, DragState, PlayerState, EditingState } from "./types";
+import type { List, ExtendedListItem, DragState, EditingState } from "./types";
 
 export const lists = writable<List[]>([]);
 export const listItemsMap = writable<Record<string, ExtendedListItem[]>>({});
@@ -12,11 +12,6 @@ export const editingState = writable<EditingState>({
     name: "",
 });
 
-export const playerState = writable<PlayerState>({
-    isPaused: false,
-    isMuted: true,
-    playerIframe: null,
-});
 
 export const dragState = writable<DragState>({
     draggedItem: null,

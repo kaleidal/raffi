@@ -29,6 +29,10 @@ declare global {
             };
             setTheme?: (theme: "dark" | "light") => void;
             openExternal?: (url: string) => Promise<void>;
+            toggleFullscreen?: () => void;
+            isFullscreen?: () => Promise<boolean>;
+            resolveStream?: (url: string) => Promise<string>;
+            sampleRegion?: (rect: { x: number; y: number; width: number; height: number }) => Promise<string | null>;
             installUpdate?: () => Promise<void>;
             getPlayableFileUrl?: (file: File) => Promise<string>;
             localLibrary?: {

@@ -1,25 +1,27 @@
 <script lang="ts">
-	export let src: string | null | undefined = null;
-	export let name: string | null | undefined = null;
-	export let sizeClass = "w-12 h-12";
+	let {
+		src = null,
+		name = null,
+		sizeClass = "w-12 h-12",
+	}: {
+		src?: string | null;
+		name?: string | null;
+		sizeClass?: string;
+	} = $props();
 
-	let failed = false;
+	let failedSrc = $state<string | null>(null);
 
-	$: normalizedSrc = String(src || "").trim();
-	$: if (normalizedSrc) {
-		failed = false;
-	}
-	$: initials = String(name || "?")
-		.trim()
-		.split(/\s+/)
-		.map((part) => part.charAt(0))
-		.join("")
-		.slice(0, 2)
-		.toUpperCase() || "?";
-
-	function handleError() {
-		failed = true;
-	}
+	const normalizedSrc = $derived(String(src || "").trim());
+	const failed = $derived(failedSrc === normalizedSrc);
+	const initials = $derived(
+		String(name || "?")
+			.trim()
+			.split(/\s+/)
+			.map((part) => part.charAt(0))
+			.join("")
+			.slice(0, 2)
+			.toUpperCase() || "?",
+	);
 </script>
 
 {#if normalizedSrc && !failed}
@@ -27,7 +29,7 @@
 		src={normalizedSrc}
 		alt={`${name || "Addon"} logo`}
 		class={`${sizeClass} object-contain rounded-xl bg-ink/5 shrink-0`}
-		on:error={handleError}
+		onerror={() => (failedSrc = normalizedSrc)}
 	/>
 {:else}
 	<div

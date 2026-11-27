@@ -1,10 +1,8 @@
 import type { Addon } from "../db/types";
 import type { StremioAddonDescriptor } from "./stremioAddons";
-import {
-    hasSupportedStremioAddonResources,
-    normalizeStremioTransportUrl,
-} from "./stremioAddons";
-import type { StremioImportPreviewItem } from "./stremioImport";
+import { offersSupportedResource, resourceNames } from "../library/addonManifest";
+import { normalizeStremioTransportUrl } from "./stremioAddons";
+import type { StremioImportPreviewItem } from "./stremioLibrary/types";
 
 export interface StremioAddonPreviewItem {
     id: string;
@@ -25,19 +23,6 @@ export interface StremioImportPreview {
     rawCount: number;
 }
 
-const readAddonResources = (manifest: Record<string, unknown>): string[] => {
-    const resources = Array.isArray(manifest.resources) ? manifest.resources : [];
-    const names = resources
-        .map((resource) => {
-            if (typeof resource === "string") return resource.toLowerCase();
-            if (resource && typeof resource === "object" && "name" in resource) {
-                return String((resource as { name?: string }).name || "").toLowerCase();
-            }
-            return "";
-        })
-        .filter(Boolean);
-    return Array.from(new Set(names));
-};
 
 export const buildStremioAddonPreviewItems = (
     descriptors: StremioAddonDescriptor[],
@@ -54,13 +39,13 @@ export const buildStremioAddonPreviewItems = (
             typeof manifest.name === "string" && manifest.name.trim()
                 ? manifest.name.trim()
                 : transportUrl;
-        const supported = hasSupportedStremioAddonResources(manifest);
+        const supported = offersSupportedResource(manifest);
 
         return {
             id: transportUrl,
             name,
             transportUrl,
-            resources: readAddonResources(manifest),
+            resources: resourceNames(manifest),
             alreadyInstalled: existingUrls.has(transportUrl),
             supported,
             descriptor,

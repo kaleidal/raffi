@@ -5,34 +5,42 @@
     import type { PopularTitleMeta } from "../../lib/library/types/popular_types";
     import { isAndroidPlatform } from "../../lib/shell/platform";
     import { router } from "../../lib/stores/router";
+    import { followTrailerColours } from "../../lib/home/trailerAmbient";
     import IconButton from "../common/controls/IconButton.svelte";
 
-    export let showcasedTitle: PopularTitleMeta | null;
+    let {
+        showcasedTitle,
+        onLogoError,
+    }: { showcasedTitle: PopularTitleMeta | null; onLogoError: () => void } = $props();
 
-    export let onLogoError: () => void = () => {};
-
-    let playerIframe: HTMLIFrameElement;
+    let playerIframe = $state.raw<HTMLIFrameElement>();
     let container: HTMLDivElement;
-    let isPaused = false;
-    let isMuted = true;
+    let isPaused = $state(false);
+    let isMuted = $state(true);
     let wasPlayingBeforeHidden = false;
     let canControlTrailer = false;
-    let trailerSrc = "";
+    let trailerPlaying = false;
+    let trailerFailed = $state(false);
 
+    const trailerSrc = $derived(trailerUrl(showcasedTitle));
 
-    $: if (showcasedTitle) {
+    $effect.pre(() => {
+        if (!showcasedTitle) return;
         isMuted = true;
         isPaused = false;
         wasPlayingBeforeHidden = false;
         canControlTrailer = false;
-        const trailerId = isAndroidPlatform ? undefined : showcasedTitle.trailerStreams?.at(-1)?.ytId;
-        const origin = typeof window !== "undefined" ? window.location.origin : "";
-        const originParam = origin && origin !== "null" ? `&origin=${encodeURIComponent(origin)}` : "";
-        trailerSrc = trailerId
-            ? `https://www.youtube-nocookie.com/embed/${trailerId}?controls=0&modestbranding=1&rel=0&autoplay=1&mute=1&loop=1&playlist=${trailerId}&showinfo=0&iv_load_policy=3&cc_load_policy=0&disablekb=1&enablejsapi=1${originParam}`
-            : "";
-    }
+        trailerPlaying = false;
+        trailerFailed = false;
+    });
 
+    function trailerUrl(title: PopularTitleMeta | null) {
+        const trailerId = isAndroidPlatform ? undefined : title?.trailerStreams?.at(-1)?.ytId;
+        if (!trailerId) return "";
+        const origin = window.location.origin;
+        const originParam = origin && origin !== "null" ? `&origin=${encodeURIComponent(origin)}` : "";
+        return `https://www.youtube-nocookie.com/embed/${trailerId}?controls=0&modestbranding=1&rel=0&autoplay=1&mute=1&loop=1&playlist=${trailerId}&showinfo=0&iv_load_policy=3&cc_load_policy=0&disablekb=1&enablejsapi=1${originParam}`;
+    }
 
     onMount(() => {
         const observer = new IntersectionObserver(
@@ -68,7 +76,7 @@
             { threshold: 0.1 },
         );
 
-        if (container) observer.observe(container);
+        observer.observe(container);
 
         return () => observer.disconnect();
     });
@@ -104,6 +112,7 @@
         if (payload?.event === "onReady") {
             initTrailerBridge();
         }
+        if (payload?.event === "onError") trailerFailed = true;
         if (payload?.event === "onStateChange") {
             const state = payload?.info?.playerState;
             if (state === 1) {
@@ -111,6 +120,7 @@
             } else if (state === 2) {
                 isPaused = true;
             }
+            if (state !== 3) trailerPlaying = state === 1;
         }
     };
 
@@ -136,7 +146,11 @@
 
     onMount(() => {
         window.addEventListener("message", handleTrailerMessage);
-        return () => window.removeEventListener("message", handleTrailerMessage);
+        const stopFollowing = followTrailerColours(() => (trailerSrc && !trailerFailed ? playerIframe : undefined), () => trailerPlaying);
+        return () => {
+            window.removeEventListener("message", handleTrailerMessage);
+            stopFollowing();
+        };
     });
 
     const handleTrailerLoad = () => {
@@ -148,7 +162,7 @@
 </script>
 
 <div
-    class="hero-shell scheme-dark w-full relative overflow-hidden bg-canvas isolate"
+    class="hero-shell scheme-dark w-full relative overflow-hidden isolate"
     bind:this={container}
 >
     {#if showcasedTitle}
@@ -161,7 +175,7 @@
                     src={showcasedTitle.logo}
                     alt="Logo"
                     class="w-[clamp(300px,38vw,600px)] h-auto max-h-[clamp(130px,14vw,220px)] object-contain object-left"
-                    on:error={onLogoError}
+                    onerror={onLogoError}
                 />
             {:else}
                 <h1 class="text-ink text-[clamp(40px,4vw,64px)] font-bold max-w-[700px] leading-[1.05]">
@@ -173,16 +187,15 @@
             <div class="flex flex-row gap-[10px] items-center">
                 <button
                     data-tv-autofocus
-                    class="details-button bg-accent/85 hover:bg-accent/70 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-[clamp(10px,1vw,16px)] text-on-accent text-[clamp(20px,1.8vw,32px)] font-medium px-[clamp(36px,4.4vw,84px)] py-[clamp(12px,1vw,18px)] w-fit rounded-full transition-colors duration-200"
-                    on:click={() =>
-                        navigateToMeta(showcasedTitle.imdb_id, showcasedTitle.type)}
+                    class="details-button bg-accent/85 hover:bg-accent/70 cursor-pointer backdrop-blur-2xl flex flex-row items-center justify-center gap-[clamp(10px,1vw,16px)] text-on-accent text-[clamp(20px,1.8vw,32px)] font-medium px-[clamp(36px,4.4vw,84px)] py-[clamp(12px,1vw,18px)] w-fit rounded-full shadow-[0_10px_30px_rgba(0,0,0,0.18)] transition-colors duration-200"
+                    onclick={() => navigateToMeta(showcasedTitle.imdb_id, showcasedTitle.type)}
                 >
                     <Info size={48} strokeWidth={3} />
 
                     Details
                 </button>
 
-                {#if trailerSrc}
+                {#if trailerSrc && !trailerFailed}
                     <IconButton
                         label={isPaused ? "Play" : "Pause"}
                         onClick={togglePlay}
@@ -208,8 +221,8 @@
             </div>
         </div>
 
-        <div in:fade={{ duration: 400 }} class="hero-media absolute inset-0 overflow-hidden pointer-events-none">
-            {#if trailerSrc}
+        <div in:fade={{ duration: 400 }} class="hero-backdrop hero-media absolute inset-0 overflow-hidden pointer-events-none">
+            {#if trailerSrc && !trailerFailed}
                 <iframe
                     bind:this={playerIframe}
                     frameborder="0"
@@ -217,7 +230,7 @@
                     src={trailerSrc}
                     class="hero-frame"
                     title="Trailer"
-                    on:load={handleTrailerLoad}
+                    onload={handleTrailerLoad}
                 ></iframe>
             {:else if showcasedTitle.background}
                 <img src={showcasedTitle.background} alt="" class="hero-still" />
@@ -225,37 +238,31 @@
         </div>
     {/if}
 
-    <div
-        class="hero-bottom-scrim absolute inset-0 z-[1] bg-gradient-to-t from-canvas via-canvas/80 to-transparent"
-    ></div>
-    <div
-        class="absolute inset-0 z-[1] bg-gradient-to-r from-canvas/80 via-transparent to-transparent"
-    ></div>
-    <div class="hero-blend page-fade pointer-events-none absolute inset-x-0 bottom-0 z-[2]"></div>
-    <div class="absolute bottom-0 left-0 right-0 h-[14px] z-[2] bg-page"></div>
+    <div class="hero-backdrop pointer-events-none absolute inset-0 z-[1] bg-gradient-to-t from-canvas via-canvas/80 to-transparent"></div>
+    <div class="hero-backdrop pointer-events-none absolute inset-0 z-[1] bg-gradient-to-r from-canvas/80 via-transparent to-transparent"></div>
 </div>
 
 <style>
     .hero-shell {
-        --hero-blend: 0px;
-        height: calc(clamp(440px, min(58vw, 76dvh), 760px) + var(--hero-blend));
+        --hero-content-gap: clamp(48px, 6vw, 100px);
+        height: clamp(440px, min(58vw, 76dvh), 760px);
         min-height: 440px;
     }
 
-    :global(:root[data-theme="light"]) .hero-shell {
-        --hero-blend: clamp(120px, 11vw, 200px);
-    }
-
-    :global(:root[data-theme="light"]) .hero-bottom-scrim {
-        display: none;
+    .hero-backdrop {
+        mask-image: linear-gradient(
+            to top,
+            transparent,
+            rgb(0 0 0 / 0.1) calc(var(--hero-content-gap) * 0.15),
+            rgb(0 0 0 / 0.35) calc(var(--hero-content-gap) * 0.38),
+            rgb(0 0 0 / 0.65) calc(var(--hero-content-gap) * 0.62),
+            rgb(0 0 0 / 0.9) calc(var(--hero-content-gap) * 0.85),
+            black var(--hero-content-gap)
+        );
     }
 
     .hero-content {
-        bottom: calc(clamp(48px, 6vw, 100px) + var(--hero-blend));
-    }
-
-    .hero-blend {
-        height: calc(var(--hero-blend) * 1.5);
+        bottom: var(--hero-content-gap);
     }
 
     .hero-frame {
@@ -281,7 +288,7 @@
 
     @media (orientation: portrait) {
         .hero-shell {
-            height: calc(clamp(560px, 74dvh, 780px) + var(--hero-blend));
+            height: clamp(560px, 74dvh, 780px);
             min-height: min(560px, 74dvh);
         }
 

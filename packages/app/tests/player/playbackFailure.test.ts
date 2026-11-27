@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { describePlaybackFailure, streamConnectionFailure } from "../../src/pages/player/session/playbackFailure";
+import { describePlaybackFailure, streamConnectionFailure } from "../../src/pages/player/session/health/playbackFailure";
 
 describe("describePlaybackFailure", () => {
 	test("identifies a browser fetch failure as a likely network block", () => {

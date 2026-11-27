@@ -10,19 +10,15 @@ Raffi doesn't come with anything to stream. What you can watch depends on the ad
 - Hardware-accelerated playback with audio and subtitle track selection
 - Seek bar previews, intro skipping and subtitle delay adjustment
 - Local files, and torrents through [Limbo](https://limbo.kaleid.al)
+- Discord presence that shows what you're watching
 
 **Keeping track**
 
 - Continue watching with progress for every episode
 - Your own lists and collections
 - Progress, lists and addons that sync with your account
-
-**Watching together**
-
-- Watch parties with synced playback, chat and host controls
-- Discord presence that shows what you're watching
 """
-keywords = ["streaming", "movies", "tv shows", "media player", "stremio addons", "watch party"]
+keywords = ["streaming", "movies", "tv shows", "media player", "stremio addons"]
 categories = ["AudioVideo", "Video", "Player"]
 homepage = "https://raffi.al"
 support = "https://github.com/kaleidal/raffi/issues"

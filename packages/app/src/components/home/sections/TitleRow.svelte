@@ -1,43 +1,32 @@
 <script lang="ts">
     import type { PopularTitleMeta } from "../../../lib/library/types/popular_types";
-    import { router } from "../../../lib/stores/router";
     import { fade } from "svelte/transition";
-    import TitleContextMenu from "../context_menus/TitleContextMenu.svelte";
-    import ListsPopup from "../../meta/modals/ListsPopup.svelte";
-    import TrailerModal from "../../meta/modals/TrailerModal.svelte";
     import { onDestroy, onMount, tick } from "svelte";
     import { ChevronLeft, ChevronRight } from "@lucide/svelte";
-    import PosterImage from "./PosterImage.svelte";
-    import { getPrimaryTrailerId } from "../../../lib/home/trailers";
- 
-    export let title: string;
-    export let titles: PopularTitleMeta[];
+    import PosterCard from "./PosterCard.svelte";
 
-    let scrollContainer: HTMLDivElement;
-    let showLeftButton = false;
-    let showRightButton = false;
-    let showContextMenu = false;
-    let contextMenuX = 0;
-    let contextMenuY = 0;
-    let selectedImdbId = "";
-    let selectedType = "";
-    let selectedTrailerId = "";
-    let showListsPopup = false;
-    let showTrailerModal = false;
-    let visibleCount = 24;
-    let previousTitles = titles;
-    let scrollFrame: number | null = null;
-    let resizeObserver: ResizeObserver | null = null;
+    let {
+        title,
+        titles,
+        onSeeAll = null,
+    }: { title: string; titles: PopularTitleMeta[]; onSeeAll?: (() => void) | null } = $props();
 
     const BATCH_SIZE = 24;
     const LOAD_AHEAD_PX = 1200;
 
-    $: renderedTitles = titles.slice(0, visibleCount);
-    $: if (titles !== previousTitles) {
-        previousTitles = titles;
-        visibleCount = Math.min(BATCH_SIZE, titles.length);
+    let scrollContainer: HTMLDivElement;
+    let showLeftButton = $state(false);
+    let showRightButton = $state(false);
+    let visibleCount = $derived(Math.min(BATCH_SIZE, titles.length));
+    let scrollFrame: number | null = null;
+    let resizeObserver: ResizeObserver | null = null;
+
+    const renderedTitles = $derived(titles.slice(0, visibleCount));
+
+    $effect(() => {
+        renderedTitles;
         scheduleScrollCheck();
-    }
+    });
 
     function checkScroll() {
         if (!scrollContainer) return;
@@ -55,7 +44,7 @@
     }
 
     function scheduleScrollCheck() {
-        if (typeof requestAnimationFrame === "undefined" || scrollFrame !== null) return;
+        if (scrollFrame !== null) return;
         scrollFrame = requestAnimationFrame(() => {
             scrollFrame = null;
             checkScroll();
@@ -65,7 +54,6 @@
     function revealMore() {
         if (visibleCount >= titles.length) return;
         visibleCount = Math.min(visibleCount + BATCH_SIZE, titles.length);
-        void tick().then(scheduleScrollCheck);
     }
 
     function scrollLeft() {
@@ -84,32 +72,9 @@
         scrollContainer.scrollBy({ left: 800, behavior: "smooth" });
     }
 
-    function handleContextMenu(e: MouseEvent, imdbId: string, type: string, trailerId: string | null) {
-        e.preventDefault();
-        contextMenuX = e.clientX;
-        contextMenuY = e.clientY;
-        selectedImdbId = imdbId;
-        selectedType = type;
-        selectedTrailerId = trailerId || "";
-        showContextMenu = true;
-    }
-
-    function handleAddToList() {
-        showContextMenu = false;
-        showListsPopup = true;
-    }
-
-    function handleViewTrailer() {
-        if (!selectedTrailerId) return;
-        showContextMenu = false;
-        showTrailerModal = true;
-    }
-
     onMount(() => {
-        if (!scrollContainer) return;
         resizeObserver = new ResizeObserver(scheduleScrollCheck);
         resizeObserver.observe(scrollContainer);
-        scheduleScrollCheck();
     });
 
     onDestroy(() => {
@@ -118,40 +83,26 @@
     });
 </script>
 
-{#if showContextMenu}
-    <TitleContextMenu
-        x={contextMenuX}
-        y={contextMenuY}
-        showTrailer={Boolean(selectedTrailerId)}
-        onClose={() => (showContextMenu = false)}
-        onAddToList={handleAddToList}
-        onViewTrailer={handleViewTrailer}
-    />
-{/if}
-
-<ListsPopup
-    bind:visible={showListsPopup}
-    imdbId={selectedImdbId}
-    type={selectedType}
-/>
-
-{#if selectedTrailerId}
-    <TrailerModal
-        bind:visible={showTrailerModal}
-        ytId={selectedTrailerId}
-    />
-{/if}
-
 <div class="home-section w-full h-fit flex flex-col gap-4 relative group overflow-visible">
-    <h2 class="section-title text-ink text-[clamp(28px,2.2vw,44px)] font-semibold">
-        {title}
-    </h2>
+    <div class="flex items-center justify-between gap-4">
+        <h2 class="section-title text-ink text-[clamp(28px,2.2vw,44px)] font-semibold">
+            {title}
+        </h2>
+        {#if onSeeAll}
+            <button
+                class="cursor-pointer rounded-full px-4 py-2 font-medium text-ink/60 transition-colors hover:bg-ink/8 hover:text-ink"
+                onclick={onSeeAll}
+            >
+                See all
+            </button>
+        {/if}
+    </div>
 
     <div class="relative">
         {#if showLeftButton}
             <button
                 class="rail-button absolute inset-y-3 left-0 z-20 flex items-center justify-center rounded-r-2xl bg-gradient-to-r from-canvas/90 to-canvas/35 text-ink backdrop-blur-sm transition-opacity duration-200 cursor-pointer"
-                on:click={scrollLeft}
+                onclick={scrollLeft}
                 aria-label="Scroll left"
                 transition:fade={{ duration: 200 }}
             >
@@ -161,42 +112,19 @@
 
     <div
         bind:this={scrollContainer}
-        on:scroll={scheduleScrollCheck}
+        onscroll={scheduleScrollCheck}
         data-scroll-row
         class="flex flex-row gap-[20px] overflow-x-scroll overflow-y-visible pt-3 pb-6 no-scrollbar scroll-smooth"
     >
-            {#each renderedTitles as title (`${title.type}:${title.imdb_id}`)}
-                <button
-                    class="w-[clamp(150px,13vw,200px)] aspect-[2/3] h-fit appearance-none border-0 bg-transparent p-0 rounded-[16px] transition-[width,translate,box-shadow] duration-300 ease-out cursor-pointer overflow-clip relative flex-shrink-0 hover:-translate-y-1.5 hover:shadow-[0_14px_30px_rgba(0,0,0,0.35)] focus-visible:-translate-y-1.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink/70"
-                    aria-label={`Open ${title.name}`}
-
-                    on:click={() => {
-                        router.navigate("meta", {
-                            imdbId: title.imdb_id,
-                            type: title.type,
-                        });
-                    }}
-                    on:contextmenu={(e) =>
-                        handleContextMenu(
-                            e,
-                            title.imdb_id,
-                            title.type,
-                            getPrimaryTrailerId(title),
-                        )}
-                >
-                    <PosterImage
-                        src={title.poster}
-                        title={title.name}
-                        alt={title.name || `${title} title poster`}
-                    />
-                </button>
+            {#each renderedTitles as entry (`${entry.type}:${entry.imdb_id}`)}
+                <PosterCard title={entry} class="w-[clamp(150px,13vw,200px)]" />
             {/each}
         </div>
 
         {#if showRightButton}
             <button
                 class="rail-button absolute inset-y-3 right-0 z-20 flex items-center justify-center rounded-l-2xl bg-gradient-to-l from-canvas/90 to-canvas/35 text-ink backdrop-blur-sm transition-opacity duration-200 cursor-pointer"
-                on:click={scrollRight}
+                onclick={scrollRight}
                 aria-label="Scroll right"
                 transition:fade={{ duration: 200 }}
             >
@@ -207,13 +135,6 @@
 </div>
 
 <style>
-    .no-scrollbar::-webkit-scrollbar {
-        display: none;
-    }
-    .no-scrollbar {
-        -ms-overflow-style: none;
-        scrollbar-width: none;
-    }
     .home-section {
         content-visibility: auto;
         contain-intrinsic-size: auto 390px;

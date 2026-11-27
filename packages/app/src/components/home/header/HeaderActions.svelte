@@ -1,23 +1,14 @@
 <script lang="ts">
-    import { Library, Play, Settings, Tv } from "@lucide/svelte";
-    import LoadingSpinner from "../../common/LoadingSpinner.svelte";
+    import { Library, Settings, Tv } from "@lucide/svelte";
+    import ShapeLoader from "../../common/loading/ShapeLoader.svelte";
     import { router, type Route } from "../../../lib/stores/router";
-    import { isAndroidPlatform, isDesktopPlatform } from "../../../lib/shell/platform";
-    import { cloudSyncStatus } from "../../../lib/db/db";
     import { showLiveInHeader } from "../../../lib/live/preferences";
     import { openSettings } from "../../../lib/stores/settings";
-    import { currentUser, authInitializing, localMode, updateStatus } from "../../../lib/stores/authStore";
+    import { currentUser, authInitializing, updateStatus } from "../../../lib/stores/authStore";
 
-    let { onOpenPlay }: { onOpenPlay: () => void } = $props();
-
-    type NavItem = { label: string; icon: typeof Play; page?: Route; onSelect: () => void };
-
-    const canPlay = $derived(
-        !isAndroidPlatform && (isDesktopPlatform || (!$localMode && $cloudSyncStatus.cloudFeaturesAvailable)),
-    );
+    type NavItem = { label: string; icon: typeof Library; page?: Route; onSelect: () => void };
 
     const items = $derived<NavItem[]>([
-        ...(canPlay ? [{ label: "Play", icon: Play, onSelect: onOpenPlay }] : []),
         { label: "Lists", icon: Library, page: "lists", onSelect: () => router.navigate("lists") },
         ...($showLiveInHeader ? [{ label: "Live", icon: Tv, page: "live" as Route, onSelect: () => router.navigate("live") }] : []),
     ]);
@@ -53,9 +44,9 @@
             onclick={() => openSettings()}
         >
             {#if $authInitializing}
-                <LoadingSpinner size="26px" />
+                <ShapeLoader size="26px" />
             {:else if $currentUser?.avatar}
-                <img src={$currentUser.avatar} alt="" class="h-full w-full object-cover" loading="lazy" />
+                <img src={$currentUser.avatar} alt="" class="h-full w-full object-cover" />
                 <span class="pointer-events-none absolute inset-0 bg-black/25 opacity-0 transition-opacity duration-300 group-hover:opacity-100"></span>
             {:else if $currentUser}
                 <span class="text-2xl font-semibold text-ink uppercase">

@@ -1,36 +1,25 @@
-import { get } from "svelte/store";
-import type { ShowResponse } from "../../../lib/library/types/meta_types";
-import {
-    MediaBunnyPlayback,
-    enrichProbedStreamAudio,
-    resolveHttpPlayback,
-    type ProbedStream,
-    type ClientPlaybackController,
-} from "../../../lib/media";
+import type { ClientPlaybackController } from "../../../lib/media";
 import {
     canTryClientPlayback,
-    isHttpUrl,
     isMagnetUrl,
     toClientPlayableUrl,
 } from "../../../lib/media/localSource";
 import {
-    addLimboTorrent,
-    LimboUnavailableError,
     removeLimboTorrent,
     type LimboTorrentStatus,
 } from "../../../lib/streams/limboClient";
-import { ensureTorrentingAllowed } from "../../../lib/stores/torrenting";
-import { selectedStream } from "../../meta/metaState";
-import type { Chapter, Track } from "../types";
 import * as Session from "./videoSession";
 import * as Subtitles from "../subtitles/subtitles";
-import { autoEnableDefaultSubtitles as applyDefaultSubtitles } from "../subtitles/subtitleAutoSelect";
 import { applyClientAudioTracks, embeddedSubtitleTracks, sessionFromProbe } from "./playerSessionMetadata";
-import { attachHlsPlayback } from "./hlsPlayback";
 import {
     describePlaybackFailure,
     PlaybackPreparationError,
-} from "./playbackFailure";
+} from "./health/playbackFailure";
+import { attachClientPlayback } from "./loader/clientPlaybackAttach";
+import { probeClientPlayback, type ClientPlayback } from "./loader/clientPlaybackProbe";
+import { limboPlaybackFailure, resolveLimboStream } from "./loader/limboStream";
+import { canResumeSession, resumeReusedSession, type ReusedSession } from "./loader/reusedSession";
+import type { PlayerSessionLoaderDeps } from "./loader/sessionLoaderDeps";
 import {
     isPlaying,
     loading,
@@ -43,8 +32,6 @@ import {
     duration,
     showSkipIntro,
     showNextEpisode,
-    currentAudioLabel,
-    currentSubtitleLabel,
     showError,
     errorMessage,
     errorDetails,
@@ -54,75 +41,14 @@ import {
     pendingSeek,
     seekGuard,
     firstSeekLoad,
-    showSeekStyleModal,
     currentChapter,
 } from "../playerState";
-
-export type PlayerSessionLoaderDeps = {
-    getFileIdx: () => number | null;
-    getStartTime: () => number;
-    autoPlay: boolean;
-    getMetaData: () => ShowResponse | null;
-    getSeason: () => number | null;
-    getEpisode: () => number | null;
-    getVideoElem: () => HTMLVideoElement | undefined;
-    getHls: () => any;
-    setHls: (value: any) => void;
-    getPlaybackController: () => ClientPlaybackController | null;
-    setPlaybackController: (value: ClientPlaybackController | null) => void;
-    getCueLinePercent: () => number;
-    shouldShowSeekStyleInfoModal: () => boolean;
-    setPendingStartAfterSeekStyleModal: (value: boolean) => void;
-    setHasStarted: (value: boolean) => void;
-    setIntroDbChapters: (chapters: Chapter[]) => void;
-    resolvePlaybackStart: (context: {
-        sessionData: any;
-        startTime: number;
-        metaData: ShowResponse | null;
-        season: number | null;
-        episode: number | null;
-    }) => Promise<{
-        effectiveStartTime: number;
-        introDbChapters: Chapter[];
-    }>;
-    startTorrentStatusPolling: (torrentId: string) => void;
-    awaitTorrentReady: (torrentId: string) => Promise<void>;
-    stopTorrentStatusPolling: () => void;
-    awaitDomUpdate: () => Promise<void>;
-    handleProviderStatusMedia?: (context: {
-        source: string;
-        meta: ProbedStream;
-    }) => boolean;
-};
 
 export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
     let loadGeneration = 0;
     let activeAbortController: AbortController | null = null;
     let activeLimboTorrentId = "";
     let cleanupPromise = Promise.resolve();
-
-    const attachSeekHandler = (videoElem: HTMLVideoElement) => {
-        Session.attachSeekingListener(
-            videoElem,
-            Session.createSeekHandler(
-                videoElem,
-                () => get(pendingSeek),
-                () => get(seekGuard),
-                {
-                    setPendingSeek: pendingSeek.set,
-                    setSeekGuard: seekGuard.set,
-                    setBuffering: playbackBuffering.set,
-                    setShowCanvas: showCanvas.set,
-                    setFirstSeekLoad: firstSeekLoad.set,
-                    setShowError: showError.set,
-                    setErrorMessage: errorMessage.set,
-                    setErrorDetails: errorDetails.set,
-                },
-                deps.getPlaybackController,
-                () => get(isPlaying),
-            ),
-        );
-    };
 
     const cancelCurrentLoad = (
         preservedController: ClientPlaybackController | null = null,
@@ -159,76 +85,10 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
         return cleanupPromise;
     };
 
-    const resolveLimboStream = async (
-        magnet: string,
-        fileIdx: number | null,
-        signal: AbortSignal,
-    ): Promise<{ streamUrl: string; status: LimboTorrentStatus }> => {
-        loadingStage.set("Connecting to Limbo");
-        loadingDetails.set("Making sure Limbo is running…");
-        loadingProgress.set(null);
-
-        try {
-            await ensureTorrentingAllowed(signal);
-        } catch (error) {
-            if (error instanceof LimboUnavailableError) {
-                throw new Error(
-                    `${error.message} Get it at https://limbo.kaleid.al`,
-                );
-            }
-            throw error;
-        }
-
-        if (signal.aborted) throw new DOMException("Aborted", "AbortError");
-
-        loadingStage.set("Waiting for Limbo approval");
-        loadingDetails.set("Approve the request in Limbo if prompted…");
-        const created = await addLimboTorrent(
-            {
-                magnet,
-                fileIndex: fileIdx,
-                sequential: true,
-                name: (() => {
-                    const stream = get(selectedStream);
-                    if (!stream) return null;
-                    return (
-                        stream.behaviorHints?.filename?.trim() ||
-                        stream.title?.trim() ||
-                        stream.name?.trim() ||
-                        null
-                    );
-                })(),
-            },
-            signal,
-        );
-        if (signal.aborted) {
-            await removeLimboTorrent(created.id, false);
-            throw new DOMException("Aborted", "AbortError");
-        }
-        activeLimboTorrentId = created.id;
-        deps.startTorrentStatusPolling(created.id);
-        await deps.awaitTorrentReady(created.id);
-
-        if (signal.aborted) throw new DOMException("Aborted", "AbortError");
-
-        const { getLimboTorrent } = await import("../../../lib/streams/limboClient");
-        const ready = await getLimboTorrent(created.id, signal);
-        if (!ready.streamUrl) {
-            throw new Error("Limbo did not return a stream URL for this torrent");
-        }
-        return { streamUrl: ready.streamUrl, status: ready };
-    };
-
     const loadVideo = async (
         src: string,
         opts?: {
-            reuseSession?: {
-                sessionData: any;
-                mode?: "direct" | "mediabunny" | "addon-hls" | "unsupported";
-                meta?: ProbedStream | null;
-                playbackController?: ClientPlaybackController | null;
-                hls?: any;
-            };
+            reuseSession?: ReusedSession;
             /** Overrides the requested start, e.g. to resume where a reload left off. */
             startTime?: number;
         },
@@ -248,127 +108,14 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
 
         try {
             const reused = opts?.reuseSession;
-            if (
-                reused &&
-                (reused.mode === "direct" ||
-                    reused.mode === "mediabunny" ||
-                    reused.mode === "addon-hls")
-            ) {
-                loadingStage.set("Continuing");
-                loadingDetails.set("");
-                loadingProgress.set(null);
-
-                const videoElem = deps.getVideoElem();
-                if (!videoElem) return;
-
-                const sessionSource = await toClientPlayableUrl(src);
-                let nextSession =
-                    reused.sessionData && typeof reused.sessionData === "object"
-                        ? { ...reused.sessionData }
-                        : sessionFromProbe(reused.meta ?? null, sessionSource);
-
-                nextSession = applyClientAudioTracks(
-                    reused.meta ?? null,
-                    sessionSource,
-                    nextSession,
-                    reused.playbackController?.getAudioIndex?.(),
-                );
-                sessionData.set(nextSession);
-
-                const metaData = deps.getMetaData();
-                const season = deps.getSeason();
-                const episode = deps.getEpisode();
-
-                const durationSeconds =
-                    reused.meta?.durationSeconds ||
-                    (Number.isFinite(videoElem.duration) ? videoElem.duration : 0) ||
-                    nextSession.durationSeconds ||
-                    0;
-                if (durationSeconds > 0) {
-                    duration.set(durationSeconds);
-                }
-
-                currentTime.set(videoElem.currentTime);
-
-                subtitleTracks.set([
-                    { id: "off", label: "Off", selected: true, group: "None" },
-                    ...embeddedSubtitleTracks(reused.meta ?? null, sessionSource),
-                ]);
-
-                if (
-                    reused.mode === "mediabunny" &&
-                    reused.playbackController
-                ) {
-                    reused.playbackController.setPrefetching(false);
-                    deps.setPlaybackController(reused.playbackController);
-                } else if (reused.mode === "addon-hls" && reused.hls) {
-                    deps.setHls(reused.hls);
-                } else {
-                    deps.setPlaybackController(null);
-                }
-                attachSeekHandler(videoElem);
-                if (isStale()) return;
-
-                try {
-                    videoElem.muted = false;
-                    videoElem.defaultMuted = false;
-                } catch {
-                    // ignore
-                }
-
-                loading.set(false);
-                loadingStage.set("");
-                loadingDetails.set("");
-                showCanvas.set(false);
-                playbackBuffering.set(false);
-                if (deps.autoPlay) {
-                    videoElem.play().catch(() => {
-                        // ignore
-                    });
-                }
-
-                void deps
-                    .resolvePlaybackStart({
-                        sessionData: nextSession,
-                        startTime: opts?.startTime ?? deps.getStartTime(),
-                        metaData,
-                        season,
-                        episode,
-                    })
-                    .then((playbackStart) => {
-                        if (isStale()) return;
-                        deps.setIntroDbChapters(playbackStart.introDbChapters);
-                        if (
-                            playbackStart.effectiveStartTime > 0 &&
-                            videoElem.currentTime < playbackStart.effectiveStartTime
-                        ) {
-                            videoElem.currentTime = playbackStart.effectiveStartTime;
-                        }
-                    })
-                    .catch(() => {
-                        // ignore
-                    });
-
-                void Subtitles.fetchAddonSubtitles(metaData, season, episode)
-                    .then(async (addonTracks) => {
-                        if (isStale()) return;
-                        if (addonTracks.length > 0) {
-                            subtitleTracks.update((current) => [...current, ...addonTracks]);
-                        }
-                        await applyDefaultSubtitles({
-                            sessionData: nextSession,
-                            subtitleTracksValue: get(subtitleTracks),
-                            videoElem,
-                            cueLinePercent: deps.getCueLinePercent(),
-                            setSubtitleTracks: (updater: (tracks: Track[]) => Track[]) =>
-                                subtitleTracks.update(updater),
-                            setCurrentSubtitleLabel: currentSubtitleLabel.set,
-                            handleSubtitleSelect: Subtitles.handleSubtitleSelect,
-                        });
-                    })
-                    .catch(() => {
-                        // ignore
-                    });
+            if (reused && canResumeSession(reused)) {
+                await resumeReusedSession({
+                    src,
+                    reused,
+                    startTimeOverride: opts?.startTime,
+                    deps,
+                    isStale,
+                });
                 return;
             }
 
@@ -390,6 +137,13 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                     src,
                     fileIdx,
                     abortController.signal,
+                    {
+                        onTorrentAdded: (torrentId) => {
+                            activeLimboTorrentId = torrentId;
+                        },
+                        startTorrentStatusPolling: deps.startTorrentStatusPolling,
+                        awaitTorrentReady: deps.awaitTorrentReady,
+                    },
                 );
                 if (isStale()) return;
                 playbackSrc = limbo.streamUrl;
@@ -400,38 +154,16 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
             const canTryClient =
                 !opts?.reuseSession && canTryClientPlayback(playableSrc);
 
-            let clientPlayback:
-                | Awaited<ReturnType<typeof resolveHttpPlayback>>
-                | null = null;
+            let clientPlayback: ClientPlayback | null = null;
 
             if (canTryClient || limboStatus) {
-                loadingStage.set("Probing stream");
-                loadingDetails.set(
-                    limboStatus
-                        ? "Checking torrent stream codecs..."
-                        : /^https?:\/\//i.test(playableSrc)
-                          ? "Checking codecs..."
-                          : "Checking local file codecs...",
+                clientPlayback = await probeClientPlayback(
+                    playableSrc,
+                    deps.getVideoElem(),
+                    abortController.signal,
+                    !!limboStatus,
                 );
-                try {
-                    clientPlayback = await resolveHttpPlayback(
-                        playableSrc,
-                        deps.getVideoElem(),
-                        abortController.signal,
-                        limboStatus ? { probeTimeoutMs: null } : undefined,
-                    );
-                } catch (error) {
-                    if (error instanceof DOMException && error.name === "AbortError") {
-                        return;
-                    }
-                    console.warn("Client playback probe failed", error);
-                    clientPlayback = {
-                        mode: "unsupported",
-                        meta: null,
-                        reason: "probe-error",
-                        error: error instanceof Error ? error.message : String(error),
-                    };
-                }
+                if (!clientPlayback) return;
             }
 
             if (isStale()) return;
@@ -457,24 +189,7 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                 clientPlayback?.mode === "addon-hls";
 
             if (limboStatus && !useClientPlayback) {
-                const probeReason = String(clientPlayback?.reason || "");
-                const probeError = String(clientPlayback?.error || "");
-                const details = `${probeReason} ${probeError}`.toLowerCase();
-                if (
-                    details.includes("404") ||
-                    details.includes("not found") ||
-                    details.includes("failed to fetch") ||
-                    details.includes("network")
-                ) {
-                    throw new Error(
-                        "Limbo could not serve this torrent stream yet. Wait a moment or try another source.",
-                    );
-                }
-                throw new Error(
-                    probeReason === "probe-error" || probeReason === "probe-failed"
-                        ? "Could not probe the Limbo torrent stream. Try another source."
-                        : "This torrent needs codecs Raffi cannot remux yet. Try another source.",
-                );
+                throw limboPlaybackFailure(clientPlayback);
             }
 
             if (clientPlayback?.mode === "unsupported") {
@@ -509,8 +224,6 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                     setPendingSeek: pendingSeek.set,
                     setAudioTracks: audioTracks.set,
                     setSubtitleTracks: subtitleTracks.set,
-                    setCurrentAudioLabel: currentAudioLabel.set,
-                    setCurrentSubtitleLabel: currentSubtitleLabel.set,
                     setSessionData: sessionData.set,
                 },
                 () =>
@@ -590,222 +303,17 @@ export function createPlayerSessionLoader(deps: PlayerSessionLoaderDeps) {
                 // ignore
             }
 
-            const needsSeekStyleModal =
-                !!deps.autoPlay && deps.shouldShowSeekStyleInfoModal();
-            if (needsSeekStyleModal) {
-                showSeekStyleModal.set(true);
-                deps.setPendingStartAfterSeekStyleModal(true);
-            }
-
             if (useClientPlayback && clientPlayback) {
-                loadingStage.set(
-                    clientPlayback.mode === "mediabunny"
-                        ? "Remuxing in the app"
-                        : "Loading stream directly",
-                );
-                loadingDetails.set(
-                    clientPlayback.mode === "mediabunny"
-                        ? "Preparing a browser-compatible stream"
-                        : "Starting playback",
-                );
-                loadingProgress.set(null);
-
-                const hls = deps.getHls();
-                if (hls) {
-                    try {
-                        hls.destroy();
-                    } catch {
-                        // ignore
-                    }
-                    deps.setHls(null);
-                }
-
-                const existingController = deps.getPlaybackController();
-                if (existingController) {
-                    await existingController.destroy();
-                    deps.setPlaybackController(null);
-                }
-
-                void applyDefaultSubtitles({
-                    sessionData: result.sessionData,
-                    subtitleTracksValue: get(subtitleTracks),
+                await attachClientPlayback({
                     videoElem,
-                    cueLinePercent: deps.getCueLinePercent(),
-                    setSubtitleTracks: (updater: (tracks: Track[]) => Track[]) =>
-                        subtitleTracks.update(updater),
-                    setCurrentSubtitleLabel: currentSubtitleLabel.set,
-                    handleSubtitleSelect: Subtitles.handleSubtitleSelect,
-                }).catch(() => {
-                    // ignore
+                    clientPlayback,
+                    sessionSource,
+                    session: result,
+                    effectiveStartTime,
+                    signal: abortController.signal,
+                    isStale,
+                    deps,
                 });
-
-                loading.set(true);
-
-                if (clientPlayback.mode === "addon-hls") {
-                    attachSeekHandler(videoElem);
-                    const hlsInstance = await attachHlsPlayback({
-                        video: videoElem,
-                        source: sessionSource,
-                        startTime: effectiveStartTime,
-                        autoPlay: !needsSeekStyleModal && deps.autoPlay,
-                        onReady: () => {
-                            loading.set(false);
-                            loadingStage.set("");
-                            loadingDetails.set("");
-                            showCanvas.set(false);
-                        },
-                        onFatalError: (error, failedInstance) => {
-                            loading.set(false);
-                            loadingStage.set("");
-                            loadingDetails.set("");
-                            showCanvas.set(false);
-                            if (deps.getHls() === failedInstance) {
-                                deps.setHls(null);
-                            }
-                            errorMessage.set("HLS playback failed");
-                            errorDetails.set(error.message);
-                            showError.set(true);
-                        },
-                    });
-                    deps.setHls(hlsInstance);
-                    return;
-                }
-
-                if (clientPlayback.mode === "mediabunny") {
-                    const controller = new MediaBunnyPlayback();
-                    deps.setPlaybackController(controller);
-                    const attached = await controller.attach(
-                        videoElem,
-                        sessionSource,
-                        {
-                            startTime: effectiveStartTime,
-                            signal: abortController.signal,
-                            meta: clientPlayback.meta,
-                            audioIndex:
-                                result.sessionData?.audioIndex ??
-                                clientPlayback.meta?.preferredAudioIndex ??
-                                0,
-                        },
-                    );
-                    if (isStale()) {
-                        await controller.destroy();
-                        deps.setPlaybackController(null);
-                        return;
-                    }
-                    if (attached.durationSeconds > 0) {
-                        duration.set(attached.durationSeconds);
-                    }
-
-                    result.sessionData = applyClientAudioTracks(
-                        attached.meta,
-                        sessionSource,
-                        result.sessionData,
-                        controller.getAudioIndex(),
-                    );
-                    sessionData.set(result.sessionData);
-
-                    // Fill in disabled/extra container tracks without blocking start.
-                    void enrichProbedStreamAudio(
-                        sessionSource,
-                        attached.meta,
-                        abortController.signal,
-                    )
-                        .then((enriched) => {
-                            if (isStale()) return;
-                            controller.replaceMeta(enriched);
-                            result.sessionData = applyClientAudioTracks(
-                                controller.getMeta() ?? enriched,
-                                src,
-                                result.sessionData,
-                                controller.getAudioIndex(),
-                            );
-                            sessionData.set(result.sessionData);
-                        })
-                        .catch(() => {
-                            // ignore
-                        });
-
-                    attachSeekHandler(videoElem);
-
-                    loading.set(false);
-                    loadingStage.set("");
-                    loadingDetails.set("");
-                    showCanvas.set(false);
-                    if (!needsSeekStyleModal && deps.autoPlay) {
-                        videoElem.play().catch(() => {
-                            // ignore
-                        });
-                    }
-                    return;
-                }
-
-                const onLoaded = () => {
-                    const currentVideo = deps.getVideoElem();
-                    if (!currentVideo) return;
-
-                    if (
-                        Number.isFinite(currentVideo.duration) &&
-                        currentVideo.duration > 0
-                    ) {
-                        duration.set(currentVideo.duration);
-                    } else if ((clientPlayback.meta?.durationSeconds ?? 0) > 0) {
-                        duration.set(clientPlayback.meta!.durationSeconds);
-                    }
-
-                    if (effectiveStartTime > 0) {
-                        try {
-                            currentVideo.currentTime = effectiveStartTime;
-                        } catch {
-                            // ignore
-                        }
-                    }
-
-                    loading.set(false);
-                    loadingStage.set("");
-                    loadingDetails.set("");
-                    showCanvas.set(false);
-
-                    if (!needsSeekStyleModal && deps.autoPlay) {
-                        currentVideo.play().catch(() => {
-                            // ignore
-                        });
-                    }
-                };
-
-                videoElem.addEventListener("loadedmetadata", onLoaded, {
-                    once: true,
-                });
-
-                if (clientPlayback.meta && isHttpUrl(sessionSource)) {
-                    videoElem.crossOrigin = "anonymous";
-                } else {
-                    videoElem.removeAttribute("crossorigin");
-                }
-                attachSeekHandler(videoElem);
-                videoElem.src = sessionSource;
-                videoElem.load();
-
-                if (clientPlayback.meta) {
-                    void enrichProbedStreamAudio(
-                        sessionSource,
-                        clientPlayback.meta,
-                        abortController.signal,
-                    )
-                        .then((enriched) => {
-                            if (isStale()) return;
-                            clientPlayback.meta = enriched;
-                            result.sessionData = applyClientAudioTracks(
-                                enriched,
-                                sessionSource,
-                                result.sessionData,
-                            );
-                            sessionData.set(result.sessionData);
-                        })
-                        .catch(() => {
-                            // ignore
-                        });
-                }
-
                 return;
             }
 
