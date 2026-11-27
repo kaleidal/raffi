@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import tailwindcss from "@tailwindcss/vite";
 import { resolve } from 'node:path'
-import { runesOutsideDependencies } from '../../packages/app/runesMode'
+import { runesOutsideDependencies } from '../../packages/app/runesMode.ts'
 
 // https://vite.dev/config/
 export default defineConfig(({ command }) => ({
@@ -26,7 +26,7 @@ export default defineConfig(({ command }) => ({
     dedupe: ['svelte'],
   },
   optimizeDeps: {
-    include: ['@raffi/app'],
+    exclude: ['@raffi/app'],
   },
   build: {
     chunkSizeWarningLimit: 1000,

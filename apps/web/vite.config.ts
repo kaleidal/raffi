@@ -3,7 +3,7 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { defineConfig } from 'vite';
 import tailwindcss from '@tailwindcss/vite';
-import { runesOutsideDependencies } from '../../packages/app/runesMode';
+import { runesOutsideDependencies } from '../../packages/app/runesMode.ts';
 
 export default defineConfig({
 	plugins: [
