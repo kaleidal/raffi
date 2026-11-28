@@ -173,13 +173,6 @@
         display: none !important;
     }
 
-    /* Subtitle styling */
-    video::cue {
-        background-color: transparent !important;
-        text-shadow: 0 0 4px black;
-        font-family: inherit;
-    }
-
     .crop-ease {
         transition-property: left, top, width, height;
         transition-duration: 450ms;

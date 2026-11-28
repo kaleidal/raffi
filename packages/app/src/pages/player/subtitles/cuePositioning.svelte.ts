@@ -1,57 +1,37 @@
-import { untrack } from "svelte";
-import * as Subtitles from "./subtitles";
+const CONTROLS_GAP_PX = 20;
+const RESTING_SHARE = 0.06;
 
-const SUBTITLE_CONTROLS_MARGIN_PX = 26;
-const CONTROLS_SETTLE_MS = 350;
-
-/** Keeps subtitle cues just above the player controls, following them as they slide in and out. */
+/** How far above the bottom of the player subtitles sit: clear of the controls while they show. */
 export function createCuePositioning({
     getContainer,
     getPanel,
-    getVideo,
     isControlsVisible,
 }: {
     getContainer: () => HTMLElement | undefined;
     getPanel: () => HTMLElement | null;
-    getVideo: () => HTMLVideoElement | undefined;
     isControlsVisible: () => boolean;
 }) {
-    let linePercent = $state(92);
-
-    const measure = () => {
-        linePercent = Subtitles.computeCueLinePercent(
-            getContainer() ?? null,
-            getVideo() ?? null,
-            getPanel(),
-            isControlsVisible(),
-            SUBTITLE_CONTROLS_MARGIN_PX,
-        );
-    };
-
-    const reposition = () => {
-        measure();
-        Subtitles.updateCuePositions(getVideo() ?? null, linePercent);
-    };
-
-    $effect.pre(measure);
+    let playerHeight = $state(0);
+    let controlsReach = $state(0);
 
     $effect(() => {
-        Subtitles.updateCuePositions(getVideo() ?? null, linePercent);
-    });
+        const container = getContainer();
+        const panel = getPanel();
+        if (!container) return;
 
-    $effect(() => {
-        isControlsVisible();
-        untrack(reposition);
-        // Follow the controls while they slide, then once more after they settle.
-        requestAnimationFrame(() => requestAnimationFrame(reposition));
-        const settle = setTimeout(reposition, CONTROLS_SETTLE_MS);
-        return () => clearTimeout(settle);
+        const measure = () => {
+            playerHeight = container.clientHeight;
+            controlsReach = panel ? (panel.offsetParent as HTMLElement).offsetHeight - panel.offsetTop : 0;
+        };
+        const observer = new ResizeObserver(measure);
+        observer.observe(container);
+        if (panel) observer.observe(panel);
+        return () => observer.disconnect();
     });
 
     return {
-        get linePercent() {
-            return linePercent;
+        get offset() {
+            return isControlsVisible() && controlsReach ? controlsReach + CONTROLS_GAP_PX : playerHeight * RESTING_SHARE;
         },
-        measure,
     };
 }

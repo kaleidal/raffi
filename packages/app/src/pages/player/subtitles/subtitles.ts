@@ -122,13 +122,7 @@ function toPlainCueText(text: string): string {
     return text.replace(/[<>]/g, "");
 }
 
-function addTimedCue(
-    track: TextTrack,
-    start: number,
-    end: number,
-    text: string,
-    getCurrentCueLine: () => number,
-) {
+function addTimedCue(track: TextTrack, start: number, end: number, text: string) {
     const adjustedStart = start + subtitleDelaySeconds;
     const adjustedEnd = end + subtitleDelaySeconds;
     if (adjustedEnd < 0) return;
@@ -138,16 +132,13 @@ function addTimedCue(
             adjustedEnd,
             toPlainCueText(text).replace(/\u00A0/g, " "),
         );
-        cue.snapToLines = false;
-        cue.lineAlign = "end";
-        cue.line = getCurrentCueLine();
         track.addCue(cue);
     } catch (e) {
         console.warn("Failed to add subtitle cue:", e);
     }
 }
 
-export function parseAndAddCue(track: TextTrack, block: string, getCurrentCueLine: () => number) {
+export function parseAndAddCue(track: TextTrack, block: string) {
     const lines = block
         .split("\n")
         .map((l) => l.trim())
@@ -174,15 +165,11 @@ export function parseAndAddCue(track: TextTrack, block: string, getCurrentCueLin
     const end = parseVTTTime(endStr);
 
     if (start !== null && end !== null) {
-        addTimedCue(track, start, end, text, getCurrentCueLine);
+        addTimedCue(track, start, end, text);
     }
 }
 
-export function parseAndAddSRTCue(
-    track: TextTrack,
-    block: string,
-    getCurrentCueLine: () => number
-) {
+export function parseAndAddSRTCue(track: TextTrack, block: string) {
     const lines = block
         .split("\n")
         .map((l) => l.trim())
@@ -213,17 +200,13 @@ export function parseAndAddSRTCue(
     const end = parseSRTTime(endStr);
 
     if (start !== null && end !== null) {
-        addTimedCue(track, start, end, text, getCurrentCueLine);
+        addTimedCue(track, start, end, text);
     } else {
         console.warn("Failed to parse SRT timing:", timing);
     }
 }
 
-export async function handleSubtitleSelect(
-    track: Track,
-    videoElem: HTMLVideoElement | null,
-    getCurrentCueLine: () => number
-) {
+export async function handleSubtitleSelect(track: Track, videoElem: HTMLVideoElement | null) {
     if (currentSubtitleAbort) {
         currentSubtitleAbort.abort();
         currentSubtitleAbort = null;
@@ -237,9 +220,7 @@ export async function handleSubtitleSelect(
 
     for (let i = 0; i < video.textTracks.length; i++) {
         const t = video.textTracks[i];
-        if (t.mode === "showing") {
-            t.mode = "disabled";
-        }
+        t.mode = "disabled";
     }
 
     if (track.id !== "off" && track.url) {
@@ -250,7 +231,7 @@ export async function handleSubtitleSelect(
             track.label,
             track.lang || "en",
         );
-        textTrack.mode = "showing";
+        textTrack.mode = "hidden";
 
         try {
             let response;
@@ -272,7 +253,7 @@ export async function handleSubtitleSelect(
                 const number = track.embeddedTrack;
                 if (!subtitles || number == null) return;
                 const addCue = (cue: { start: number; end: number; text: string }) =>
-                    addTimedCue(textTrack, cue.start, cue.end, cue.text, getCurrentCueLine);
+                    addTimedCue(textTrack, cue.start, cue.end, cue.text);
                 subtitles.cuesFor(number).forEach(addCue);
                 currentSubtitleAbort.signal.addEventListener(
                     "abort",
@@ -315,17 +296,17 @@ export async function handleSubtitleSelect(
 
                 for (const part of parts) {
                     if (isSrt) {
-                        parseAndAddSRTCue(textTrack, part, getCurrentCueLine);
+                        parseAndAddSRTCue(textTrack, part);
                     } else {
-                        parseAndAddCue(textTrack, part, getCurrentCueLine);
+                        parseAndAddCue(textTrack, part);
                     }
                 }
             }
             if (buffer.trim()) {
                 if (isSrt) {
-                    parseAndAddSRTCue(textTrack, buffer, getCurrentCueLine);
+                    parseAndAddSRTCue(textTrack, buffer);
                 } else {
-                    parseAndAddCue(textTrack, buffer, getCurrentCueLine);
+                    parseAndAddCue(textTrack, buffer);
                 }
             }
         } catch (err: any) {
@@ -389,48 +370,4 @@ export async function fetchAddonSubtitles(
         console.error("Failed to load addons:", err);
         return [];
     }
-}
-
-export function updateCuePositions(videoElem: HTMLVideoElement | null, cueLinePercent: number) {
-    const video = videoElem;
-    if (!video) return;
-
-    const linePosition = Math.max(5, Math.min(95, cueLinePercent));
-
-    for (let i = 0; i < video.textTracks.length; i++) {
-        const track = video.textTracks[i];
-        if (track.mode === "showing" && track.cues) {
-            for (let j = 0; j < track.cues.length; j++) {
-                const cue = track.cues[j] as VTTCue;
-                cue.snapToLines = false;
-                cue.lineAlign = "end";
-                cue.line = linePosition;
-            }
-        }
-    }
-}
-
-/** Hidden controls leave subtitles this far above the bottom of the player. */
-const RESTING_CUE_OFFSET = 0.08;
-
-/**
- * Where cues sit as a share of the video element, which can reach past the player once the bars
- * baked into the video are cropped: just above the controls when they show, else near the bottom.
- */
-export function computeCueLinePercent(
-    playerContainer: HTMLElement | null,
-    videoElem: HTMLVideoElement | null,
-    controlsOverlay: HTMLElement | null,
-    controlsVisible: boolean,
-    marginPx: number,
-) {
-    if (!playerContainer || !videoElem) return 92;
-    const player = playerContainer.getBoundingClientRect();
-    const video = videoElem.getBoundingClientRect();
-    if (!player.height || !video.height) return 92;
-
-    const target = controlsVisible && controlsOverlay
-        ? controlsOverlay.getBoundingClientRect().top - marginPx
-        : player.bottom - player.height * RESTING_CUE_OFFSET;
-    return Math.max(5, Math.min(95, ((target - video.top) / video.height) * 100));
 }

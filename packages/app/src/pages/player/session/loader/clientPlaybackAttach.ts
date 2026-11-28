@@ -231,11 +231,7 @@ export async function attachClientPlayback(context: ClientPlaybackAttachContext)
         deps.setPlaybackController(null);
     }
 
-    void enableDefaultSubtitles(
-        session.sessionData,
-        videoElem,
-        deps.getCueLinePercent(),
-    ).catch(() => {
+    void enableDefaultSubtitles(session.sessionData, videoElem).catch(() => {
         // ignore
     });
 

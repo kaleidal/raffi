@@ -42,7 +42,6 @@ export function createPlayerSession({
     hasStarted,
     setHasStarted,
     setIntroDbChapters,
-    getCueLinePercent,
     showArtwork,
     resetForNewSource,
     cancelNextEpisode,
@@ -56,7 +55,6 @@ export function createPlayerSession({
     hasStarted: () => boolean;
     setHasStarted: (value: boolean) => void;
     setIntroDbChapters: (chapters: Chapter[]) => void;
-    getCueLinePercent: () => number;
     showArtwork: () => void;
     resetForNewSource: () => void;
     cancelNextEpisode: () => void;
@@ -119,8 +117,7 @@ export function createPlayerSession({
         setHls: (value) => (media.hls = value),
         getPlaybackController: () => media.controller,
         setPlaybackController: (value) => (media.controller = value),
-        getCueLinePercent,
-        setHasStarted,
+            setHasStarted,
         setIntroDbChapters,
         handleProviderStatusMedia: ({ source, meta }) => {
             const { streamAvailability, videoSrc } = route();

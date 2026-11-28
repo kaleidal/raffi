@@ -15,14 +15,12 @@ import { rememberSubtitleChoice } from "../subtitles/subtitlePreference";
 /** What the player's track panel and error screen do. */
 export const createPlayerActions = ({
 	getVideoElem,
-	getCueLinePercent,
 	getVideoSrc,
 	loadVideo,
 	handleClose,
 	getPlaybackController,
 }: {
 	getVideoElem: () => HTMLVideoElement | null | undefined;
-	getCueLinePercent: () => number;
 	getVideoSrc: () => string | null;
 	loadVideo: (src: string) => void | Promise<void>;
 	handleClose: () => void | Promise<void>;
@@ -62,8 +60,7 @@ export const createPlayerActions = ({
 		void Subtitles.handleSubtitleSelect(
 			track,
 			videoElem,
-			getCueLinePercent,
-		);
+				);
 	};
 
 	const onSubtitleUpload = async (file: File) => {
@@ -80,8 +77,7 @@ export const createPlayerActions = ({
 		await Subtitles.handleSubtitleSelect(
 			track,
 			videoElem,
-			getCueLinePercent,
-		);
+				);
 	};
 
 	const onSubtitleDelayChange = (seconds: number) => {
@@ -95,8 +91,7 @@ export const createPlayerActions = ({
 		void Subtitles.handleSubtitleSelect(
 			selected,
 			videoElem,
-			getCueLinePercent,
-		);
+				);
 	};
 
 	const onErrorRetry = () => {

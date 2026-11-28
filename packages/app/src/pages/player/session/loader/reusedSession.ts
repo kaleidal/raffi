@@ -138,7 +138,7 @@ export async function resumeReusedSession({
             if (addonTracks.length > 0) {
                 subtitleTracks.update((current) => [...current, ...addonTracks]);
             }
-            await enableDefaultSubtitles(nextSession, videoElem, deps.getCueLinePercent());
+            await enableDefaultSubtitles(nextSession, videoElem);
         })
         .catch(() => {
             // ignore

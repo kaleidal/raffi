@@ -46,16 +46,11 @@ export const attachSeekHandler = (
     );
 };
 
-export const enableDefaultSubtitles = (
-    sessionData: any,
-    videoElem: HTMLVideoElement,
-    cueLinePercent: number,
-) =>
+export const enableDefaultSubtitles = (sessionData: any, videoElem: HTMLVideoElement) =>
     autoEnableDefaultSubtitles({
         sessionData,
         subtitleTracksValue: get(subtitleTracks),
         videoElem,
-        cueLinePercent,
         setSubtitleTracks: (updater: (tracks: Track[]) => Track[]) =>
             subtitleTracks.update(updater),
         handleSubtitleSelect: Subtitles.handleSubtitleSelect,

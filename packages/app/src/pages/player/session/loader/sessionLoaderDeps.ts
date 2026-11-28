@@ -13,7 +13,6 @@ export type PlayerSessionLoaderDeps = {
     setHls: (value: any) => void;
     getPlaybackController: () => ClientPlaybackController | null;
     setPlaybackController: (value: ClientPlaybackController | null) => void;
-    getCueLinePercent: () => number;
     setHasStarted: (value: boolean) => void;
     setIntroDbChapters: (chapters: Chapter[]) => void;
     resolvePlaybackStart: (context: {

@@ -8,6 +8,7 @@
     import PlayPauseFeedback from "../../components/player/PlayPauseFeedback.svelte";
     import ShapeLoader from "../../components/common/loading/ShapeLoader.svelte";
     import PlayerVideo from "./components/PlayerVideo.svelte";
+    import SubtitleCues from "./components/SubtitleCues.svelte";
     import PlayerLoadingScreen from "./components/PlayerLoadingScreen.svelte";
     import PlayerErrorModal from "../../components/player/modals/PlayerErrorModal.svelte";
     import { flushPendingLibraryProgress } from "../../lib/db/db";
@@ -77,7 +78,6 @@
 
     const imdbID = untrack(() => metaData?.meta?.imdb_id || null);
     const DESKTOP_DOWNLOAD_URL = "https://raffi.al/#download";
-    const CROP_SETTLE_MS = 500;
 
     const media = new PlayerMedia();
     let playerContainer = $state<HTMLDivElement>();
@@ -195,7 +195,6 @@
         hasStarted: () => hasStarted,
         setHasStarted: (value) => (hasStarted = value),
         setIntroDbChapters: (chapters) => (introDbChapters = chapters),
-        getCueLinePercent: () => cues.linePercent,
         showArtwork: () => (loadingBackdrop = episodeArtwork(metaData, season, episode)),
         resetForNewSource: () => {
             introDbChapters = [];
@@ -212,7 +211,6 @@
 
     const actions = createPlayerActions({
         getVideoElem: () => media.video,
-        getCueLinePercent: () => cues.linePercent,
         getVideoSrc: () => videoSrc,
         loadVideo: (src) => (src === media.src ? transitions.reload() : session.loadVideo(src)),
         handleClose,
@@ -246,7 +244,6 @@
     const cues = createCuePositioning({
         getContainer: () => playerContainer,
         getPanel: () => controlsPanel,
-        getVideo: () => media.video,
         isControlsVisible: () => $controlsVisible,
     });
 
@@ -257,12 +254,6 @@
 
     const autocrop = createAutocrop({ getPreview: () => seekTimeline.preview, getDuration: () => $duration });
     const pictureAspect = $derived(videoSize && pictureAspectOf(videoSize, autocrop.rect));
-
-    $effect(() => {
-        autocrop.rect;
-        const settled = setTimeout(cues.measure, CROP_SETTLE_MS);
-        return () => clearTimeout(settled);
-    });
 
     const seekWithMediaKeys = (time: number) => seekToTime(Math.max(0, Math.min(time, $duration)));
     followMediaSession({
@@ -355,11 +346,6 @@
         untrack(() => session.preflight.request(source));
     });
 
-    $effect(() => {
-        miniPlayer.active;
-        untrack(cues.measure);
-    });
-
     onMount(() => {
         resetPlayerState();
         return playbackEvents.watchMetadata();
@@ -379,7 +365,6 @@
 <svelte:window
     onmessage={embedPlayback.handleMessage}
     onmousemove={(event) => controlsManager.handleMouseMove(controlsVisible.set, Boolean(controlsPanel?.contains(event.target as Node)))}
-    onresize={cues.measure}
     onkeydown={(e) =>
         controlsManager.handleKeydown(e, $currentTime, $duration, $volume, seekToTime, volume.set, seekFeedback.set, togglePlayWithFeedback)}
 />
@@ -425,6 +410,10 @@
             />
         {/if}
     </div>
+
+    {#if !embedSrc}
+        <SubtitleCues video={media.video} offset={cues.offset} />
+    {/if}
 
     {#if playPauseFeedback && !embedSrc}
         <PlayPauseFeedback type={playPauseFeedback.type} id={playPauseFeedback.id} />
